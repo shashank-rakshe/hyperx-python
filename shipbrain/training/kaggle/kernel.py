@@ -92,22 +92,53 @@ os.chdir('/kaggle/working/src/shipbrain')
 sh('pip -q install unsloth scipy pyNastran ezdxf pdfplumber pypdfium2 pillow')
 sh('pip -q install cadquery || echo "cadquery not installed: CAD tasks skipped"')
 report('installing done, making training data')
-rules = glob.glob('/kaggle/input/*/rules_index.json')          # optional PRIVATE Kaggle dataset you attach yourself
+# ---- PRIVATE data: attach your private Kaggle dataset(s) (Add Input -> Your Datasets); nothing else to change
+rules = glob.glob('/kaggle/input/**/rules_index.json', recursive=True)
 extra = f'--knowledge {rules[0]}' if rules else ''
+PRIVATE_TRAIN = sorted(f for f in glob.glob('/kaggle/input/**/*.jsonl*', recursive=True)
+                       if 'eval' not in os.path.basename(f).lower() and '/shipbrain_model' not in f)
+PRIVATE_EVAL = sorted(f for f in glob.glob('/kaggle/input/**/*eval*.jsonl*', recursive=True))
+PRIVATE = bool(rules or PRIVATE_TRAIN)
+if PRIVATE:
+    UPLOAD_MODEL = False                 # a model trained on company data is never published (GitHub repo is public)
+    print('private data attached:', rules + PRIVATE_TRAIN + PRIVATE_EVAL, '- the model will NOT be uploaded to GitHub', flush=True)
+# ---- continue from an older ShipBrain model: attach that run's output (Add Input -> Notebook Output) and start with
+#      SB_CONTINUE=1 python k.py   (default: train fresh from the base model on ALL data - recommended, nothing is forgotten)
+if os.environ.get('SB_CONTINUE') == '1':
+    prev = sorted(glob.glob('/kaggle/input/**/shipbrain_model/lora/adapter_config.json', recursive=True))
+    if prev:
+        BASE = os.path.dirname(prev[-1])
+        print('continuing from the older model:', BASE, flush=True)
+    else:
+        print('SB_CONTINUE=1 but no older model attached: training from the base model', flush=True)
 sh(f'python training/make_dataset.py --n {N_TRAIN} --eval-n {N_EVAL} --out data/train.jsonl --eval-out data/eval.jsonl {extra}')
 if not sh('python training/repo_tasks.py --packs packs --out data/repo_train.jsonl --eval-out data/repo_eval.jsonl', required=False):
     open('data/repo_train.jsonl', 'w').close()          # knowledge of shared repos is a bonus, not a blocker
 sh('cat data/repo_eval.jsonl >> data/eval.jsonl', required=False)
+def _plain(paths):
+    out = []
+    for f in paths:                                   # .jsonl.gz -> .jsonl next to the data folder
+        if f.endswith('.gz'):
+            import gzip
+            dst = 'data/' + os.path.basename(f)[:-3]
+            open(dst, 'w').write(gzip.open(f, 'rt').read())
+            out.append(dst)
+        else:
+            out.append(f)
+    return out
+PRIV = ' '.join(_plain(PRIVATE_TRAIN))
+for f in _plain(PRIVATE_EVAL):
+    sh(f'cat {f} >> data/eval.jsonl', required=False)
 report('scoring the base model')
 sh(f'python training/evaluate.py --local {BASE} --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_before.json', required=False)
 report('training the main model')
-sh(f'python training/finetune.py --data data/train.jsonl data/repo_train.jsonl --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
+sh(f'python training/finetune.py --data data/train.jsonl data/repo_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
 report('scoring the trained model')
 sh(f'python training/evaluate.py --local /kaggle/working/shipbrain_model/lora --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_after.json', required=False)
 if DRAFT:
     report('training the small draft model')
 if DRAFT:      # same data, 1 epoch: the draft learns the tool format, so the main model accepts more of its guesses
-    sh(f'EPOCHS=1 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl --base {DRAFT} --out /kaggle/working/draft_model --quant q8_0', required=False)
+    sh(f'EPOCHS=1 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl {PRIV} --base {DRAFT} --out /kaggle/working/draft_model --quant q8_0', required=False)
     for f in glob.glob('/kaggle/working/draft_model*/**/*.gguf', recursive=True):
         shutil.move(f, '/kaggle/working/' + os.path.basename(f).replace('shipbrain-', 'shipbrain-draft-'))
     shutil.rmtree('/kaggle/working/draft_model', ignore_errors=True)
