@@ -201,12 +201,24 @@ def t_section(r, tools):
 
 
 def t_calc(r, tools):
-    h = r.choice([2, 3, 4.5, 6, 7.5, 10, 12.3])
-    expr = f'1.025*9.81*{h}/1000'
-    res = tools.call('calc', {'expression': expr})
-    return [{'role': 'user', 'content': f'Pressure in MPa of {h} m sea water head?'},
-            {'role': 'assistant', 'content': tool_block('calc', {'expression': expr})}, result_msg('calc', res),
-            {'role': 'assistant', 'content': 'p = rho g h = 1.025 t/m3 x 9.81 x %s m = **%s MPa** (value from calc).' % (h, format(float('%.5g' % res['value']), 'g'))}]
+    """small engineering arithmetic through the calc tool (the answer quotes the tool's value, never re-computes it)"""
+    v = lambda x: format(float('%.5g' % x), 'g')
+    if r.random() < 0.5:
+        h = round(r.uniform(0.5, 25), r.choice([0, 1]))
+        expr = f'1.025*9.81*{h:g}/1000'
+        q = r.choice([f'Pressure in MPa of {h:g} m sea water head?', f'What is {h:g} m of sea water in MPa?',
+                      f'{h:g} m head ka pressure kitna MPa?', f'Convert a {h:g} m sea water head to pressure'])
+        res = tools.call('calc', {'expression': expr})
+        ans = 'p = rho g h = 1.025 t/m3 x 9.81 x %s m = **%s MPa** (value from calc).' % (f'{h:g}', v(res['value']))
+    else:
+        L, B, t = r.choice(range(500, 12001, 100)), r.choice(range(300, 4001, 50)), r.choice([6, 8, 10, 12, 14, 15, 16, 18, 20, 25])
+        expr = f'{L}*{B}*{t}*7.85e-6'
+        q = r.choice([f'Weight of a steel plate {L} x {B} x {t} mm in kg?', f'How heavy is a {t} mm plate of {L} x {B} mm (steel)?',
+                      f'steel plate {L}x{B}x{t} weight?'])
+        res = tools.call('calc', {'expression': expr})
+        ans = 'm = L x B x t x 7.85e-6 kg/mm3 = **%s kg** (value from calc).' % v(res['value'])
+    return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('calc', {'expression': expr})},
+            result_msg('calc', res), {'role': 'assistant', 'content': ans}]
 
 
 def t_plates(r, tools):
