@@ -108,10 +108,11 @@ if DRAFT:
     report('training the small draft model')
 if DRAFT:      # same data, 1 epoch: the draft learns the tool format, so the main model accepts more of its guesses
     sh(f'EPOCHS=1 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl --base {DRAFT} --out /kaggle/working/draft_model --quant q8_0', required=False)
-    for f in glob.glob('/kaggle/working/draft_model/*.gguf'):
+    for f in glob.glob('/kaggle/working/draft_model*/**/*.gguf', recursive=True):
         shutil.move(f, '/kaggle/working/' + os.path.basename(f).replace('shipbrain-', 'shipbrain-draft-'))
     shutil.rmtree('/kaggle/working/draft_model', ignore_errors=True)
-for f in glob.glob('/kaggle/working/shipbrain_model/*.gguf'):
+    shutil.rmtree('/kaggle/working/draft_model_gguf', ignore_errors=True)
+for f in glob.glob('/kaggle/working/shipbrain_model*/**/*.gguf', recursive=True):   # newer Unsloth writes <out>_gguf/
     shutil.move(f, '/kaggle/working/' + os.path.basename(f))
 shutil.rmtree('/kaggle/working/shipbrain_model/ckpt', ignore_errors=True)
 summary = {f: json.load(open('/kaggle/working/' + f))['total'] for f in ('eval_before.json', 'eval_after.json')

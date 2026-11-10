@@ -61,6 +61,9 @@ def main():
     tok.save_pretrained(a.out + '/lora')
     if not a.no_gguf:
         model.save_pretrained_gguf(a.out, tok, quantization_method=a.quant)
+        import glob as _g, shutil as _sh
+        for f in _g.glob(a.out + '_gguf/**/*.gguf', recursive=True):      # newer Unsloth writes into <out>_gguf/
+            _sh.move(f, os.path.join(a.out, os.path.basename(f)))
         for f in os.listdir(a.out):
             if f.endswith('.gguf') and 'shipbrain' not in f:
                 os.rename(os.path.join(a.out, f), os.path.join(a.out, f'shipbrain-{a.quant}.gguf' if a.quant.upper() in f.upper() else 'shipbrain-' + f))
