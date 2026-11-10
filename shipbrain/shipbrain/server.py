@@ -199,6 +199,10 @@ def main(argv=None):
     from .memory import Memory
     tools = agent.Tools(a.workdir, kb, allow_code=a.allow_code, examples=ex, memory=Memory(os.path.join(a.workdir, '.memory')),
                         repo_kb=_repo_kb(a.packs))
+    try:
+        print(f'ship tools: {tools.load_ship_tools()} tools')
+    except Exception as e:
+        print('ship tools not loaded:', e)
     for p in a.plugin:
         try:
             print(f'plugin {p}: {tools.load_plugin(p)} tools')

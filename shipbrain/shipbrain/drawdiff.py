@@ -210,10 +210,18 @@ def drawing_texts(path, page=0):
         return [], 'no text (scanned drawing; install Tesseract + pytesseract for OCR)'
 
 
-def check_dimensions(path, page=0, tol=0.5):
+def check_dimensions(path, page=0, tol=0.5, fix=None):
     """find sums and products written on a drawing (24 x 101.6 = 2438.4, 6 @ 800 = 4800, 1200 + 800 = 2000) and check them;
     also count the numbers by class (plate thickness, weld size, section size, ...)"""
     lines, how = drawing_texts(path, page)
+    if fix:                                           # e.g. the ship tools' OCR label repair
+        fixed = []
+        for ln in lines:
+            try:
+                fixed.append(fix(str(ln)) or ln)
+            except Exception:
+                fixed.append(ln)
+        lines = fixed
     checked, wrong = [], []
     for ln in lines:
         s = ' '.join(str(ln).split())

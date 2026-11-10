@@ -820,3 +820,16 @@ def test_drawing_dimension_check(tmp_path):
     assert len(r['checked']) == 4 and len(r['wrong']) == 1
     assert r['wrong'][0]['computed'] == 2400 and 'should be 2400' in r['plain_english']
     assert r['numbers_by_class'].get('plate thickness') == 1 and r['numbers_by_class'].get('frame number') == 1
+
+
+# ------------------------------------------------------------------ built-in ship tools
+def test_ship_tools_load_and_fix_labels(tmp_path):
+    ezdxf = pytest.importorskip('ezdxf')
+    t = agent.Tools(tmp_path)
+    assert t.load_ship_tools() >= 8 and len(t.converters) == 1
+    assert t.call('ocr_fix', {'text': 'FRAMESPACE;1600mm'})['text'] == 'FRAME SPACE : 1600mm'
+    assert t.call('classify_number', {'text': '6.0'})['class'] == 'plate_thk'
+    doc = ezdxf.new()
+    doc.modelspace().add_text('6 @ 800 = 4800', dxfattribs={'insert': (0, 0), 'height': 50})
+    doc.saveas(str(tmp_path / 'd.dxf'))
+    assert len(t.call('drawing_check', {'file': 'd.dxf'})['checked']) == 1

@@ -343,7 +343,13 @@ class Tools:
 
     def drawing_check(self, file, page=0):
         from .drawdiff import check_dimensions
-        return check_dimensions(self._path(file), int(page))
+        fix = self.t.get('ocr_fix')                      # ship plugin: repair misread labels before checking numbers
+        return check_dimensions(self._path(file), int(page), fix=(lambda t: fix[0](t).get('text', t)) if fix else None)
+
+    def load_ship_tools(self):
+        """the built-in ship tools (shiptools/): rule search, member checks, XML read/write, OCR label fixes ..."""
+        d = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'shiptools')
+        return self.load_plugin(d) if os.path.exists(os.path.join(d, 'ship_mcp.py')) else 0
 
     def compare_structures(self, a, b, tol=5.0, move_tol=300.0):
         from . import members

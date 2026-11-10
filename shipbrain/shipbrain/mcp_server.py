@@ -15,6 +15,10 @@ def build(a):
     from .examples import Examples
     t = agent.Tools(a.workdir, kb, allow_code=a.allow_code, examples=Examples(), memory=Memory(os.path.join(a.workdir, '.memory')),
                     repo_kb=_repo_kb(a.packs))
+    try:
+        t.load_ship_tools()
+    except Exception as e:
+        print(f'ship tools not loaded: {e}', file=sys.stderr)
     for p in a.plugin:
         try:
             t.load_plugin(p)
