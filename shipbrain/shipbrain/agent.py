@@ -184,9 +184,8 @@ class Tools:
         self.register('compare_structures', self.compare_structures, 'Compare two structure models. method "coverage" (default): '
                       'stiffener length and plate area found in the other model with the same section / thickness, both ways, and where '
                       'the gaps are - works when members are split differently (drawing-read vs yard model). method "members": '
-                      'one-to-one changes between two versions of one model. ',
-                      '(structure JSON, or ship XML through your plugin): plates (thickness, grade), stiffeners (section, grade), brackets, '
-                      'openings - same / changed / moved / added / removed, with positions.',
+                      'one-to-one changes between two versions of one model (same / changed / moved / added / removed). '
+                      'Reads structure JSON or ship XML.',
                       {'type': 'object', 'properties': {'a': {'type': 'string'}, 'b': {'type': 'string'}, 'tol': {'type': 'number'},
                                                          'move_tol': {'type': 'number'}}, 'required': ['a', 'b']})
         self.register('structure_to_mesh', self.structure_to_mesh, 'Make a global 1D+2D FE mesh from a structure model (structure JSON or '
