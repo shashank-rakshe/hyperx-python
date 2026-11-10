@@ -16,11 +16,14 @@ BRANCH = 'claude/new-session-qpeo6g'
 REPO = 'https://github.com/shashank-rakshe/hyperx-python.git'
 
 
-def sh(cmd):
+def sh(cmd, required=True):
     print('$', cmd, flush=True)
     r = subprocess.run(cmd, shell=True)
     if r.returncode:
-        raise SystemExit(f'failed: {cmd}')
+        if required:
+            raise SystemExit(f'failed: {cmd}')
+        print(f'(optional step failed, continuing): {cmd}', flush=True)
+    return r.returncode == 0
 
 
 os.chdir('/kaggle/working')
@@ -31,20 +34,23 @@ sh('pip -q install cadquery || echo "cadquery not installed: CAD tasks skipped"'
 rules = glob.glob('/kaggle/input/*/rules_index.json')          # optional PRIVATE Kaggle dataset you attach yourself
 extra = f'--knowledge {rules[0]}' if rules else ''
 sh(f'python training/make_dataset.py --n {N_TRAIN} --eval-n {N_EVAL} --out data/train.jsonl --eval-out data/eval.jsonl {extra}')
-sh('python training/repo_tasks.py --packs packs --out data/repo_train.jsonl --eval-out data/repo_eval.jsonl')   # knowledge of shared repos
-sh('cat data/repo_eval.jsonl >> data/eval.jsonl')
-sh(f'python training/evaluate.py --local {BASE} --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_before.json')
+if not sh('python training/repo_tasks.py --packs packs --out data/repo_train.jsonl --eval-out data/repo_eval.jsonl', required=False):
+    open('data/repo_train.jsonl', 'w').close()          # knowledge of shared repos is a bonus, not a blocker
+sh('cat data/repo_eval.jsonl >> data/eval.jsonl', required=False)
+sh(f'python training/evaluate.py --local {BASE} --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_before.json', required=False)
 sh(f'python training/finetune.py --data data/train.jsonl data/repo_train.jsonl --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
-sh(f'python training/evaluate.py --local /kaggle/working/shipbrain_model/lora --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_after.json')
+sh(f'python training/evaluate.py --local /kaggle/working/shipbrain_model/lora --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_after.json', required=False)
 if DRAFT:      # same data, 1 epoch: the draft learns the tool format, so the main model accepts more of its guesses
-    sh(f'EPOCHS=1 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl --base {DRAFT} --out /kaggle/working/draft_model --quant q8_0')
+    sh(f'EPOCHS=1 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl --base {DRAFT} --out /kaggle/working/draft_model --quant q8_0', required=False)
     for f in glob.glob('/kaggle/working/draft_model/*.gguf'):
         shutil.move(f, '/kaggle/working/' + os.path.basename(f).replace('shipbrain-', 'shipbrain-draft-'))
     shutil.rmtree('/kaggle/working/draft_model', ignore_errors=True)
 for f in glob.glob('/kaggle/working/shipbrain_model/*.gguf'):
     shutil.move(f, '/kaggle/working/' + os.path.basename(f))
 shutil.rmtree('/kaggle/working/shipbrain_model/ckpt', ignore_errors=True)
-summary = {f: json.load(open('/kaggle/working/' + f))['total'] for f in ('eval_before.json', 'eval_after.json')}
+summary = {f: json.load(open('/kaggle/working/' + f))['total'] for f in ('eval_before.json', 'eval_after.json')
+           if os.path.exists('/kaggle/working/' + f)}
+summary['model_files'] = sorted(os.path.basename(f) for f in glob.glob('/kaggle/working/*.gguf'))
 json.dump(summary, open('/kaggle/working/summary.json', 'w'), indent=1)
 print('SUMMARY', summary, flush=True)
 try:
@@ -61,3 +67,4 @@ if token:
         api.upload_file(path_or_fileobj=f, path_in_repo=os.path.basename(f), repo_id=repo)
     print('uploaded to https://huggingface.co/' + repo)
 shutil.rmtree('/kaggle/working/src', ignore_errors=True)
+print('ALL DONE - open the Output tab and download shipbrain-q4_k_m.gguf (and summary.json)', flush=True)
