@@ -4,7 +4,7 @@ this code builds the mesh, checks it, and writes Nastran BDF / Abaqus-CalculiX I
 
 1. stiffened_panel(spec)  - ship deck / bulkhead / shell panel: plate + longitudinal stiffeners + transverse frames
    (structured quad mesh, stiffeners as shell webs+flanges or as offset beams, nodes shared at every crossing).
-2. mesh_cad_file(path)    - any STEP / IGES / BREP / STL through gmsh (optional dependency): surface or volume mesh.
+2. platemesh.py / cadplates.py - any assembly of flat plates (JSON or STEP via CadQuery), own conforming mesher.
 
 Coordinates: plate in the X-Y plane at z = 0 (moulded line), X = panel length (along longitudinals),
 Y = panel width, stiffeners/frames hang below the plate (-Z). Units: mm, N, MPa (t, mm, s consistent set).
@@ -330,6 +330,13 @@ def _card(*fields):
     return '\n'.join(out)
 
 
+def _loads(m):
+    """[(element ids, pressure MPa)]: panel = pressure on the plate; plate assemblies carry m.loads"""
+    if getattr(m, 'loads', None) is not None:
+        return [(ids, p) for ids, p in m.loads if p]
+    return [(m.groups.get('plate', []), m.spec['pressure'])] if m.spec.get('pressure') else []
+
+
 def write_bdf(m, path):
     s = m.spec
     mat = s['material']
@@ -348,6 +355,8 @@ def write_bdf(m, path):
     for e in m.elems:
         if e['type'] == 'quad':
             L.append(_card('CQUAD4', e['id'], e['pid'], *e['nodes']))
+        elif e['type'] == 'tri':
+            L.append(_card('CTRIA3', e['id'], e['pid'], *e['nodes']))
         else:
             o, w = e['orient'], e['offset']
             L.append(_card('CBAR', e['id'], e['pid'], *e['nodes'], *o, '', '', '', *w, *w))
@@ -357,9 +366,9 @@ def write_bdf(m, path):
     for d, ids in sorted(by.items()):
         for k in range(0, len(ids), 6):
             L.append(_card('SPC1', 1, d, *ids[k:k + 6]))
-    if s['pressure']:
-        for eid in m.groups.get('plate', []):
-            L.append(_card('PLOAD4', 1, eid, -float(s['pressure'])))       # PLOAD4 positive = along the normal (+Z); load pushes -Z
+    for ids, p in _loads(m):
+        for eid in ids:
+            L.append(_card('PLOAD4', 1, eid, -float(p)))                     # PLOAD4 positive = along the normal; load pushes against it
     L.append('ENDDATA')
     open(path, 'w').write('\n'.join(L) + '\n')
     return path
@@ -375,9 +384,11 @@ def write_inp(m, path):
     for pid in pids:
         p = m.props[pid]
         es = [e for e in m.elems if e['pid'] == pid]
-        typ = 'S4' if p['kind'] == 'shell' else 'B31'
-        L.append(f'*ELEMENT, TYPE={typ}, ELSET=P{pid}')
-        L += [f"{e['id']}, " + ', '.join(map(str, e['nodes'])) for e in es]
+        for typ, sel in (('S4', 'quad'), ('S3', 'tri'), ('B31', 'bar')):
+            ee = [e for e in es if e['type'] == sel]
+            if ee:
+                L.append(f'*ELEMENT, TYPE={typ}, ELSET=P{pid}')
+                L += [f"{e['id']}, " + ', '.join(map(str, e['nodes'])) for e in ee]
     L += [f"*MATERIAL, NAME={mat.get('name', 'STEEL')}", '*ELASTIC', f"{mat['E']}, {mat['nu']}", '*DENSITY', f"{mat['rho']}"]
     for pid in pids:
         p = m.props[pid]
@@ -389,9 +400,9 @@ def write_inp(m, path):
             h = math.sqrt(12 * p['I1'] / p['A'])
             b = p['A'] / h
             L += [f"*BEAM SECTION, ELSET=P{pid}, MATERIAL={mat.get('name', 'STEEL')}, SECTION=RECT", f'{h:.4f}, {b:.4f}', '0., 0., 1.']
-    L.append('*ELSET, ELSET=PLATE')
-    ids = m.groups.get('plate', [])
-    L += [', '.join(map(str, ids[k:k + 16])) for k in range(0, len(ids), 16)]
+    for k, (ids, p) in enumerate(_loads(m), 1):
+        L.append(f'*ELSET, ELSET=LOAD{k}')
+        L += [', '.join(map(str, ids[j:j + 16])) for j in range(0, len(ids), 16)]
     L += ['*STEP', '*STATIC']
     if m.spc:
         L.append('*BOUNDARY')
@@ -404,8 +415,8 @@ def write_inp(m, path):
                     runs.append((st, a))
                     st = b
             L += [f'{nid}, {a}, {b}' for a, b in runs]
-    if s['pressure']:
-        L += ['*DLOAD', f"PLATE, P, {-float(s['pressure'])}"]                      # CalculiX: -P on these S4 pushes the plate to -Z (checked)
+    for k, (ids, p) in enumerate(_loads(m), 1):
+        L += ['*DLOAD', f"LOAD{k}, P, {-float(p)}"]                                   # CalculiX: -P pushes against the element normal (checked)
     L += ['*NODE FILE', 'U', '*EL FILE', 'S', '*NODE PRINT, NSET=NALL', 'U', '*END STEP']
     txt = '\n'.join(L) + '\n'
     txt = txt.replace('*NODE PRINT, NSET=NALL\nU\n', '')                             # NALL exists in CalculiX only
@@ -416,10 +427,14 @@ def write_inp(m, path):
 def viewer_data(m, max_edges=60000):
     """compact edges + coordinates for the GUI 3D preview"""
     edges, seen = [], set()
+    horiz = {P.id: abs(P.n[2]) > 0.7 for P in getattr(m, 'plates', [])}       # assemblies: plating vs webs
     for e in m.elems:
         n = e['nodes']
         pairs = [(n[i], n[(i + 1) % len(n)]) for i in range(len(n))] if e['type'] == 'quad' else [(n[0], n[1])]
-        g = 0 if e['group'] == 'plate' else (1 if e['group'].startswith('STIFF') else 2)
+        if horiz:
+            g = 0 if horiz.get(e['group']) else 1
+        else:
+            g = 0 if e['group'] == 'plate' else (1 if e['group'].startswith('STIFF') else 2)
         for a, b in pairs:
             k = (min(a, b), max(a, b))
             if k not in seen:
@@ -440,50 +455,6 @@ def build_panel(spec, out_dir='.', formats=('bdf', 'inp')):
     json.dump(m.spec, open(base + '.spec.json', 'w'), indent=1)
     files['spec'] = base + '.spec.json'
     return m, {**summary(m), 'files': files}
-
-
-# ------------------------------------------------------------------ any CAD file through gmsh
-def mesh_cad_file(path, element_size=50.0, dim=2, order=1, quads=True, out_dir='.', formats=('bdf', 'inp', 'msh')):
-    """STEP / IGES / BREP / STL -> surface (dim=2, shells) or volume (dim=3, tets) mesh with gmsh"""
-    try:
-        import gmsh
-    except Exception as ex:
-        raise RuntimeError('gmsh is not installed (pip install gmsh)') from ex
-    gmsh.initialize()
-    try:
-        gmsh.option.setNumber('General.Terminal', 0)
-        gmsh.model.add('part')
-        if path.lower().endswith('.stl'):
-            gmsh.merge(path)
-            gmsh.model.mesh.classifySurfaces(40 * math.pi / 180, True, True)
-            gmsh.model.mesh.createGeometry()
-        else:
-            gmsh.model.occ.importShapes(path)
-            gmsh.model.occ.synchronize()
-        gmsh.option.setNumber('Mesh.MeshSizeMax', float(element_size))
-        gmsh.option.setNumber('Mesh.MeshSizeMin', float(element_size) / 4)
-        if quads and dim == 2:
-            gmsh.option.setNumber('Mesh.RecombineAll', 1)
-            gmsh.option.setNumber('Mesh.Algorithm', 8)
-        gmsh.model.mesh.generate(int(dim))
-        if order > 1:
-            gmsh.model.mesh.setOrder(int(order))
-        os.makedirs(out_dir, exist_ok=True)
-        base = os.path.join(out_dir, os.path.splitext(os.path.basename(path))[0])
-        files = {}
-        gmsh.option.setNumber('Mesh.SaveAll', 0)
-        for g in gmsh.model.getEntities(int(dim)):
-            gmsh.model.addPhysicalGroup(g[0], [g[1]])
-        for f in formats:
-            gmsh.write(base + '.' + f)
-            files[f] = base + '.' + f
-        types, tags, _ = gmsh.model.mesh.getElements(int(dim))
-        n_el = sum(len(t) for t in tags)
-        n_nodes = len(gmsh.model.mesh.getNodes()[0])
-        names = [gmsh.model.mesh.getElementProperties(t)[0] for t in types]
-        return {'nodes': n_nodes, 'elements': n_el, 'element_types': names, 'files': files}
-    finally:
-        gmsh.finalize()
 
 
 if __name__ == '__main__':

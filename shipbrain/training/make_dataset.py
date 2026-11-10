@@ -22,7 +22,9 @@ Task families (weights in TASKS):
 import argparse, json, os, random, sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+import math   # noqa: E402
 from shipbrain import agent, mesh, fea, knowledge   # noqa: E402
+from shipbrain.examples import Examples   # noqa: E402
 
 R = random.Random(0)
 
@@ -207,6 +209,84 @@ def t_calc(r, tools):
             {'role': 'assistant', 'content': f"p = rho g h = 1.025 t/m3 x 9.81 x {h} m = **{res['value']:.4f} MPa** ({res['value'] * 1000:.1f} kPa)."}]
 
 
+def t_plates(r, tools):
+    """grillage: deck + longitudinal girders + transverse web frames (+ optional opening) -> plates_mesh"""
+    L = float(r.choice([4000, 4800, 6000, 7200, 8000]))
+    B = float(r.choice([2400, 3000, 3200, 4000]))
+    t = float(r.choice([8, 10, 12, 14]))
+    ng, nf = r.choice([1, 2, 3]), r.choice([0, 1, 2])
+    hg, hf = float(r.choice([400, 500, 600, 800])), float(r.choice([600, 800, 1000]))
+    tg, tf = float(r.choice([10, 11, 12])), float(r.choice([9, 10, 12]))
+    h = float(r.choice([150, 200, 250]))
+    ys = [round(B * (k + 1) / (ng + 1)) for k in range(ng)]
+    xs = [round(L * (k + 1) / (nf + 1)) for k in range(nf)]
+    deck = {'id': 'DECK', 't': t, 'outline': [[0, 0, 0], [L, 0, 0], [L, B, 0], [0, B, 0]]}
+    hole = None
+    if r.random() < 0.4 and ng >= 1:
+        y0 = ys[0] + 150 if ng == 1 else (ys[0] + ys[1]) / 2 - 300
+        x0 = (xs[0] + 400) if xs else L / 2 - 500
+        w, d = 800.0, 500.0
+        if y0 + d < (ys[1] if ng > 1 else B) - 100 and x0 + w < L - 200:
+            hole = [x0, y0, w, d]
+            deck['holes'] = [[[x0, y0, 0], [x0 + w, y0, 0], [x0 + w, y0 + d, 0], [x0, y0 + d, 0]]]
+    plates = [deck]
+    plates += [{'id': f'GIR{k + 1}', 't': tg, 'outline': [[0, y, 0], [L, y, 0], [L, y, -hg], [0, y, -hg]]} for k, y in enumerate(ys)]
+    plates += [{'id': f'WEB{k + 1}', 't': tf, 'outline': [[x, 0, 0], [x, B, 0], [x, B, -hf], [x, 0, -hf]]} for k, x in enumerate(xs)]
+    head = r.choice([0, 3, 5, 8])
+    args = {'name': f'grillage_{int(L)}x{int(B)}', 'element_size': h, 'plates': plates,
+            'loads': [{'plates': ['DECK'], 'pressure': round(head * 0.01005, 5)}] if head else [],
+            'fix': [{'x': 0}, {'x': L}]}
+    user = (f"{r.choice(['Mesh a grillage:', 'Model this deck structure:', 'Create FE mesh -', 'grillage mesh banao:'])} deck {mm_or_m(L, r)} x "
+            f"{mm_or_m(B, r)}, t={t:g}; {ng} longitudinal girder{'s' if ng > 1 else ''} {hg:g}x{tg:g} at y = {', '.join(f'{y:g}' for y in ys)}"
+            + (f"; {nf} transverse web frame{'s' if nf > 1 else ''} {hf:g}x{tf:g} at x = {', '.join(f'{x:g}' for x in xs)}" if nf else '; no web frames')
+            + (f"; opening {hole[2]:g}x{hole[3]:g} with corner at ({hole[0]:g}, {hole[1]:g})" if hole else '')
+            + (f'; {head} m head on the deck' if head else '') + f'; ends x=0 and x={L:g} clamped; element size {h:g}')
+    res = tools.call('plates_mesh', json.loads(json.dumps(args)))
+    if 'error' in res:
+        return None
+    c = res['check']
+    ans = (f"Mesh **{res['name']}**: {res['nodes']} nodes, {res['elements']} elements ({res['quads']} quads, {res['trias']} trias), "
+           f"{res['plates']} plates joined along {res['joint_segments']} joint segments.\n\n"
+           f"- Connectivity: {c['parts']} part, {c['free_nodes']} free nodes, {c['duplicate_nodes']} duplicate nodes.\n"
+           f"- Quality: max aspect {c['quality']['max_aspect']}, corner angles {c['quality']['min_angle']}-{c['quality']['max_angle']} deg.\n"
+           f"- Files: {', '.join(res['files'].values())}.\n\nCheck verdict: {c['verdict']}.")
+    return [{'role': 'user', 'content': user}, {'role': 'assistant', 'content': tool_block('plates_mesh', args)},
+            result_msg('plates_mesh', res), {'role': 'assistant', 'content': ans}]
+
+
+CAD_FAMILIES = [
+    ('flat bar {h:g}x{t:g}, {L:g} long', lambda r: dict(L=float(r.choice([1200, 2000, 2400, 3200])), h=float(r.choice([100, 150, 200])), t=float(r.choice([8, 10, 12]))),
+     'L, h, t = {L:g}, {h:g}, {t:g}\nresult = cq.Workplane("YZ").rect(t, h, centered=(True, False)).extrude(L)',
+     lambda p: ([p['L'], p['t'], p['h']], p['L'] * p['h'] * p['t'])),
+    ('plate {L:g} x {B:g} x {t:g} with a {d:g} mm hole in the middle', lambda r: dict(L=float(r.choice([800, 1000, 1500])), B=float(r.choice([600, 800, 1000])), t=float(r.choice([8, 10, 12, 15])), d=float(r.choice([100, 150, 219, 273]))),
+     'L, B, t, d = {L:g}, {B:g}, {t:g}, {d:g}\nresult = cq.Workplane("XY").rect(L, B).extrude(t).faces(">Z").workplane().hole(d)',
+     lambda p: ([p['L'], p['B'], p['t']], (p['L'] * p['B'] - math.pi * p['d'] ** 2 / 4) * p['t'])),
+    ('box girder {L:g} long, {B:g} wide, {H:g} high, plates {t:g} thick', lambda r: dict(L=float(r.choice([3000, 6000])), B=float(r.choice([600, 800])), H=float(r.choice([500, 600, 800])), t=float(r.choice([10, 12, 14]))),
+     'L, B, H, t = {L:g}, {B:g}, {H:g}, {t:g}\nresult = cq.Workplane("YZ").rect(B, H).rect(B - 2 * t, H - 2 * t).extrude(L)',
+     lambda p: ([p['L'], p['B'], p['H']], p['L'] * (p['B'] * p['H'] - (p['B'] - 2 * p['t']) * (p['H'] - 2 * p['t'])))),
+    ('T-bar web {hw:g}x{tw:g} flange {bf:g}x{tf:g}, {L:g} long', lambda r: dict(L=float(r.choice([2000, 3200])), hw=float(r.choice([300, 400, 500])), tw=float(r.choice([9, 10, 12])), bf=float(r.choice([100, 150, 200])), tf=float(r.choice([12, 15, 20]))),
+     'L, hw, tw, bf, tf = {L:g}, {hw:g}, {tw:g}, {bf:g}, {tf:g}\nweb = cq.Workplane("XY").box(L, tw, hw - tf, centered=(False, True, False)).translate((0, 0, -(hw - tf)))\nflange = cq.Workplane("XY").box(L, bf, tf, centered=(False, True, False)).translate((0, 0, -hw))\nresult = web.union(flange)',
+     lambda p: ([p['L'], p['bf'], p['hw']], p['L'] * ((p['hw'] - p['tf']) * p['tw'] + p['bf'] * p['tf']))),
+]
+
+
+def t_cad(r, tools):
+    """text -> CadQuery script -> cadquery_build with the user's sizes as expect -> verified answer"""
+    desc, gen, code, exp = r.choice(CAD_FAMILIES)
+    p = gen(r)
+    bbox, vol = exp(p)
+    user = r.choice(['Make a 3D model of a ', 'CAD model: ', 'Create STEP for a ', 'Model a ']) + desc.format(**p)
+    args = {'name': desc.split()[0].replace('-', '_') + '_part', 'code': 'import cadquery as cq\n' + code.format(**p),
+            'expect': {'bbox': bbox, 'volume': round(vol, 1)}}
+    res = tools.call('cadquery_build', json.loads(json.dumps(args)))
+    if not res.get('ok') or not res.get('pass'):
+        return None
+    ans = (f"Built and checked: bbox {res['bbox']} mm, volume {res['volume']:g} mm3, {res['n_solids']} solid - "
+           + '; '.join(res['checks']) + f".\nFiles: {', '.join(res['files'])}.")
+    return [{'role': 'user', 'content': user}, {'role': 'assistant', 'content': tool_block('cadquery_build', args)},
+            result_msg('cadquery_build', res), {'role': 'assistant', 'content': ans}]
+
+
 CHAT = [
     ('Why are stiffeners modelled with shell webs instead of beams?',
      'Shell webs share nodes with the plate, so the stiffener and its attached plating bend together without needing beam offsets, '
@@ -254,7 +334,7 @@ def make_rules_task(entries):
 
 TASKS = [('mesh', 30, lambda r, T: t_mesh(r, T)), ('mesh_fix', 6, lambda r, T: t_mesh(r, T, 'fix')),
          ('mesh_assume', 6, lambda r, T: t_mesh(r, T, 'assume')), ('plate', 12, t_plate), ('stiff', 12, t_stiff),
-         ('buckle', 5, t_buckle), ('section', 8, t_section), ('calc', 4, t_calc), ('chat', 3, t_chat)]
+         ('buckle', 5, t_buckle), ('section', 8, t_section), ('calc', 4, t_calc), ('chat', 3, t_chat), ('plates', 10, t_plates)]
 
 
 def main(argv=None):
@@ -265,12 +345,20 @@ def main(argv=None):
     ap.add_argument('--eval-out', default='data/eval.jsonl')
     ap.add_argument('--knowledge', action='append', default=[], help='rules_index.json / folder (adds rule retrieval tasks)')
     ap.add_argument('--seed', type=int, default=0)
+    ap.add_argument('--no-cad', action='store_true', help='skip CadQuery tasks (slow: ~2 s per sample)')
     a = ap.parse_args(argv)
     import tempfile
     work = tempfile.mkdtemp(prefix='sb_data_')
     kb = knowledge.load(a.knowledge)
-    tools = agent.Tools(work, kb)
+    try:
+        import cadquery  # noqa: F401
+        has_cq = True
+    except ImportError:
+        has_cq = False
+    tools = agent.Tools(work, kb, allow_code=True, examples=Examples())
     tasks = list(TASKS)
+    if has_cq and not a.no_cad:
+        tasks.append(('cad', 6, t_cad))
     if len(kb):
         tasks.append(('rules', 25, make_rules_task([d for d in kb.docs if d.get('id')])))
     sysmsg = {'role': 'system', 'content': agent.system_prompt(tools)}
@@ -285,7 +373,9 @@ def main(argv=None):
                 msgs = fn(r, tools)
                 if not msgs:
                     continue
-                f.write(json.dumps({'task': name, 'messages': [sysmsg] + msgs}) + '\n')
+                ctx, _ = agent.retrieve(tools, msgs[0]['content'])          # same RAG context as at run time
+                head = [sysmsg] + ([{'role': 'system', 'content': ctx}] if ctx else [])
+                f.write(json.dumps({'task': name, 'messages': head + msgs}) + '\n')
                 counts[name] = counts.get(name, 0) + 1
         print(path, sum(counts.values()), 'samples', counts)
     for fn in os.listdir(work):

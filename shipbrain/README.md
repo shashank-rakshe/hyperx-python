@@ -11,8 +11,8 @@ CalculiX/Abaqus `.inp`, a 3D preview and a short summary. **No GPU and no intern
  you ──► GUI (browser page, local) ──► small fine-tuned LLM (CPU, GGUF/llamafile)
                     ▲                         │  ```tool {"name": "panel_mesh", "args": {...}}```
                     │                         ▼
-                    └──── answer ◄──── tools (deterministic code): mesher, Roark checks, CalculiX,
-                                       gmsh, knowledge search, your private ship tools (plugin)
+                    └──── answer ◄──── tools (deterministic code): own mesher, CadQuery, Roark checks,
+                                       CalculiX, mesh checks, RAG search, your private ship tools (plugin)
 ```
 
 **How it is built.** The model never writes mesh files or works out numbers in its head. It writes a short JSON spec and
@@ -24,12 +24,14 @@ A small model can learn to write that JSON reliably, and the results stay correc
 | Tool | What it does | Verified |
 |---|---|---|
 | `panel_mesh` | stiffened panel: plate + stiffeners (FlatBar / T / L / HP) + frames, shell or beam stiffeners, pressure, edge supports → `.bdf` + `.inp` | CalculiX deflection matches Roark within 0.2 % (simply supported and clamped) |
-| `cad_mesh` | any STEP / IGES / BREP / STL → shell (quad) or solid (tet) mesh via gmsh | test with a STEP box |
+| `plates_mesh` | **own mesher (no gmsh)**: any assembly of flat plates (deck, girders, webs, brackets, floors, bulkheads, openings) → all-quad shell mesh. Joints share nodes by construction | 0 free nodes, 0 duplicate nodes, 1 connected part; CalculiX vs Roark −0.1 % (simply supported), 0.0 % (clamped) |
+| `cad_mesh` | STEP / BREP via CadQuery → thin solids become mid-surface plates and gaps are closed → own mesher. Curved faces are reported, not meshed yet | test: STEP grillage of 3 solids → one connected mesh |
+| `mesh_check` | checks **any** `.bdf` / `.inp` (also gmsh output): free nodes, duplicate nodes, unconnected parts, free edges, angles, warp, inverted elements | detects a deliberately broken mesh |
 | `solve_calculix` | runs CalculiX on the CPU, returns max displacement / von Mises | yes, when `ccx` is installed |
 | `plate_check`, `stiffener_check`, `plate_buckling`, `section_props` | hand checks (Roark tables, beam theory, Johnson-Ostenfeld) | unit tests |
-| `knowledge_search` | BM25 search over your folder of rules, notes and PDFs; answers cite rule ids | your 458-rule index loads |
+| `knowledge_search` + **automatic RAG** | every question first pulls the best rule/notes chunks (and, for CAD requests, verified CadQuery examples) into the prompt; answers cite the ids | your rule index loads; retrieval tests |
 | `calc` | exact arithmetic (sandboxed) | tested |
-| `cadquery_build` | runs a CadQuery script → STEP/STL (only with `--allow-code`) | needs cadquery |
+| `cadquery_build` | runs a CadQuery script → STEP/STL. Returns bbox, volume, solid count and validity, plus **PASS/FAIL against the sizes the user asked for**; errors come back with type and line number. Only active with `--allow-code` (it runs model-written code on your PC) | tests: pass, wrong size → FAIL, typo → error line |
 | *your plugins* | any `TOOLS = {...}` file, e.g. your private `ship_mcp.py` (rules_search, check_members, alike_score, xml_from_members…) | plugin loader tested |
 
 With no model connected, the app still works: `/panel_mesh {"length": 4800, "width": 3200}` runs a tool directly, and plain
@@ -38,14 +40,15 @@ questions search the knowledge folder.
 ## Quick start (workstation, CPU only)
 
 ```bash
-pip install numpy gmsh pymupdf          # gmsh / pymupdf are optional
-python -m shipbrain --model shipbrain-q4_k_m.gguf \
+pip install numpy scipy cadquery pymupdf     # cadquery: STEP + CAD tools; pymupdf: PDFs (optional)
+python -m shipbrain --model shipbrain-q4_k_m.gguf --allow-code \
        --knowledge D:\ship_src  --plugin D:\cad-llm-repo
 ```
 The page opens at http://127.0.0.1:7860. If the model is already running elsewhere (Ollama, LM Studio, llama-server), use
 `--server http://127.0.0.1:11434 --model-name shipbrain` in place of `--model`.
 
-**Two files only:** `python packaging/build_exe.py` builds `shipbrain.exe` (app, GUI and tools, about 70 MB).
+**Two files only:** `python packaging/build_exe.py` builds `shipbrain.exe` (app, GUI and tools; about 70 MB without
+CadQuery, a few hundred MB with it).
 `packaging/make_llamafile.md` explains how to pack the model into `shipbrain.llamafile`.
 Then run `shipbrain.exe --model shipbrain.llamafile`.
 
@@ -75,6 +78,14 @@ python training/evaluate.py --server http://127.0.0.1:8080 --data data/eval.json
 Base model: `Qwen3-1.7B` (fast, weaker), `Qwen3-4B-Instruct-2507` (default), `Qwen3-8B` (best, slower). See
 `packaging/make_llamafile.md` for CPU speeds.
 
+The training data includes the retrieved context exactly as the app adds it at run time, so the model learns to use RAG.
+Task families: panel mesh, plate-assembly mesh, recovery from a tool error, stated assumptions, CadQuery parts with checked
+sizes, Roark / stiffener / buckling / section checks, rule retrieval (with your index).
+
+**Publishing the model.** GGUF files are 1-5 GB. That is too big for git (GitHub's file limit is 100 MB). Upload them as a
+GitHub Release asset (up to 2 GB per file) or to a Hugging Face model repo. Do not train on company data if you intend to
+publish the model: a model fine-tuned with your rule index can repeat it.
+
 ### Making the brain stronger: what goes where
 
 | You have… | Put it… | Why |
@@ -82,13 +93,14 @@ Base model: `Qwen3-1.7B` (fast, weaker), `Qwen3-4B-Instruct-2507` (default), `Qw
 | rule books, yard standards, method notes, class rules you are licensed to use, past reports | `--knowledge` folder | facts change; search finds them on every question; no retraining |
 | a repeatable task (a new member type, a new check, a new file format) | a **tool** (Python function) + a few lines in `make_dataset.py` | code does it exactly; the model only learns when to call it |
 | your way of working, answer style, how to read a request | more / better **training samples** → fine-tune again | this is what weights are good at |
+| CAD parts you trust | `examples/cadquery/your_part.py` with `# Prompt:` / `# Tags:` lines, then `python -m shipbrain.examples verify` | verified examples are retrieved when the model writes CAD code |
 | drawings → model pairs (your `ship_pairs.py` tiles) | fine-tune the vision model (Qwen3-VL) as in the ship-rules repo | reading images needs a vision model |
 
 ## Tests
 
 ```bash
-python -m pytest tests -q        # 18 tests: mesher, BDF format, CalculiX vs Roark, gmsh, knowledge, plugins,
-                                 # agent loop and GUI server end to end against a mock streaming model
+python -m pytest tests -q        # 25 tests: both meshers, conformity, gap closing, broken-mesh detection, CalculiX vs Roark,
+                                 # STEP -> mesh, CadQuery checks, RAG, plugins, agent loop + GUI server vs a mock model
 ```
 
 ## Next steps (not done yet)
@@ -96,7 +108,10 @@ python -m pytest tests -q        # 18 tests: mesher, BDF format, CalculiX vs Roa
 - **Train and measure.** Training has not run yet; there was no GPU in the build session. Run steps 1-4 above and compare `eval_before.json` with `eval_after.json`.
 - **HyperX.** Import the generated `.bdf` into HyperX through its Python API (docs in `../docs`) for panel sizing.
 - **CFD.** A tool that writes an OpenFOAM case (blockMesh/snappyHexMesh dictionaries) from a STEP hull or part. Today the assistant only explains the set-up.
-- **More meshers.** Openings with cut-outs, brackets, girders deeper than frames, corrugated bulkheads, double-bottom blocks built from your ship XML.
+- **Curved shell.** Mesh curved faces (hull shell) in the surface's own (u,v) parameters, with the same shared-edge rule.
+- **Stiffener slots in the assembly mesher.** Slots where stiffeners pass through web frames; today the web is continuous at the crossing.
+- **Ship primitives.** CAD2Program-style primitives (`plate`, `stiffener`, `bracket`, `bulkhead` + a few parameters) instead of free CadQuery code. Small models are more reliable with these.
+- **Arrangement → structure.** Feed bulkhead and deck positions from a general-arrangement generator (e.g. ShipSpace-GA) into `plates_mesh`, with tank heads as pressure loads.
 - **Vision.** Read a deck-plan tile and send the member JSON straight to `panel_mesh`, by joining with `ship_rag.py panel`.
 
 ## Private data
@@ -104,3 +119,11 @@ python -m pytest tests -q        # 18 tests: mesher, BDF format, CalculiX vs Roa
 Do **not** commit ship drawings, XMLs, rule texts, `rules_index.json`, generated training data, or model weights.
 **This repository is public.** `.gitignore` already excludes these files. Keep them on the company drive and point the app at them with
 `--knowledge` / `--plugin`.
+
+## Credits (ideas, no code copied)
+
+- [agent3dify](https://github.com/neka-nat/agent3dify) (MIT): a fixed script contract with one JSON result line; a stall guard for repair loops.
+- [text-to-cad](https://github.com/earthtojake/text-to-cad) (MIT): check the user's sizes against the built solid, not against the model's words; an example corpus with prompts.
+- [solidcraft](https://github.com/tangency-labs/solidcraft) (MIT/Apache-2.0): a verified example and oracle set; small tool replies.
+- [CAD2Program](https://manycore-research.github.io/CAD2Program/): small models do better emitting short parametric primitives than free B-rep code.
+- [ShipSpace-GA](https://github.com/kodendaal/ShipSpace-GA) (MIT, data CC BY 4.0): an arrangement generator, planned as a source of bulkhead and deck positions.

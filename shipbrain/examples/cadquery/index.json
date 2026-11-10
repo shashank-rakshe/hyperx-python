@@ -1,0 +1,102 @@
+{
+ "box_girder": {
+  "ok": true,
+  "bbox": [
+   6000.0,
+   800.0,
+   600.0
+  ],
+  "volume": 198144000.0,
+  "n_solids": 1
+ },
+ "flat_bar_stiffener": {
+  "ok": true,
+  "bbox": [
+   2400.0,
+   12.0,
+   150.0
+  ],
+  "volume": 4320000.0,
+  "n_solids": 1
+ },
+ "l_bar_stiffener": {
+  "ok": true,
+  "bbox": [
+   2000.0,
+   90.0,
+   250.0
+  ],
+  "volume": 6920000.0,
+  "n_solids": 1
+ },
+ "manhole_plate": {
+  "ok": true,
+  "bbox": [
+   2000.0,
+   1500.0,
+   114.0
+  ],
+  "volume": 48000442.1,
+  "n_solids": 1
+ },
+ "pipe_penetration_collar": {
+  "ok": true,
+  "bbox": [
+   1000.0,
+   1000.0,
+   30.0
+  ],
+  "volume": 11126253.1,
+  "n_solids": 1
+ },
+ "plate_with_lightening_holes": {
+  "ok": true,
+  "bbox": [
+   3000.0,
+   12.0,
+   1200.0
+  ],
+  "volume": 35796106.6,
+  "n_solids": 1
+ },
+ "stiffened_deck_panel": {
+  "ok": true,
+  "bbox": [
+   4800.0,
+   3200.0,
+   172.0
+  ],
+  "volume": 207360000.0,
+  "n_solids": 1
+ },
+ "t_bar_stiffener": {
+  "ok": true,
+  "bbox": [
+   3200.0,
+   150.0,
+   400.0
+  ],
+  "volume": 19520000.0,
+  "n_solids": 1
+ },
+ "triangular_bracket": {
+  "ok": true,
+  "bbox": [
+   600.0,
+   12.0,
+   600.0
+  ],
+  "volume": 2154600.0,
+  "n_solids": 1
+ },
+ "web_frame_with_cutouts": {
+  "ok": true,
+  "bbox": [
+   3200.0,
+   10.0,
+   800.0
+  ],
+  "volume": 25328000.0,
+  "n_solids": 1
+ }
+}

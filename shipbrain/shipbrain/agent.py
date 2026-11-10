@@ -10,10 +10,11 @@ The model then answers (or calls another tool). Numbers, meshes and files always
 """
 import ast, importlib.util, json, math, operator, os, re, subprocess, sys, textwrap, time, urllib.request
 
-from . import mesh as _mesh, fea as _fea, solver as _solver
+from . import mesh as _mesh, fea as _fea, solver as _solver, platemesh as _pm, meshcheck as _mc
 
 TOOL_RE = re.compile(r'```tool\s*\n(.*?)\n?```', re.S)
 MAX_STEPS = 6
+MESH_TOOLS = ('panel_mesh', 'plates_mesh', 'cad_mesh')
 
 
 # ====================================================================== safe calculator
@@ -44,7 +45,8 @@ def calc(expression):
 
 # ====================================================================== tool registry
 class Tools:
-    def __init__(self, workdir, kb=None, allow_code=False):
+    def __init__(self, workdir, kb=None, allow_code=False, examples=None):
+        self.examples = examples
         self.workdir = os.path.abspath(workdir)
         os.makedirs(self.workdir, exist_ok=True)
         self.kb = kb
@@ -79,9 +81,22 @@ class Tools:
                           'pressure': {'type': 'number', 'description': 'MPa (1 m water head = 0.01 MPa)'},
                           'boundary': {'type': 'string', 'enum': ['simply', 'clamped', 'free']},
                           'material': {'type': 'object', 'description': '{"E": MPa, "nu": -, "rho": t/mm3}'}}})
-        self.register('cad_mesh', self.cad_mesh, 'Mesh a CAD file in the workspace (STEP/IGES/BREP/STL) with gmsh: dim 2 = shell surface mesh, 3 = solid tets.',
-                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'element_size': num, 'dim': {'type': 'integer'},
-                                                         'quads': {'type': 'boolean'}}, 'required': ['file']})
+        self.register('plates_mesh', self.plates_mesh,
+                      'Mesh ANY assembly of flat plates (deck, girders, webs, brackets, floors, bulkheads, openings) with the own '
+                      'conforming all-quad mesher: joints share nodes, no free nodes. Each plate: {"id", "t", "outline": [[x,y,z],...], '
+                      '"holes": [[[x,y,z],...]]}. Units mm, MPa.',
+                      {'type': 'object', 'properties': {
+                          'name': {'type': 'string'}, 'element_size': num, 'plates': {'type': 'array'},
+                          'loads': {'type': 'array', 'description': '[{"plates": [ids], "pressure": MPa}]'},
+                          'fix': {'type': 'array', 'description': '[{"x": 0, "dof": "123456"}] all given coordinates must match'}},
+                       'required': ['plates']})
+        self.register('cad_mesh', self.cad_mesh, 'Mesh a STEP/BREP file in the workspace with the own mesher: thin solids -> mid-surface plates, '
+                      'planar sheet faces -> plates; gaps closed, joints conforming. Curved faces are reported, not meshed.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'element_size': num, 'default_t': num,
+                                                         'loads': {'type': 'array'}, 'fix': {'type': 'array'}}, 'required': ['file']})
+        self.register('mesh_check', self.mesh_check, 'Check any shell mesh file (.bdf/.inp, from any mesher): free nodes, duplicate nodes, '
+                      'unconnected parts, free edges, element quality.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
         self.register('solve_calculix', self.solve_calculix, 'Run CalculiX on an .inp in the workspace (linear static) and return max displacement and von Mises stress.',
                       {'type': 'object', 'properties': {'inp': {'type': 'string'}}, 'required': ['inp']})
         self.register('plate_check', _fea.plate_pressure, 'Hand check (Roark): plate field a x b x t under lateral pressure q -> max stress, deflection.',
@@ -100,8 +115,11 @@ class Tools:
         self.register('list_files', self.list_files, 'List the files in the workspace (uploads and results).', {'type': 'object', 'properties': {}})
         if self.allow_code:
             self.register('cadquery_build', self.cadquery_build,
-                          'Run a CadQuery script that sets `result` (a cq.Workplane) and export STEP + STL into the workspace. Then use cad_mesh.',
-                          {'type': 'object', 'properties': {'code': {'type': 'string'}, 'name': {'type': 'string'}}, 'required': ['code']})
+                          'Run a CadQuery script that sets `result` (a cq.Workplane); exports STEP + STL. Returns bbox, volume, n_solids, valid '
+                          'and PASS/FAIL against expect (put the user\'s sizes there). Then cad_mesh the .step for FE.',
+                          {'type': 'object', 'properties': {'code': {'type': 'string'}, 'name': {'type': 'string'},
+                                                             'expect': {'type': 'object', 'description': '{"bbox": [x,y,z] mm, "volume": mm3, "n_solids": n, "tol": 0.01}'}},
+                           'required': ['code']})
 
     # ------------------------------------------------------------------ implementations
     def knowledge_search(self, query, k=5):
@@ -119,10 +137,25 @@ class Tools:
         info['viewer'] = 'mesh shown in the 3D view'
         return info
 
-    def cad_mesh(self, file, element_size=50.0, dim=2, quads=True):
-        info = _mesh.mesh_cad_file(self._path(file), element_size, int(dim), quads=quads, out_dir=self.workdir)
+    def _mesh_result(self, m, info):
+        self.last_mesh = _mesh.viewer_data(m)
         info['files'] = {k: os.path.basename(v) for k, v in info['files'].items()}
+        info['viewer'] = 'mesh shown in the 3D view'
         return info
+
+    def plates_mesh(self, plates, name=None, element_size=100.0, loads=None, fix=None, material=None):
+        spec = {'name': re.sub(r'[^A-Za-z0-9_\-]', '_', str(name or 'assembly_%s' % time.strftime('%H%M%S')))[:40],
+                'plates': plates, 'element_size': element_size, 'loads': loads or [], 'fix': fix or []}
+        if material:
+            spec['material'] = material
+        return self._mesh_result(*_pm.build_plates(spec, self.workdir))
+
+    def cad_mesh(self, file, element_size=100.0, default_t=10.0, loads=None, fix=None):
+        from . import cadplates
+        return self._mesh_result(*cadplates.mesh_cad(self._path(file), element_size, default_t, self.workdir, loads=loads, fix=fix))
+
+    def mesh_check(self, file):
+        return _mc.check_file(self._path(file))
 
     def solve_calculix(self, inp):
         r = _solver.run_calculix(self._path(inp))
@@ -132,27 +165,10 @@ class Tools:
     def list_files(self):
         return {'files': sorted(f for f in os.listdir(self.workdir) if not f.startswith('.'))}
 
-    def cadquery_build(self, code, name='part'):
+    def cadquery_build(self, code, name='part', expect=None):
+        from . import cadrun
         name = re.sub(r'[^A-Za-z0-9_\-]', '_', name)[:40]
-        script = textwrap.dedent(code) + textwrap.dedent(f'''
-            import cadquery as _cq
-            _r = result if 'result' in dir() else None
-            assert _r is not None, 'the script must set result = <cq.Workplane>'
-            _cq.exporters.export(_r, {name + '.step'!r})
-            _cq.exporters.export(_r, {name + '.stl'!r})
-            _s = _r.val()
-            _b = _s.BoundingBox()
-            print('__INFO__', {{'volume': _s.Volume(), 'bbox': [_b.xlen, _b.ylen, _b.zlen], 'solids': len(_r.solids().vals())}})
-        ''')
-        path = os.path.join(self.workdir, name + '_script.py')
-        open(path, 'w').write('import cadquery as cq\n' + script)
-        r = subprocess.run([sys.executable, '-I', path], cwd=self.workdir, capture_output=True, text=True, timeout=300)
-        info = [l for l in r.stdout.splitlines() if l.startswith('__INFO__')]
-        if r.returncode or not info:
-            raise RuntimeError((r.stderr or r.stdout)[-1500:])
-        out = ast.literal_eval(info[-1][9:])
-        out['files'] = [name + '.step', name + '.stl', name + '_script.py']
-        return out
+        return cadrun.run(code, self.workdir, name, expect)
 
     # ------------------------------------------------------------------ plugins (e.g. your private ship_mcp.py)
     def load_plugin(self, path):
@@ -273,9 +289,35 @@ def _strip_think(t):
     return re.sub(r'<think>.*?</think>', '', t, flags=re.S)
 
 
+CAD_WORDS = re.compile(r'\b(cad|cadquery|step|stl|solid|3d|3-d|part|extrude)\b|model of|make a model|3d model', re.I)
+
+
+def retrieve(tools, question, k=3, min_score=3.0):
+    """RAG: best rule-book / notes chunks and (for CAD requests) verified CadQuery examples, as one context message"""
+    parts, used = [], []
+    if tools.kb is not None and len(tools.kb):
+        for h in tools.kb.search(question, k):
+            if h['score'] >= min_score:
+                parts.append(f"[{h['id']}] ({h['source']}) {h['text'][:600]}")
+                used.append(h['id'])
+    if tools.examples is not None and CAD_WORDS.search(question) and not re.search(r'\bmesh', question, re.I):
+        for e in tools.examples.search(question, 2):
+            parts.append(f"[example {e['name']}] verified {e.get('metrics', {})}\n```python\n{e['code'][:1500]}\n```")
+            used.append('example:' + e['name'])
+    if not parts:
+        return None, []
+    return ('Retrieved context (use it if relevant, cite the [ids]; it may be incomplete):\n\n' + '\n\n'.join(parts)), used
+
+
 def run(llm, tools, history, max_steps=MAX_STEPS):
     """history: [{'role','content'}] of the chat so far (user last). Yields UI events (dicts)."""
-    msgs = [{'role': 'system', 'content': system_prompt(tools)}] + list(history)
+    msgs = [{'role': 'system', 'content': system_prompt(tools)}]
+    ctx, used = retrieve(tools, history[-1]['content'])
+    if ctx:
+        msgs.append({'role': 'system', 'content': ctx})
+        yield {'type': 'context', 'sources': used}
+    msgs += list(history)
+    seen = set()
     for step in range(max_steps):
         text = ''
         for piece in llm.stream(msgs):
@@ -290,10 +332,18 @@ def run(llm, tools, history, max_steps=MAX_STEPS):
         if call['name'] == '__bad__':
             res = {'error': 'the tool block is not valid JSON: ' + call['raw'][:200] + ' - write it again as JSON'}
         else:
-            yield {'type': 'tool_call', 'name': call['name'], 'args': call['args']}
-            res = tools.call(call['name'], call['args'])
+            key = call['name'] + json.dumps(call['args'], sort_keys=True, default=str)
+            if key in seen:                                   # stall guard: same call again -> stop looping
+                res = {'error': 'this exact call was already made; change the arguments or answer with what you have'}
+                if step >= 2:
+                    yield {'type': 'done', 'content': text + '\n\n(stopped: the model repeated the same tool call)'}
+                    return
+            else:
+                seen.add(key)
+                yield {'type': 'tool_call', 'name': call['name'], 'args': call['args']}
+                res = tools.call(call['name'], call['args'])
         ev = {'type': 'tool_result', 'name': call['name'], 'result': res}
-        if call['name'] == 'panel_mesh' and 'error' not in res and tools.last_mesh:
+        if call['name'] in MESH_TOOLS and 'error' not in res and tools.last_mesh:
             ev['mesh'] = tools.last_mesh
         yield ev
         msgs.append({'role': 'user', 'content': f"TOOL_RESULT {call['name']}: " + json.dumps(res, default=str)[:6000]})
@@ -309,7 +359,7 @@ def run_offline(tools, history):
         yield {'type': 'tool_call', 'name': name, 'args': args}
         res = tools.call(name, args)
         ev = {'type': 'tool_result', 'name': name, 'result': res}
-        if name == 'panel_mesh' and 'error' not in res:
+        if name in MESH_TOOLS and 'error' not in res:
             ev['mesh'] = tools.last_mesh
         yield ev
         yield {'type': 'done', 'content': ''}

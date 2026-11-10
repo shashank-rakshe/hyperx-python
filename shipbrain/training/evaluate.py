@@ -68,7 +68,7 @@ def main():
             got = f'ERROR {e}'
         s = per.setdefault(d['task'], {'n': 0, 'tool_ok': 0, 'args_ok': 0, 'final_ok': 0})
         s['n'] += 1
-        rec = {'task': d['task'], 'user': msgs[1]['content'][:200], 'got': got[:600]}
+        rec = {'task': d['task'], 'user': next(m['content'] for m in msgs if m['role'] == 'user')[:200], 'got': got[:600]}
         rc = agent.parse_tool_call(ref)
         if rc:
             gc = agent.parse_tool_call(got)

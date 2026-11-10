@@ -1,7 +1,8 @@
-# app (the core runs on the Python standard library alone)
+# app core: Python standard library + numpy
 numpy
-gmsh            # optional: mesh any STEP/IGES/STL (cad_mesh tool)
+scipy           # fast Delaunay for the own mesher (a pure-Python fallback is built in)
+cadquery        # STEP import (cad_mesh) and the cadquery_build tool
 pymupdf         # optional: read PDFs into the knowledge base
-# cadquery      # optional: --allow-code cadquery_build tool
 # CalculiX (ccx) on PATH: optional, solve_calculix tool
+# no gmsh: meshing is done by shipbrain/platemesh.py (own conforming mesher)
 # training (GPU machine / Colab only): unsloth trl datasets

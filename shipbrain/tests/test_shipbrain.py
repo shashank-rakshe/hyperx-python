@@ -2,6 +2,7 @@
 import json, os, shutil, sys, threading, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -66,17 +67,97 @@ def test_calculix_stiffened_panel_runs(tmp_path):
     assert 0 < r['max_displacement_mm'] < 50
 
 
-def test_gmsh_step(tmp_path):
-    gmsh = pytest.importorskip('gmsh')
-    gmsh.initialize()
-    gmsh.option.setNumber('General.Terminal', 0)
-    gmsh.model.occ.addBox(0, 0, 0, 200, 100, 50)
-    gmsh.model.occ.synchronize()
-    step = str(tmp_path / 'box.step')
-    gmsh.write(step)
-    gmsh.finalize()
-    r = mesh.mesh_cad_file(step, element_size=25, dim=2, out_dir=str(tmp_path))
-    assert r['elements'] > 50 and os.path.exists(r['files']['bdf'])
+# ------------------------------------------------------------------ own plate-assembly mesher
+from shipbrain import platemesh, meshcheck  # noqa: E402
+
+GRILLAGE = [
+    {'id': 'DECK', 't': 12, 'outline': [[0, 0, 0], [6000, 0, 0], [6000, 4000, 0], [0, 4000, 0]],
+     'holes': [[[4200, 1600, 0], [5200, 1600, 0], [5200, 2400, 0], [4200, 2400, 0]]]},
+    {'id': 'G1', 't': 12, 'outline': [[0, 1000, 0], [6000, 1000, 0], [6000, 1000, -600], [0, 1000, -600]]},
+    {'id': 'G2', 't': 12, 'outline': [[0, 3000, 0], [6000, 3000, 0], [6000, 3000, -600], [0, 3000, -600]]},
+    {'id': 'W', 't': 10, 'outline': [[3000, 0, 0], [3000, 4000, 0], [3000, 4000, -800], [3000, 0, -800]]},
+    {'id': 'BR', 't': 10, 'outline': [[3000, 2000, -800], [3600, 2000, -800], [3000, 2000, -200]]}]
+
+
+def test_plate_assembly_is_conforming():
+    m = platemesh.mesh_plates(GRILLAGE, 200)
+    c = meshcheck.check(m.xyz, [e['nodes'] for e in m.elems])
+    assert c['free_nodes'] == 0 and c['duplicate_nodes'] == 0 and c['parts'] == 1, c
+    assert c['quality']['inverted_or_degenerate'] == 0 and all(len(e['nodes']) == 4 for e in m.elems)
+    X = np.array(m.xyz)
+    # girder/deck joint: every deck node on the joint line is also a girder node
+    on_joint = {i for i, p in enumerate(X) if abs(p[1] - 1000) < 1e-6 and abs(p[2]) < 1e-6}
+    g1 = {n - 1 for e in m.elems if e['group'] == 'G1' for n in e['nodes']}
+    deck = {n - 1 for e in m.elems if e['group'] == 'DECK' for n in e['nodes']}
+    assert on_joint and on_joint <= g1 and on_joint <= deck
+    # no element inside the opening
+    for e in m.elems:
+        if e['group'] == 'DECK':
+            c0 = X[[n - 1 for n in e['nodes']]].mean(0)
+            assert not (4200 < c0[0] < 5200 and 1600 < c0[1] < 2400)
+
+
+def test_gap_closing_joins_midsurfaces():
+    web = {'id': 'WEB', 't': 12, 'outline': [[0, 500, 6], [2000, 500, 6], [2000, 500, 400], [0, 500, 400]]}   # stops t/2 above the deck
+    deck = {'id': 'DECK', 't': 12, 'outline': [[0, 0, 0], [2000, 0, 0], [2000, 1000, 0], [0, 1000, 0]]}
+    m = platemesh.mesh_plates([deck, web], 100)
+    assert m.report['gap_snaps'] == 2
+    assert meshcheck.check(m.xyz, [e['nodes'] for e in m.elems])['parts'] == 1
+
+
+def test_meshcheck_finds_broken_mesh():
+    xyz = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (1, 0, 0), (2, 0, 0), (2, 1, 0), (1, 1, 0), (5, 5, 5)]
+    c = meshcheck.check(xyz, [[1, 2, 3, 4], [5, 6, 7, 8]])
+    assert c['free_nodes'] == 1 and c['duplicate_nodes'] == 2 and c['parts'] == 2 and c['verdict'] != 'ok'
+
+
+@pytest.mark.skipif(not solver.ccx_path(), reason='CalculiX not installed')
+@pytest.mark.parametrize('bc', ['simply', 'clamped'])
+def test_unstructured_mesher_matches_roark(tmp_path, bc):
+    fx = ([{'x': 0}, {'x': 2000}, {'y': 0}, {'y': 1000}] if bc == 'clamped' else
+          [{'x': 0, 'dof': '3'}, {'x': 2000, 'dof': '3'}, {'y': 0, 'dof': '3'}, {'y': 1000, 'dof': '3'},
+           {'x': 0, 'y': 0, 'dof': '12'}, {'x': 2000, 'y': 0, 'dof': '2'}])
+    spec = {'name': 'u', 'element_size': 25, 'fix': fx, 'loads': [{'plates': ['P'], 'pressure': 0.05}],
+            'plates': [{'id': 'P', 't': 20, 'outline': [[0, 0, 0], [2000, 0, 0], [2000, 1000, 0], [0, 1000, 0]]}]}
+    _, info = platemesh.build_plates(spec, tmp_path, formats=('inp',))
+    r = solver.run_calculix(info['files']['inp'])
+    ref = fea.plate_pressure(2000, 1000, 20, 0.05, bc)['w_max_mm']
+    assert abs(r['max_displacement_mm'] / ref - 1) < 0.02
+
+
+def test_step_to_mesh_with_cadquery(tmp_path):
+    cq = pytest.importorskip('cadquery')
+    from shipbrain import cadplates
+    deck = cq.Workplane('XY').box(3000, 2000, 12, centered=(False, False, False)).faces('>Z').workplane().center(2200, 1000).hole(500)
+    web = cq.Workplane('XY').box(3000, 12, 400, centered=(False, True, False)).translate((0, 700, -400))
+    frame = cq.Workplane('XY').box(10, 2000, 600, centered=(True, False, False)).translate((1500, 0, -600))
+    step = str(tmp_path / 'g.step')
+    cq.exporters.export(cq.Workplane().add([deck.val(), web.val(), frame.val()]), step)
+    m, info = cadplates.mesh_cad(step, 100, out_dir=str(tmp_path))
+    assert info['cad']['solids_to_plates'] == 3 and info['gap_snaps'] > 0
+    assert info['check']['parts'] == 1 and info['check']['free_nodes'] == 0 and info['check']['duplicate_nodes'] == 0
+
+
+def test_cadquery_build_checks(tmp_path):
+    pytest.importorskip('cadquery')
+    from shipbrain import cadrun
+    ok = cadrun.run('result = cq.Workplane("XY").box(100, 50, 10)', tmp_path, 'b', {'bbox': [100, 50, 10], 'volume': 50000})
+    assert ok['ok'] and ok['pass'] and os.path.exists(tmp_path / 'b.step')
+    bad = cadrun.run('result = cq.Workplane("XY").box(100, 50, 12)', tmp_path, 'c', {'bbox': [100, 50, 10]})
+    assert bad['ok'] and not bad['pass'] and bad['checks'][0].startswith('FAIL')
+    err = cadrun.run('x = 1\nresult = cq.Workplane("XY").bxo(1, 1, 1)', tmp_path)
+    assert not err['ok'] and err['error_type'] == 'AttributeError' and err['error_line'] == 3
+
+
+def test_example_library_rag():
+    from shipbrain.examples import Examples
+    E = Examples()
+    assert len(E.items) >= 10
+    assert E.search('bulkhead plate with pipe penetration collar')[0]['name'] == 'pipe_penetration_collar'
+    t = agent.Tools(os.path.join(os.path.dirname(__file__), '..', 'shipbrain_work_test'), examples=E)
+    ctx, used = agent.retrieve(t, 'make a 3D model of a triangular bracket with a snipe')
+    assert 'example:triangular_bracket' in used and 'cq.Workplane' in ctx
+    assert agent.retrieve(t, 'mesh a deck panel 4800 x 3200')[0] is None
 
 
 # ------------------------------------------------------------------ hand checks
@@ -200,12 +281,14 @@ def test_gui_server_end_to_end(mock_llm, tmp_path):
 def test_dataset_generation(tmp_path):
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'training'))
     import make_dataset
-    make_dataset.main(['--n', '40', '--eval-n', '5', '--out', str(tmp_path / 't.jsonl'), '--eval-out', str(tmp_path / 'e.jsonl')])
+    make_dataset.main(['--n', '40', '--eval-n', '5', '--no-cad', '--out', str(tmp_path / 't.jsonl'), '--eval-out', str(tmp_path / 'e.jsonl')])
     rows = [json.loads(l) for l in open(tmp_path / 't.jsonl')]
     assert len(rows) == 40
     for r in rows:
         roles = [m['role'] for m in r['messages']]
-        assert roles[0] == 'system' and roles[1] == 'user' and roles[-1] == 'assistant'
+        rest = [x for x in roles if x != 'system']
+        assert roles[0] == 'system' and rest[0] == 'user' and roles[-1] == 'assistant'
+        assert roles.index('user') == len(roles) - len(rest)          # system messages only at the start
         for m in r['messages']:
             if m['role'] == 'assistant' and '```tool' in m['content']:
                 assert agent.parse_tool_call(m['content'])['name'] != '__bad__'

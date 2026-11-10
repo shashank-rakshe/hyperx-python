@@ -53,7 +53,8 @@ class H(BaseHTTPRequestHandler):
         elif u.path == '/api/status':
             llm, tools = STATE['llm'], STATE['tools']
             self._send(200, {'model_ok': bool(llm and llm.ok()), 'server': llm.base if llm else None, 'model': llm.model if llm else None,
-                             'tools': list(tools.t), 'knowledge_chunks': len(tools.kb or []), 'workdir': tools.workdir})
+                             'tools': list(tools.t), 'knowledge_chunks': len(tools.kb or []),
+                             'examples': len(tools.examples.items) if tools.examples else 0, 'workdir': tools.workdir})
         elif u.path == '/api/files':
             self._send(200, STATE['tools'].list_files())
         elif u.path.startswith('/files/'):
@@ -133,6 +134,11 @@ def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None):
 
 
 def main(argv=None):
+    if len(sys.argv) > 1 and sys.argv[1] == '--cq-run':          # child process of cadrun inside the frozen exe
+        from . import cadrun
+        sys.argv = [sys.argv[0]] + sys.argv[2:]
+        exec(cadrun.RUNNER, {'__name__': '__main__'})
+        return
     ap = argparse.ArgumentParser(prog='shipbrain', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--server', default=os.environ.get('SHIPBRAIN_SERVER', 'http://127.0.0.1:8080'),
                     help='OpenAI-compatible server: llama-server :8080, Ollama :11434, LM Studio :1234')
@@ -145,6 +151,7 @@ def main(argv=None):
     ap.add_argument('--knowledge', action='append', default=[], help='folder or file to learn from (repeatable)')
     ap.add_argument('--plugin', action='append', default=[], help='python file / folder with TOOLS = {...} (e.g. your ship_mcp.py)')
     ap.add_argument('--workdir', default='shipbrain_work')
+    ap.add_argument('--examples', help='folder of verified CadQuery examples (default: the built-in library)')
     ap.add_argument('--allow-code', action='store_true', help='let the model run CadQuery scripts on this PC (cadquery_build tool)')
     ap.add_argument('--port', type=int, default=7860)
     ap.add_argument('--lan', action='store_true', help='allow other PCs on the network to open the page (default: this PC only)')
@@ -155,14 +162,16 @@ def main(argv=None):
     if a.model:
         a.server, proc = start_model(a.model, 8081, a.threads, a.ctx, a.mmproj, a.llama_bin)
     kb = knowledge.load(a.knowledge)
-    tools = agent.Tools(a.workdir, kb, allow_code=a.allow_code)
+    from .examples import Examples
+    ex = Examples(a.examples)
+    tools = agent.Tools(a.workdir, kb, allow_code=a.allow_code, examples=ex)
     for p in a.plugin:
         try:
             print(f'plugin {p}: {tools.load_plugin(p)} tools')
         except Exception as e:
             print(f'plugin {p} not loaded: {e}')
     STATE.update(llm=agent.LLM(a.server, a.model_name), tools=tools, lan=a.lan)
-    print(f'knowledge: {len(kb)} chunks' + (f' ({len(kb.skipped)} files skipped)' if kb.skipped else ''))
+    print(f'knowledge: {len(kb)} chunks' + (f' ({len(kb.skipped)} files skipped)' if kb.skipped else '') + f', CAD examples: {len(ex.items)}')
     print(f'model server: {a.server} ({"connected" if STATE["llm"].ok() else "NOT reachable - tools and knowledge search still work"})')
     srv = ThreadingHTTPServer(('0.0.0.0' if a.lan else '127.0.0.1', a.port), H)
     url = f'http://127.0.0.1:{a.port}'
