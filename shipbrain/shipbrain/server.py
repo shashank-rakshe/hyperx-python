@@ -127,8 +127,9 @@ def gpu_layers_for(choice, model_path):
         return 0
     info = gpu_info()
     if not info:
-        if choice == 'on':
-            print('no NVIDIA GPU found (nvidia-smi): running on the CPU')
+        if choice == 'on':                  # no nvidia-smi (e.g. Vulkan build, any GPU): try it, the CPU is the safety net
+            print('GPU memory unknown (no nvidia-smi): trying the GPU, falls back to the CPU if it fails')
+            return 999
         return 0
     name, mb = info
     need = os.path.getsize(model_path) / 2 ** 20 * 1.2 + 1300 if os.path.exists(model_path) else 2600   # weights + 8k context
@@ -161,7 +162,7 @@ def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None, draf
             os.chmod(path, 0o755)
         cmd = ([path] if os.name == 'nt' else ['sh', path]) if not path.endswith('.exe') else [path]
         cmd += ['--server', '--nobrowser', '--port', str(port), '-c', str(ctx), '--host', '127.0.0.1']
-    if gpu_layers:                                   # NVIDIA GPU: the layers live in graphics memory (needs a CUDA build)
+    if gpu_layers:                                   # GPU: the layers live in graphics memory (CUDA or Vulkan build of llama.cpp)
         cmd += ['-ngl', str(gpu_layers)]
     if threads:
         cmd += ['-t', str(threads)]
@@ -172,12 +173,31 @@ def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None, draf
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
     url = f'http://127.0.0.1:{port}'
     llm = agent.LLM(url)
+    def cpu_again(why):
+        print(f'the GPU did not work ({why}): starting again on the CPU')
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        return start_model(path, port, threads, ctx, mmproj, bin_, draft, extra, 0)
     for _ in range(600):
         if proc.poll() is not None:
+            if gpu_layers:                           # old card / driver / wrong llama.cpp build: never leave the user stuck
+                return cpu_again('the model server stopped while loading')
             sys.exit('the model server stopped while loading (not enough RAM? wrong file?)')
         if llm.ok():
+            if gpu_layers:                           # an unsupported card can load and then fail on the first answer
+                try:
+                    test = agent.LLM(url, max_tokens=4, timeout=120)
+                    if not ''.join(test.stream([{'role': 'user', 'content': 'Say OK'}])).strip() and proc.poll() is not None:
+                        return cpu_again('no answer')
+                except Exception as e:
+                    return cpu_again(type(e).__name__)
+                print('GPU test answer OK')
             return url, proc
         time.sleep(1)
+    if gpu_layers:
+        return cpu_again('no start within 10 minutes')
     sys.exit('the model server did not start within 10 minutes')
 
 

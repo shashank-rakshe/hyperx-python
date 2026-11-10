@@ -119,7 +119,15 @@ Then run `shipbrain.exe --model shipbrain.llamafile`.
 
 `python -m shipbrain --model shipbrain-q4_k_m.gguf` now checks for an NVIDIA GPU (`nvidia-smi`) and, when the model fits,
 puts all of it on the GPU (`--gpu auto`, the default; `--gpu off` = CPU, `--gpu 20` = only 20 layers on the GPU).
-It needs the **CUDA build** of llama.cpp (`llama-server` from the llama.cpp releases, file name with `cuda`) or a llamafile.
+Which llama.cpp build (llama.cpp releases page, Windows zip):
+
+| Card (if unsure, use Vulkan) | Build |
+|---|---|
+| don't know / very old (e.g. Quadro K-series, GTX 600-700) | **`vulkan`**: works on almost any GPU with a current driver; start with `--gpu on` |
+| Quadro M / P / T, GTX 900 / 1000 / 1600, RTX (2014 and newer) | `cuda` (fastest) or `vulkan` |
+
+**Safety net:** if the model does not load on the GPU, or the first test answer fails, ShipBrain restarts it on the CPU by
+itself and keeps going. So trying the GPU can never leave the app broken.
 
 | Card memory | Fits on the GPU | Expected |
 |---|---|---|
