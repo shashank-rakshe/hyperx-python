@@ -644,30 +644,61 @@ class SegGraph:
         self.stats['welded_points'] += len(mp)
         return len(mp)
 
-    def split_near(self, r):
-        """a point lying within r of another line (end point a few mm off a joint line, near-collinear overlapping
-        lines) splits that line there: both then run through the same point and overlapping parts become one line"""
+    def _can_move(self, v, p, r, plates, beam_lines, ip, ib):
+        """point v may go to p: p stays within r of the plane of every plate and of every beam line using v"""
+        for k in ip.get(v, ()):
+            if abs(plates[k].plane_dist(p)) > r:
+                return False
+        for k in ib.get(v, ()):
+            a, b = beam_lines[k]
+            d = _unit(b - a)
+            w = p - a
+            if np.linalg.norm(w - (w @ d) * d) > r:
+                return False
+        return True
+
+    def split_near(self, r, plates, beam_lines):
+        """a point lying within r of another line (end point a few mm off a joint line, near-collinear overlapping lines):
+        the point is moved onto that line when it stays in the planes of its own plates (the line stays straight),
+        otherwise - for small offsets only - the line is bent through the point. Either way both share the point and
+        overlapping parts become one line."""
         used = self.used()
         if not used:
             return 0
         X = np.array([self.V[v] for v in used])
         ua = np.array(used)
-        new, n = {}, 0
-        for (i, j), (op, ob) in self.E.items():
+        best = {}
+        for (i, j) in self.E:
             a, b = self.V[i], self.V[j]
             d = b - a
             L2 = float(d @ d)
             lo, hi = np.minimum(a, b) - r, np.maximum(a, b) + r
             c = np.where(np.all(X >= lo, 1) & np.all(X <= hi, 1))[0]
-            ts = []
-            if len(c):
-                W = X[c] - a
-                t = (W @ d) / L2
-                dist = np.linalg.norm(W - t[:, None] * d, axis=1)
-                for k in np.where((t > 1e-9) & (t < 1 - 1e-9) & (dist <= r))[0]:
-                    v = int(ua[c[k]])
-                    if v != i and v != j:
-                        ts.append((float(t[k]), v))
+            if not len(c):
+                continue
+            W = X[c] - a
+            t = (W @ d) / L2
+            dist = np.linalg.norm(W - t[:, None] * d, axis=1)
+            for k in np.where((t > 1e-9) & (t < 1 - 1e-9) & (dist <= r))[0]:
+                v = int(ua[c[k]])
+                if v != i and v != j and (v not in best or dist[k] < best[v][0]):
+                    best[v] = (float(dist[k]), (i, j), float(t[k]))
+        if not best:
+            return 0
+        ip, ib = self.incident()
+        tight = max(r * 0.1, 1e-9)
+        on_edge = {}
+        for v, (dist, k, t) in sorted(best.items(), key=lambda x: x[1][0]):
+            i, j = k
+            x = self.V[i] + t * (self.V[j] - self.V[i])
+            if self._can_move(v, x, tight, plates, beam_lines, ip, ib):
+                self.V[v] = x
+            elif dist > r / 2:
+                continue
+            on_edge.setdefault(k, []).append((t, v))
+        new, n = {}, 0
+        for (i, j), (op, ob) in self.E.items():
+            ts = on_edge.get((i, j))
             if ts:
                 chain = [i] + [v for _, v in sorted(ts)] + [j]
                 n += len(ts)
@@ -791,7 +822,7 @@ def mesh_plates(plates_in, h, tol=None, close_gap=True, all_quad=True, smooth=3,
     G = SegGraph(segs, own_p, own_b, tol)
     if snap > tol:
         for _ in range(4):
-            n = G.weld(snap) + G.split_near(snap)
+            n = G.weld(snap) + G.split_near(snap, plates, beam_lines)
             if min_len > tol:
                 n += G.collapse_short(min_len, snap, plates, beam_lines)
             if not n:
@@ -932,7 +963,7 @@ def mesh_plates(plates_in, h, tol=None, close_gap=True, all_quad=True, smooth=3,
                 g = reg.get((node_xyz[a_] + node_xyz[b_]) / 2)
                 if g in on_seg:
                     line_of.setdefault(g, set()).add(k)
-        elems, bar_elems, rep = _repair(node_xyz, elems, bar_elems, plates, on_seg, max(tol, snap / 2), corners, line_of)
+        elems, bar_elems, rep = _repair(node_xyz, elems, bar_elems, plates, on_seg, max(tol, snap / 2), corners, line_of, corner_move=snap)
         report['repair'] = rep
     # renumber only used nodes (no free nodes by construction)
     used_nodes = sorted(set(g for _, e in elems for g in e) | set(g for _, a_, b_ in bar_elems for g in (a_, b_)))
@@ -988,7 +1019,7 @@ def _elem_quality(X, e, plate):
     return amin, area, inv
 
 
-def _repair(X, elems, bars, plates, fixed, weld_tol, corners=(), line_of=None, min_angle=5.0, rounds=6):
+def _repair(X, elems, bars, plates, fixed, weld_tol, corners=(), line_of=None, min_angle=5.0, rounds=6, corner_move=0.0):
     """global clean-up of the finished mesh: merge nodes closer than weld_tol, then remove elements with a corner below
     min_angle / no area by collapsing their shortest side. Every merge renames a node in ALL elements (and beams), so
     plates stay joined; a merge is undone if it would turn a neighbouring element inside out. Joint / boundary line end
@@ -996,8 +1027,8 @@ def _repair(X, elems, bars, plates, fixed, weld_tol, corners=(), line_of=None, m
     line_of = line_of or {}
 
     def movable(src, dst):
-        if src in corners:
-            return False
+        if src in corners:                       # a corner only moves as far as the line clean-up may move it
+            return dst in fixed and np.linalg.norm(X[src] - X[dst]) <= corner_move
         if src not in fixed:
             return True
         return bool(line_of.get(src, set()) & line_of.get(dst, set()))
@@ -1062,21 +1093,20 @@ def _repair(X, elems, bars, plates, fixed, weld_tol, corners=(), line_of=None, m
                         continue
                     ok = True
                     for kk in of_node.get(src, ()):
-                        if kk == k or kk in dead:
+                        if kk == k:
                             continue
                         pj, ej = elems[kk]
-                        ej2 = []
-                        for g in ej:
-                            g = dst if g == src else g
-                            if not ej2 or ej2[-1] != g:
-                                ej2.append(g)
-                        while len(ej2) > 1 and ej2[0] == ej2[-1]:
-                            ej2.pop()
+                        ej0 = clean(ej)
+                        ej2 = clean([dst if root(g) == src else g for g in ej])
                         if len(ej2) < 3:
                             continue                         # vanishes
-                        a2, ar2, inv2 = _elem_quality(X, ej2, plates[pj])
                         L2 = max(np.linalg.norm(X[ej2[(m2 + 1) % len(ej2)]] - X[ej2[m2]]) for m2 in range(len(ej2)))
-                        if inv2 or abs(ar2) <= 1e-6 * L2 ** 2:
+                        a2, ar2, inv2 = _elem_quality(X, ej2, plates[pj])
+                        bad2 = inv2 or abs(ar2) <= 1e-6 * L2 ** 2
+                        if bad2 and len(ej0) >= 3:
+                            a0, ar0, inv0 = _elem_quality(X, ej0, plates[pj])
+                            bad2 = not inv0                  # only refuse to make a good neighbour bad
+                        if bad2:
                             ok = False
                             break
                     if ok:
