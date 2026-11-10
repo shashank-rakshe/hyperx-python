@@ -35,23 +35,22 @@ def number_class(text):
 
 # ------------------------------------------------------------------ extraction
 def _pdf_items(path, page=0):
-    import pymupdf
+    import pdfplumber                                     # MIT (pdfminer.six)
     lines, texts = [], []
-    with pymupdf.open(path) as d:
-        pg = d[page]
-        for dr in pg.get_drawings():
-            w = dr.get('width') or 0.0
-            dashed = bool(dr.get('dashes')) and dr.get('dashes') not in ('[] 0', '[]0', '')
-            for it in dr['items']:
-                if it[0] == 'l':
-                    a, b = it[1], it[2]
-                    lines.append({'a': (a.x, a.y), 'b': (b.x, b.y), 'width': round(w, 2), 'dashed': dashed, 'layer': ''})
-                elif it[0] == 're':
-                    r = it[1]
-                    P = [(r.x0, r.y0), (r.x1, r.y0), (r.x1, r.y1), (r.x0, r.y1)]
-                    lines += [{'a': P[k], 'b': P[(k + 1) % 4], 'width': round(w, 2), 'dashed': dashed, 'layer': ''} for k in range(4)]
-        for x0, y0, x1, y1, word, *_ in pg.get_text('words'):
-            texts.append({'text': word, 'at': ((x0 + x1) / 2, (y0 + y1) / 2), 'h': y1 - y0})
+    with pdfplumber.open(path) as d:
+        pg = d.pages[page]
+        for o in pg.lines + pg.rects + pg.curves:
+            w = round(float(o.get('linewidth') or 0.0), 2)
+            dash = o.get('dash')
+            dashed = bool(dash and dash[0])
+            pts = o.get('pts') or []
+            if o['object_type'] == 'rect':
+                x0, x1, t, b = o['x0'], o['x1'], o['top'], o['bottom']
+                pts = [(x0, t), (x1, t), (x1, b), (x0, b), (x0, t)]
+            pts = [(float(x), float(y)) for x, y in pts]
+            lines += [{'a': a_, 'b': b_, 'width': w, 'dashed': dashed, 'layer': ''} for a_, b_ in zip(pts, pts[1:])]
+        for wd in pg.extract_words():
+            texts.append({'text': wd['text'], 'at': ((wd['x0'] + wd['x1']) / 2, (wd['top'] + wd['bottom']) / 2), 'h': wd['bottom'] - wd['top']})
     return lines, texts, 'pt'
 
 

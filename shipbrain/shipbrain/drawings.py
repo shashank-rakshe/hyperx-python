@@ -22,10 +22,10 @@ def load_image(path, page=0, dpi=150, size=None):
     """grayscale float image 0..255 (white paper = 255)"""
     low = path.lower()
     if low.endswith('.pdf'):
-        import pymupdf
-        with pymupdf.open(path) as d:
-            pix = d[page].get_pixmap(dpi=dpi, colorspace=pymupdf.csGRAY)
-            img = np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width).astype(float)
+        import pypdfium2                                  # Apache-2.0 / BSD (PDFium)
+        pdf = pypdfium2.PdfDocument(path)
+        img = np.asarray(pdf[page].render(scale=dpi / 72, grayscale=True).to_pil().convert('L'), float)
+        pdf.close()
     elif low.endswith('.dxf'):
         img = render_dxf(path, size or 2000)[0]
     else:

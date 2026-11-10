@@ -1,7 +1,7 @@
 """
 Build ONE executable of the ShipBrain app (GUI + tools) with PyInstaller.
 
-    pip install pyinstaller numpy scipy cadquery pyNastran ezdxf pymupdf pillow
+    pip install pyinstaller numpy scipy cadquery pyNastran ezdxf pdfplumber pypdfium2 pillow
     python packaging/build_exe.py            ->  dist/shipbrain.exe (Windows) or dist/shipbrain (Linux)
 
 Then on the workstation you need just two files:
@@ -18,7 +18,7 @@ open(entry, 'w').write('from shipbrain.server import main\nmain()\n')
 cmd = [sys.executable, '-m', 'PyInstaller', '--onefile', '--name', 'shipbrain', '--paths', ROOT,
        '--add-data', f"{os.path.join(ROOT, 'shipbrain', 'ui.html')}{sep}shipbrain",
        '--add-data', f"{os.path.join(ROOT, 'examples')}{sep}examples",
-       '--hidden-import', 'fitz', '--collect-submodules', 'scipy.spatial', '--collect-submodules', 'scipy.ndimage',
+       '--collect-all', 'pypdfium2', '--collect-all', 'pdfplumber', '--collect-submodules', 'scipy.spatial', '--collect-submodules', 'scipy.ndimage',
        '--collect-all', 'ezdxf', '--collect-all', 'pyNastran', entry]
 try:
     import cadquery  # noqa: F401   (large: OCP adds ~300 MB to the exe)

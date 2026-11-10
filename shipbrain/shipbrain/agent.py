@@ -45,8 +45,9 @@ def calc(expression):
 
 # ====================================================================== tool registry
 class Tools:
-    def __init__(self, workdir, kb=None, allow_code=False, examples=None):
+    def __init__(self, workdir, kb=None, allow_code=False, examples=None, memory=None):
         self.examples = examples
+        self.memory = memory
         self.converters = []          # e.g. xml_to_members from your private plugin
         self.workdir = os.path.abspath(workdir)
         os.makedirs(self.workdir, exist_ok=True)
@@ -69,8 +70,17 @@ class Tools:
         prof = {'type': 'object', 'description': 'profile: {"type": "FlatBar"|"TBar"|"LBar"|"HP", "h": web height mm, "t": web mm, '
                                                  '"bf": flange width mm, "tf": flange mm}'}
         self.register('knowledge_search', self.knowledge_search,
-                      'Search the rule book / notes / standards in the knowledge folder. Use before answering rule or method questions; cite the ids.',
-                      {'type': 'object', 'properties': {'query': {'type': 'string'}, 'k': {'type': 'integer'}}, 'required': ['query']})
+                      'Search the rule book / notes / standards in the knowledge folder (keyword + meaning). Use before answering rule or '
+                      'method questions; cite the ids. scope = part of a folder/file name to search only that project.',
+                      {'type': 'object', 'properties': {'query': {'type': 'string'}, 'k': {'type': 'integer'}, 'scope': {'type': 'string'}},
+                       'required': ['query']})
+        self.register('remember', self.remember, 'Store a fact, yard practice or correction the user teaches, so it is used in later answers.',
+                      {'type': 'object', 'properties': {'text': {'type': 'string'}, 'tags': {'type': 'array'}}, 'required': ['text']})
+        self.register('recall', self.recall, 'Search the assistant memory (facts and corrections taught by the user).',
+                      {'type': 'object', 'properties': {'query': {'type': 'string'}}, 'required': ['query']})
+        self.register('memory_feedback', self.memory_feedback, 'Like (good=true) or dislike a memory by id; forget=true deletes it.',
+                      {'type': 'object', 'properties': {'id': {'type': 'string'}, 'good': {'type': 'boolean'}, 'forget': {'type': 'boolean'}},
+                       'required': ['id']})
         self.register('panel_mesh', self.panel_mesh,
                       'Build a stiffened ship panel FE mesh (plate + stiffeners + frames) and write Nastran .bdf and CalculiX/Abaqus .inp. '
                       'Units mm, MPa. Stiffeners run along X by default; frames cross them.',
@@ -174,11 +184,26 @@ class Tools:
                            'required': ['code']})
 
     # ------------------------------------------------------------------ implementations
-    def knowledge_search(self, query, k=5):
+    def knowledge_search(self, query, k=5, scope=None):
         if not self.kb or not len(self.kb):
             return {'results': [], 'note': 'knowledge folder is empty - start the app with --knowledge DIR'}
         return {'results': [{'id': h['id'], 'source': h['source'], 'title': h['title'], 'text': h['text'][:700], 'score': h['score']}
-                            for h in self.kb.search(query, int(k))]}
+                            for h in self.kb.search(query, int(k), scope=scope)]}
+
+    def _mem(self):
+        if self.memory is None:
+            from .memory import Memory
+            self.memory = Memory(os.path.join(self.workdir, '.memory'))
+        return self.memory
+
+    def remember(self, text, tags=None):
+        return self._mem().remember(text, tags)
+
+    def recall(self, query):
+        return {'memories': [{'id': m['id'], 'text': m['text'], 'likes': m.get('likes', 0)} for m in self._mem().recall(query, 5, 0.5)]}
+
+    def memory_feedback(self, id, good=True, forget=False):
+        return self._mem().forget(id) if forget else self._mem().feedback(id, good)
 
     def panel_mesh(self, **spec):
         spec.setdefault('name', 'panel_%s' % time.strftime('%H%M%S'))
@@ -484,9 +509,13 @@ CAD_WORDS = re.compile(r'\b(cad|cadquery|step|stl|solid|3d|3-d|part|extrude)\b|m
 def retrieve(tools, question, k=3, min_score=3.0):
     """RAG: best rule-book / notes chunks and (for CAD requests) verified CadQuery examples, as one context message"""
     parts, used = [], []
+    if tools.memory is not None:
+        for m in tools.memory.recall(question, 3):
+            parts.append(f"[memory {m['id']}] (taught by the user) {m['text']}")
+            used.append('memory:' + m['id'])
     if tools.kb is not None and len(tools.kb):
         for h in tools.kb.search(question, k):
-            if h['score'] >= min_score:
+            if h['score'] >= min_score or getattr(tools.kb, 'embedder', None):
                 parts.append(f"[{h['id']}] ({h['source']}) {h['text'][:600]}")
                 used.append(h['id'])
     if tools.examples is not None and CAD_WORDS.search(question) and not re.search(r'\bmesh', question, re.I):

@@ -57,12 +57,13 @@ def file_info(path):
         say.append('It can be compared with another drawing, or turned into a 3D plate model if its layers name the members '
                    '(outline, openings, girders/webs, stiffeners).')
     elif low.endswith('.pdf'):
-        import pymupdf
-        with pymupdf.open(path) as d:
-            n = len(d)
-            txt = ' '.join(d[0].get_text().split())[:400]
-            r = d[0].rect
-        info.update(pages=n, first_page_text=txt, page_size_mm=[round(r.width * 25.4 / 72), round(r.height * 25.4 / 72)])
+        import pypdfium2
+        pdf = pypdfium2.PdfDocument(path)
+        n = len(pdf)
+        txt = ' '.join(pdf[0].get_textpage().get_text_range().split())[:400]
+        w, h = pdf[0].get_size()
+        pdf.close()
+        info.update(pages=n, first_page_text=txt, page_size_mm=[round(w * 25.4 / 72), round(h * 25.4 / 72)])
         say.append(f"{name} is a PDF with {n} page(s); page 1 is {info['page_size_mm'][0]} x {info['page_size_mm'][1]} mm.")
         say.append('It has a text layer.' if txt else 'It has no text layer (probably a scan): numbers must be read from the image.')
     elif low.endswith(('.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp')):

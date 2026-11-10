@@ -4,9 +4,10 @@ scipy           # fast Delaunay for the own mesher (pure-Python fallback built i
 cadquery        # STEP import (cad_mesh), STEP export (drawing_to_3d), cadquery_build
 pyNastran       # robust Nastran .bdf reading (a built-in reader is used if missing)
 ezdxf           # DXF drawings: drawing_to_3d, compare_drawings, file_info
-pymupdf         # PDF drawings and PDFs in the knowledge base
+pdfplumber      # vector PDF drawings: lines, line styles, words (MIT)
+pypdfium2       # PDF rendering + text for the knowledge base (Apache-2.0/BSD)
 pillow          # images for drawing comparison
 # CalculiX (ccx) on PATH: optional, solve_calculix / fatigue solve
 # ANSYS (PyMAPDL: ansys-mapdl-core) and Abaqus: optional, need their own licences; ShipBrain writes inputs + scripts
-# no gmsh: meshing is done by shipbrain/platemesh.py (own conforming mesher)
+# everything here is free open source (no AGPL / paid-licence libraries). no gmsh: meshing is done by shipbrain/platemesh.py (own conforming mesher)
 # training (GPU machine / Colab only): unsloth trl datasets

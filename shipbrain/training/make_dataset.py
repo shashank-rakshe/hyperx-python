@@ -424,6 +424,8 @@ def main(argv=None):
     ap.add_argument('--knowledge', action='append', default=[], help='rules_index.json / folder (adds rule retrieval tasks)')
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--no-cad', action='store_true', help='skip CadQuery tasks (slow: ~2 s per sample)')
+    ap.add_argument('--feedback', action='append', default=[], help="feedback.jsonl from the app: liked (thumbs-up) conversations "
+                                                                      "are added to the training data (x3), so the model learns your real requests")
     a = ap.parse_args(argv)
     import tempfile
     work = tempfile.mkdtemp(prefix='sb_data_')
@@ -456,6 +458,17 @@ def main(argv=None):
                 f.write(json.dumps({'task': name, 'messages': head + msgs}) + '\n')
                 counts[name] = counts.get(name, 0) + 1
         print(path, sum(counts.values()), 'samples', counts)
+    fb = 0
+    with open(a.out, 'a', encoding='utf-8') as f:
+        for path in a.feedback:
+            for line in open(path, encoding='utf-8'):
+                r = json.loads(line)
+                if r.get('good') and r.get('messages') and r['messages'][-1]['role'] == 'assistant':
+                    for _ in range(3):
+                        f.write(json.dumps({'task': 'feedback', 'messages': [sysmsg] + r['messages']}) + '\n')
+                    fb += 1
+    if a.feedback:
+        print(f'added {fb} liked conversation(s) from the app (x3)')
     for fn in os.listdir(work):
         os.remove(os.path.join(work, fn))
     os.rmdir(work)

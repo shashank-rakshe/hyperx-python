@@ -74,6 +74,9 @@ class H(BaseHTTPRequestHandler):
             name = re.sub(r'[^A-Za-z0-9_\-\.]', '_', os.path.basename(d['name']))
             open(os.path.join(STATE['tools'].workdir, name), 'wb').write(base64.b64decode(d['data']))
             return self._send(200, {'saved': name})
+        if self.path == '/api/feedback':
+            d = self._body()
+            return self._send(200, STATE['tools']._mem().answer_feedback(d.get('messages', []), d.get('good', True), d.get('comment', '')))
         if self.path == '/api/settings':
             d = self._body()
             if d.get('server'):
@@ -151,6 +154,9 @@ def main(argv=None):
     ap.add_argument('--knowledge', action='append', default=[], help='folder or file to learn from (repeatable)')
     ap.add_argument('--plugin', action='append', default=[], help='python file / folder with TOOLS = {...} (e.g. your ship_mcp.py)')
     ap.add_argument('--workdir', default='shipbrain_work')
+    ap.add_argument('--embed-server', help='OpenAI-compatible embeddings server for meaning-based search, e.g. http://127.0.0.1:8090 '
+                                           '(llama-server -m nomic-embed-text-v1.5.Q8_0.gguf --embedding --port 8090)')
+    ap.add_argument('--embed-model', default='local')
     ap.add_argument('--examples', help='folder of verified CadQuery examples (default: the built-in library)')
     ap.add_argument('--allow-code', action='store_true', help='let the model run CadQuery scripts on this PC (cadquery_build tool)')
     ap.add_argument('--port', type=int, default=7860)
@@ -161,10 +167,12 @@ def main(argv=None):
     proc = None
     if a.model:
         a.server, proc = start_model(a.model, 8081, a.threads, a.ctx, a.mmproj, a.llama_bin)
-    kb = knowledge.load(a.knowledge)
+    emb = knowledge.Embedder(a.embed_server, a.embed_model) if a.embed_server else None
+    kb = knowledge.load(a.knowledge, cache_dir=os.path.join(a.workdir, '.index'), embedder=emb)
     from .examples import Examples
     ex = Examples(a.examples)
-    tools = agent.Tools(a.workdir, kb, allow_code=a.allow_code, examples=ex)
+    from .memory import Memory
+    tools = agent.Tools(a.workdir, kb, allow_code=a.allow_code, examples=ex, memory=Memory(os.path.join(a.workdir, '.memory')))
     for p in a.plugin:
         try:
             print(f'plugin {p}: {tools.load_plugin(p)} tools')

@@ -540,16 +540,86 @@ def test_semantic_dxf_compare(tmp_path):
 
 
 def test_semantic_pdf_compare(tmp_path):
-    pymupdf = pytest.importorskip('pymupdf')
+    pytest.importorskip('pdfplumber')
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
     from shipbrain.drawdiff import compare_vector
 
     def pdf(path, rev):
-        d = pymupdf.open()
-        pg = d.new_page()
-        pg.draw_line((50, 100), (500, 100), width=1.5)
-        pg.draw_line((50, 300), (500, 300), width=0.3, dashes='[4 2] 0' if rev else None)
-        pg.insert_text((60, 200), 'FB150x12' if not rev else 'HP200x10', fontsize=9)
-        d.save(path)
+        f = plt.figure(figsize=(6, 4))
+        ax = f.add_axes([0, 0, 1, 1])
+        ax.set_xlim(0, 600)
+        ax.set_ylim(0, 400)
+        ax.axis('off')
+        ax.plot([50, 500], [100, 100], lw=1.5, color='k')
+        ax.plot([50, 500], [300, 300], lw=0.3, color='k', ls='--' if rev else '-')
+        ax.text(60, 200, 'HP200x10' if rev else 'FB150x12', fontsize=9)
+        f.savefig(path)
+        plt.close(f)
         return path
     r = compare_vector(pdf(str(tmp_path / 'a.pdf'), 0), pdf(str(tmp_path / 'b.pdf'), 1))
     assert r['lines']['style_changed'] == 1 and r['texts']['changed_by_class'] == {'section size': 1}
+    from shipbrain import drawings
+    assert drawings.load_image(str(tmp_path / 'a.pdf')).ndim == 2
+    from shipbrain.fileinfo import file_info
+    assert 'PDF with 1 page' in file_info(str(tmp_path / 'a.pdf'))['plain_english']
+
+
+# ------------------------------------------------------------------ memory, hybrid search, MCP, CPU training
+def test_memory_and_feedback(tmp_path):
+    from shipbrain.memory import Memory
+    m = Memory(str(tmp_path))
+    a = m.remember('Our yard uses 700 mm frame spacing in the engine room', ['practice'])
+    m.remember('Brackets are modelled as shell elements')
+    assert m.recall('what frame spacing in the engine room?')[0]['id'] == a['id']
+    m.feedback(a['id'], False)
+    m.feedback(a['id'], False)
+    assert m.recall('frame spacing engine room') == []                       # clearly disliked -> not used
+    r = m.answer_feedback([{'role': 'user', 'content': 'stiffener spacing?'}, {'role': 'assistant', 'content': '600'}],
+                          False, 'Use 800 mm stiffener spacing on decks')
+    assert 'memory' in r and Memory(str(tmp_path)).recall('stiffener spacing decks')
+    t = agent.Tools(tmp_path / 'w', memory=Memory(str(tmp_path)))
+    ctx, used = agent.retrieve(t, 'which stiffener spacing on decks?')
+    assert any(u.startswith('memory:') for u in used) and 'taught by the user' in ctx
+
+
+def test_hybrid_search_with_embedding_server(tmp_path):
+    class Emb(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            vec = lambda t: [float('hull' in t.lower() or 'shell' in t.lower()), float('weld' in t.lower()), 0.1]
+            out = json.dumps({'data': [{'index': i, 'embedding': vec(t)} for i, t in enumerate(body['input'])]}).encode()
+            self.send_response(200)
+            self.send_header('Content-Length', str(len(out)))
+            self.end_headers()
+            self.wfile.write(out)
+    s = ThreadingHTTPServer(('127.0.0.1', 0), Emb)
+    threading.Thread(target=s.serve_forever, daemon=True).start()
+    try:
+        (tmp_path / 'docs').mkdir()
+        (tmp_path / 'docs' / 'a.md').write_text('# Outer shell\n\nThe hull plating thickness is checked against slamming.')
+        (tmp_path / 'docs' / 'b.md').write_text('# Joints\n\nFillet welds need a throat of 0.7 t.')
+        emb = knowledge.Embedder(f'http://127.0.0.1:{s.server_address[1]}')
+        kb = knowledge.load([str(tmp_path / 'docs')], cache_dir=str(tmp_path / 'c'), embedder=emb)
+        assert kb.search('shell', 1)[0]['source'] == 'a.md'                   # meaning + keywords fused
+        assert kb.search('welds', 2, scope='b.md')[0]['source'] == 'b.md'
+        assert os.path.exists(tmp_path / 'c' / 'embeddings.npz')
+        kb2 = knowledge.load([str(tmp_path / 'docs')], cache_dir=str(tmp_path / 'c'))   # cached index, no re-read
+        assert len(kb2) == len(kb)
+    finally:
+        s.shutdown()
+
+
+def test_mcp_server_lists_and_calls_tools(tmp_path):
+    from shipbrain import mcp_server
+    t = agent.Tools(tmp_path)
+    r = mcp_server.handle(t, {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/list'})
+    names = {x['name'] for x in r['result']['tools']}
+    assert {'plates_mesh', 'fe_convert', 'compare_structures', 'remember'} <= names
+    r = mcp_server.handle(t, {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/call', 'params': {'name': 'calc', 'arguments': {'expression': '6*7'}}})
+    assert json.loads(r['result']['content'][0]['text'])['value'] == 42
+    assert mcp_server.handle(t, {'jsonrpc': '2.0', 'method': 'notifications/initialized'}) is None

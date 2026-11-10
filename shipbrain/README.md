@@ -62,6 +62,17 @@ PyMAPDL and Abaqus need their own licensed software on your PC. ShipBrain writes
 | `compare_structures` | two versions of a structure model, member by member: plates (thickness, grade), stiffeners (section, grade), brackets, openings → same / changed / moved / added / removed, with positions. Reads structure JSON, or your ship XML through your private plugin (its `xml_to_members` is picked up automatically) |
 | `structure_to_mesh` | structure model → cleaned → global 1D + 2D mesh (plates with thickness and openings as shells, stiffeners as beams with their sections), plus a STEP |
 
+**Knowledge and memory (ideas from Voitta's knowledge engine, own implementation)**
+
+| Feature | What it does |
+|---|---|
+| hybrid search | keyword (BM25) + meaning-based search fused by reciprocal rank fusion. Meaning-based search uses any local open-source embedding model served by llama.cpp (`--embed-server`, e.g. nomic-embed-text, Apache-2.0), on CPU |
+| fast restarts | index and embeddings are cached; only files whose content changed are read again |
+| search scope | `knowledge_search(..., scope="project-a")` searches one project or folder only |
+| memory | `remember` / `recall` / `memory_feedback`: facts and yard practice you teach are used in later answers. Liked memories rank higher; clearly disliked ones are dropped |
+| 👍 / 👎 on answers | a 👎 with your correction is remembered at once. All rated chats go to `feedback.jsonl`, and `make_dataset.py --feedback` turns the liked ones into training data for the next fine-tune |
+| MCP server | `claude mcp add shipbrain -- python -m shipbrain.mcp_server --knowledge D:\ship_src`: Claude Code or other agents use the same tools |
+
 **Other tools:** `cadquery_build` (checked CAD), `solve_calculix`, `plate_check`, `stiffener_check`, `plate_buckling`, `section_props`,
 `calc`, `knowledge_search` with automatic RAG, and your plugins (e.g. your private `ship_mcp.py`).
 
@@ -95,7 +106,19 @@ Then run `shipbrain.exe --model shipbrain.llamafile`.
 
 ## Making the model ("modify the LLM weights")
 
-**Easiest: open `training/ShipBrain_train_colab.ipynb` in Google Colab** (File → Upload notebook, Runtime → T4 GPU) and
+### Three free ways to train (pick one)
+
+| Way | Account needed | GPU | How |
+|---|---|---|---|
+| **Kaggle** (recommended: the assistant can start and watch runs for you) | free Kaggle account + **phone verification** (needed for GPU and internet in notebooks) | free T4/P100, ~30 h per week, up to 12 h per run | `pip install kaggle`, set `KAGGLE_USERNAME` / `KAGGLE_KEY`, then `python training/kaggle_run.py start`, `watch`, `fetch` |
+| **Google Colab** | free Google account | free T4 (when available) | open `training/ShipBrain_train_colab.ipynb`, run the cells |
+| **Your own PC, no account** | none | none (CPU) | `python training/finetune_cpu.py --base Qwen/Qwen3-0.6B --max-samples 1000`. It is slow (hours to a day for small models) and saves checkpoints, so it can resume |
+
+All three use only open-source software: Qwen3 models (Apache-2.0), Unsloth (Apache-2.0) or Transformers + PEFT
+(Apache-2.0), and llama.cpp (MIT) for the CPU model file. The model file is saved to your private Hugging Face repo, or
+downloaded from the Kaggle or Colab output.
+
+**Colab: open `training/ShipBrain_train_colab.ipynb` in Google Colab** (File → Upload notebook, Runtime → T4 GPU) and
 run the cells. It clones the code, makes the data, scores the base model, fine-tunes, scores again, writes the GGUF, and
 uploads it to a **private** Hugging Face repo using a token stored in Colab's *Secrets* panel as `HF_TOKEN`.
 
@@ -144,7 +167,7 @@ publish the model: a model fine-tuned with your rule index can repeat it.
 ## Tests
 
 ```bash
-python -m pytest tests -q        # 43 tests: structure compare + mesh, semantic drawing diff, meshers, conformity, 1D+2D, cleaning, fatigue, formats + same solver answer through
+python -m pytest tests -q        # 46 tests: memory, hybrid search, MCP, structure compare + mesh, semantic drawing diff, meshers, conformity, 1D+2D, cleaning, fatigue, formats + same solver answer through
                                  # each, edit ops, 1D/2D/3D conversions, DXF->3D, drawing and mesh-vs-drawing comparison,
                                  # CadQuery, RAG, plugins, agent loop + GUI server vs a mock model
 ```
@@ -168,7 +191,15 @@ Do **not** commit ship drawings, XMLs, rule texts, `rules_index.json`, generated
 **This repository is public.** `.gitignore` already excludes these files. Keep them on the company drive and point the app at them with
 `--knowledge` / `--plugin`.
 
-## Optional: MinerU for PDFs
+## Licences: free and open source only
+
+Everything ShipBrain needs is free and open source: numpy and scipy (BSD), CadQuery (Apache-2.0) with OpenCascade (LGPL),
+pyNastran (BSD), ezdxf (MIT), pdfplumber (MIT), pypdfium2 (Apache/BSD), Pillow (MIT-CMU), CalculiX (GPL, run as a
+separate program), llama.cpp (MIT) and llamafile (Apache-2.0). Training uses Qwen3 (Apache-2.0), Unsloth (Apache-2.0),
+Transformers and PEFT (Apache-2.0). PyMuPDF (AGPL or paid) was replaced. ANSYS and Abaqus are only targets of the file
+converters and are never needed.
+
+## Optional: MinerU for PDFs (off by default)
 
 [MinerU](https://github.com/opendatalab/MinerU) turns PDFs (scans, tables, formulas) into Markdown. ShipBrain uses it for the
 knowledge base when it is installed and `SHIPBRAIN_MINERU=1` is set. It is not bundled. **Check its licence first:**
@@ -181,5 +212,6 @@ counted together with affiliates, and an online service must say that it uses Mi
 - [text-to-cad](https://github.com/earthtojake/text-to-cad) (MIT): check the user's sizes against the built solid, not against the model's words; an example corpus with prompts.
 - [solidcraft](https://github.com/tangency-labs/solidcraft) (MIT/Apache-2.0): a verified example and oracle set; small tool replies.
 - [CAD2Program](https://manycore-research.github.io/CAD2Program/): small models do better emitting short parametric primitives than free B-rep code.
+- [Voitta](https://github.com/voitta-ai/voitta-rag) (voitta-rag is AGPL-3.0, so nothing was copied): hybrid search, re-indexing only changed files, search scope, assistant memory with like/dislike, tools over MCP.
 - [CADCraft](https://github.com/storytold/cadcraft) (MIT/Apache-2.0): DXF as the drawing exchange format.
 - [ShipSpace-GA](https://github.com/kodendaal/ShipSpace-GA) (MIT, data CC BY 4.0): an arrangement generator, planned as a source of bulkhead and deck positions.

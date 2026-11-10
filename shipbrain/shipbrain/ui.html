@@ -36,6 +36,7 @@ details.tool summary{padding:6px 10px;cursor:pointer;color:var(--mute)}details.t
 details.tool pre{margin:0;padding:8px 10px;overflow:auto;max-height:320px;border-top:1px solid var(--line);white-space:pre-wrap}
 .err{color:var(--err)}
 .ov{max-width:100%;border:1px solid var(--line);border-radius:8px;margin:6px 0}
+.fb{font-size:13px;color:var(--mute);margin:2px 0 4px}.fb button{background:none;border:0;padding:2px 6px;opacity:.6}.fb button:hover{opacity:1}
 .ctx{font-size:12px;color:var(--mute);margin:2px 0 6px}
 #empty{text-align:center;color:var(--mute);margin-top:12vh}
 #empty h2{color:var(--ink);font-weight:600}
@@ -138,7 +139,15 @@ function view(m){
       (s.result&&s.result.overlay?'<img class="ov" src="/files/'+encodeURIComponent(s.result.overlay)+'">':'');
     else if(s.kind==='error')h+='<div class="err">'+esc(s.text)+'</div>';
     else if(s.kind==='ctx')h+='<div class="ctx">📚 used: '+s.sources.map(esc).join(', ')+'</div>'});
+  if(m.content&&!m.rated)h+='<div class="fb"><button title="good answer" onclick="rate(this,true)">👍</button><button title="wrong answer - tell me the correct one" onclick="rate(this,false)">👎</button></div>';
+  if(m.rated)h+='<div class="fb">'+(m.rated==='good'?'👍 thanks':'👎 noted - I will use your correction')+'</div>';
   d.innerHTML=h||'<div class="b" style="color:var(--mute)">…</div>';return d}
+async function rate(btn,good){
+  const c=cur();const node=btn.closest('.msg');const idx=[...document.querySelectorAll('#msgs .msg')].indexOf(node);
+  const comment=good?'':(prompt('What is the correct answer or what was wrong? (it is remembered and used for training)')||'');
+  const msgs=c.msgs.slice(0,idx+1).map(m=>({role:m.role,content:m.content}));
+  await fetch('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:msgs,good,comment})});
+  c.msgs[idx].rated=good?'good':'bad';save();render()}
 function newChat(){const id=Date.now().toString(36);store.chats.push({id,title:'',msgs:[]});store.cur=id;save();render();$('in').focus()}
 async function send(){
   const t=$('in').value.trim();if(!t)return;$('in').value='';autosize();
