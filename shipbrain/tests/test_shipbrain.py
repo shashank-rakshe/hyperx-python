@@ -1204,3 +1204,22 @@ def test_long_chat_keeps_decisions_and_files(tmp_path):
     f = tmp_path / '.state' / (chatstate.chat_id(h) + '.md')
     f.write_text('# my notes (edited)\n## Decisions\n- use S460 instead\n')
     assert 'S460' in chatstate.compact(h, str(tmp_path))[1]                  # the user's corrected notes win
+
+
+def test_skills_and_hooks(tmp_path):
+    T = agent.Tools(tmp_path)
+    assert [x['name'] for x in T.skills.match('Clean up bracket.step for FEA')] == ['fea-prep']
+    assert [x['name'] for x in T.skills.match('find the pipes in skid.stp')] == ['piping-model']
+    assert T.skills.match('what is a hot spot stress?') == []
+    out = T.call('add_skill', {'name': 'Weekly hatch', 'description': 'weekly hatch check', 'steps': ['plate_check', 'result_insight'],
+                               'when': 'weekly hatch'})
+    assert out['skill'] == 'weekly-hatch' and os.path.exists(tmp_path / 'skills' / 'weekly-hatch.md')
+    ctx = agent.retrieve(agent.Tools(tmp_path), 'run the weekly hatch check')[0]       # saved on disk: a new session uses it
+    assert '[skill weekly-hatch]' in ctx and '1. plate_check' in ctx
+    assert 'error' in T.call('add_skill', {'name': 'x', 'description': 'x', 'steps': ['a'], 'when': '(['})
+    plug = tmp_path / 'myplug.py'
+    plug.write_text("TOOLS = {}\nHOOKS = {'tool_result': lambda n, a, r: 'units are MPa' if n == 'calc' else None,\n"
+                    "         'question': lambda q: 'site rule: yield 355' if 'yield' in q else None}\n")
+    T.load_plugin(str(plug))
+    assert T.hook('tool_result', 'calc', {}, {}) == ['units are MPa'] and T.hook('tool_result', 'x', {}, {}) == []
+    assert T.hook('question', 'what yield?') == ['site rule: yield 355']

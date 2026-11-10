@@ -88,6 +88,13 @@ class Tools:
         self.register('convert_units', self.convert_units, 'Convert values between units (tools use mm, N, MPa, t): values = '
                       '[{"value", "from", "to"}], e.g. in->mm, psi->MPa, kN.m->N.mm, cm4->mm4, msw->MPa.',
                       {'type': 'object', 'properties': {'values': {'type': 'array'}}, 'required': ['values']})
+        self.register('add_skill', self.add_skill, 'Save a workflow the user teaches ("whenever I ask X, do A then B") as a skill: '
+                      'name, description, steps (list or text), when (optional regex of trigger words). Used from then on.',
+                      {'type': 'object', 'properties': {'name': {'type': 'string'}, 'description': {'type': 'string'},
+                                                         'steps': {'type': 'array'}, 'when': {'type': 'string'}},
+                       'required': ['name', 'description', 'steps']})
+        self.register('list_skills', self.list_skills, 'List the skills (saved workflows) ShipBrain knows: built-in and the user\'s own.',
+                      {'type': 'object', 'properties': {}})
         self.register('memory_feedback', self.memory_feedback, 'Like (good=true) or dislike a memory by id; forget=true deletes it.',
                       {'type': 'object', 'properties': {'id': {'type': 'string'}, 'good': {'type': 'boolean'}, 'forget': {'type': 'boolean'}},
                        'required': ['id']})
@@ -520,6 +527,39 @@ class Tools:
         return r
 
     @property
+    def skills(self):
+        from .skills import Skills
+        folder = os.path.join(self.workdir, 'skills')
+        if getattr(self, '_skills', None) is None or self._skills_folder != folder:
+            self._skills, self._skills_folder = Skills([folder] + list(getattr(self, 'skill_dirs', []))), folder
+        return self._skills
+
+    def add_skill(self, name, description, steps, when=''):
+        path = self.skills.add(os.path.join(self.workdir, 'skills'), name, description, steps, when)
+        nm = os.path.splitext(os.path.basename(path))[0]
+        return {'skill': nm, 'file': os.path.relpath(path, self.workdir),
+                'plain_english': f'Saved the skill "{nm}". When a question matches it, I will follow these steps. '
+                                 f'You can edit {os.path.relpath(path, self.workdir)} at any time.'}
+
+    def list_skills(self):
+        items = [{'name': k, 'description': v['description'], 'own': not v['source'].startswith(
+            os.path.dirname(os.path.abspath(__file__)))} for k, v in sorted(self.skills.items.items())]
+        return {'skills': items, 'plain_english': f"{len(items)} skills: " + '; '.join(
+            f"{i['name']} ({'yours' if i['own'] else 'built in'}): {i['description']}" for i in items)}
+
+    def hook(self, event, *args):
+        """run the plugins' hooks for an event -> list of notes (text) for the model"""
+        out = []
+        for fn in getattr(self, 'hooks', {}).get(event, []):
+            try:
+                r = fn(*args)
+                if r:
+                    out.append(str(r)[:1500])
+            except Exception as e:
+                out.append(f'(hook {getattr(fn, "__name__", "?")} failed: {type(e).__name__}: {e})')
+        return out
+
+    @property
     def profile(self):
         from .userprofile import Profile
         if getattr(self, '_profile', None) is None or self._profile.path != os.path.join(self.workdir, 'profile.json'):
@@ -751,6 +791,10 @@ class Tools:
                         conv = None
         if conv:
             self.converters.append(conv)
+        if not hasattr(self, 'hooks'):
+            self.hooks = {}
+        for ev, fn in getattr(mod, 'HOOKS', {}).items():            # question | tool_result | compact
+            self.hooks.setdefault(ev, []).append(fn)
         for name, (fn, desc, schema) in getattr(mod, 'TOOLS', {}).items():
             if name not in self.t:
                 self.register(name, fn, desc, schema)
@@ -916,6 +960,12 @@ def retrieve(tools, question, k=3, min_score=3.0):
     if prof is not None and prof.context():
         parts.append(prof.context())
         used.append('profile')
+    sk = getattr(tools, 'skills', None)
+    if sk is not None:
+        from .skills import context as _skill_ctx
+        for x in sk.match(question, 1):
+            parts.append(_skill_ctx(x))
+            used.append('skill:' + x['name'])
     if tools.memory is not None:
         for m in tools.memory.recall(question, 3):
             parts.append(f"[memory {m['id']}] (taught by the user) {m['text']}")
@@ -945,6 +995,9 @@ def run(llm, tools, history, max_steps=MAX_STEPS):
     """history: [{'role','content'}] of the chat so far (user last). Yields UI events (dicts)."""
     msgs = [{'role': 'system', 'content': system_prompt(tools, PROMPT_COMPACT)}]
     ctx, used = retrieve(tools, history[-1]['content'])
+    for h in tools.hook('question', history[-1]['content']) if hasattr(tools, 'hook') else []:
+        ctx = (ctx + '\n\n' if ctx else '') + '[hook] ' + h
+        used.append('hook')
     if ctx:
         msgs.append({'role': 'system', 'content': ctx})
         yield {'type': 'context', 'sources': used}
@@ -952,6 +1005,8 @@ def run(llm, tools, history, max_steps=MAX_STEPS):
     fixed = sum(chatstate.tokens(m['content']) for m in msgs)
     history, note = chatstate.compact(list(history), getattr(tools, 'workdir', None), fixed_tokens=fixed)
     if note:
+        for h in tools.hook('compact', note) if hasattr(tools, 'hook') else []:
+            note += '\n\n[hook] ' + h
         msgs.append({'role': 'system', 'content': note})
         yield {'type': 'context', 'sources': ['chat notes']}
     msgs += list(history)
@@ -984,7 +1039,9 @@ def run(llm, tools, history, max_steps=MAX_STEPS):
         if call['name'] in MESH_TOOLS and 'error' not in res and tools.last_mesh:
             ev['mesh'] = tools.last_mesh
         yield ev
-        msgs.append({'role': 'user', 'content': f"TOOL_RESULT {call['name']}: " + compact_result(res)})
+        extra = tools.hook('tool_result', call['name'], call['args'], res) if hasattr(tools, 'hook') else []
+        msgs.append({'role': 'user', 'content': f"TOOL_RESULT {call['name']}: " + compact_result(res)
+                     + ''.join('\n[hook] ' + h for h in extra)})
     yield {'type': 'done', 'content': '(stopped after %d tool steps)' % max_steps}
 
 

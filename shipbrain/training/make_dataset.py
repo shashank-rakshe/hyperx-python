@@ -676,6 +676,32 @@ def t_profile(r, tools):
             result_msg('set_profile', out), {'role': 'assistant', 'content': out['plain_english']}]
 
 
+_TEACH = [
+    ('monthly-tank-check', 'monthly tank wall check', ['plate_check for each tank wall plate with 0.15 MPa', 'stiffener_check for the vertical stiffeners',
+                                                       'list any utilisation above 0.9'], 'monthly tank'),
+    ('new-bracket-model', 'make and check a new bracket model', ['cadquery_build the bracket from the sizes given', 'repair_model to remove holes below 15 mm',
+                                                                 'cad_mesh at 10 mm'], 'new bracket'),
+    ('hatch-report', 'hatch cover result report', ['result_insight on the latest .frd with yield 355', 'compare with the baseline run',
+                                                   'write a three-line summary'], 'hatch report'),
+    ('pipe-skid-check', 'check a pipe skid model', ['pipe_extract with SCH80', 'surface_extract mid for the frame', 'tell how many pipe runs there are'],
+     'skid check'),
+]
+
+
+def t_add_skill(r, tools):
+    """the user teaches a workflow in the chat -> add_skill (saved, used from then on)"""
+    name, desc, steps, when = r.choice(_TEACH)
+    lead = r.choice(['Whenever I say "{w}", do this: ', 'Remember this workflow for "{w}": ', 'New procedure - when I ask for a {w}: ',
+                     'From now on, for a {w}: ']).format(w=when)
+    q = lead + '; '.join(f'{i + 1}) {s}' for i, s in enumerate(steps))
+    args = {'name': name, 'description': desc, 'steps': steps, 'when': when}
+    out = tools.call('add_skill', args)
+    if 'error' in out:
+        return None
+    return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('add_skill', args)},
+            result_msg('add_skill', out), {'role': 'assistant', 'content': out['plain_english']}]
+
+
 _SUR = {}                                     # built surrogates: name -> (args, result), built once per dataset run
 _SUR_SETS = [('deck_plate', {'L': [1500, 3000], 'B': [600, 900], 't': [8, 16], 'p': [0.02, 0.08]}),
              ('tank_wall', {'L': [800, 2000], 'B': [500, 800], 't': [10, 20], 'p': [0.05, 0.15]}),
@@ -827,7 +853,7 @@ TASKS = [('mesh', 30, lambda r, T: t_mesh(r, T)), ('mesh_fix', 6, lambda r, T: t
          ('mesh_assume', 6, lambda r, T: t_mesh(r, T, 'assume')), ('plate', 12, t_plate), ('stiff', 12, t_stiff),
          ('buckle', 5, t_buckle), ('section', 8, t_section), ('calc', 4, t_calc), ('chat', 3, t_chat), ('plates', 4, t_plates), ('program', 12, t_program), ('cad_bank', 14, t_cad_bank),
          ('fileinfo', 4, t_fileinfo), ('convert', 4, t_convert), ('edit', 5, t_edit), ('clean', 3, t_clean), ('fe_repair', 3, t_fe_repair),
-         ('sur_build', 1, t_sur_build), ('units', 5, t_units), ('profile', 2, t_profile), ('sur_predict', 4, t_sur_predict), ('insight', 3, t_insight)]
+         ('sur_build', 1, t_sur_build), ('units', 5, t_units), ('profile', 2, t_profile), ('add_skill', 2, t_add_skill), ('sur_predict', 4, t_sur_predict), ('insight', 3, t_insight)]
 
 
 def main(argv=None):

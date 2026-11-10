@@ -131,6 +131,29 @@ user lives on that user's PC and is read at run time, so nobody needs their own 
 | CPU / GPU | `--gpu auto` | uses the card when it works, else the CPU |
 | company data for training | private Kaggle dataset | gives that company its own private model; the public model never sees it |
 
+## Skills and hooks: teach it workflows without retraining
+
+**Skills** are small Markdown files with the steps of a workflow. For every question the best matching skill is given to
+the model, which then follows the steps. Built in (`shipbrain/skill_library/`): `fea-prep` (clean up CAD for FEA),
+`piping-model`, `surrogate-study`, `result-review`, `other-units`. Your own go in `<workdir>/skills/`, or teach one in
+the chat: *"Whenever I say 'monthly tank check', do: 1) plate_check ... 2) ... 3) ..."* -> `add_skill` saves it, and it
+is used from then on (`list_skills` shows them all). A skill file:
+
+```
+---
+name: monthly-tank-check
+description: monthly tank wall check
+when: monthly tank            # regex of trigger words (optional; else word match with the description)
+---
+1. plate_check for each tank wall plate with 0.15 MPa
+2. stiffener_check for the vertical stiffeners
+3. list any utilisation above 0.9
+```
+
+**Hooks** are functions in a plugin file (next to its `TOOLS`), called at fixed moments; the text they return is given
+to the model as a note: `HOOKS = {'question': fn(question), 'tool_result': fn(name, args, result), 'compact': fn(notes)}`.
+Example: a company rule checker that adds "site rule: yield 355 MPa" to every question about yield.
+
 ## Long chats on a small model
 
 The model's window is small (8k tokens by default, `--ctx`). When a chat no longer fits, the oldest turns are replaced by
