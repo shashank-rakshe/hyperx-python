@@ -30,7 +30,7 @@ MAX_JSON = 30_000
 DEFAULT_BUDGET_KB = 1500             # raw text kept per repo
 
 DOC_EXT = ('.md', '.markdown', '.rst', '.txt', '.html', '.htm')
-CODE_EXT = ('.py', '.rs', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cs')
+CODE_EXT = ('.py', '.rs', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cs', '.cpp', '.cc', '.cxx', '.hpp', '.hh', '.h', '.c')
 DECK_EXT = ('.rad', '.inp', '.bdf', '.k', '.key', '.fem')    # solver input decks: keyword blocks are good format examples
 SKIP_DIRS = {'.git', 'node_modules', 'vendor', 'vendored', 'third_party', 'third-party', 'thirdparty', 'external', 'extern',
              'deps', 'dist', 'build', 'target', 'out', '__pycache__', '.venv', 'venv', 'env', 'site-packages', '.tox',
@@ -42,6 +42,7 @@ EXAMPLE_DIRS = {'example', 'examples', 'samples', 'sample', 'demo', 'demos', 'tu
 TEST_DIRS = {'test', 'tests', 'testing', '__tests__', 'spec', 'specs'}
 SKIP_NAME = re.compile(r'^(licen[cs]e|copying|notice|third[-_]party|changelog|changes|history|authors|contributors)', re.I)
 LOCK_NAME = re.compile(r'(requirements[\w\-]*\.txt|\.lock|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|\.min\.(js|css)|\.map)$', re.I)
+NOISE_PATH = re.compile(r'(^|/)(blessed_files|expected_outputs?|reference_outputs?|golden)/|(^|/)CMakeLists\.txt$|\.cmake$', re.I)
 LICENCE_FILE = re.compile(r'^(un)?(licen[cs]e|copying)([-_.][\w\-]+)?(\.txt|\.md|\.rst)?$', re.I)
 WEB_ASSET_DIRS = {'static', 'assets', 'public', 'www', 'wwwroot', 'js', 'lib', 'libs'}
 LOW_NAME = {'migration', 'migrating', 'release', 'releasing', 'ribbon', 'blur', 'egui', 'i18n', 'localization', 'fonts', 'icons',
@@ -367,6 +368,8 @@ def _holder(c):
 
 
 def _drop_reason(path, data, kind):
+    if NOISE_PATH.search(path):
+        return 'test output / build script'
     if b'\0' in data[:8000]:
         return 'binary'
     text = data.decode('utf-8', 'replace')
@@ -533,6 +536,9 @@ def chunk_python(text):
 _ITEM = {
     'rs': (re.compile(r'^(pub(\([^)]*\))?\s+)?(async\s+|unsafe\s+|const\s+|extern\s+"C"\s+)*(fn|struct|enum|trait|impl|mod|const|static|type|macro_rules!)\b'),
            re.compile(r'^\s{4}(pub(\([^)]*\))?\s+)?(async\s+|unsafe\s+|const\s+)*fn\s')),
+    'cpp': (re.compile(r'^(template\s*<[^>]*>\s*)?((static|inline|virtual|constexpr|extern|explicit|friend)\s+)*'
+                       r'(struct|class|namespace|enum|[\w:<>,*& ]+?\s+[\w:~]+\s*\([^;]*$)'),
+            re.compile(r'^\s{2,4}((static|inline|virtual|constexpr|explicit)\s+)*[\w:<>,*& ]+?\s+[\w:~]+\s*\([^;]*$')),
     'cs': (re.compile(r'^\s{0,4}(\[[^\]]*\]\s*)*((public|internal|private|protected|static|sealed|abstract|partial|readonly|file)\s+)*(class|struct|record|interface|enum)\s'),
            re.compile(r'^\s{4,8}((public|internal|private|protected|static|override|virtual|abstract|async|sealed|new)\s+)+[\w<>\[\],. ?]+\s+\w+\s*(<[^>]*>)?\(')),
     'js': (re.compile(r'^(export\s+)?(default\s+)?(async\s+)?(function\*?|class|const|let|var|interface|type|enum|abstract\s+class)\b'),
@@ -607,6 +613,8 @@ def chunk_file(path, text):
         return chunk_code(text, 'rs')
     if low.endswith('.cs'):
         return chunk_code(text, 'cs')
+    if low.endswith(('.cpp', '.cc', '.cxx', '.hpp', '.hh', '.h', '.c')):
+        return chunk_code(text, 'cpp')
     if low.endswith(('.ts', '.tsx', '.js', '.jsx', '.mjs')):
         return chunk_code(text, 'js')
     return chunk_text(text)

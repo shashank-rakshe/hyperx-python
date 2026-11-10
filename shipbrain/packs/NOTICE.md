@@ -45,6 +45,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2026 Ciuntuc BIM Studio S.R.L
 
+## mofem-cephas
+
+- Source: https://github.com/MoFEM/mofem-cephas.git (commit 0ca4c7333ce1)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2022 [Authors](http://mofem.eng.gla.ac.uk/mofem/html/authors.html)
+
 ## solidcraft
 
 - Source: https://github.com/tangency-labs/solidcraft (commit b57026e1fd77)
