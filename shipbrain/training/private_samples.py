@@ -51,8 +51,11 @@ def make(runs, out, per_run=6, seed=0):
     sysmsg = {'role': 'system', 'content': agent.system_prompt(tools)}
     n = 0
     with open(out, 'w', encoding='utf-8') as fh:
-        for line in open(runs, encoding='utf-8'):
+        uniq = {}
+        for line in open(runs, encoding='utf-8'):                 # the same call twice: keep the last result
             x = json.loads(line)
+            uniq[json.dumps([x['name'], x['args']], sort_keys=True)] = x
+        for x in uniq.values():
             res = x['result']
             if 'error' in res or not res.get('plain_english'):
                 continue
