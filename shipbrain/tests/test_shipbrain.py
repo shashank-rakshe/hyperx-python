@@ -741,3 +741,66 @@ def test_repo_tasks_make_valid_samples(tmp_path):
             assert all(h['id'].startswith('hulltools:') for h in res['results'])       # private-only pack never used
         else:
             assert res['pass'] and all(c.startswith('PASS') for c in res['checks'])
+
+
+# ------------------------------------------------------------------ mesher robustness (agent)
+_DECK = {'id': 'DECK', 't': 12, 'outline': [[0, 0, 0], [3000, 0, 0], [3000, 2000, 0], [0, 2000, 0]]}
+
+
+def _mcheck(m):
+    return meshcheck.check(m.xyz, [e['nodes'] for e in m.elems])
+
+
+def test_joint_lines_2mm_apart_give_no_slivers():
+    # two girders under the deck, the second drawn 2 mm off the first's plane and overlapping it by 300 mm
+    w1 = {'id': 'W1', 't': 10, 'outline': [[0, 1000, 0], [1500, 1000, 0], [1500, 1000, -500], [0, 1000, -500]]}
+    w2 = {'id': 'W2', 't': 10, 'outline': [[1200, 1002, 0], [3000, 1002, 0], [3000, 1002, -500], [1200, 1002, -500]]}
+    m = platemesh.mesh_plates([_DECK, w1, w2], 200)
+    c = _mcheck(m)
+    assert c['verdict'] == 'ok' and c['parts'] == 1 and c['duplicate_nodes'] == 0, c['verdict']
+    assert c['quality']['inverted_or_degenerate'] == 0 and c['quality']['min_angle'] >= 20
+    assert m.report['line_clean_up']['welded_points'] + m.report['line_clean_up']['split_at_points'] > 0
+
+
+def test_bracket_on_1d_stiffener_web_is_tied():
+    beam = [{'id': 'L1', 'a': [0, 1000, 0], 'b': [3000, 1000, 0], 'profile': {'type': 'FlatBar', 'h': 200, 't': 12}, 'normal': [0, 0, -1]}]
+    # bracket in the stiffener's web plane, its top edge 0.5 x profile height below the beam line
+    br = {'id': 'BR', 't': 10, 'outline': [[500, 1000, -100], [1100, 1000, -100], [500, 1000, -700]]}
+    loose = platemesh.mesh_plates([_DECK, br], 200, beams=beam, bracket_ties=False)
+    assert _mcheck(loose)['parts'] == 2
+    m = platemesh.mesh_plates([_DECK, br], 200, beams=beam)
+    c = _mcheck(m)
+    assert c['parts'] == 1 and c['verdict'] == 'ok', c['verdict']
+    assert [t[:2] for t in m.report['bracket_ties']] == [['BR', 'L1']]
+    bar_nodes = {n for e in m.elems if e['type'] == 'bar' for n in e['nodes']}
+    br_nodes = {n for e in m.elems if e['group'] == 'BR' for n in e['nodes']}
+    assert len(bar_nodes & br_nodes) >= 3                          # bracket edge shares the beam's nodes
+
+
+def test_moulded_line_offsets_are_closed():
+    # girder drawn to the deck's far face (one deck thickness short of the mid-plane)
+    g = {'id': 'G', 't': 10, 'outline': [[0, 1000, -12], [3000, 1000, -12], [3000, 1000, -600], [0, 1000, -600]]}
+    c = _mcheck(platemesh.mesh_plates([_DECK, g], 200))
+    assert c['parts'] == 1 and c['verdict'] == 'ok', c['verdict']
+    # neighbouring deck panel one plate thickness lower
+    d2 = {'id': 'DECK2', 't': 12, 'outline': [[3000, 0, -12], [4500, 0, -12], [4500, 2000, -12], [3000, 2000, -12]]}
+    c = _mcheck(platemesh.mesh_plates([_DECK, d2], 400))
+    assert c['parts'] == 1 and c['verdict'] == 'ok' and c['duplicate_nodes'] == 0, c['verdict']
+
+
+def test_repair_removes_degenerate_elements_and_keeps_corners():
+    # a 15 mm snipe and a 3 mm step at a corner: shorter than h / 10, collapsed; no element below 5 degrees
+    p = {'id': 'P', 't': 10, 'outline': [[0, 0, 0], [2000, 0, 0], [2000, 985, 0], [1985, 1000, 0], [0, 1000, 0], [0, 3, 0]]}
+    w = {'id': 'W', 't': 10, 'outline': [[0, 500, 0], [2000, 500, 0], [2000, 500, -400], [0, 500, -400]]}
+    m = platemesh.mesh_plates([p, w], 200)
+    c = _mcheck(m)
+    assert c['parts'] == 1 and c['duplicate_nodes'] == 0 and c['free_nodes'] == 0, c['verdict']
+    assert c['quality']['inverted_or_degenerate'] == 0 and c['quality']['min_angle'] >= 5, c['verdict']
+    assert c['quality']['max_aspect'] < 20                           # no 3 mm / 15 mm sliver elements left
+    X = np.array(m.xyz)
+    for corner in ([2000, 0, 0], [0, 1000, 0], [2000, 500, -400]):    # real corners are not moved
+        assert np.linalg.norm(X - corner, axis=1).min() < 1e-6
+    area = sum(0.5 * np.linalg.norm(np.cross(X[e['nodes'][2] - 1] - X[e['nodes'][0] - 1], X[e['nodes'][3 if len(e['nodes']) == 4 else 1] - 1] - X[e['nodes'][1] - 1]))
+               if len(e['nodes']) == 4 else 0.5 * np.linalg.norm(np.cross(X[e['nodes'][1] - 1] - X[e['nodes'][0] - 1], X[e['nodes'][2] - 1] - X[e['nodes'][0] - 1]))
+               for e in m.elems if e['group'] == 'P')
+    assert abs(area - 2000 * 1000) < 0.01 * 2000 * 1000

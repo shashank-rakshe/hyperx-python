@@ -135,13 +135,24 @@ Real gains have to be measured on the trained ShipBrain model.
 
 ## Known limits (measured on a real engine-room structure model: 703 plates, 565 stiffeners)
 
-- **Size:** the whole structure meshes in about 2 minutes on 4 CPU cores (≈ 42,000 elements at 400 mm).
-- **Connectivity:** with 15 mm snapping, 92 % of the elements are in one connected piece. Most of the remaining loose
-  pieces are brackets that attach to stiffener webs, while the stiffeners are 1D beams in the model. Next fix: model
-  bracketed stiffeners as shell webs, or tie the brackets to the beam nodes.
-- **Slivers:** real data has lines a few mm apart, which still give some sliver elements and near-duplicate nodes.
-  Next fix: merge nearly coincident lines before meshing.
-- The synthetic test models in `tests/` are fully clean: 1 part, no free or duplicate nodes, no bad elements.
+| | first version | now | target |
+|---|---|---|---|
+| mesh time (4 CPU cores, 400 mm elements) | 135 s | **51 s** | |
+| unconnected pieces | 165 | **10** | 1 |
+| largest connected piece | 92 % | **98.7 %** | >= 99 % |
+| loose brackets | 139 | **0** (262 bracket edges tied to their stiffeners) | 0 |
+| near-duplicate nodes | 824 | **0** | 0 |
+| inverted / degenerate elements | 518 | **14** | 0 |
+| elements with a corner < 5 deg | 2,352 | **335** | 0 |
+| max aspect ratio / max warp | 1014 / 79 deg | **134 / 6.7 deg** | |
+
+- The 9 remaining loose plate pieces sit 105-773 mm from any other plate. That looks like structure missing from the
+  source model, so they are reported, not forced shut.
+- The remaining slivers are thin triangles between real lines 20-60 mm apart, wider than the 5 % snap tolerance. A
+  larger snap made more zig-zag lines and more inverted elements, so it was not used.
+- New mesher options: `snap_tol` (default 0.05 x element size), `min_seg` (h/10), `bracket_ties` (on), `repair` (on).
+  The report lists every line clean-up, bracket tie and repair.
+- The synthetic test models are fully clean: 1 part, no free or duplicate nodes, no bad elements.
 
 ## Making the model ("modify the LLM weights")
 

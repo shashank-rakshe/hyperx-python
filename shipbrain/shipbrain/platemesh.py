@@ -4,15 +4,24 @@ No gmsh. Conforming by construction: no free nodes, no duplicate nodes, plates s
 
 Pipeline
   1. each plate = planar polygon (outline + holes) in 3D, thickness t
+  1b. bracket ties: a plate in a 1D stiffener's web plane with an edge along the web toe is pulled onto the beam
+     line (tie_brackets) - 1D stiffeners have no web for the bracket to sit on
   2. gap closing: a plate edge lying within ~half the thicknesses of another plate's plane is snapped onto it
-     (mid-surfaces of CAD solids stop t/2 short of the plate they sit on -> would be disconnected)
+     (mid-surfaces of CAD solids stop t/2 short of the plate they sit on -> would be disconnected); also moulded-line
+     offsets (edge drawn to the far face of the other plate: up to t_other + t/2)
   3. all plate-plate intersection lines are computed and clipped to both plates
-  4. every boundary edge and joint line becomes a global segment; segments are split at every crossing / T-joint,
-     de-duplicated, then discretised ONCE -> both plates of a joint get the very same nodes
+  4. every boundary edge, joint line and beam line becomes a global segment; segments are split at every crossing /
+     T-joint and de-duplicated; each knows the plates / beams it belongs to (SegGraph)
+  4b. line clean-up on that one global graph (so every plate sees the same change): end points closer than snap_tol are
+     welded, a point within snap_tol of another line is moved onto it (or the line bent through it) so near-collinear /
+     overlapping lines become one, lines shorter than min_seg collapse to a point when all plates stay flat;
+     then every line is discretised ONCE -> all plates of a joint get the very same nodes
   5. per plate: constrained Delaunay triangulation in the plate plane (fixed joint/boundary nodes + hex-grid interior points,
      constraint edges recovered by edge flips), Delaunay flips, smoothing
   6. triangles paired into quads, then every element split into quads (all-quad mesh, element size h);
      edge mid-nodes are shared through the global node registry
+  6b. repair: nodes closer than snap_tol / 2 merged, elements with a corner < 5 deg / no area removed by collapsing
+     their shortest side (global, never moving plate corners further than snap_tol, never inverting a neighbour)
   7. checks (free nodes, duplicates, connectivity, quality) - see meshcheck.py
 
 Units mm. Plate dict: {"id": "DECK", "outline": [[x,y,z], ...], "holes": [[[x,y,z], ...]], "t": 12, "group": "deck"}
@@ -763,7 +772,6 @@ def _keep_regions(T, P2, cons, loops2):
     ins = _inside(C, loops2)
     area = np.array([abs(_orient(*P2[t])) for t in tris]) + 1e-30
     uf = _UF(len(tris))
-    idx = {id(t): k for k, t in enumerate(tris)}
     tri_of = {}
     for k, t in enumerate(tris):
         for m in range(3):
@@ -1157,8 +1165,12 @@ def _smooth3d(m, plates, fixed, iters=3):
         for i in free:
             P = pl[next(iter(owner[i]))]
             old = X[i - 1].copy()
-            X[i - 1] = X[[j - 1 for j in nb[i]]].mean(0)
+            Y = X[[j - 1 for j in nb[i]]]
+            X[i - 1] = Y.mean(0)
             X[i - 1] -= P.plane_dist(X[i - 1]) * P.n
+            if np.linalg.norm(Y - X[i - 1], axis=1).min() < 0.5 * np.linalg.norm(Y - old, axis=1).min():
+                X[i - 1] = old                                  # never pull a node onto a neighbour
+                continue
             for e in elems_of[i]:
                 Q = np.array([P.to2(X[j - 1]) for j in e['nodes']])
                 if any(_orient(Q[k - 1], Q[k], Q[(k + 1) % len(Q)]) <= 0 for k in range(len(Q))):
@@ -1171,14 +1183,16 @@ def _smooth3d(m, plates, fixed, iters=3):
 # ====================================================================== spec -> files
 def build_plates(spec, out_dir='.', formats=('bdf', 'inp')):
     """spec: {"name", "plates": [...], "element_size", "material", "loads": [{"plates": [ids], "pressure": MPa}],
-              "fix": [{"x"|"y"|"z": value, "dof": "123456"}], "all_quad": true}"""
+              "fix": [{"x"|"y"|"z": value, "dof": "123456"}], "all_quad": true,
+              optional mesher settings (see mesh_plates): "snap_tol", "min_seg", "bracket_ties" (true), "repair" (true)}"""
     import json, os
     from . import mesh as M, meshcheck
     s = dict(spec)
     s.setdefault('name', 'assembly')
     s.setdefault('material', M.DEFAULT_SPEC['material'])
     h = float(s.get('element_size', 100))
-    m = mesh_plates(s['plates'], h, all_quad=s.get('all_quad', True), beams=s.get('beams'))
+    m = mesh_plates(s['plates'], h, all_quad=s.get('all_quad', True), beams=s.get('beams'), snap_tol=s.get('snap_tol'),
+                    min_seg=s.get('min_seg'), bracket_ties=s.get('bracket_ties', True), repair=s.get('repair', True))
     m.spec = {'name': s['name'], 'material': s['material'], 'pressure': 0}
     m.loads = []
     for ld in s.get('loads', []) or []:
