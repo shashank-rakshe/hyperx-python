@@ -623,3 +623,121 @@ def test_mcp_server_lists_and_calls_tools(tmp_path):
     r = mcp_server.handle(t, {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/call', 'params': {'name': 'calc', 'arguments': {'expression': '6*7'}}})
     assert json.loads(r['result']['content'][0]['text'])['value'] == 42
     assert mcp_server.handle(t, {'jsonrpc': '2.0', 'method': 'notifications/initialized'}) is None
+
+
+# ------------------------------------------------------------------ repo packs (agent)
+MIT_TEXT = ('MIT License\n\nCopyright (c) 2026 Hull Tools Ltd\n\nPermission is hereby granted, free of charge, to any person '
+            'obtaining a copy of this software ...\n')
+
+
+def _fake_repo(root, licence=MIT_TEXT):
+    """tiny git repo: LICENSE, README with headings, code, plus things that must be dropped"""
+    root.mkdir()
+    (root / 'LICENSE').write_text(licence)
+    (root / 'README.md').write_text('# Hull tools\n\nSmall helpers for hull plating.\n\n## Plate weight\n\n'
+                                    'The plate weight is length times breadth times thickness times the steel density '
+                                    'of 7.85 t/m3, which the hull_plate_weight function returns in tonnes.\n')
+    (root / 'hull.py').write_text('"""hull helpers"""\nimport math\n\n\ndef hull_plate_weight(l, b, t):\n'
+                                  '    """weight of one hull plate in tonnes from its sizes in mm"""\n'
+                                  '    return l * b * t * 7.85e-9\n\n\nclass Frame:\n    """a transverse web frame"""\n'
+                                  '    spacing = 800\n\n    def web_area(self, h, t):\n'
+                                  '        """cross-section area of the frame web in mm2"""\n        return h * t\n')
+    (root / 'vendor').mkdir()
+    (root / 'vendor' / 'lib.py').write_text('def vendored_thing():\n    return 1\n')
+    (root / 'app.min.js').write_text('var a=1;' * 400)
+    (root / 'logo.png').write_bytes(b'\x89PNG\r\n\x1a\n\0\0\0' * 50)
+    (root / 'README_copy.md').write_text((root / 'README.md').read_text())          # exact duplicate chunks
+    git = ['git', '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', '-C', str(root)]
+    import subprocess
+    subprocess.run(git + ['init', '-q'], check=True)
+    subprocess.run(git + ['add', '-A'], check=True)
+    subprocess.run(git + ['commit', '-qm', 'init'], check=True)
+    return root
+
+
+def test_repopack_licence_decision():
+    from shipbrain import repopack
+    ok = repopack.check_licence(MIT_TEXT)
+    assert ok['allowed'] and ok['license'] == 'MIT' and ok['attribution'] == ['Copyright (c) 2026 Hull Tools Ltd']
+    agpl = repopack.check_licence('GNU AFFERO GENERAL PUBLIC LICENSE\nVersion 3, 19 November 2007\n...')
+    assert not agpl['allowed'] and agpl['license'].startswith('AGPL') and 'copyleft' in agpl['reason']
+    assert not repopack.check_licence({})['allowed']                                     # no licence: refused
+    dual = repopack.check_licence({'LICENSE-MIT': MIT_TEXT, 'LICENSE-APACHE': 'Apache License\nVersion 2.0, January 2004'})
+    assert dual['allowed'] and 'Apache-2.0' in dual['license'] and 'MIT' in dual['license']
+    assert not repopack.check_licence({'LICENSE': 'All rights reserved. Do not copy.'})['allowed']   # unknown
+    assert repopack.spdx_kind('MIT OR Apache-2.0')[1] == 'permissive' and repopack.spdx_kind('GPL-3.0-only')[1] == 'copyleft'
+
+
+@pytest.mark.skipif(not shutil.which('git'), reason='git not installed')
+def test_repopack_round_trip_and_load(tmp_path):
+    from shipbrain import repopack
+    repo = _fake_repo(tmp_path / 'hulltools')
+    out = tmp_path / 'packs'
+    res = repopack.build_pack(str(repo), str(out), log=lambda *a: None)
+    assert res['allowed_for_training'] and res['gz_bytes'] > 0 and os.path.exists(res['file'])
+    p = repopack.read_pack(res['file'])
+    assert p['license'] == 'MIT' and p['allowed_for_training'] and len(p['commit']) == 40
+    srcs = {c['source'] for c in p['chunks']}
+    assert srcs == {'README.md', 'hull.py'}                         # vendored, minified, binary, duplicate dropped
+    titles = {c['title'] for c in p['chunks']}
+    assert 'def hull_plate_weight' in titles and 'class Frame' in titles and 'Hull tools > Plate weight' in titles
+    assert p['stats']['near_duplicates_dropped'] >= 1
+    notice = repopack.write_notice(str(out))
+    assert 'Copyright (c) 2026 Hull Tools Ltd' in notice and (out / 'NOTICE.md').exists()
+    kb = knowledge.Knowledge()
+    assert repopack.load_pack(res['file'], kb) == len(p['chunks'])
+    hit = kb.search('hull plate weight density tonnes', 3)[0]
+    assert hit['source'].startswith('repo:hulltools/') and hit['id'].startswith('hulltools:')
+    assert kb.search('weight', 3, scope='repo:hulltools')
+    # a copyleft repo is refused, or packed as private-only when forced
+    agpl = _fake_repo(tmp_path / 'gplthing', 'GNU AFFERO GENERAL PUBLIC LICENSE\nVersion 3\n')
+    r = repopack.build_pack(str(agpl), str(out), log=lambda *a: None)
+    assert r['refused'] and 'AGPL' in r['reason'] and not (out / 'gplthing.sbpack').exists()
+    r = repopack.build_pack(str(agpl), str(out), private_only=True, log=lambda *a: None)
+    assert r['file'].endswith('gplthing.private.sbpack') and not repopack.read_pack(r['file'])['allowed_for_training']
+    assert repopack.load_pack(r['file'], knowledge.Knowledge(), training_only=True) == 0
+
+
+@pytest.mark.skipif(not shutil.which('git'), reason='git not installed')
+def test_repo_tasks_make_valid_samples(tmp_path):
+    import re
+    from shipbrain import repopack
+    from shipbrain.examples import Examples, verify_all
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'training'))
+    import repo_tasks
+    out = tmp_path / 'packs'
+    repopack.build_pack(str(_fake_repo(tmp_path / 'hulltools')), str(out), log=lambda *a: None)
+    agpl = _fake_repo(tmp_path / 'gplthing', 'GNU AFFERO GENERAL PUBLIC LICENSE\nVersion 3\n')
+    repopack.build_pack(str(agpl), str(out), private_only=True, log=lambda *a: None)
+    cad = False
+    try:
+        import cadquery  # noqa: F401
+        cad = True
+        exdir = tmp_path / 'ex'
+        exdir.mkdir()
+        (exdir / 'sc_box.py').write_text('# Prompt: box 40 x 30 x 20 mm\n# Tags: box\n# Source: https://example.org/repo (MIT), '
+                                         'ported to CadQuery\n# Expect: {"bbox": [40, 30, 20], "volume": 24000}\n'
+                                         'import cadquery as cq\nresult = cq.Workplane("XY").box(40, 30, 20)\n')
+        assert verify_all(str(exdir), str(tmp_path / 'w0'))[0].startswith('sc_box: ok')
+        ex = Examples(str(exdir))
+    except ImportError:
+        ex = Examples(str(tmp_path / 'none'))
+    train, ev = repo_tasks.make(str(out), str(tmp_path / 'w'), per_pack=10, cad=cad, examples=ex)
+    rows = train + ev
+    assert any(r['task'] == 'repo_knowledge' for r in rows)
+    assert cad == any(r['task'] == 'repo_cad' for r in rows)
+    for r in rows:
+        m = r['messages']
+        assert m[0]['role'] == 'system' and 'knowledge_search' in m[0]['content']
+        i = next(k for k, x in enumerate(m) if x['role'] == 'assistant')
+        call = agent.parse_tool_call(m[i]['content'])
+        assert call['name'] in ('knowledge_search', 'cadquery_build')
+        assert m[i + 1]['role'] == 'user' and m[i + 1]['content'].startswith('TOOL_RESULT ' + call['name'])
+        assert m[-1]['role'] == 'assistant' and not agent.parse_tool_call(m[-1]['content'])
+        res = json.loads(m[i + 1]['content'].split(': ', 1)[1])
+        if call['name'] == 'knowledge_search':
+            cited = re.findall(r'\[([^\]]+#\d+)\]', m[-1]['content'])
+            assert cited and cited[0] in [h['id'] for h in res['results']]
+            assert all(h['id'].startswith('hulltools:') for h in res['results'])       # private-only pack never used
+        else:
+            assert res['pass'] and all(c.startswith('PASS') for c in res['checks'])

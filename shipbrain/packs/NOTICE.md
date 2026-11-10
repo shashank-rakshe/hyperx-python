@@ -33,7 +33,7 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 
 ## solidcraft
 
-- Source: https://github.com/tangency-labs/solidcraft (commit 7e902aa47351)
+- Source: https://github.com/tangency-labs/solidcraft (commit b57026e1fd77)
 - Licence: Apache-2.0 + MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2026 SolidCraft contributors
