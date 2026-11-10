@@ -292,3 +292,183 @@ def test_dataset_generation(tmp_path):
         for m in r['messages']:
             if m['role'] == 'assistant' and '```tool' in m['content']:
                 assert agent.parse_tool_call(m['content'])['name'] != '__bad__'
+
+
+# ------------------------------------------------------------------ FE model: formats, editing, 1D/2D/3D
+from shipbrain.femodel import FEModel  # noqa: E402
+
+
+def _bare(tmp_path, h=50):
+    spec = {'name': 'c', 'element_size': h, 'fix': [{'x': 0}, {'x': 2000}, {'y': 0}, {'y': 1000}],
+            'loads': [{'plates': ['P'], 'pressure': 0.05}],
+            'plates': [{'id': 'P', 't': 20, 'outline': [[0, 0, 0], [2000, 0, 0], [2000, 1000, 0], [0, 1000, 0]]}]}
+    m, _ = platemesh.build_plates(spec, tmp_path, formats=())
+    return FEModel.from_mesh(m)
+
+
+def test_format_round_trips_keep_the_model(tmp_path):
+    f = _bare(tmp_path)
+    for ext in ('bdf', 'inp'):
+        f.write(str(tmp_path / f'r.{ext}'))
+        g = FEModel.read(str(tmp_path / f'r.{ext}'))
+        assert len(g.nodes) == len(f.nodes) and len(g.elems) == len(f.elems)
+        assert len(g.spc) == len(f.spc) and sum(len(l['elems']) for l in g.loads) == len(f.elems)
+        assert max(np.abs(g.nodes[k] - f.nodes[k]).max() for k in f.nodes) < 1e-5
+    f.write(str(tmp_path / 'r.mac'))
+    txt = open(tmp_path / 'r.mac').read()
+    assert txt.count('\nEN,') == len(f.elems) and 'SECDATA,20' in txt and 'SFE,' in txt
+    assert len(f.write_drivers(str(tmp_path / 'r'))) == 2
+
+
+@pytest.mark.skipif(not solver.ccx_path(), reason='CalculiX not installed')
+def test_same_answer_through_every_format(tmp_path):
+    f = _bare(tmp_path, 100)
+    f.write(str(tmp_path / 'a.inp'))
+    ref = solver.run_calculix(str(tmp_path / 'a.inp'))['max_displacement_mm']
+    f.write(str(tmp_path / 'a.bdf'))
+    FEModel.read(str(tmp_path / 'a.bdf')).write(str(tmp_path / 'b.inp'))
+    assert solver.run_calculix(str(tmp_path / 'b.inp'))['max_displacement_mm'] == pytest.approx(ref, rel=1e-6)
+
+
+@pytest.mark.skipif(not solver.ccx_path(), reason='CalculiX not installed')
+def test_refine_keeps_supports_and_converges(tmp_path):
+    f = _bare(tmp_path, 50)
+    f.refine()
+    f.write(str(tmp_path / 'r.inp'))
+    w = solver.run_calculix(str(tmp_path / 'r.inp'))['max_displacement_mm']
+    assert abs(w / fea.plate_pressure(2000, 1000, 20, 0.05, 'clamped')['w_max_mm'] - 1) < 0.02
+
+
+def test_mirror_merge_delete_renumber(tmp_path):
+    f = _bare(tmp_path, 100)
+    n0, e0 = len(f.nodes), len(f.elems)
+    r = f.mirror('y', 1000)
+    assert len(f.elems) == 2 * e0 and r['merged_nodes'] == 21 and f.check()['all_elements_parts'] == 1
+    d = f.delete(box=[[0, 1000, -1], [500, 2000, 1]])
+    assert d['deleted_elements'] > 0 and f.check()['free_nodes_all'] == 0
+    f.renumber(1001, 5001)
+    assert min(f.nodes) == 1001 and min(f.elems) == 5001
+
+
+def test_dimension_conversions(tmp_path):
+    f = _bare(tmp_path, 100)
+    s = f.copy()
+    s.shell_to_solid(layers=2)
+    c = s.check()
+    assert c['by_dimension']['3D'] == 2 * len(f.elems) and c['inverted_solids'] == 0 and c['all_elements_parts'] == 1
+    k = s.copy()
+    assert k.solid_skin()['skin_shells'] == 2 * len(f.elems) + 2 * 2 * (20 + 10)      # top + bottom + 2 layers on 60 edge faces
+    b = f.copy()
+    assert b.edges_to_beams()['bars_added'] == 60
+    assert b.beams_to_shells(100, 10)['web_shells'] == 120 and b.check()['all_elements_parts'] == 1
+
+
+# ------------------------------------------------------------------ 1D in the plate mesher, cleaning, fatigue
+def test_beams_share_plate_nodes():
+    beams = [{'id': 'L1', 'a': [0, 500, 0], 'b': [2000, 500, 0], 'profile': {'type': 'FlatBar', 'h': 150, 't': 12}}]
+    m = platemesh.mesh_plates([{'id': 'P', 't': 12, 'outline': [[0, 0, 0], [2000, 0, 0], [2000, 1000, 0], [0, 1000, 0]]}], 100, beams=beams)
+    bars = [e for e in m.elems if e['type'] == 'bar']
+    assert len(bars) == 20
+    plate_nodes = {n for e in m.elems if e['type'] == 'quad' for n in e['nodes']}
+    assert all(n in plate_nodes for e in bars for n in e['nodes'])
+    assert bars[0]['offset'][2] < 0                                  # hangs below the plate
+
+
+def test_geometry_cleaning_makes_dirty_input_meshable():
+    import copy
+    from shipbrain import geoclean
+    dirty = copy.deepcopy(GRILLAGE)
+    dirty[1]['outline'][0] = [0, 1000.8, 0.6]
+    dirty[1]['outline'].insert(1, [3000, 1000, 0])
+    dirty.append(copy.deepcopy(dirty[3]))
+    dirty[-1]['id'] = 'W_copy'
+    dirty.append({'id': 'SLIVER', 't': 5, 'outline': [[0, 0, -10], [5, 0, -10], [5, 1, -10]]})
+    clean, act = geoclean.clean_plates(dirty)
+    assert len(clean) == len(GRILLAGE) and any('duplicate' in a for a in act) and any('sliver' in a for a in act)
+    m = platemesh.mesh_plates(clean, 200)
+    assert meshcheck.check(m.xyz, [e['nodes'] for e in m.elems])['verdict'] == 'ok'
+
+
+@pytest.mark.skipif(not solver.ccx_path(), reason='CalculiX not installed')
+def test_fatigue_hotspot(tmp_path):
+    from shipbrain import fatigue
+    m, info = fatigue.fatigue_mesh(GRILLAGE, [3000, 1000, -300], size=200, out_dir=str(tmp_path), loads=[{'plates': ['G1'], 'pressure': 1.0}])
+    assert info['t_ref'] == 10 and info['check']['verdict'] == 'ok' and len(info['readout_points']) == 4
+    assert max(abs(e - 10) for e in [np.linalg.norm(np.subtract(m.xyz[a['nodes'][0] - 1], m.xyz[a['nodes'][1] - 1])) for a in m.elems[:50]]) < 6
+    r = solver.run_calculix(info['files']['inp'])
+    h = fatigue.hotspot_stress(r['frd'], info['readout_points'])
+    w = h['worst']
+    face = 'top' if abs(w['top']['hot_spot']) >= abs(w['bottom']['hot_spot']) else 'bottom'
+    assert w[face]['hot_spot'] == pytest.approx(1.5 * w[face]['s_0.5t'] - 0.5 * w[face]['s_1.5t'], abs=0.02)
+
+
+# ------------------------------------------------------------------ drawings
+def _plan(path, extra=False):
+    ezdxf = pytest.importorskip('ezdxf')
+    doc = ezdxf.new()
+    ms = doc.modelspace()
+    ms.add_lwpolyline([(0, 0), (6000, 0), (6000, 4000), (0, 4000)], close=True, dxfattribs={'layer': 'DECK'})
+    ms.add_lwpolyline([(4200, 1600), (5200, 1600), (5200, 2400), (4200, 2400)], close=True, dxfattribs={'layer': 'OPENING'})
+    for y in (1000, 3000):
+        ms.add_line((0, y), (6000, y), dxfattribs={'layer': 'GIRDER'})
+    ms.add_line((3000, 0), (3000, 4000), dxfattribs={'layer': 'WEB_FRAME'})
+    ms.add_line((0, 500), (3000, 500), dxfattribs={'layer': 'STIFF'})
+    if extra:
+        ms.add_line((0, 2500), (6000, 2500), dxfattribs={'layer': 'GIRDER'})
+    doc.saveas(path)
+    return path
+
+
+def test_drawing_to_3d_and_mesh(tmp_path):
+    from shipbrain import drawings
+    r = drawings.dxf_to_plates(_plan(str(tmp_path / 'p.dxf')))
+    assert r['report']['outlines'] == 1 and r['report']['webs'] == 3 and r['report']['stiffeners'] == 1
+    assert len(r['plates'][0]['holes']) == 1
+    m, info = platemesh.build_plates({'name': 'p', 'plates': r['plates'], 'beams': r['beams'], 'element_size': 250}, str(tmp_path))
+    assert info['check']['verdict'] == 'ok' and info['bars'] > 0
+    if pytest.importorskip('cadquery'):
+        assert drawings.plates_to_step(r['plates'], str(tmp_path / 'p.step'), r['beams'])['solids'] == 5
+
+
+def test_compare_two_drawings(tmp_path):
+    from shipbrain import drawings
+    a, b = _plan(str(tmp_path / 'a.dxf')), _plan(str(tmp_path / 'b.dxf'), extra=True)
+    r = drawings.compare_drawings(a, b, str(tmp_path / 'o.png'))
+    assert r['only_in_A_px'] == 0 and len(r['regions_only_in_B']) == 1 and 0.85 < r['similarity'] < 1
+    assert drawings.compare_drawings(a, a, str(tmp_path / 'o2.png'))['similarity'] == 1.0
+
+
+def test_mesh_vs_drawing(tmp_path):
+    from shipbrain import drawings
+    from PIL import Image
+    p = _plan(str(tmp_path / 'a.dxf'))
+    r = drawings.dxf_to_plates(p)
+    m, _ = platemesh.build_plates({'name': 'p', 'plates': r['plates'], 'beams': r['beams'], 'element_size': 250}, str(tmp_path), formats=())
+    img, box = drawings.render_dxf(p, 1200)
+    Image.fromarray(img.astype('uint8')).save(tmp_path / 'a.png')
+    f = FEModel.from_mesh(m)
+    good = drawings.compare_mesh_drawing(f, str(tmp_path / 'a.png'), box, out_png=str(tmp_path / 'g.png'))
+    assert good['pass'] and good['mesh_on_drawing'] > 0.95
+    f.translate([120, -80, 0])
+    bad = drawings.compare_mesh_drawing(f, str(tmp_path / 'a.png'), box, out_png=str(tmp_path / 'b.png'))
+    assert not bad['pass'] and abs(bad['best_shift_mm'][0] + 120) < 20 and abs(bad['best_shift_mm'][1] - 80) < 20
+
+
+def test_file_info_plain_english(tmp_path):
+    from shipbrain.fileinfo import file_info
+    f = _bare(tmp_path, 200)
+    f.write(str(tmp_path / 'm.bdf'))
+    t = file_info(str(tmp_path / 'm.bdf'))['plain_english']
+    assert 'finite element model' in t and 'no problems found' in t
+    assert 'DXF' in file_info(_plan(str(tmp_path / 'p.dxf')))['plain_english']
+
+
+def test_agent_fe_tools(tmp_path):
+    t = agent.Tools(tmp_path)
+    f = _bare(tmp_path, 200)
+    f.write(str(tmp_path / 'm.bdf'))
+    c = t.call('fe_convert', {'file': 'm.bdf'})
+    assert 'm_conv.inp' in c['files'] and 'm_conv.mac' in c['files']
+    e = t.call('fe_edit', {'file': 'm.bdf', 'ops': [{'op': 'mirror', 'axis': 'y', 'value': 1000}, {'op': 'refine'}]})
+    assert e['parts'] == 1 and e['model']['elements'] == 4 * 2 * len(f.elems)
+    assert 'error' in t.call('fe_edit', {'file': 'm.bdf', 'ops': [{'op': '__class__'}]})

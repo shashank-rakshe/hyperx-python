@@ -112,21 +112,31 @@ def import_cad(path):
     import cadquery as cq
     low = path.lower()
     if low.endswith(('.step', '.stp')):
-        return cq.importers.importStep(path)
+        wp = cq.importers.importStep(path)
+        vals = [v for v in wp.vals() if isinstance(v, cq.Shape)]
+        return vals[0] if len(vals) == 1 else cq.Compound.makeCompound(vals)
     if low.endswith('.brep'):
         return cq.Shape.importBrep(path)
     raise ValueError('CAD input must be STEP (.step/.stp) or BREP; for STL use a surface model in CAD first')
 
 
-def mesh_cad(path, element_size=100.0, default_t=10.0, out_dir='.', name=None, loads=None, fix=None, material=None):
+def mesh_cad(path, element_size=100.0, default_t=10.0, out_dir='.', name=None, loads=None, fix=None, material=None, clean=True, beams=None):
     import os
     from .platemesh import build_plates
+    from . import geoclean
     shape = import_cad(path)
+    actions = []
+    if clean:
+        shape, actions = geoclean.clean_shape(shape)
     plates, rep = shape_to_plates(shape, float(element_size), float(default_t))
+    if clean and plates:
+        plates, a2 = geoclean.clean_plates(plates, merge_tol=max(1.0, float(element_size) / 50))
+        actions += [a for a in a2 if not a.startswith('Geometry was already clean')]
+    rep['cleaning'] = actions or ['nothing to clean']
     if not plates:
         raise ValueError('no plate-like geometry found: ' + '; '.join(rep['skipped'][:5]))
     spec = {'name': name or os.path.splitext(os.path.basename(path))[0], 'element_size': element_size, 'plates': plates,
-            'loads': loads or [], 'fix': fix or []}
+            'loads': loads or [], 'fix': fix or [], 'beams': beams or []}
     if material:
         spec['material'] = material
     m, info = build_plates(spec, out_dir)

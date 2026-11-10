@@ -121,6 +121,8 @@ def check(xyz, elems, groups=None, tol=None):
     # edges
     cnt = {}
     for e in E:
+        if len(e) < 3:                                   # 1D elements: connectivity only
+            continue
         for k in range(len(e)):
             key = tuple(sorted((e[k], e[(k + 1) % len(e)])))
             cnt[key] = cnt.get(key, 0) + 1
@@ -130,6 +132,8 @@ def check(xyz, elems, groups=None, tol=None):
     # quality
     ar, amin, amax, warp, inv = [], 180.0, 0.0, 0.0, 0
     for e in E:
+        if len(e) < 3:
+            continue
         P = X[e]
         n = len(P)
         sides = [np.linalg.norm(P[(k + 1) % n] - P[k]) for k in range(n)]
@@ -152,7 +156,7 @@ def check(xyz, elems, groups=None, tol=None):
         if n == 4:
             d = abs((P - P.mean(0)) @ nrm).max()
             warp = max(warp, math.degrees(math.atan2(2 * d, min(sides))))
-    out = {'nodes': len(X), 'elements': len(E), 'free_nodes': int((~used).sum()), 'duplicate_nodes': dup,
+    out = {'nodes': len(X), 'elements': len(E), 'elements_1d': sum(len(e) == 2 for e in E), 'free_nodes': int((~used).sum()), 'duplicate_nodes': dup,
            'parts': len(parts), 'part_sizes': sizes[:10], 'free_edges': len(free_e), 'free_edges_on_duplicates': fake,
            't_joint_edges': sum(1 for c in cnt.values() if c >= 3),
            'quality': {'max_aspect': round(float(max(ar)), 2) if ar else None, 'aspect_gt_5': int(sum(a > 5 for a in ar)),

@@ -35,6 +35,7 @@ details.tool{background:var(--tool);border:1px solid var(--line);border-radius:8
 details.tool summary{padding:6px 10px;cursor:pointer;color:var(--mute)}details.tool summary b{color:var(--ink)}
 details.tool pre{margin:0;padding:8px 10px;overflow:auto;max-height:320px;border-top:1px solid var(--line);white-space:pre-wrap}
 .err{color:var(--err)}
+.ov{max-width:100%;border:1px solid var(--line);border-radius:8px;margin:6px 0}
 .ctx{font-size:12px;color:var(--mute);margin:2px 0 6px}
 #empty{text-align:center;color:var(--mute);margin-top:12vh}
 #empty h2{color:var(--ink);font-weight:600}
@@ -132,7 +133,9 @@ function view(m){
   let h='';(m.steps||[]).forEach(s=>{
     if(s.kind==='text')h+='<div class="b">'+md(s.text)+'</div>';
     else if(s.kind==='tool')h+='<details class="tool"><summary>⚙ <b>'+esc(s.name)+'</b> '+(s.result?(s.result.error?'<span class="err">failed</span>':'done'):'running…')+
-      '</summary><pre>'+esc(JSON.stringify(s.args,null,1))+(s.result?'\n\n→ '+esc(JSON.stringify(s.result,null,1)):'')+'</pre></details>';
+      '</summary><pre>'+esc(JSON.stringify(s.args,null,1))+(s.result?'\n\n→ '+esc(JSON.stringify(s.result,null,1)):'')+'</pre></details>'+
+      (s.result&&s.result.plain_english?'<div class="b"><p>'+esc(s.result.plain_english)+'</p></div>':'')+
+      (s.result&&s.result.overlay?'<img class="ov" src="/files/'+encodeURIComponent(s.result.overlay)+'">':'');
     else if(s.kind==='error')h+='<div class="err">'+esc(s.text)+'</div>';
     else if(s.kind==='ctx')h+='<div class="ctx">📚 used: '+s.sources.map(esc).join(', ')+'</div>'});
   d.innerHTML=h||'<div class="b" style="color:var(--mute)">…</div>';return d}

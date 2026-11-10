@@ -25,6 +25,29 @@ def _blocks(frd):
                 name, data = None, None
 
 
+def read_frd_full(frd):
+    """node coordinates (incl. CalculiX's expanded shell/beam nodes) + nodal stress tensors [sxx syy szz sxy syz szx]"""
+    xyz, stress, disp = {}, {}, {}
+    mode = None
+    with open(frd, errors='replace') as f:
+        for line in f:
+            if line.startswith('    2C'):
+                mode = 'xyz'
+                continue
+            if line.startswith(' -4'):
+                name = line.split()[1]
+                mode = 'S' if name.startswith('STRESS') else ('U' if name.startswith('DISP') else None)
+                continue
+            if line.startswith(' -3'):
+                mode = None
+                continue
+            if line.startswith(' -1') and mode:
+                nid = int(line[3:13])
+                vals = [float(line[13 + 12 * i: 25 + 12 * i]) for i in range((len(line.rstrip()) - 13) // 12)]
+                (xyz if mode == 'xyz' else stress if mode == 'S' else disp)[nid] = vals
+    return xyz, stress, disp
+
+
 def read_frd(frd):
     out = {}
     for name, d in _blocks(frd):

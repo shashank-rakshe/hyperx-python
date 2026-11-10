@@ -90,7 +90,8 @@ class Plate:
         self.id = str(d.get('id', 'P'))
         self.group = str(d.get('group', self.id))
         self.t = float(d.get('t', 10.0))
-        self.loops3 = [np.array(d['outline'], float)] + [np.array(h, float) for h in d.get('holes', []) or []]
+        # round away float noise (2899.9999999999995 -> 2900): it would otherwise create near-duplicate nodes
+        self.loops3 = [np.round(np.array(d['outline'], float), 6)] + [np.round(np.array(h, float), 6) for h in d.get('holes', []) or []]
         for L in self.loops3:
             if len(L) < 3:
                 raise ValueError(f'plate {self.id}: a loop needs at least 3 points')
@@ -399,8 +400,11 @@ def _quad_score(Q):
 
 
 # ====================================================================== mesher
-def mesh_plates(plates_in, h, tol=None, close_gap=True, all_quad=True, smooth=3):
+def mesh_plates(plates_in, h, tol=None, close_gap=True, all_quad=True, smooth=3, beams=None):
+    """beams: 1D stiffeners [{"id", "a": [x,y,z], "b": [x,y,z], "profile": {...}, "normal": [0,0,-1]}] - their lines are
+    put into the plates' meshes so the CBARs share the plate nodes; offset = normal * (t_plate/2 + profile centroid)"""
     h = float(h)
+    beams = beams or []
     tol = tol or max(1e-3, h * 1e-3)
     plates = [Plate(d, tol) for d in plates_in]
     ids = [p.id for p in plates]
@@ -408,7 +412,8 @@ def mesh_plates(plates_in, h, tol=None, close_gap=True, all_quad=True, smooth=3)
         raise ValueError('plate ids must be unique')
     moved = close_gaps(plates, tol) if close_gap else 0
     H = 2 * h if all_quad else h                                   # triangles at 2h -> split -> quads at h
-    segs = [e for P in plates for e in P.edges3()] + intersections(plates, tol)
+    beam_lines = [(np.array(b['a'], float), np.array(b['b'], float)) for b in beams]
+    segs = [e for P in plates for e in P.edges3()] + intersections(plates, tol) + beam_lines
     segs = split_segments(segs, tol)
     reg = Registry(tol)
     seg_nodes = []
@@ -516,8 +521,28 @@ def mesh_plates(plates_in, h, tol=None, close_gap=True, all_quad=True, smooth=3)
                     on_seg.add(mids[k])
             for k in range(len(X)):
                 elems.append((pi, [G_[k], mids[k], c, mids[k - 1]]))
+    # 1D beams along their (split, discretised) segments, through the same mid-nodes as the shells
+    from .mesh import profile_props
+    bar_elems = []
+    for bi, bm in enumerate(beams):
+        a, b = beam_lines[bi]
+        d = b - a
+        L2 = d @ d
+        pts = []
+        for (p, q), ns in zip(segs, seg_nodes):
+            # sub-segment lies on this beam line?
+            if all(np.linalg.norm(np.cross(x - a, d)) / math.sqrt(L2) <= tol and -tol <= (x - a) @ d / math.sqrt(L2) <= math.sqrt(L2) + tol for x in (p, q)):
+                chain = ns
+                if all_quad:
+                    chain = []
+                    for k in range(len(ns) - 1):
+                        chain += [ns[k], reg.get((node_xyz[ns[k]] + node_xyz[ns[k + 1]]) / 2)]
+                    chain.append(ns[-1])
+                for k in range(len(chain) - 1):
+                    bar_elems.append((bi, chain[k], chain[k + 1]))
+                    on_seg.update((chain[k], chain[k + 1]))
     # renumber only used nodes (no free nodes by construction)
-    used_nodes = sorted(set(g for _, e in elems for g in e))
+    used_nodes = sorted(set(g for _, e in elems for g in e) | set(g for _, a_, b_ in bar_elems for g in (a_, b_)))
     new = {g: k + 1 for k, g in enumerate(used_nodes)}
     m.xyz = [tuple(round(float(c), 4) for c in node_xyz[g]) for g in used_nodes]
     m.nodes = {p: i + 1 for i, p in enumerate(m.xyz)}
@@ -530,6 +555,19 @@ def mesh_plates(plates_in, h, tol=None, close_gap=True, all_quad=True, smooth=3)
     for pi, e in elems:
         P = plates[pi]
         m.add('quad' if len(e) == 4 else 'tri', [new[g] for g in e], pid_of[(P.group, P.t)], P.id)
+    for bi, bm in enumerate(beams):
+        sp = profile_props(bm['profile'])
+        nrm = _unit(np.array(bm.get('normal', [0, 0, -1]), float))
+        mid_pt = (beam_lines[bi][0] + beam_lines[bi][1]) / 2
+        host = [P for P in plates if abs(P.plane_dist(mid_pt)) <= 2 * tol and P.in_or_on(P.to2(mid_pt), 2 * tol)[0]]
+        tp = max((P.t for P in host), default=0.0)
+        off = nrm * (tp / 2 + sp['zc'])
+        pid = 1000 + bi
+        m.props[pid] = {'kind': 'bar', 'A': sp['A'], 'I1': sp['I_vert'], 'I2': sp['I_lat'], 'J': sp['J'], 'offset': float(-(tp / 2 + sp['zc'])),
+                        'name': str(bm.get('id', f'BEAM{bi + 1}'))}
+        for b_i, n1, n2 in bar_elems:
+            if b_i == bi:
+                m.add('bar', [new[n1], new[n2]], pid, str(bm.get('id', f'BEAM{bi + 1}')), orient=tuple(-nrm), offset=tuple(off))
     if all_quad and smooth:
         _smooth3d(m, plates, set(new[g] for g in on_seg if g in new))
     m.plates = plates
@@ -577,7 +615,7 @@ def build_plates(spec, out_dir='.', formats=('bdf', 'inp')):
     s.setdefault('name', 'assembly')
     s.setdefault('material', M.DEFAULT_SPEC['material'])
     h = float(s.get('element_size', 100))
-    m = mesh_plates(s['plates'], h, all_quad=s.get('all_quad', True))
+    m = mesh_plates(s['plates'], h, all_quad=s.get('all_quad', True), beams=s.get('beams'))
     m.spec = {'name': s['name'], 'material': s['material'], 'pressure': 0}
     m.loads = []
     for ld in s.get('loads', []) or []:
@@ -604,6 +642,7 @@ def build_plates(spec, out_dir='.', formats=('bdf', 'inp')):
     files['spec'] = base + '.spec.json'
     chk = meshcheck.check(m.xyz, [e['nodes'] for e in m.elems], [e['group'] for e in m.elems])
     info = {'name': s['name'], 'nodes': len(m.xyz), 'elements': len(m.elems),
-            'quads': sum(len(e['nodes']) == 4 for e in m.elems), 'trias': sum(len(e['nodes']) == 3 for e in m.elems),
+            'quads': sum(e['type'] == 'quad' for e in m.elems), 'trias': sum(e['type'] == 'tri' for e in m.elems),
+            'bars': sum(e['type'] == 'bar' for e in m.elems),
             **m.report, 'check': chk, 'files': files}
     return m, info

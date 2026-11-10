@@ -1,8 +1,12 @@
 # app core: Python standard library + numpy
 numpy
-scipy           # fast Delaunay for the own mesher (a pure-Python fallback is built in)
-cadquery        # STEP import (cad_mesh) and the cadquery_build tool
-pymupdf         # optional: read PDFs into the knowledge base
-# CalculiX (ccx) on PATH: optional, solve_calculix tool
+scipy           # fast Delaunay for the own mesher (pure-Python fallback built in), image comparison
+cadquery        # STEP import (cad_mesh), STEP export (drawing_to_3d), cadquery_build
+pyNastran       # robust Nastran .bdf reading (a built-in reader is used if missing)
+ezdxf           # DXF drawings: drawing_to_3d, compare_drawings, file_info
+pymupdf         # PDF drawings and PDFs in the knowledge base
+pillow          # images for drawing comparison
+# CalculiX (ccx) on PATH: optional, solve_calculix / fatigue solve
+# ANSYS (PyMAPDL: ansys-mapdl-core) and Abaqus: optional, need their own licences; ShipBrain writes inputs + scripts
 # no gmsh: meshing is done by shipbrain/platemesh.py (own conforming mesher)
 # training (GPU machine / Colab only): unsloth trl datasets

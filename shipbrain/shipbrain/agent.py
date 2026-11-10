@@ -14,7 +14,7 @@ from . import mesh as _mesh, fea as _fea, solver as _solver, platemesh as _pm, m
 
 TOOL_RE = re.compile(r'```tool\s*\n(.*?)\n?```', re.S)
 MAX_STEPS = 6
-MESH_TOOLS = ('panel_mesh', 'plates_mesh', 'cad_mesh')
+MESH_TOOLS = ('panel_mesh', 'plates_mesh', 'cad_mesh', 'fatigue_mesh', 'drawing_to_3d')
 
 
 # ====================================================================== safe calculator
@@ -88,7 +88,9 @@ class Tools:
                       {'type': 'object', 'properties': {
                           'name': {'type': 'string'}, 'element_size': num, 'plates': {'type': 'array'},
                           'loads': {'type': 'array', 'description': '[{"plates": [ids], "pressure": MPa}]'},
-                          'fix': {'type': 'array', 'description': '[{"x": 0, "dof": "123456"}] all given coordinates must match'}},
+                          'fix': {'type': 'array', 'description': '[{"x": 0, "dof": "123456"}] all given coordinates must match'},
+                          'beams': {'type': 'array', 'description': '1D stiffeners sharing plate nodes: [{"id", "a": [x,y,z], "b": [x,y,z], "profile": profile, "normal": [0,0,-1]}]'},
+                          'clean': {'type': 'boolean', 'description': 'clean the geometry first (default true)'}},
                        'required': ['plates']})
         self.register('cad_mesh', self.cad_mesh, 'Mesh a STEP/BREP file in the workspace with the own mesher: thin solids -> mid-surface plates, '
                       'planar sheet faces -> plates; gaps closed, joints conforming. Curved faces are reported, not meshed.',
@@ -112,6 +114,44 @@ class Tools:
                       {'type': 'object', 'properties': {'profile': prof, 't_plate': num, 'b_eff': num}, 'required': ['profile']})
         self.register('calc', calc, 'Exact arithmetic (sqrt, sin, pi, ^ ...). Use it instead of mental arithmetic.',
                       {'type': 'object', 'properties': {'expression': {'type': 'string'}}, 'required': ['expression']})
+        path_arg = lambda d: {'type': 'object', 'properties': {'file': {'type': 'string', 'description': d}}, 'required': ['file']}
+        self.register('file_info', self.file_info, 'Describe any file in the workspace in plain English (FE model, STEP, DXF, PDF, image, JSON, XML, text): '
+                      'what it is, what is inside, problems found. Call this first when the user asks about an uploaded file.',
+                      path_arg('file name in the workspace'))
+        self.register('fe_convert', self.fe_convert, 'Convert an FE model between Nastran .bdf, Abaqus/CalculiX .inp and ANSYS APDL .mac '
+                      '(+ PyMAPDL and Abaqus driver scripts). 1D/2D/3D elements, properties, materials, supports and loads are kept.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'to': {'type': 'array', 'description': '["bdf","inp","mac"]'}},
+                       'required': ['file']})
+        self.register('fe_edit', self.fe_edit, 'Edit or convert an FE model file step by step and save it. ops (in order), each {"op": name, ...}: '
+                      'equivalence{tol} | delete{group|box|ids|types} | remove_free_nodes | translate{d:[x,y,z]} | mirror{axis,value} | '
+                      'refine | split_quads | renumber{node_start,elem_start} | merge{file} | set_thickness{pid,t} | '
+                      'shell_to_solid{layers} (2D->3D) | solid_skin{t} (3D->2D) | edges_to_beams{which:"free"|"joints"} (2D->1D) | '
+                      'beams_to_shells{height,t} (1D->2D)',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'ops': {'type': 'array'}, 'out': {'type': 'string'}},
+                       'required': ['file', 'ops']})
+        self.register('geometry_clean', self.geometry_clean, 'Clean unclean geometry before meshing: a plate list (repeated/in-line points, '
+                      'corners that almost meet, warped plates, slivers, duplicates, tiny holes) or a STEP file (repair, sew, merge split faces).',
+                      {'type': 'object', 'properties': {'plates': {'type': 'array'}, 'file': {'type': 'string'}, 'merge_tol': {'type': 'number'}}})
+        self.register('fatigue_mesh', self.fatigue_mesh, 'Fatigue hot-spot local model: cut a box around the hot spot from a plate assembly, '
+                      'mesh it t x t, give the read-out points at 0.5t / 1.5t; with solve=true also run CalculiX and return the '
+                      'extrapolated hot-spot stress (1.5 s(0.5t) - 0.5 s(1.5t)).',
+                      {'type': 'object', 'properties': {'plates': {'type': 'array'}, 'hotspot': {'type': 'array'}, 'size': {'type': 'number'},
+                                                         't': {'type': 'number'}, 'loads': {'type': 'array'}, 'solve': {'type': 'boolean'},
+                                                         'name': {'type': 'string'}}, 'required': ['plates', 'hotspot']})
+        self.register('compare_drawings', self.compare_drawings, 'Compare two drawings (PDF page, PNG/JPG, DXF): aligned overlay, '
+                      'what was removed (red) / added (green), similarity in %, changed areas.',
+                      {'type': 'object', 'properties': {'a': {'type': 'string'}, 'b': {'type': 'string'}, 'page_a': {'type': 'integer'},
+                                                         'page_b': {'type': 'integer'}}, 'required': ['a', 'b']})
+        self.register('compare_mesh_drawing', self.compare_mesh_drawing, 'Check an FE mesh against a drawing (plan view at a height): share of '
+                      'mesh lines on drawn lines, coverage, best shift (calibration error), overlay image. box = ship mm window the drawing shows.',
+                      {'type': 'object', 'properties': {'mesh': {'type': 'string'}, 'drawing': {'type': 'string'},
+                                                         'box': {'type': 'array', 'description': '[x0, x1, y0, y1] mm'}, 'level': {'type': 'number'},
+                                                         'axis': {'type': 'string'}, 'page': {'type': 'integer'}}, 'required': ['mesh', 'drawing', 'box']})
+        self.register('drawing_to_3d', self.drawing_to_3d, 'Turn a DXF structural plan into a 3D model: outline/opening layers -> plate, '
+                      'girder/web layers -> vertical plates, stiffener layers -> 1D beams. Writes a STEP and (mesh=true) a 1D+2D FE mesh.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'z': {'type': 'number'}, 't_plate': {'type': 'number'},
+                                                         'layers': {'type': 'object'}, 'mesh': {'type': 'boolean'}, 'element_size': {'type': 'number'}},
+                       'required': ['file']})
         self.register('list_files', self.list_files, 'List the files in the workspace (uploads and results).', {'type': 'object', 'properties': {}})
         if self.allow_code:
             self.register('cadquery_build', self.cadquery_build,
@@ -143,16 +183,107 @@ class Tools:
         info['viewer'] = 'mesh shown in the 3D view'
         return info
 
-    def plates_mesh(self, plates, name=None, element_size=100.0, loads=None, fix=None, material=None):
+    def plates_mesh(self, plates, name=None, element_size=100.0, loads=None, fix=None, material=None, beams=None, clean=True):
+        from . import geoclean
+        actions = []
+        if clean:
+            plates, actions = geoclean.clean_plates(plates, merge_tol=max(1.0, float(element_size) / 50))
         spec = {'name': re.sub(r'[^A-Za-z0-9_\-]', '_', str(name or 'assembly_%s' % time.strftime('%H%M%S')))[:40],
-                'plates': plates, 'element_size': element_size, 'loads': loads or [], 'fix': fix or []}
+                'plates': plates, 'element_size': element_size, 'loads': loads or [], 'fix': fix or [], 'beams': beams or []}
         if material:
             spec['material'] = material
-        return self._mesh_result(*_pm.build_plates(spec, self.workdir))
+        out = self._mesh_result(*_pm.build_plates(spec, self.workdir))
+        out['cleaning'] = actions
+        return out
 
     def cad_mesh(self, file, element_size=100.0, default_t=10.0, loads=None, fix=None):
         from . import cadplates
         return self._mesh_result(*cadplates.mesh_cad(self._path(file), element_size, default_t, self.workdir, loads=loads, fix=fix))
+
+    def file_info(self, file):
+        from .fileinfo import file_info
+        return file_info(self._path(file))
+
+    def fe_convert(self, file, to=('bdf', 'inp', 'mac')):
+        from .femodel import FEModel
+        m = FEModel.read(self._path(file))
+        base = os.path.join(self.workdir, os.path.splitext(os.path.basename(file))[0] + '_conv')
+        files = [os.path.basename(m.write(base + '.' + ext)) for ext in to]
+        if 'mac' in to:
+            files += [os.path.basename(x) for x in m.write_drivers(base)]
+        s = m.summary()
+        return {'files': files, 'model': s, 'plain_english': f"Converted {file} ({s['nodes']} nodes, {s['elements']} elements) to " + ', '.join(files) + '.'}
+
+    def fe_edit(self, file, ops, out=None):
+        from .femodel import FEModel
+        m = FEModel.read(self._path(file))
+        log = []
+        for o in ops:
+            o = dict(o)
+            name = o.pop('op')
+            if name == 'merge':
+                o = {'other': FEModel.read(self._path(o.pop('file'))), **o}
+            if name == 'delete' and 'types' in o and isinstance(o['types'], str):
+                o['types'] = [o['types']]
+            fn = getattr(m, name, None)
+            if name.startswith('_') or not callable(fn) or name in ('read', 'write', 'copy', 'summary', 'check'):
+                raise ValueError(f'unknown edit op {name}')
+            log.append({name: fn(**o)})
+        out = out or os.path.splitext(os.path.basename(file))[0] + '_edited' + os.path.splitext(file)[1]
+        m.write(self._path(out))
+        c = m.check()
+        return {'file': out, 'steps': log, 'model': m.summary(), 'check': c.get('verdict', 'n/a'),
+                'parts': c.get('all_elements_parts')}
+
+    def geometry_clean(self, plates=None, file=None, merge_tol=2.0):
+        from . import geoclean
+        if file:
+            from .cadplates import import_cad
+            import cadquery as cq
+            shp, act = geoclean.clean_shape(import_cad(self._path(file)))
+            out = os.path.splitext(os.path.basename(file))[0] + '_clean.step'
+            cq.exporters.export(cq.Workplane().add(shp), self._path(out))
+            return {'file': out, 'actions': act}
+        clean, act = geoclean.clean_plates(plates or [], merge_tol=merge_tol)
+        return {'plates': clean, 'actions': act}
+
+    def fatigue_mesh(self, plates, hotspot, size=None, t=None, loads=None, solve=False, name='hotspot'):
+        from . import fatigue
+        m, info = fatigue.fatigue_mesh(plates, hotspot, size, t, self.workdir, re.sub(r'[^A-Za-z0-9_\-]', '_', name)[:40], loads)
+        out = self._mesh_result(m, info)
+        if solve:
+            r = _solver.run_calculix(os.path.join(self.workdir, out['files']['inp']))
+            out['hot_spot'] = fatigue.hotspot_stress(r['frd'], info['readout_points'])
+        return out
+
+    def compare_drawings(self, a, b, page_a=0, page_b=0):
+        from . import drawings
+        out = os.path.join(self.workdir, f'compare_{os.path.splitext(os.path.basename(a))[0]}_vs_{os.path.splitext(os.path.basename(b))[0]}.png')
+        r = drawings.compare_drawings(self._path(a), self._path(b), out, page_a, page_b)
+        r['overlay'] = os.path.basename(out)
+        return r
+
+    def compare_mesh_drawing(self, mesh, drawing, box, level=0.0, axis='z', page=0):
+        from . import drawings
+        out = os.path.join(self.workdir, f'mesh_vs_{os.path.splitext(os.path.basename(drawing))[0]}.png')
+        r = drawings.compare_mesh_drawing(self._path(mesh), self._path(drawing), box, level, axis, out, page)
+        r['overlay'] = os.path.basename(out)
+        return r
+
+    def drawing_to_3d(self, file, z=0.0, t_plate=12.0, layers=None, mesh=True, element_size=200.0):
+        from . import drawings
+        r = drawings.dxf_to_plates(self._path(file), z, t_plate, layers)
+        base = os.path.splitext(os.path.basename(file))[0]
+        out = {'report': r['report'], 'plates': len(r['plates']), 'beams': len(r['beams'])}
+        try:
+            out['step'] = os.path.basename(drawings.plates_to_step(r['plates'], self._path(base + '_3d.step'), r['beams'])['step'])
+        except ImportError:
+            out['step'] = 'not written (CadQuery not installed)'
+        json.dump({'plates': r['plates'], 'beams': r['beams']}, open(self._path(base + '_plates.json'), 'w'), indent=1)
+        out['spec'] = base + '_plates.json'
+        if mesh:
+            out['mesh'] = self.plates_mesh(r['plates'], base + '_mesh', element_size, beams=r['beams'])
+        return out
 
     def mesh_check(self, file):
         return _mc.check_file(self._path(file))
@@ -207,6 +338,9 @@ SYSTEM = """You are ShipBrain, an engineering assistant for ship structures: CAD
 Units: mm, N, MPa, tonne (1 m sea-water head = 0.01005 MPa).
 
 Rules:
+0. Write in plain, simple English: short sentences, everyday words, explain an engineering term the first time you use it,
+   always give units. When a tool result has a "plain_english" text, use it. If the user asks about an uploaded file,
+   call file_info first and explain what you found.
 1. Numbers, meshes and files come from tools, never from memory. Use calc for arithmetic.
 2. For rules, methods or yard practice, call knowledge_search first and cite the ids/sources you used.
 3. To call a tool, reply with ONLY one block:

@@ -287,6 +287,76 @@ def t_cad(r, tools):
             result_msg('cadquery_build', res), {'role': 'assistant', 'content': ans}]
 
 
+def _small_model(r, tools):
+    L, B = float(r.choice([2000, 3000, 4000])), float(r.choice([1000, 1500, 2000]))
+    name = f'model_{int(L)}x{int(B)}_{r.randint(100, 999)}'
+    res = tools.call('plates_mesh', {'name': name, 'element_size': 250, 'plates': [
+        {'id': 'P', 't': float(r.choice([8, 10, 12])), 'outline': [[0, 0, 0], [L, 0, 0], [L, B, 0], [0, B, 0]]},
+        {'id': 'W', 't': 10.0, 'outline': [[0, B / 2, 0], [L, B / 2, 0], [L, B / 2, -400], [0, B / 2, -400]]}],
+        'fix': [{'x': 0}], 'loads': [{'plates': ['P'], 'pressure': 0.02}]})
+    return name, res
+
+
+def t_fileinfo(r, tools):
+    name, res = _small_model(r, tools)
+    f = name + r.choice(['.bdf', '.inp'])
+    q = r.choice([f'What is in {f}?', f'Explain the uploaded file {f} in simple words', f'{f} check karo - kya hai isme?', f'Tell me about {f}'])
+    out = tools.call('file_info', {'file': f})
+    if 'error' in out:
+        return None
+    return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('file_info', {'file': f})},
+            result_msg('file_info', out), {'role': 'assistant', 'content': out['plain_english']}]
+
+
+def t_convert(r, tools):
+    name, res = _small_model(r, tools)
+    src = name + '.bdf'
+    to = r.choice([['inp'], ['mac'], ['inp', 'mac'], ['bdf', 'inp', 'mac']])
+    words = {'inp': 'Abaqus/CalculiX', 'mac': 'ANSYS', 'bdf': 'Nastran'}
+    q = f"Convert {src} to {' and '.join(words[t] for t in to)}"
+    out = tools.call('fe_convert', {'file': src, 'to': to})
+    if 'error' in out:
+        return None
+    ans = out['plain_english'] + (' The ANSYS file runs in MAPDL as it is; the _pymapdl.py script runs it from Python (needs an ANSYS licence).' if 'mac' in to else '')
+    return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('fe_convert', {'file': src, 'to': to})},
+            result_msg('fe_convert', out), {'role': 'assistant', 'content': ans}]
+
+
+def t_edit(r, tools):
+    name, res = _small_model(r, tools)
+    src = name + '.bdf'
+    choice = r.choice([
+        ('Mirror {f} about the centre line y=0 to get the full breadth', [{'op': 'mirror', 'axis': 'y', 'value': 0}]),
+        ('Refine the mesh in {f} (split every element)', [{'op': 'refine'}]),
+        ('Make a solid (3D) model from the shells in {f}, 2 layers through the thickness', [{'op': 'shell_to_solid', 'layers': 2}]),
+        ('Merge coincident nodes in {f} and renumber from 1001', [{'op': 'equivalence', 'tol': 0.1}, {'op': 'renumber', 'node_start': 1001, 'elem_start': 1001}]),
+        ('Add beams on all free edges of {f}', [{'op': 'edges_to_beams', 'which': 'free'}])])
+    q, ops = choice[0].format(f=src), choice[1]
+    out = tools.call('fe_edit', {'file': src, 'ops': ops})
+    if 'error' in out:
+        return None
+    s = out['model']
+    ans = (f"Done. Saved as {out['file']}: {s['nodes']} nodes, {s['elements']} elements "
+           f"({', '.join(f'{v} {k}' for k, v in s['by_dimension'].items() if v)}). The model is in {out['parts']} connected part(s); "
+           f"mesh check: {out['check']}.")
+    return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('fe_edit', {'file': src, 'ops': ops})},
+            result_msg('fe_edit', out), {'role': 'assistant', 'content': ans}]
+
+
+def t_clean(r, tools):
+    L = float(r.choice([3000, 4000, 6000]))
+    off = round(r.uniform(0.3, 1.5), 1)
+    plates = [{'id': 'DECK', 't': 12.0, 'outline': [[0, 0, 0], [L, 0, 0], [L, 2000, 0], [0, 2000, 0]]},
+              {'id': 'GIR', 't': 12.0, 'outline': [[0, 1000 + off, off], [L / 2, 1000, 0], [L, 1000, 0], [L, 1000, -500], [0, 1000, -500]]}]
+    if r.random() < 0.5:
+        plates.append(dict(plates[1], id='GIR_copy'))
+    q = r.choice(['Clean this geometry before meshing: ', 'The CAD is dirty, fix it: ', 'Check and clean these plates: ']) + json.dumps(plates)
+    out = tools.call('geometry_clean', {'plates': plates})
+    ans = 'Cleaned. What I changed:\n' + '\n'.join('- ' + a for a in out['actions']) + f"\n{len(out['plates'])} plate(s) are ready to mesh."
+    return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('geometry_clean', {'plates': plates})},
+            result_msg('geometry_clean', out), {'role': 'assistant', 'content': ans}]
+
+
 CHAT = [
     ('Why are stiffeners modelled with shell webs instead of beams?',
      'Shell webs share nodes with the plate, so the stiffener and its attached plating bend together without needing beam offsets, '
@@ -297,6 +367,13 @@ CHAT = [
      'spacing (stiffeners as beams) is common. Keep aspect ratio below 3 in high-stress areas and below 5 elsewhere.'),
     ('What does the pressure value mean in the mesh?',
      'Lateral pressure in MPa on all plate elements, pushing towards -Z (towards the stiffeners). 1 m of sea water = 0.01005 MPa.'),
+    ('What is the difference between 1D, 2D and 3D elements?',
+     '1D elements (beams, CBAR) are lines: good for stiffeners and girders in a global model. 2D elements (shells, CQUAD4) are '
+     'flat plates with a thickness: the normal choice for ship plating. 3D elements (solids, CHEXA) fill a volume: used for '
+     'local details such as weld toes in fatigue models. Global ship models use 1D + 2D; local fatigue models use fine 2D (t x t) or 3D.'),
+    ('What is a hot-spot stress?',
+     'It is the stress at the weld toe, found by reading the surface stress at 0.5t and 1.5t away from the weld (t = plate thickness) '
+     'and extrapolating to the toe: s_hs = 1.5 s(0.5t) - 0.5 s(1.5t). The mesh near the weld must be t x t. It is used with an S-N curve to get fatigue life.'),
     ('Can you do CFD?',
      'Not as a solver here. I can set up the geometry and mesh of a part for an external CFD tool, estimate loads with hand formulas, '
      'and explain the set-up (domain size, boundary layers, y+). CFD case generation is planned as a tool.'),
@@ -334,7 +411,8 @@ def make_rules_task(entries):
 
 TASKS = [('mesh', 30, lambda r, T: t_mesh(r, T)), ('mesh_fix', 6, lambda r, T: t_mesh(r, T, 'fix')),
          ('mesh_assume', 6, lambda r, T: t_mesh(r, T, 'assume')), ('plate', 12, t_plate), ('stiff', 12, t_stiff),
-         ('buckle', 5, t_buckle), ('section', 8, t_section), ('calc', 4, t_calc), ('chat', 3, t_chat), ('plates', 10, t_plates)]
+         ('buckle', 5, t_buckle), ('section', 8, t_section), ('calc', 4, t_calc), ('chat', 3, t_chat), ('plates', 10, t_plates),
+         ('fileinfo', 4, t_fileinfo), ('convert', 4, t_convert), ('edit', 5, t_edit), ('clean', 3, t_clean)]
 
 
 def main(argv=None):

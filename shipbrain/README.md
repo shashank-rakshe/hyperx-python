@@ -21,18 +21,41 @@ A small model can learn to write that JSON reliably, and the results stay correc
 
 ## What it can do now
 
+Every tool answers with numbers that come from code, plus a `plain_english` summary. The assistant is told to write in
+simple English, and to call `file_info` first when you ask about an uploaded file.
+
+**Meshing (own mesher, no gmsh)**
+
 | Tool | What it does | Verified |
 |---|---|---|
-| `panel_mesh` | stiffened panel: plate + stiffeners (FlatBar / T / L / HP) + frames, shell or beam stiffeners, pressure, edge supports → `.bdf` + `.inp` | CalculiX deflection matches Roark within 0.2 % (simply supported and clamped) |
-| `plates_mesh` | **own mesher (no gmsh)**: any assembly of flat plates (deck, girders, webs, brackets, floors, bulkheads, openings) → all-quad shell mesh. Joints share nodes by construction | 0 free nodes, 0 duplicate nodes, 1 connected part; CalculiX vs Roark −0.1 % (simply supported), 0.0 % (clamped) |
-| `cad_mesh` | STEP / BREP via CadQuery → thin solids become mid-surface plates and gaps are closed → own mesher. Curved faces are reported, not meshed yet | test: STEP grillage of 3 solids → one connected mesh |
-| `mesh_check` | checks **any** `.bdf` / `.inp` (also gmsh output): free nodes, duplicate nodes, unconnected parts, free edges, angles, warp, inverted elements | detects a deliberately broken mesh |
-| `solve_calculix` | runs CalculiX on the CPU, returns max displacement / von Mises | yes, when `ccx` is installed |
-| `plate_check`, `stiffener_check`, `plate_buckling`, `section_props` | hand checks (Roark tables, beam theory, Johnson-Ostenfeld) | unit tests |
-| `knowledge_search` + **automatic RAG** | every question first pulls the best rule/notes chunks (and, for CAD requests, verified CadQuery examples) into the prompt; answers cite the ids | your rule index loads; retrieval tests |
-| `calc` | exact arithmetic (sandboxed) | tested |
-| `cadquery_build` | runs a CadQuery script → STEP/STL. Returns bbox, volume, solid count and validity, plus **PASS/FAIL against the sizes the user asked for**; errors come back with type and line number. Only active with `--allow-code` (it runs model-written code on your PC) | tests: pass, wrong size → FAIL, typo → error line |
-| *your plugins* | any `TOOLS = {...}` file, e.g. your private `ship_mcp.py` (rules_search, check_members, alike_score, xml_from_members…) | plugin loader tested |
+| `panel_mesh` | stiffened panel (plate + FlatBar/T/L/HP stiffeners + frames), shell or beam stiffeners | CalculiX vs Roark 0.2 % |
+| `plates_mesh` | **global structure mesh, 1D + 2D**: any assembly of flat plates (deck, girders, webs, brackets, floors, bulkheads, openings) as all-quad shells, plus 1D stiffeners (CBAR with offsets) that share the plate nodes. Joints share nodes by construction; the geometry is cleaned first | 0 free / duplicate nodes, 1 part; Roark −0.1 % / 0.0 %; 1D+2D vs structured mesher within 3 % |
+| `cad_mesh` | STEP/BREP → cleaned → thin solids to mid-surface plates → mesh | STEP grillage → one connected mesh |
+| `fatigue_mesh` | **fatigue hot-spot model**: cuts a box around the hot spot, meshes it t × t, finds the 0.5t / 1.5t read-out points; with `solve` it runs CalculiX and returns s_hs = 1.5 s(0.5t) − 0.5 s(1.5t) per surface | test |
+| `geometry_clean` | **unclean geometry**: repeated or in-line points, corners that almost meet, warped plates (moves only the odd corner), slivers, duplicates, tiny holes; STEP repair, sewing, merging faces split in one plane | dirty model: 2 loose parts → 1 clean part |
+| `mesh_check` | any `.bdf`/`.inp` (also from gmsh/ANSA/Patran): free nodes, duplicates, loose parts, free edges, angles, warp | |
+
+**FE model: formats, conversion, editing (1D / 2D / 3D)**
+
+| Tool | What it does |
+|---|---|
+| `fe_convert` | Nastran `.bdf` (read with **pyNastran**) ↔ Abaqus/CalculiX `.inp` ↔ ANSYS APDL `.mac`. Writes driver scripts for **PyMAPDL** (`ansys-mapdl-core`) and **Abaqus/CAE** (Python). Bars, shells, solids, properties, materials, supports and loads are kept: the same CalculiX answer through every format (test) |
+| `fe_edit` | equivalence, delete (group / box / ids / type), remove free nodes, translate, **mirror** (half → full breadth), **refine** (supports carried over; converges to Roark), split quads, renumber, merge models, set thickness |
+| element-type conversion (`fe_edit` ops) | 2D → 3D `shell_to_solid` (hexa/penta through the thickness), 3D → 2D `solid_skin`, 2D → 1D `edges_to_beams`, 1D → 2D `beams_to_shells` |
+
+PyMAPDL and Abaqus need their own licensed software on your PC. ShipBrain writes the input files and the scripts; it does not run ANSYS or Abaqus itself.
+
+**Drawings**
+
+| Tool | What it does |
+|---|---|
+| `drawing_to_3d` | DXF structural plan → 3D: outline/opening layers → plate with holes; girder/web/frame layers → vertical plates; stiffener layers → 1D beams. Writes a STEP and a 1D + 2D mesh. Scanned drawings need the vision model or redrawn DXF lines |
+| `compare_drawings` | two drawings (PDF page, PNG/JPG, DXF), aligned automatically: red = removed, green = added, % same, list of changed areas |
+| `compare_mesh_drawing` | FE mesh vs drawing (plan view at a height): % of mesh lines on drawn lines, coverage, and the shift that would line them up (calibration error) with an overlay image |
+| `file_info` | plain-English description of any uploaded file (FE model, STEP, DXF, PDF, image, JSON, XML, text) |
+
+**Other tools:** `cadquery_build` (checked CAD), `solve_calculix`, `plate_check`, `stiffener_check`, `plate_buckling`, `section_props`,
+`calc`, `knowledge_search` with automatic RAG, and your plugins (e.g. your private `ship_mcp.py`).
 
 With no model connected, the app still works: `/panel_mesh {"length": 4800, "width": 3200}` runs a tool directly, and plain
 questions search the knowledge folder.
@@ -40,7 +63,7 @@ questions search the knowledge folder.
 ## Quick start (workstation, CPU only)
 
 ```bash
-pip install numpy scipy cadquery pymupdf     # cadquery: STEP + CAD tools; pymupdf: PDFs (optional)
+pip install numpy scipy cadquery pyNastran ezdxf pymupdf pillow   # see requirements.txt for what each one is for
 python -m shipbrain --model shipbrain-q4_k_m.gguf --allow-code \
        --knowledge D:\ship_src  --plugin D:\cad-llm-repo
 ```
@@ -99,8 +122,9 @@ publish the model: a model fine-tuned with your rule index can repeat it.
 ## Tests
 
 ```bash
-python -m pytest tests -q        # 25 tests: both meshers, conformity, gap closing, broken-mesh detection, CalculiX vs Roark,
-                                 # STEP -> mesh, CadQuery checks, RAG, plugins, agent loop + GUI server vs a mock model
+python -m pytest tests -q        # 38 tests: meshers, conformity, 1D+2D, cleaning, fatigue, formats + same solver answer through
+                                 # each, edit ops, 1D/2D/3D conversions, DXF->3D, drawing and mesh-vs-drawing comparison,
+                                 # CadQuery, RAG, plugins, agent loop + GUI server vs a mock model
 ```
 
 ## Next steps (not done yet)
@@ -108,6 +132,8 @@ python -m pytest tests -q        # 25 tests: both meshers, conformity, gap closi
 - **Train and measure.** Training has not run yet; there was no GPU in the build session. Run steps 1-4 above and compare `eval_before.json` with `eval_after.json`.
 - **HyperX.** Import the generated `.bdf` into HyperX through its Python API (docs in `../docs`) for panel sizing.
 - **CFD.** A tool that writes an OpenFOAM case (blockMesh/snappyHexMesh dictionaries) from a STEP hull or part. Today the assistant only explains the set-up.
+- **Fatigue sub-modelling.** Drive the cut boundary of the hot-spot box with the global model's displacements, not clamps. Add free-edge hot spots (cut-out corners) and S-N damage.
+- **Global ship model from a general arrangement.** Decks, bulkheads and double bottom from main dimensions, then mesh.
 - **Curved shell.** Mesh curved faces (hull shell) in the surface's own (u,v) parameters, with the same shared-edge rule.
 - **Stiffener slots in the assembly mesher.** Slots where stiffeners pass through web frames; today the web is continuous at the crossing.
 - **Ship primitives.** CAD2Program-style primitives (`plate`, `stiffener`, `bracket`, `bulkhead` + a few parameters) instead of free CadQuery code. Small models are more reliable with these.
