@@ -1,0 +1,49 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Deck report</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{margin:0;font:13px system-ui,sans-serif;display:flex;height:100vh;color:#222}
+#side{width:250px;padding:10px;border-right:1px solid #ccc;overflow:auto;flex:none}
+#main{flex:1;position:relative;background:#fafafa}
+svg{width:100%;height:100%;cursor:grab}
+button,label{display:block;margin:4px 0}
+button.deck{width:100%;text-align:left;padding:6px}
+button.on{background:#1f6feb;color:#fff}
+#tip{position:absolute;left:8px;bottom:8px;background:#fffd;border:1px solid #bbb;padding:4px 8px;max-width:60%}
+a.b{display:block;padding:8px;background:#222;color:#fff;text-align:center;text-decoration:none;margin:8px 0}
+pre{white-space:pre-wrap;font-size:11px;max-height:200px;overflow:auto}
+</style></head><body>
+<div id="side"><h3>1005 EC decks (model from drawing)</h3>
+<a class="b" href="view_3d.html" target="_blank">Open 3D view</a>
+<div id="list"></div><hr>
+<label><input type="checkbox" id="lp" checked> plates (colour = thickness)</label>
+<label><input type="checkbox" id="lh" checked> openings</label>
+<label><input type="checkbox" id="ls" checked> stiffeners / girders</label>
+<button id="fit">Fit to window</button>
+<p>Wheel = zoom, drag = pan. Hover a member for its name and section.</p>
+<details><summary>Build summary</summary><pre><!--SUMMARY--></pre></details></div>
+<div id="main"><svg id="sv"><g id="g"></g></svg><div id="tip">&nbsp;</div></div>
+<script>/*DATA*/
+const sv=document.getElementById('sv'),g=document.getElementById('g'),tip=document.getElementById('tip');
+let cur=0,vb={x:0,y:0,w:1,h:1};
+const tcol={};const pal=['#9ecae1','#a1d99b','#fdd0a2','#d4b9da','#fcbba1','#c7e9c0','#bcbddc','#fdae6b'];
+function col(t){if(!(t in tcol))tcol[t]=pal[Object.keys(tcol).length%pal.length];return tcol[t]}
+const kc={girder:'#c0392b',beam:'#2c3e50',carling:'#16a085',deep:'#8e44ad'};
+function path(p,close){return 'M'+p.map(a=>a.join(',')).join('L')+(close?'Z':'')}
+function draw(){const d=DECKS[cur];let s='';
+ if(document.getElementById('lp').checked)for(const p of d.plates)s+=`<path d="${path(p.p,1)}" fill="${col(p.t)}" stroke="#555" stroke-width="1" vector-effect="non-scaling-stroke" data-i="${p.t} mm  ${p.n}"/>`;
+ if(document.getElementById('lh').checked)for(const h of d.holes)s+=`<path d="${path(h,1)}" fill="#fff" stroke="#c00" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
+ if(document.getElementById('ls').checked)for(const m of d.stiff)s+=`<path d="${path(m.p,0)}" fill="none" stroke="${kc[m.k]||'#555'}" stroke-width="2" vector-effect="non-scaling-stroke" data-i="${m.k} ${m.n} ${m.s}"/>`;
+ g.innerHTML=s}
+function fit(){const d=DECKS[cur];let a=[],b=[];for(const p of d.plates)for(const q of p.p){a.push(q[0]);b.push(q[1])}
+ if(!a.length)return;const x0=Math.min(...a),x1=Math.max(...a),y0=Math.min(...b),y1=Math.max(...b);const w=x1-x0,h=y1-y0;
+ const r=sv.getBoundingClientRect();const k=Math.max(w/r.width,h/r.height)*1.05;vb={x:x0-(r.width*k-w)/2,y:y0-(r.height*k-h)/2,w:r.width*k,h:r.height*k};setvb()}
+function setvb(){sv.setAttribute('viewBox',`${vb.x} ${vb.y} ${vb.w} ${vb.h}`)}
+function sel(i){cur=i;[...document.querySelectorAll('button.deck')].forEach((b,j)=>b.classList.toggle('on',j==i));draw();fit()}
+const L=document.getElementById('list');DECKS.forEach((d,i)=>{const b=document.createElement('button');b.className='deck';b.textContent=`${d.name}  (Z ${d.z!=null?Math.round(d.z):'?'})  ${d.plates.length} plates, ${d.stiff.length} members`;b.onclick=()=>sel(i);L.appendChild(b)});
+['lp','lh','ls'].forEach(i=>document.getElementById(i).onchange=draw);document.getElementById('fit').onclick=fit;
+sv.addEventListener('wheel',e=>{e.preventDefault();const r=sv.getBoundingClientRect();const f=e.deltaY<0?0.85:1/0.85;const mx=vb.x+(e.clientX-r.left)/r.width*vb.w,my=vb.y+(e.clientY-r.top)/r.height*vb.h;vb={x:mx-(mx-vb.x)*f,y:my-(my-vb.y)*f,w:vb.w*f,h:vb.h*f};setvb()},{passive:false});
+let dr=null;sv.onmousedown=e=>{dr=[e.clientX,e.clientY,vb.x,vb.y]};addEventListener('mouseup',()=>dr=null);
+addEventListener('mousemove',e=>{if(dr){const r=sv.getBoundingClientRect();vb.x=dr[2]-(e.clientX-dr[0])/r.width*vb.w;vb.y=dr[3]-(e.clientY-dr[1])/r.height*vb.h;setvb()}
+ const t=e.target.getAttribute&&e.target.getAttribute('data-i');if(t)tip.textContent=t});
+sel(0);
+</script></body></html>

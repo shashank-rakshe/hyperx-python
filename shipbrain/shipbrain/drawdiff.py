@@ -10,7 +10,7 @@ Then items of A and B are matched by position (tolerance in drawing units) and t
   "line added / removed", "line style changed (solid -> dashed)", "text '12' -> '14' (plate thickness)", ...
 Scanned PDFs have no vector content: use compare_drawings (image overlay) for those.
 """
-import math, re
+import math, os, re
 
 NUM_CLASSES = [
     ('weld size', re.compile(r'^(a|z|s)\s*=?\s*\d+(\.\d+)?$|^\d+(\.\d+)?\s*(a|z|fw|fillet)$|^\d+(\.\d+)?\s*typ\.?$', re.I)),
@@ -184,6 +184,36 @@ _EXPR = [
 ]
 
 
+def _join_rows(lines):
+    """OCR boxes -> text rows: boxes whose vertical centres are within half a text height are one row, read left to right"""
+    items = []
+    for l in lines:
+        try:
+            xs, ys = [p[0] for p in l.box], [p[1] for p in l.box]
+        except TypeError:
+            x0, y0, x1, y1 = l.box
+            xs, ys = [x0, x1], [y0, y1]
+        items.append((min(xs), (min(ys) + max(ys)) / 2, max(ys) - min(ys), max(xs), l.text))
+    items.sort(key=lambda t: (t[1], t[0]))
+    rows = []
+    for it in items:
+        if rows and abs(rows[-1][-1][1] - it[1]) <= 0.5 * max(it[2], rows[-1][-1][2], 1):
+            rows[-1].append(it)
+        else:
+            rows.append([it])
+    out = []
+    for r in rows:
+        r.sort(key=lambda t: t[0])
+        txt, last_x1 = [], None
+        for x0, _, _, x1, t in r:
+            if last_x1 is not None and x0 < last_x1 - 2:          # overlapping duplicate box from tiling
+                continue
+            txt.append(t)
+            last_x1 = x1
+        out.append(' '.join(txt))
+    return out
+
+
 def drawing_texts(path, page=0):
     """text lines of a drawing: DXF texts, PDF text layer, or OCR (only if Tesseract is installed) for scans"""
     low = path.lower()
@@ -195,19 +225,30 @@ def drawing_texts(path, page=0):
             txt = d.pages[page].extract_text() or ''
         if txt.strip():
             return txt.splitlines(), 'pdf text layer'
-    try:                                              # scan / image: optional OCR (Tesseract, Apache-2.0)
-        import pytesseract
-        from PIL import Image
-        if low.endswith('.pdf'):
-            import pypdfium2
-            pdf = pypdfium2.PdfDocument(path)
-            img = pdf[page].render(scale=300 / 72, grayscale=True).to_pil()
-            pdf.close()
-        else:
-            img = Image.open(path)
-        return pytesseract.image_to_string(img).splitlines(), 'OCR'
+    from PIL import Image
+    if low.endswith('.pdf'):
+        import pypdfium2
+        pdf = pypdfium2.PdfDocument(path)
+        img = pdf[page].render(scale=300 / 72, grayscale=True).to_pil()
+        pdf.close()
+    else:
+        img = Image.open(path).convert('L')
+    try:                                              # 1st choice: the ship drawing reader's OCR (tiled, drawing-tuned)
+        import sys, numpy as np
+        dr = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'shiptools', 'deckrules_tool')
+        if dr not in sys.path:
+            sys.path.insert(0, dr)
+        from deckrules.ocr import OCR
+        eng = OCR('auto')
+        lines = eng.read_tiled(np.asarray(img))
+        return _join_rows(lines), f'OCR ({eng.backend}, ship drawing reader)'
     except Exception:
-        return [], 'no text (scanned drawing; install Tesseract + pytesseract for OCR)'
+        pass
+    try:                                              # fallback: plain Tesseract
+        import pytesseract
+        return pytesseract.image_to_string(img).splitlines(), 'OCR (Tesseract)'
+    except Exception:
+        return [], 'no text (scanned drawing; install rapidocr-onnxruntime or Tesseract for OCR)'
 
 
 def check_dimensions(path, page=0, tol=0.5, fix=None):

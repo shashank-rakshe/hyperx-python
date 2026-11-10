@@ -7,6 +7,10 @@ ezdxf           # DXF drawings: drawing_to_3d, compare_drawings, file_info
 pdfplumber      # vector PDF drawings: lines, line styles, words (MIT)
 pypdfium2       # PDF rendering + text for the knowledge base (Apache-2.0/BSD)
 pillow          # images for drawing comparison
+shapely         # ship drawing reader (shiptools/deckrules_tool), BSD
+lxml            # ship drawing reader XML, BSD
+rapidocr-onnxruntime  # OCR for scanned drawings (Apache-2.0); optional
+opencv-python-headless  # scanned drawings (Apache-2.0); optional
 # CalculiX (ccx) on PATH: optional, solve_calculix / fatigue solve
 # ANSYS (PyMAPDL: ansys-mapdl-core) and Abaqus: optional, need their own licences; ShipBrain writes inputs + scripts
 # everything here is free open source (no AGPL / paid-licence libraries). no gmsh: meshing is done by shipbrain/platemesh.py (own conforming mesher)

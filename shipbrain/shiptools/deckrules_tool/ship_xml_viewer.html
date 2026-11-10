@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ship XML Viewer</title>
+<style>
+:root{--bg:#1e2227;--panel:#262b32;--line:#39414b;--txt:#d8dee6;--mut:#8a95a3;--acc:#4da3ff}
+@media (prefers-color-scheme: light){:root{--bg:#eef1f5;--panel:#fff;--line:#cfd6df;--txt:#1d2530;--mut:#5d6b7b;--acc:#0b6bcb}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:13px/1.35 system-ui,Segoe UI,Arial,sans-serif}
+#app{display:grid;grid-template-columns:330px 1fr;grid-template-rows:auto 1fr;height:100%}
+#top{grid-column:1/3;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+button,select,input[type=search]{background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:5px;padding:4px 9px;font:inherit}
+button{cursor:pointer}button:hover{border-color:var(--acc)}button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+#side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+#side .hd{padding:8px 10px;border-bottom:1px solid var(--line)}
+#tree{flex:1;overflow:auto;padding:4px 6px 20px}
+#info{border-top:1px solid var(--line);padding:8px 10px;max-height:34%;overflow:auto;color:var(--mut);font-size:12px;white-space:pre-wrap;word-break:break-word}
+#info b{color:var(--txt)}
+.row{display:flex;align-items:center;gap:4px;padding:1px 0;white-space:nowrap}
+.row.sel>.nm{background:var(--acc);color:#fff;border-radius:3px}
+.nm{overflow:hidden;text-overflow:ellipsis;cursor:pointer;padding:0 3px;max-width:230px}
+.tg{width:14px;text-align:center;cursor:pointer;color:var(--mut);user-select:none}
+.kids{margin-left:14px}.cnt{color:var(--mut);font-size:11px;margin-left:4px}
+.sw{width:9px;height:9px;border-radius:2px;display:inline-block;flex:none}
+#cv{width:100%;height:100%;display:block;cursor:grab;touch-action:none}
+#cv:active{cursor:grabbing}
+#stage{position:relative;min-height:0;min-width:0}
+#hint{position:absolute;left:10px;bottom:8px;color:var(--mut);font-size:12px;pointer-events:none}
+#drop{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--mut);font-size:15px;pointer-events:none}
+#legend{position:absolute;right:10px;top:8px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 9px;font-size:12px}
+#legend label{display:flex;align-items:center;gap:5px;cursor:pointer;margin:2px 0}
+#float{position:absolute;left:10px;bottom:30px;width:min(360px,calc(100% - 20px));max-height:45%;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;white-space:pre-wrap;word-break:break-word;color:var(--mut)}
+#float[hidden]{display:none}#float b{color:var(--txt)}#float textarea{width:100%;margin-top:6px;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:5px;font:inherit;padding:4px;min-height:44px}
+body.nosb #app{grid-template-columns:1fr}body.nosb #stage{grid-column:1/3}body.nosb #side{display:none}
+#stat{margin-left:auto;color:var(--mut);font-size:12px}
+@media (max-width:760px){#app{grid-template-columns:1fr;grid-template-rows:auto 40% 1fr}#top{grid-column:1}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <button id="open">Open XML…</button>
+    <input type="file" id="file" accept=".xml,text/xml" multiple hidden>
+    <span style="width:8px"></span>
+    <button data-v="iso">Iso</button><button data-v="top">Top</button><button data-v="front">Front</button><button data-v="left">Left</button><button data-v="back">Back</button>
+    <button id="fit">Fit</button>
+    <button id="sb">Hide panel</button><button id="fs">Full screen</button>
+    <button id="wire">Wireframe</button>
+    <button id="edges" class="on">Edges</button>
+    <label style="display:flex;gap:4px;align-items:center">Opacity <input type="range" id="op" min="20" max="100" value="92"></label>
+    <label>Colour <select id="cm"><option value="type">by type</option><option value="thk">by thickness</option><option value="panel">by panel</option></select></label>
+    <span id="stat">no file loaded</span>
+  </div>
+  <div id="side">
+    <div class="hd"><input type="search" id="q" placeholder="Filter by name (e.g. DEEP, FR100000, B4)" style="width:100%"></div>
+    <div id="tree"></div>
+    <div id="info">Click a part in the 3D view or in the tree to see its data.</div>
+  </div>
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="drop">Open or drop a ship moulded-line XML file<br><small>everything runs locally in this page – nothing is uploaded</small></div>
+    <div id="legend"></div>
+    <div id="float" hidden></div>
+    <div id="hint">drag = orbit · right-drag / Shift-drag = pan · wheel = zoom · click = pick · double-click = centre on part</div>
+  </div>
+</div>
+<script>
+'use strict';
+const $=s=>document.querySelector(s);
+const cv=$('#cv'),ctx=cv.getContext('2d');
+const TYPES={plate:['Plate','#4f8ff0'],web:['Stiffener web','#f0a04f'],flange:['Flange','#59c27a'],bracket:['Bracket','#e5534b'],line:['Bar / pipe (line)','#9aa4b2']};
+const visType={plate:true,web:true,flange:true,bracket:true,line:true};
+let items=[],blocks=[],view={yaw:-0.8,pitch:0.55,dist:1,tx:0,ty:0,tz:0,panx:0,pany:0},sel=null,wire=false,showEdges=true,order=[];
+let bbox=null,fileNames=[];
+
+/* ---------- vector helpers ---------- */
+const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],len=a=>Math.hypot(a[0],a[1],a[2]);
+const nrm=a=>{const l=len(a)||1;return[a[0]/l,a[1]/l,a[2]/l]};
+
+/* ---------- XML parsing ---------- */
+const kids=(n,t)=>[...n.children].filter(c=>c.tagName===t);
+const kid=(n,t)=>kids(n,t)[0]||null;
+const xyz=n=>n?[+n.getAttribute('X'),+n.getAttribute('Y'),+n.getAttribute('Z')]:[0,0,0];
+function cs(n){ // CoordSys -> {o,u,v,w}
+  const c=kid(n,'CoordSys');if(!c)return null;
+  const o=xyz(kid(c,'Origin')),w=nrm(xyz(kid(c,'Waxis'))),u=nrm(xyz(kid(c,'Uaxis')));
+  const v=nrm(cross(w,u));return{o,u,v,w};
+}
+function contour(n){ // SimpleContour / DetailedContour / Contour / Trace -> [[u,v]..]
+  if(!n)return null;const s=kid(n,'StartPoint2d');if(!s)return null;
+  const p=[[+s.getAttribute('U'),+s.getAttribute('V')]];
+  for(const g of kids(n,'Segment2d')){const q=kid(g,'Node2d');if(q)p.push([+q.getAttribute('U'),+q.getAttribute('V')]);}
+  if(p.length>2){const a=p[0],b=p[p.length-1];if(Math.abs(a[0]-b[0])<1e-6&&Math.abs(a[1]-b[1])<1e-6)p.pop();}
+  return p;
+}
+const to3=(c,p)=>[c.o[0]+c.u[0]*p[0]+c.v[0]*p[1],c.o[1]+c.u[1]*p[0]+c.v[1]*p[1],c.o[2]+c.u[2]*p[0]+c.v[2]*p[1]];
+function inPoly(pt,poly){let r=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if((a[1]>pt[1])!==(b[1]>pt[1])&&pt[0]<(b[0]-a[0])*(pt[1]-a[1])/(b[1]-a[1])+a[0])r=!r;}return r;}
+function area2(p){let s=0;for(let i=0,j=p.length-1;i<p.length;j=i++)s+=p[j][0]*p[i][1]-p[i][0]*p[j][1];return Math.abs(s)/2;}
+
+function parse(text,fname){
+  const doc=new DOMParser().parseFromString(text,'text/xml');
+  if(doc.querySelector('parsererror'))throw new Error('not a valid XML file: '+fname);
+  const root=doc.documentElement;const out=[];
+  const bars={};for(const b of root.getElementsByTagName('BarSection')){bars[b.getAttribute('BarSectionId')]=b;}
+  for(const blk of root.getElementsByTagName('Block')){
+    const bname=blk.getAttribute('ObjId')||'Block';
+    for(const pp of kids(blk,'PlanePanel')){
+      const pname=pp.getAttribute('ObjId')||'Panel',c=cs(pp);if(!c)continue;
+      const holes=[];
+      for(const hg of kids(pp,'HoleGroup'))for(const h of kids(hg,'Hole')){const k=contour(kid(h,'Contour'));if(k&&k.length>2)holes.push(k);}
+      for(const pg of kids(pp,'PlateGroup')){
+        const t=+(kid(kid(pg,'Material')||pg,'Thickness')?.textContent||0);
+        for(const pl of kids(pg,'Plate')){
+          const k=contour(kid(pl,'SimpleContour'));if(!k||k.length<3)continue;
+          const hh=holes.filter(h=>inPoly(h[0],k));
+          out.push({block:bname,panel:pname,name:pl.getAttribute('Name')||pname+'-P',type:'plate',t,poly:k,cs:c,holes:hh,src:pl.getAttribute('Source')||'',attrs:{}});
+        }
+      }
+      for(const sg of kids(pp,'StiffenerGroup')){
+        const bs=kid(kid(sg,'Material')||sg,'BarShape'),sec=bs?bs.getAttribute('BarSectionId'):'',par=bs?(kid(bs,'Parameters')?.textContent||''):'';
+        for(const st of kids(sg,'Stiffener')){
+          const nm=st.getAttribute('Name')||pname+'/S';
+          const info={section:sec,params:par,kind:st.getAttribute('Kind')||'',evidence:st.getAttribute('Evidence')||''};
+          let made=false;
+          const web=kid(st,'Web');
+          if(web){const wc=cs(web),k=contour(kid(web,'DetailedContour'));if(wc&&k&&k.length>=3){out.push({block:bname,panel:pname,name:nm+' Web',type:'web',t:0,poly:k,cs:wc,holes:[],src:info.kind,attrs:info});made=true;}}
+          const fl=kid(st,'Flange1');
+          if(fl){const fc=cs(fl),k=contour(kid(fl,'DetailedContour'));if(fc&&k&&k.length>=3){out.push({block:bname,panel:pname,name:nm+' Flange',type:'flange',t:+(fl.getAttribute('Thickness')||0),poly:k,cs:fc,holes:[],src:info.kind,attrs:info});made=true;}}
+          if(!made){const tr=contour(kid(st,'Trace'));if(tr&&tr.length>=2)out.push({block:bname,panel:pname,name:nm,type:'line',t:0,line:tr.map(p=>to3(c,p)),poly:null,cs:c,holes:[],src:info.kind,attrs:info});}
+        }
+      }
+      for(const bg of kids(pp,'BracketGroup')){
+        const t=+(kid(kid(bg,'Material')||bg,'Thickness')?.textContent||0);
+        for(const br of kids(bg,'Bracket')){const bc=cs(br),k=contour(kid(br,'SimpleContour'));if(bc&&k&&k.length>=3)out.push({block:bname,panel:pname,name:br.getAttribute('Name')||pname+'/B',type:'bracket',t,poly:k,cs:bc,holes:[],src:br.getAttribute('Source')||'',attrs:{}});}
+      }
+    }
+  }
+  return out;
+}
+
+/* ---------- build 3D data ---------- */
+function prepare(list){
+  let mn=[1e18,1e18,1e18],mx=[-1e18,-1e18,-1e18];
+  list.forEach((it,i)=>{
+    it.id=i;it.on=true;
+    if(it.poly){
+      it.p3=it.poly.map(p=>to3(it.cs,p));
+      it.h3=it.holes.map(h=>h.map(p=>to3(it.cs,p)));
+      it.n=nrm(it.cs.w);
+      it.area=area2(it.poly)-it.holes.reduce((s,h)=>s+area2(h),0);
+    }else{it.p3=it.line;it.n=[0,0,1];it.area=0}
+    const c=[0,0,0];for(const p of it.p3){for(let k=0;k<3;k++){c[k]+=p[k];mn[k]=Math.min(mn[k],p[k]);mx[k]=Math.max(mx[k],p[k]);}}
+    it.c=c.map(v=>v/it.p3.length);
+  });
+  bbox={mn,mx};
+  const m={};list.forEach(it=>{(m[it.block]??=new Map());(m[it.block].get(it.panel)||m[it.block].set(it.panel,[]).get(it.panel)).push(it)});
+  blocks=Object.entries(m).map(([b,pm])=>({name:b,open:false,on:true,panels:[...pm].map(([p,its])=>({name:p,open:false,items:its}))}));
+}
+const PAL=['#4f8ff0','#f0a04f','#59c27a','#e5534b','#b07cf0','#38c1c7','#e0c341','#e57fb3','#8fb35a','#c78a5e'];
+function hash(s){let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))|0;return Math.abs(h)}
+function thkColor(t){if(!t)return'#8a95a3';const k=Math.min(1,Math.max(0,(t-5)/25));return`hsl(${220-220*k},70%,55%)`}
+function colorOf(it){const m=$('#cm').value;if(m==='thk'&&it.type!=='line')return thkColor(it.t||(it.attrs.params?+it.attrs.params.split(/\s+/).pop():0));if(m==='panel')return PAL[hash(it.panel)%PAL.length];return TYPES[it.type][1]}
+
+/* ---------- tree ---------- */
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function drawTree(){
+  const q=$('#q').value.trim().toLowerCase(),t=$('#tree');let h='';
+  blocks.forEach((b,bi)=>{
+    let bh='',bc=0;
+    b.panels.forEach((p,pi)=>{
+      const its=p.items.filter(i=>!q||i.name.toLowerCase().includes(q)||p.name.toLowerCase().includes(q));
+      if(!its.length)return;bc+=its.length;
+      const op=p.open||!!q;
+      let ph=`<div class="row"><span class="tg" data-t="p" data-b="${bi}" data-p="${pi}">${op?'▾':'▸'}</span><input type="checkbox" data-c="p" data-b="${bi}" data-p="${pi}" ${its.every(i=>i.on)?'checked':''}><span class="nm" title="${esc(p.name)}" data-t="p" data-b="${bi}" data-p="${pi}">${esc(p.name)}</span><span class="cnt">${its.length}</span></div>`;
+      if(op)ph+='<div class="kids">'+its.map(i=>`<div class="row ${sel&&sel.id===i.id?'sel':''}"><input type="checkbox" data-c="i" data-i="${i.id}" ${i.on?'checked':''}><span class="sw" style="background:${TYPES[i.type][1]}"></span><span class="nm" data-i="${i.id}" title="${esc(i.name)}">${esc(i.name)}</span></div>`).join('')+'</div>';
+      bh+=ph;
+    });
+    if(!bh)return;
+    const ob=b.open||!!q;
+    h+=`<div class="row"><span class="tg" data-t="b" data-b="${bi}">${ob?'▾':'▸'}</span><input type="checkbox" data-c="b" data-b="${bi}" ${b.panels.every(p=>p.items.every(i=>i.on))?'checked':''}><b class="nm" data-t="b" data-b="${bi}">${esc(b.name)}</b><span class="cnt">${bc}</span></div>`+(ob?`<div class="kids">${bh}</div>`:'');
+  });
+  t.innerHTML=h||'<div style="padding:10px;color:var(--mut)">nothing to show</div>';
+}
+$('#tree').addEventListener('click',e=>{
+  const d=e.target.dataset;
+  if(e.target.type==='checkbox'){
+    const on=e.target.checked;
+    if(d.c==='i')items[+d.i].on=on;
+    if(d.c==='p')blocks[+d.b].panels[+d.p].items.forEach(i=>i.on=on);
+    if(d.c==='b')blocks[+d.b].panels.forEach(p=>p.items.forEach(i=>i.on=on));
+    drawTree();render();return;
+  }
+  if(d.t==='b'){blocks[+d.b].open=!blocks[+d.b].open;drawTree();return}
+  if(d.t==='p'){const p=blocks[+d.b].panels[+d.p];p.open=!p.open;drawTree();return}
+  if(d.i!==undefined){pick(items[+d.i]);}
+});
+$('#tree').addEventListener('dblclick',e=>{if(e.target.dataset.i!==undefined)centerOn(items[+e.target.dataset.i])});
+$('#q').addEventListener('input',drawTree);
+
+/* ---------- info ---------- */
+function pick(it){
+  sel=it;
+  if(!it){$('#info').textContent='';$('#float').hidden=true;render();drawTree();return}
+  const bb=[[1e18,1e18,1e18],[-1e18,-1e18,-1e18]];for(const p of it.p3)for(let k=0;k<3;k++){bb[0][k]=Math.min(bb[0][k],p[k]);bb[1][k]=Math.max(bb[1][k],p[k]);}
+  const f=v=>Math.round(v*10)/10;
+  let s=`<b>${esc(it.name)}</b>\n${TYPES[it.type][0]}  ·  panel ${esc(it.panel)}\n`;
+  if(it.t)s+=`thickness: <b>${it.t}</b> mm\n`;
+  if(it.area)s+=`area: ${(it.area/1e6).toFixed(3)} m²\n`;
+  s+=`X ${f(bb[0][0])} … ${f(bb[1][0])}  (${f(bb[1][0]-bb[0][0])})\nY ${f(bb[0][1])} … ${f(bb[1][1])}  (${f(bb[1][1]-bb[0][1])})\nZ ${f(bb[0][2])} … ${f(bb[1][2])}  (${f(bb[1][2]-bb[0][2])})\n`;
+  if(it.attrs.section)s+=`section: ${esc(it.attrs.section)}  (${esc(it.attrs.params)})\n`;
+  if(it.attrs.kind)s+=`kind: ${esc(it.attrs.kind)}\n`;
+  if(it.attrs.evidence)s+=`evidence: ${esc(it.attrs.evidence)}\n`;
+  if(it.src)s+=`source: ${esc(it.src)}\n`;
+  if(it.holes&&it.holes.length)s+=`holes: ${it.holes.length}\n`;
+  {const E=edgesOf(it),Ls=E.map(e=>len(sub(e[0],e[1])));s+=`edges (mm): ${Ls.map(v=>f(v)).join(' · ')}\nperimeter: ${f(Ls.reduce((a,b)=>a+b,0))} mm  (click near an edge to highlight its length)\n`;
+   if(it.type==='web'||it.type==='flange'){const L=Math.max(...Ls),H=Math.min(...Ls.filter(v=>v>1));s+=`member length ≈ ${f(L)} mm, depth/width ≈ ${f(H)} mm\n`}}
+  $('#info').innerHTML=s;
+  const fl=$('#float');fl.hidden=false;
+  fl.innerHTML=s+`<textarea id="cmt" placeholder="Type your comment for this part…"></textarea><div style="margin-top:4px;display:flex;gap:6px"><button id="cpy">Copy comment</button><button id="xcl">Close</button></div>`;
+  $('#cpy').onclick=()=>{const v=`Part: ${it.name} | panel: ${it.panel} | X ${f(it.c[0])} Y ${f(it.c[1])} Z ${f(it.c[2])}\nComment: ${$('#cmt').value}`;
+    (navigator.clipboard?navigator.clipboard.writeText(v):Promise.reject()).then(()=>{$('#cpy').textContent='Copied'},()=>{const t=$('#cmt');t.value=v;t.select();$('#cpy').textContent='Select + copy above'})};
+  $('#xcl').onclick=()=>{fl.hidden=true};
+  render();drawTree();
+}
+
+/* ---------- camera / render ---------- */
+function cam(){
+  const cy=Math.cos(view.yaw),sy=Math.sin(view.yaw),cp=Math.cos(view.pitch),sp=Math.sin(view.pitch);
+  // camera looks at target from direction d (Z up)
+  const d=[cp*sy,-cp*cy,sp];                    // from target to eye
+  const r=nrm(cross([0,0,1],d)),up=cross(d,r);
+  return{d,r,up,eye:[view.tx+d[0]*view.dist,view.ty+d[1]*view.dist,view.tz+d[2]*view.dist]};
+}
+function resize(){const r=cv.getBoundingClientRect(),k=devicePixelRatio||1;cv.width=Math.max(1,r.width*k);cv.height=Math.max(1,r.height*k);ctx.setTransform(k,0,0,k,0,0);render()}
+addEventListener('resize',resize);
+function project(c,p){
+  const v=sub(p,c.eye),x=dot(v,c.r),y=dot(v,c.up),z=-dot(v,c.d);
+  const W=cv.clientWidth,H=cv.clientHeight,f=Math.min(W,H)*0.9;
+  return[W/2+view.panx+f*x/(z||1e-6)*1,H/2+view.pany-f*y/(z||1e-6)*1,z];
+}
+function render(){
+  const W=cv.clientWidth,H=cv.clientHeight;ctx.clearRect(0,0,W,H);
+  if(!items.length)return;
+  const c=cam(),alpha=$('#op').value/100;
+  const draw=[];
+  for(const it of items){
+    if(!it.on||!visType[it.type])continue;
+    const sp=it.p3.map(p=>project(c,p));
+    if(sp.some(p=>p[2]<=1))continue;
+    const z=it.c?-dot(sub(it.c,c.eye),c.d):0;
+    draw.push({it,sp,z});
+  }
+  draw.sort((a,b)=>b.z-a.z);order=draw;
+  for(const {it,sp} of draw){
+    const col=colorOf(it);
+    ctx.beginPath();
+    if(it.type==='line'){ctx.moveTo(sp[0][0],sp[0][1]);for(let i=1;i<sp.length;i++)ctx.lineTo(sp[i][0],sp[i][1]);ctx.strokeStyle=col;ctx.lineWidth=2;ctx.stroke();continue}
+    ctx.moveTo(sp[0][0],sp[0][1]);for(let i=1;i<sp.length;i++)ctx.lineTo(sp[i][0],sp[i][1]);ctx.closePath();
+    if(it.h3.length)for(const h of it.h3){const hp=h.map(p=>project(c,p));ctx.moveTo(hp[0][0],hp[0][1]);for(let i=1;i<hp.length;i++)ctx.lineTo(hp[i][0],hp[i][1]);ctx.closePath()}
+    if(!wire){
+      const lam=Math.abs(dot(it.n,c.d)),sh=0.45+0.55*lam;
+      ctx.globalAlpha=alpha;ctx.fillStyle=shade(col,sh);ctx.fill('evenodd');ctx.globalAlpha=1;
+    }
+    if(showEdges||wire){ctx.strokeStyle=wire?col:'rgba(0,0,0,.35)';ctx.lineWidth=wire?1:0.6;ctx.stroke()}
+  }
+  if(sel&&sel.on&&visType[sel.type]){
+    const sp=sel.p3.map(p=>project(c,p));if(!sp.some(p=>p[2]<=1)){
+      ctx.beginPath();ctx.moveTo(sp[0][0],sp[0][1]);for(let i=1;i<sp.length;i++)ctx.lineTo(sp[i][0],sp[i][1]);if(sel.type!=='line')ctx.closePath();
+      ctx.strokeStyle='#00e5ff';ctx.lineWidth=2.5;ctx.stroke();
+    }
+  }
+  if(sel&&sel.on&&visType[sel.type]&&sel.p3&&sel.p3.length>1)dims(c);
+  axes(c);
+}
+let hitEdge=null;
+function edgesOf(it){const e=[],P=it.p3,n=P.length,cl=it.type!=='line';for(let i=0;i<(cl?n:n-1);i++)e.push([P[i],P[(i+1)%n]]);return e}
+function dims(c){
+  const E=edgesOf(sel);ctx.font='11px system-ui';ctx.textBaseline='middle';
+  E.forEach((ed,i)=>{
+    const a=project(c,ed[0]),b=project(c,ed[1]);if(a[2]<=1||b[2]<=1)return;
+    const L=len(sub(ed[0],ed[1]));const hit=hitEdge&&hitEdge.it===sel&&hitEdge.i===i;
+    if(L<1)return;
+    ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.strokeStyle=hit?'#ff2bd6':'#00e5ff';ctx.lineWidth=hit?4:2.5;ctx.stroke();
+    const px=Math.hypot(a[0]-b[0],a[1]-b[1]);
+    if(px<34&&!hit)return;
+    const t=Math.round(L*10)/10+' mm',mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2,w=ctx.measureText(t).width+8;
+    ctx.fillStyle=hit?'#ff2bd6':'#003b4a';ctx.fillRect(mx-w/2,my-9,w,18);ctx.fillStyle='#fff';ctx.textAlign='center';ctx.fillText(t,mx,my);ctx.textAlign='left';
+  });
+}
+function nearestEdge(it,px,py){
+  const c=cam();let best=null;edgesOf(it).forEach((ed,i)=>{
+    const a=project(c,ed[0]),b=project(c,ed[1]);if(a[2]<=1||b[2]<=1)return;
+    const dx=b[0]-a[0],dy=b[1]-a[1],l2=dx*dx+dy*dy||1,t=Math.max(0,Math.min(1,((px-a[0])*dx+(py-a[1])*dy)/l2));
+    const d=Math.hypot(px-(a[0]+t*dx),py-(a[1]+t*dy));if(!best||d<best.d)best={d,i,it};});
+  return best&&best.d<14?best:null}
+function shade(col,k){const m=/^#(..)(..)(..)$/.exec(col);let r,g,b;if(m){r=parseInt(m[1],16);g=parseInt(m[2],16);b=parseInt(m[3],16)}else{const t=document.createElement('canvas').getContext('2d');t.fillStyle=col;const v=t.fillStyle;const mm=/^#(..)(..)(..)$/.exec(v);if(!mm)return col;r=parseInt(mm[1],16);g=parseInt(mm[2],16);b=parseInt(mm[3],16)}return`rgb(${r*k|0},${g*k|0},${b*k|0})`}
+function axes(c){
+  const x0=46,y0=cv.clientHeight-46,L=26;ctx.lineWidth=2;ctx.font='11px system-ui';
+  for(const [v,col,l] of [[[1,0,0],'#ff5a5a','X'],[[0,1,0],'#5adf5a','Y'],[[0,0,1],'#5a9bff','Z']]){
+    const sx=dot(v,c.r)*L,sy=-dot(v,c.up)*L;ctx.strokeStyle=col;ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x0+sx,y0+sy);ctx.stroke();ctx.fillText(l,x0+sx*1.25-3,y0+sy*1.25+4);
+  }
+}
+function fit(){
+  if(!bbox)return;const mn=bbox.mn,mx=bbox.mx;
+  view.tx=(mn[0]+mx[0])/2;view.ty=(mn[1]+mx[1])/2;view.tz=(mn[2]+mx[2])/2;
+  view.dist=Math.max(len(sub(mx,mn))*0.62,100);view.panx=0;view.pany=0;render();
+}
+function setView(n){
+  const V={iso:[-0.8,0.55],top:[0,Math.PI/2-1e-3],front:[0,0],back:[Math.PI,0],left:[-Math.PI/2,0]};
+  [view.yaw,view.pitch]=V[n];fit();
+}
+function centerOn(it){if(!it)return;view.tx=it.c[0];view.ty=it.c[1];view.tz=it.c[2];view.panx=0;view.pany=0;
+  const mn=[1e18,1e18,1e18],mx=[-1e18,-1e18,-1e18];for(const p of it.p3)for(let k=0;k<3;k++){mn[k]=Math.min(mn[k],p[k]);mx[k]=Math.max(mx[k],p[k]);}
+  view.dist=Math.max(len(sub(mx,mn))*2.2,300);render()}
+
+/* ---------- interaction ---------- */
+let drag=null;
+cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);drag={x:e.clientX,y:e.clientY,pan:e.button===2||e.shiftKey,moved:false}});
+cv.addEventListener('pointermove',e=>{
+  if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+  if(Math.abs(dx)+Math.abs(dy)>2)drag.moved=true;drag.x=e.clientX;drag.y=e.clientY;
+  if(drag.pan){view.panx+=dx;view.pany+=dy}else{view.yaw-=dx*0.006;view.pitch=Math.max(-1.55,Math.min(1.55,view.pitch+dy*0.006))}
+  render();
+});
+cv.addEventListener('pointerup',e=>{
+  const was=drag;drag=null;if(!was||was.moved)return;
+  const r=cv.getBoundingClientRect(),px=e.clientX-r.left,py=e.clientY-r.top;
+  if(sel&&sel.on){const h=nearestEdge(sel,px,py);if(h){hitEdge=h;pick(sel);return}}
+  for(let i=order.length-1;i>=0;i--){const {it,sp}=order[i];if(it.type==='line'){continue}if(inPoly([px,py],sp)){hitEdge=null;pick(it);hitEdge=nearestEdge(it,px,py);render();return}}
+  for(let i=order.length-1;i>=0;i--){const {it}=order[i];if(it.type==='line'){const h=nearestEdge(it,px,py);if(h){hitEdge=null;pick(it);hitEdge=nearestEdge(it,px,py);render();return}}}
+  hitEdge=null;pick(null);
+});
+cv.addEventListener('dblclick',e=>{if(sel)centerOn(sel)});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('wheel',e=>{e.preventDefault();view.dist*=Math.exp(e.deltaY*0.0012);render()},{passive:false});
+document.querySelectorAll('[data-v]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.v)));
+$('#fit').onclick=fit;
+$('#sb').onclick=e=>{document.body.classList.toggle('nosb');e.target.textContent=document.body.classList.contains('nosb')?'Show panel':'Hide panel';resize()};
+$('#fs').onclick=()=>{const d=document.documentElement;try{(document.fullscreenElement?document.exitFullscreen():d.requestFullscreen()).catch(()=>{})}catch(e){}};
+$('#wire').onclick=e=>{wire=!wire;e.target.classList.toggle('on',wire);render()};
+$('#edges').onclick=e=>{showEdges=!showEdges;e.target.classList.toggle('on',showEdges);render()};
+$('#op').oninput=render;$('#cm').onchange=()=>{legend();render()};
+function legend(){
+  const m=$('#cm').value;
+  $('#legend').innerHTML=Object.entries(TYPES).map(([k,[n,c]])=>`<label><input type="checkbox" data-ty="${k}" ${visType[k]?'checked':''}><span class="sw" style="background:${m==='type'?c:'#888'}"></span>${n}</label>`).join('')+(m==='thk'?'<div style="color:var(--mut);margin-top:3px">blue 5 mm → red 30 mm</div>':'');
+}
+$('#legend').addEventListener('change',e=>{const k=e.target.dataset.ty;if(k){visType[k]=e.target.checked;render()}});
+
+/* ---------- loading ---------- */
+async function load(files){
+  let all=[];fileNames=[];
+  try{
+    for(const f of files){const t=await f.text();all=all.concat(parse(t,f.name));fileNames.push(f.name)}
+  }catch(err){alert(err.message);return}
+  if(!all.length){alert('No plates / stiffeners found. Is this a ship moulded-line XML (Ship > Block > PlanePanel)?');return}
+  items=all;sel=null;prepare(items);$('#drop').style.display='none';
+  const c={};items.forEach(i=>c[i.type]=(c[i.type]||0)+1);
+  $('#stat').textContent=`${fileNames.join(', ')} · ${blocks.length} blocks · ${new Set(items.map(i=>i.panel)).size} panels · ${items.length} parts (${Object.entries(c).map(([k,v])=>v+' '+k).join(', ')})`;
+  legend();drawTree();$('#info').textContent='Click a part in the 3D view or in the tree to see its data.';resize();setView('iso');
+}
+$('#open').onclick=()=>$('#file').click();
+$('#file').onchange=e=>{if(e.target.files.length)load([...e.target.files])};
+addEventListener('dragover',e=>e.preventDefault());
+addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer.files.length)load([...e.dataTransfer.files])});
+legend();resize();
+</script>
+</body>
+</html>

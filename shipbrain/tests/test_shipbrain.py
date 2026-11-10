@@ -833,3 +833,22 @@ def test_ship_tools_load_and_fix_labels(tmp_path):
     doc.modelspace().add_text('6 @ 800 = 4800', dxfattribs={'insert': (0, 0), 'height': 50})
     doc.saveas(str(tmp_path / 'd.dxf'))
     assert len(t.call('drawing_check', {'file': 'd.dxf'})['checked']) == 1
+
+
+# ------------------------------------------------------------------ ship drawing reader (deckrules) wiring
+def test_ocr_boxes_join_into_rows():
+    from shipbrain.drawdiff import _join_rows
+
+    class L:
+        def __init__(self, t, x0, y0, x1, y1):
+            self.text, self.box = t, [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    rows = _join_rows([L('= 4800', 300, 10, 420, 40), L('6 @ 800', 20, 12, 200, 42), L('FR.23', 20, 100, 120, 130),
+                       L('800', 150, 13, 200, 41)])            # last one: duplicate box from an overlapping tile
+    assert rows == ['6 @ 800 = 4800', 'FR.23']
+
+
+def test_deckrules_tool_is_importable():
+    import sys
+    d = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'shiptools', 'deckrules_tool')
+    sys.path.insert(0, d)
+    from deckrules import numclass, textnorm   # noqa: F401  (pure-python parts, no OCR engine needed)

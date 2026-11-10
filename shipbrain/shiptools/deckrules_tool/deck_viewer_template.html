@@ -1,0 +1,102 @@
+<title>Deck Viewer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root{--bg:#eef1f5;--panel:#fff;--line:#cfd6df;--txt:#1d2530;--mut:#5d6b7b;--acc:#0b6bcb}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1e2227;--panel:#262b32;--line:#39414b;--txt:#d8dee6;--mut:#8a95a3;--acc:#4da3ff;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1e2227;--panel:#262b32;--line:#39414b;--txt:#d8dee6;--mut:#8a95a3;--acc:#4da3ff;color-scheme:dark}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:13px/1.35 system-ui,Segoe UI,Arial,sans-serif}
+#app{display:grid;grid-template-rows:auto 1fr auto;height:100vh}
+#top{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px max(16px,env(safe-area-inset-left));background:var(--panel);border-bottom:1px solid var(--line)}
+button,label.t{background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:5px;padding:4px 9px;font:inherit;cursor:pointer}
+button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+label.t input{margin-right:4px;vertical-align:-2px}
+#panes{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);min-height:0}
+#panes.one{grid-template-columns:1fr}
+.pane{position:relative;overflow:hidden;background:var(--bg);min-height:0}
+.pane canvas{position:absolute;left:0;top:0;width:100%;height:100%;display:block;touch-action:none}
+.cap{position:absolute;left:8px;top:6px;background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:2px 8px;font-size:12px;color:var(--mut);pointer-events:none}
+#info{padding:5px max(16px,env(safe-area-inset-left));background:var(--panel);border-top:1px solid var(--line);color:var(--mut);min-height:30px;font-size:12px}
+@media (max-width:760px){#panes{grid-template-columns:1fr;grid-template-rows:1fr 1fr}}
+</style>
+<div id="app">
+ <div id="top">
+  <span id="tabs"></span>
+  <button id="mSide" class="on">Drawing | XML</button><button id="mOver">Overlay</button><button id="mXml">XML only</button><button id="mIso">Iso 3D</button><label class="t" id="bothL" style="display:none"><input type="checkbox" id="both" checked>both decks</label>
+  <label class="t">opacity <input type="range" id="op" min="0" max="100" value="55" style="width:70px;vertical-align:middle"></label>
+  <span id="lay"></span><button id="fit">Fit</button>
+ </div>
+ <div id="panes">
+  <div class="pane" id="pA"><canvas id="cA"></canvas><div class="cap">Real drawing (zoom: wheel, pan: drag)</div></div>
+  <div class="pane" id="pB"><canvas id="cB"></canvas><div class="cap">Produced XML (same view)</div></div>
+ </div>
+ <div id="info">Click a member in the XML pane for its details.</div>
+</div>
+<script>
+const DECKS=/*DATA*/null;
+const COL={beam:'#2e9d5b',carling:'#d97b00',girder:'#c0392b',deep:'#8e44ad'};
+const LAY={plates:1,holes:1,beam:1,carling:1,girder:1,deep:1,frames:1,offcl:1,brackets:0,walls3d:1,sections3d:1};
+const VERT=/*VERT*/null||[];
+let di=0,mode='side',view={s:1,tx:0,ty:0},imgs=[];
+const $=id=>document.getElementById(id);
+DECKS.forEach((d,i)=>{const im=new Image();im.onload=()=>draw();im.src=d.img;imgs[i]=im;
+ const b=document.createElement('button');b.textContent=d.name+(d.z?' ('+d.z+')':'');b.onclick=()=>{di=i;[...$('tabs').children].forEach((x,j)=>x.classList.toggle('on',j==i));fit();};$('tabs').appendChild(b);});
+$('tabs').children[0].classList.add('on');
+$('lay').innerHTML=Object.keys(LAY).map(k=>`<label class="t"><input type="checkbox" data-k="${k}" ${LAY[k]?'checked':''}>${k}</label>`).join('');
+$('lay').onchange=e=>{LAY[e.target.dataset.k]=e.target.checked?1:0;draw()};
+function setMode(m){mode=m;['mSide','mOver','mXml','mIso'].forEach(x=>$(x).classList.remove('on'));$({side:'mSide',over:'mOver',xml:'mXml',iso:'mIso'}[m]).classList.add('on');
+ $('bothL').style.display=m=='iso'?'':'none';
+ $('panes').className=m=='side'?'':'one';$('pA').style.display=(m=='xml')?'none':'';$('pB').style.display=(m=='over'||m=='iso')?'none':'';
+ $('pA').querySelector('.cap').textContent=m=='over'?'Drawing + produced XML overlay':m=='iso'?'Iso 3D of the produced XML (drag = rotate, shift/right-drag = pan, wheel = zoom)':'Real drawing (zoom: wheel, pan: drag)';fit();}
+$('mSide').onclick=()=>setMode('side');$('mOver').onclick=()=>setMode('over');$('mXml').onclick=()=>setMode('xml');$('mIso').onclick=()=>setMode('iso');$('both').onchange=()=>fit();$('op').oninput=draw;$('fit').onclick=fit;
+// world = drawing pixel space (page pt * zoom, from clip origin)
+function P(d,X,Y){const px=d.x0+X/d.k,py=d.cl-Y/d.k;return[(px-d.clip[0])*d.zoom,(py-d.clip[1])*d.zoom]}
+function size(c){const r=c.parentElement.getBoundingClientRect(),dp=devicePixelRatio||1;if(c.width!=Math.round(r.width*dp)||c.height!=Math.round(r.height*dp)){c.width=Math.round(r.width*dp);c.height=Math.round(r.height*dp)}return[c.width,c.height,dp]}
+function fit(){if(mode=='iso'){isoFit();draw();return}const d=DECKS[di];const c=mode=='xml'?$('cB'):$('cA');const[w,h,dp]=size(c);view.s=Math.min(w/d.w,h/d.h)*.96;view.tx=(w-d.w*view.s)/2;view.ty=(h-d.h*view.s)/2;draw()}
+function drawXml(c,over){const d=DECKS[di],[w,h,dp]=size(c),g=c.getContext('2d');
+ g.save();g.setTransform(1,0,0,1,0,0);if(!over){g.fillStyle=getComputedStyle(document.body).backgroundColor;g.fillRect(0,0,w,h)}
+ g.translate(view.tx,view.ty);g.scale(view.s,view.s);const lw=1/view.s*dp;
+ const al=over?$('op').value/100:1;g.globalAlpha=al;
+ const poly=(pts,close)=>{g.beginPath();pts.forEach((p,i)=>{const q=P(d,p[0],p[1]);i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1])});if(close)g.closePath()};
+ if(LAY.plates)d.plates.forEach(p=>{poly(p.pts,1);g.fillStyle='rgba(120,160,210,.30)';g.fill();g.strokeStyle='#4a78b5';g.lineWidth=1.6*lw;g.stroke()});
+ if(LAY.holes)d.holes.forEach(p=>{poly(p,1);g.fillStyle=over?'rgba(255,255,255,.0)':getComputedStyle(document.body).backgroundColor;g.fill();g.strokeStyle='#7a8794';g.lineWidth=1.2*lw;g.stroke()});
+ if(LAY.frames)d.frames.forEach(f=>{const a=P(d,f.X,d.yrange[0]),b=P(d,f.X,d.yrange[1]);g.setLineDash([8*lw,5*lw]);g.strokeStyle='#8a4fff';g.lineWidth=1*lw;g.beginPath();g.moveTo(a[0],a[1]);g.lineTo(b[0],b[1]);g.stroke();g.setLineDash([]);
+  g.fillStyle='#8a4fff';g.font=(13*dp/view.s)+'px sans-serif';g.fillText('FR.'+f.n,a[0]+3/view.s,a[1]-4/view.s)});
+ if(LAY.offcl)d.offcl.forEach(o=>{const a=P(d,d.xrange[0],o.Y),b=P(d,d.xrange[1],o.Y);g.setLineDash([2*lw,5*lw]);g.strokeStyle='#0b9aa8';g.lineWidth=1*lw;g.beginPath();g.moveTo(a[0],a[1]);g.lineTo(b[0],b[1]);g.stroke();g.setLineDash([]);
+  g.fillStyle='#0b9aa8';g.font=(13*dp/view.s)+'px sans-serif';g.fillText(Math.abs(o.v)+' OFF C.L',b[0]-90/view.s,b[1]-3/view.s)});
+ d.mem.forEach(m=>{if(!LAY[m.k])return;poly(m.pts,0);g.strokeStyle=COL[m.k]||'#333';g.lineWidth=(m.k=='girder'||m.k=='deep'?3:1.8)*lw;g.stroke()});
+ g.restore()}
+function drawImg(c,over){const d=DECKS[di],[w,h,dp]=size(c),g=c.getContext('2d');g.save();g.setTransform(1,0,0,1,0,0);g.fillStyle='#fff';g.fillRect(0,0,w,h);g.translate(view.tx,view.ty);g.scale(view.s,view.s);if(imgs[di].complete)g.drawImage(imgs[di],0,0);g.restore()}
+
+const ISO={az:-55,el:32,s:1,tx:0,ty:0};
+function secH(sec){const m=/^(?:\S+\s+)?(\d+(?:\.\d+)?)/.exec(sec||'');return m?+m[1]:150}
+function isoDecks(){return $('both').checked?DECKS.map((d,i)=>i):[di]}
+function proj(X,Y,Z){const a=ISO.az*Math.PI/180,e=ISO.el*Math.PI/180,ca=Math.cos(a),sa=Math.sin(a);const x=X*ca-Y*sa,y=X*sa+Y*ca;return[x,-(Z*Math.cos(e)+y*Math.sin(e)),y*Math.cos(e)-Z*Math.sin(e)]}
+function isoFit(){const c=$('cA'),[w,h]=size(c);let mnx=1e18,mxx=-1e18,mny=1e18,mxy=-1e18;const zr=isoDecks().map(i=>DECKS[i].zn);const z0=Math.max(...zr);
+ isoDecks().forEach(i=>{DECKS[i].plates.forEach(p=>p.pts.forEach(q=>{const r=proj(q[0],q[1],DECKS[i].zn-z0);mnx=Math.min(mnx,r[0]);mxx=Math.max(mxx,r[0]);mny=Math.min(mny,r[1]-400);mxy=Math.max(mxy,r[1])}))});
+ ISO.s=Math.min(w/(mxx-mnx||1),h/(mxy-mny||1))*.9;ISO.tx=w/2-ISO.s*(mnx+mxx)/2;ISO.ty=h/2-ISO.s*(mny+mxy)/2;ISO.z0=z0}
+function drawIso(){const c=$('cA'),[w,h,dp]=size(c),g=c.getContext('2d');g.save();g.setTransform(1,0,0,1,0,0);g.fillStyle=getComputedStyle(document.body).backgroundColor;g.fillRect(0,0,w,h);
+ const P3=(X,Y,Z)=>{const r=proj(X,Y,Z-ISO.z0);return[ISO.tx+r[0]*ISO.s,ISO.ty+r[1]*ISO.s,r[2]]};const polys=[];
+ isoDecks().forEach(i=>{const d=DECKS[i],z=d.zn;
+  if(LAY.plates)d.plates.forEach(p=>{polys.push({z:1e9,pts:p.pts.map(q=>P3(q[0],q[1],z)),fill:'rgba(120,160,210,.35)',st:'#4a78b5',lw:1.4});});
+  if(LAY.holes)d.holes.forEach(p=>polys.push({z:1e9+1,pts:p.map(q=>P3(q[0],q[1],z)),fill:getComputedStyle(document.body).backgroundColor,st:'#7a8794',lw:1}));
+  d.mem.forEach(m=>{if(!LAY[m.k])return;const hh=m.k=='deep'?450:secH(m.sec);for(let k=0;k+1<m.pts.length;k++){const a=m.pts[k],b=m.pts[k+1];
+    const q=[P3(a[0],a[1],z),P3(b[0],b[1],z),P3(b[0],b[1],z-hh),P3(a[0],a[1],z-hh)];polys.push({z:(q[0][2]+q[1][2]+q[2][2]+q[3][2])/4,pts:q,fill:(COL[m.k]||'#333')+'bb',st:COL[m.k]||'#333',lw:.8});}});
+  });
+ const zs=isoDecks().map(i=>DECKS[i].zn),zt=Math.max(...zs),zb=Math.min(...zs)-3600;
+ VERT.forEach(v=>{if(!(v.k=='wall'?LAY.walls3d:LAY.sections3d))return;const zz=v.pts.map(p=>p[2]);if(Math.min(...zz)>=zt+1||Math.max(...zz)<=zb)return;
+   const q=v.pts.map(p=>P3(p[0],p[1],p[2]));const col=v.k=='wall'?'200,120,60':'60,160,110';
+   polys.push({z:q.reduce((s,p)=>s+p[2],0)/q.length,pts:q,fill:`rgba(${col},${v.plate?.28:.10})`,st:`rgb(${col})`,lw:1});
+   v.st.forEach(s=>{for(let k=0;k+1<s.pts.length;k++){const a=P3(...s.pts[k]),b=P3(...s.pts[k+1]);polys.push({z:(a[2]+b[2])/2-1,pts:[a,b],fill:null,st:`rgb(${col})`,lw:2.2})}})});
+ polys.sort((a,b)=>b.z-a.z);
+ polys.forEach(p=>{g.beginPath();p.pts.forEach((q,k)=>k?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1]));if(p.fill){g.closePath();g.fillStyle=p.fill;g.fill()}g.strokeStyle=p.st;g.lineWidth=p.lw*dp;g.stroke()});
+ g.fillStyle=getComputedStyle(document.body).color;g.font=(13*dp)+'px sans-serif';isoDecks().forEach(i=>{const d=DECKS[i];const q=P3(d.plates[0]?d.plates[0].pts[0][0]:0,d.plates[0]?d.plates[0].pts[0][1]:0,d.zn);g.fillText(d.name,q[0]+8*dp,q[1]-6*dp)});g.restore()}
+function draw(){if(mode=='iso'){drawIso();return}if(mode=='side'){drawImg($('cA'));drawXml($('cB'),0)}else if(mode=='over'){drawImg($('cA'));drawXml($('cA'),1)}else drawXml($('cB'),0)}
+function bind(c){c.addEventListener('wheel',e=>{if(mode=='iso'){e.preventDefault();const r=c.getBoundingClientRect(),dp=devicePixelRatio||1,x=(e.clientX-r.left)*dp,y=(e.clientY-r.top)*dp,k=Math.exp(-e.deltaY*.0015);ISO.tx=x-(x-ISO.tx)*k;ISO.ty=y-(y-ISO.ty)*k;ISO.s*=k;draw();return}e.preventDefault();const r=c.getBoundingClientRect(),dp=devicePixelRatio||1,x=(e.clientX-r.left)*dp,y=(e.clientY-r.top)*dp,k=Math.exp(-e.deltaY*.0015);view.tx=x-(x-view.tx)*k;view.ty=y-(y-view.ty)*k;view.s*=k;draw()},{passive:false});
+ let dr=null,mv=0;c.onpointerdown=e=>{dr=[e.clientX,e.clientY,mode=='iso'?ISO.tx:view.tx,mode=='iso'?ISO.ty:view.ty,ISO.az,ISO.el];mv=0;c.setPointerCapture(e.pointerId)};
+ c.onpointermove=e=>{if(!dr)return;const dp=devicePixelRatio||1;if(mode=='iso'){const dx=e.clientX-dr[0],dy=e.clientY-dr[1];mv+=Math.abs(dx)+Math.abs(dy);if(e.shiftKey||e.buttons==2){ISO.tx=dr[2]+dx*dp;ISO.ty=dr[3]+dy*dp}else{ISO.az=dr[4]+dx*.4;ISO.el=Math.max(-5,Math.min(89,dr[5]-dy*.4))}draw();return}const dx=e.clientX-dr[0],dy=e.clientY-dr[1];mv+=Math.abs(dx)+Math.abs(dy);view.tx=dr[2]+dx*dp;view.ty=dr[3]+dy*dp;draw()};
+ c.onpointerup=e=>{dr=null;if(mv<4)pick(c,e)};}
+function pick(c,e){const d=DECKS[di],r=c.getBoundingClientRect(),dp=devicePixelRatio||1,wx=((e.clientX-r.left)*dp-view.tx)/view.s,wy=((e.clientY-r.top)*dp-view.ty)/view.s;let best=null;
+ d.mem.forEach(m=>{if(!LAY[m.k])return;for(let i=0;i+1<m.pts.length;i++){const a=P(d,...m.pts[i]),b=P(d,...m.pts[i+1]),vx=b[0]-a[0],vy=b[1]-a[1],L=vx*vx+vy*vy||1,t=Math.max(0,Math.min(1,((wx-a[0])*vx+(wy-a[1])*vy)/L)),dx=wx-(a[0]+t*vx),dy=wy-(a[1]+t*vy),dd=Math.hypot(dx,dy);if(!best||dd<best[0])best=[dd,m]}});
+ $('info').textContent=best&&best[0]*view.s<14*dp?`${best[1].n} · ${best[1].k} · ${best[1].sec} · ${best[1].ev}`:`${d.name}: ${d.plates.length} plates, ${d.mem.length} members (beam ${d.mem.filter(m=>m.k=='beam').length}, carling ${d.mem.filter(m=>m.k=='carling').length}, girder ${d.mem.filter(m=>m.k=='girder').length}), ${d.brk} brackets, ${d.frames.length} frame lines, ${d.offcl.length} OFF C.L lines`}
+bind($('cA'));bind($('cB'));addEventListener('resize',fit);setTimeout(fit,50);
+</script>

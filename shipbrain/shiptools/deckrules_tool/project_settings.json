@@ -1,0 +1,31 @@
+{
+ "_note": "Project setup the drawing itself does not carry. Replace frame data with the GA / frame-table Excel for each new ship.",
+ "frame_spacing_mm": 800,
+ "frame0_x_mm": 0.0,
+ "frame_table": {},
+ "frame_source": "1005 deckhouse: uniform 800 mm from FR.0 at X=0 (owner-authorised for this sample; use GA for new ships)",
+ "section_aliases": {
+  "150 U.A": [
+   "L",
+   150,
+   90,
+   9,
+   9
+  ],
+  "250 I.A": [
+   "L",
+   250,
+   90,
+   10,
+   15
+  ]
+ },
+ "section_aliases_source": "owner-confirmed 2026-10-16 (hull_builder section_alias_catalog.json)",
+ "reference_deck_codes": {
+  "COMP": "COM"
+ },
+ "mirror_missing_side": false,
+ "_mirror_note": "R-SY side-symmetry (owner rule) implemented in mirror.py; tested on 1005: 0 of 120 mirrored wall members match the reference, so it is OFF by default",
+ "section_dashed_stiffeners": true,
+ "yard": "default_yard"
+}

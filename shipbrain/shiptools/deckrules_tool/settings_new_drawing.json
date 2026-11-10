@@ -1,0 +1,28 @@
+{
+ "_note": "New drawing: every value is read from the drawing (frame spacing from FRAME SPACE, X anchored n*spacing unless a frame table / anchor is answered). Owner answers go to answers/*.json.",
+ "frame_spacing_mm": null,
+ "frame0_x_mm": 0.0,
+ "frame_table": {},
+ "frame_source": "read from the drawing",
+ "section_aliases": {
+  "150 U.A": [
+   "L",
+   150,
+   90,
+   9,
+   9
+  ],
+  "250 I.A": [
+   "L",
+   250,
+   90,
+   10,
+   15
+  ]
+ },
+ "section_aliases_source": "owner-confirmed 2026-10-16 (hull_builder section_alias_catalog.json)",
+ "mirror_missing_side": false,
+ "_mirror_note": "R-SY side-symmetry (owner rule) implemented in mirror.py; tested on 1005: 0 of 120 mirrored wall members match the reference, so it is OFF by default",
+ "section_dashed_stiffeners": true,
+ "yard": "default_yard"
+}

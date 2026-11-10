@@ -102,7 +102,7 @@ class FEModel:
         if low.endswith(('.bdf', '.dat', '.nas', '.fem', '.blk')):
             try:
                 return cls._read_bdf_pynastran(path)
-            except ImportError:
+            except Exception:                          # pyNastran missing or incompatible: built-in reader
                 return cls._read_bdf_own(path)
         if low.endswith('.inp'):
             return cls._read_inp(path)
@@ -110,6 +110,8 @@ class FEModel:
 
     @classmethod
     def _read_bdf_pynastran(cls, path):
+        if not hasattr(np, 'in1d'):                    # numpy 2.x removed in1d; pyNastran 1.4 still calls it
+            np.in1d = np.isin
         from pyNastran.bdf.bdf import BDF
         b = BDF(debug=None, log=None)
         b.read_bdf(path, xref=False, punch=_is_punch(path))
