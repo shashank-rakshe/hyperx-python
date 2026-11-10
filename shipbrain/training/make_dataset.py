@@ -328,6 +328,45 @@ def t_program(r, tools):
             result_msg('build_structure', res), {'role': 'assistant', 'content': res['plain_english'] + f"\nFiles: {', '.join(res['files'].values())}."}]
 
 
+_BANK = None
+
+
+def _bank():
+    """verified text-to-CAD items (training/cad_families.py): built and size-checked; read without CadQuery"""
+    global _BANK
+    if _BANK is None:
+        import gzip
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'cad_bank.jsonl.gz')
+        _BANK = [json.loads(l) for l in gzip.open(p, 'rt', encoding='utf-8')] if os.path.exists(p) else []
+    return _BANK
+
+
+def t_cad_bank(r, tools):
+    """user asks for a part -> CadQuery script with the user's sizes as expect -> checked result; with a repair item the first
+    script has a typical mistake, the tool says what is wrong, and the model fixes it"""
+    b = _bank()
+    if not b:
+        return None
+    it = r.choice(b)
+    args = {'name': it['name'], 'code': it['code'], 'expect': it['expect']}
+    res = it['result']
+    msgs = [{'role': 'user', 'content': it['prompt']}]
+    rep = it.get('repair')
+    if rep and r.random() < 0.6:
+        bad = dict(args, code=rep['bad_code'])
+        msgs += [{'role': 'assistant', 'content': tool_block('cadquery_build', bad)}, result_msg('cadquery_build', rep['bad_result'])]
+        why = {'size': 'one size did not match the request, corrected it', 'api': 'a CadQuery call was misspelt, corrected it',
+               'result': 'the script did not set result, fixed it'}[rep['kind']]
+        lead = f"First try failed ({why}). "
+    else:
+        lead = ''
+    msgs += [{'role': 'assistant', 'content': tool_block('cadquery_build', args)}, result_msg('cadquery_build', res),
+             {'role': 'assistant', 'content': lead + f"Built and checked: {res['n_solids']} solid, bounding box {res['bbox']} mm, "
+                                                     f"volume {res['volume']:g} mm3 - " + '; '.join(res['checks'])
+                                                     + f". Files: {', '.join(res['files'])}."}]
+    return msgs
+
+
 def _small_model(r, tools):
     L, B = float(r.choice([2000, 3000, 4000])), float(r.choice([1000, 1500, 2000]))
     name = f'model_{int(L)}x{int(B)}_{r.randint(100, 999)}'
@@ -452,7 +491,7 @@ def make_rules_task(entries):
 
 TASKS = [('mesh', 30, lambda r, T: t_mesh(r, T)), ('mesh_fix', 6, lambda r, T: t_mesh(r, T, 'fix')),
          ('mesh_assume', 6, lambda r, T: t_mesh(r, T, 'assume')), ('plate', 12, t_plate), ('stiff', 12, t_stiff),
-         ('buckle', 5, t_buckle), ('section', 8, t_section), ('calc', 4, t_calc), ('chat', 3, t_chat), ('plates', 4, t_plates), ('program', 12, t_program),
+         ('buckle', 5, t_buckle), ('section', 8, t_section), ('calc', 4, t_calc), ('chat', 3, t_chat), ('plates', 4, t_plates), ('program', 12, t_program), ('cad_bank', 14, t_cad_bank),
          ('fileinfo', 4, t_fileinfo), ('convert', 4, t_convert), ('edit', 5, t_edit), ('clean', 3, t_clean)]
 
 

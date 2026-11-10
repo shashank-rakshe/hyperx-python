@@ -130,10 +130,12 @@ PRIV = ' '.join(_plain(PRIVATE_TRAIN))
 for f in _plain(PRIVATE_EVAL):
     sh(f'cat {f} >> data/eval.jsonl', required=False)
 report('scoring the base model')
+sh(f'python training/cad_eval.py --local {BASE} --limit 30 --out /kaggle/working/cad_eval_before.json', required=False)
 sh(f'python training/evaluate.py --local {BASE} --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_before.json', required=False)
 report('training the main model')
 sh(f'python training/finetune.py --data data/train.jsonl data/repo_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
 report('scoring the trained model')
+sh('python training/cad_eval.py --local /kaggle/working/shipbrain_model/lora --limit 30 --out /kaggle/working/cad_eval_after.json', required=False)
 sh(f'python training/evaluate.py --local /kaggle/working/shipbrain_model/lora --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_after.json', required=False)
 if DRAFT:
     report('training the small draft model')
@@ -148,6 +150,11 @@ for f in glob.glob('/kaggle/working/shipbrain_model*/**/*.gguf', recursive=True)
 shutil.rmtree('/kaggle/working/shipbrain_model/ckpt', ignore_errors=True)
 summary = {f: json.load(open('/kaggle/working/' + f))['total'] for f in ('eval_before.json', 'eval_after.json')
            if os.path.exists('/kaggle/working/' + f)}
+for f in ('cad_eval_before.json', 'cad_eval_after.json'):            # text-to-CAD on unseen parts
+    try:
+        summary[f] = {k: v for k, v in json.load(open('/kaggle/working/' + f))['summary'].items() if not isinstance(v, (list, dict))}
+    except Exception:
+        pass
 summary['model_files'] = sorted(os.path.basename(f) for f in glob.glob('/kaggle/working/*.gguf'))
 json.dump(summary, open('/kaggle/working/summary.json', 'w'), indent=1)
 print('SUMMARY', summary, flush=True)
