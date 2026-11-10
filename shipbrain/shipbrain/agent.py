@@ -166,6 +166,23 @@ class Tools:
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'schedule': {'type': 'string', 'description': 'SCH10|SCH40|SCH80|SCH160'},
                                                          'element_size': num_, 'to': {'type': 'array', 'description': '["bdf","inp"]'}},
                        'required': ['file']})
+        self.register('surrogate_build', self.surrogate_build, 'AI surrogate (POD + RBF reduced-order model) of a parametric FE problem: '
+                      'runs a study (own mesher + CalculiX), adds runs where it is least accurate, measures its accuracy by '
+                      'leave-one-out; then predicts stress/displacement fields in ~1 ms. Writes the model (.npz) and a C++ header. '
+                      'problem "plate": ranges for L, B, t (mm), p (MPa); edge clamped|simply.',
+                      {'type': 'object', 'properties': {'name': {'type': 'string'}, 'ranges': {'type': 'object'}, 'n': {'type': 'integer'},
+                                                         'max_runs': {'type': 'integer'}, 'edge': {'type': 'string'},
+                                                         'template': {'type': 'object'}}, 'required': ['ranges']})
+        self.register('surrogate_predict', self.surrogate_predict, 'Predict with a trained surrogate: peak von Mises, peak displacement, full '
+                      'field (ParaView .vtk) and an error estimate; if it is not confident (or outside the trained range) the real '
+                      'solver is run instead and the run is added to the model.',
+                      {'type': 'object', 'properties': {'name': {'type': 'string'}, 'params': {'type': 'object'}, 'tol_pct': num_,
+                                                         'fallback': {'type': 'boolean'}}, 'required': ['name', 'params']})
+        self.register('result_insight', self.result_insight, 'Post-process a CalculiX result (.frd): peak stress and where, utilisation vs '
+                      'yield with PASS/FAIL, hotspot areas, elements that need refinement, change against a baseline run, '
+                      'a report draft and a ParaView .vtk of the fields.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'yield_MPa': num_, 'safety_factor': num_,
+                                                         'baseline': {'type': 'string'}}, 'required': ['file']})
         self.register('fatigue_mesh', self.fatigue_mesh, 'Fatigue hot-spot local model: cut a box around the hot spot from a plate assembly, '
                       'mesh it t x t, give the read-out points at 0.5t / 1.5t; with solve=true also run CalculiX and return the '
                       'extrapolated hot-spot stress (1.5 s(0.5t) - 0.5 s(1.5t)).',
@@ -426,6 +443,73 @@ class Tools:
                 'plain_english': f"Found {r['straight_pipes']} straight pipe(s) and {r['bends']} bend(s) in {r['runs']} connected run(s), "
                                  f"total {r['total_length_m']} m; outside diameters {sizes} mm. 1D FE model: {m.summary()['elements']} pipe "
                                  f"beams in {c.get('all_elements_parts')} part(s), saved as {', '.join(files)}."}
+
+    def surrogate_build(self, ranges, name='plate_surrogate', n=30, max_runs=None, edge='clamped', template=None):
+        from . import cae_ai
+        name = re.sub(r'[^A-Za-z0-9_\-]', '_', str(name))[:40]
+        ranges = {k: [float(v[0]), float(v[1])] for k, v in ranges.items()}
+        tpl = template or cae_ai.plate_template(edge)
+        if not template:
+            miss = [k for k in ('L', 'B', 't', 'p') if k not in ranges]
+            if miss:
+                raise ValueError('plate surrogate needs ranges for L, B, t, p; missing: ' + ', '.join(miss))
+        t0 = time.time()
+        s = cae_ai.build(tpl, ranges, int(n), self.workdir, name, log=None, max_runs=int(max_runs) if max_runs else None)
+        s.save(self._path(name + '.npz'))
+        s.export_cpp(self._path(name + '.hpp'))
+        loo = s.meta['loo']
+        return {'files': [name + '.npz', name + '.hpp'], 'runs': len(s.runs), 'adaptive_runs': s.meta['adaptive_runs'],
+                'accuracy_leave_one_out': loo, 'pod_modes': {f: m['n_modes'] for f, m in s.models.items()},
+                'seconds_per_solve': s.meta['seconds_per_solve'],
+                'plain_english': f"Trained a surrogate on {len(s.runs)} real CalculiX runs ({s.meta['adaptive_runs']} added where it was least "
+                                 f"accurate) in {time.time() - t0:.0f} s. Checked by leaving each run out: peak stress within "
+                                 f"{loo['vm_peak']['mean_pct']} % on average (worst {loo['vm_peak']['max_pct']} %), peak displacement within "
+                                 f"{loo['umag_peak']['mean_pct']} %. A prediction takes about 1 ms instead of {s.meta['seconds_per_solve']} s. "
+                                 f"Saved {name}.npz and the C++ header {name}.hpp."}
+
+    def surrogate_predict(self, name, params, tol_pct=5.0, fallback=True):
+        from . import cae_ai
+        from .solver import ccx_path
+        path = self._path(re.sub(r'\.npz$', '', str(name)) + '.npz')
+        s = cae_ai.Surrogate.load(path)
+        miss = [k for k in s.keys if k not in params]
+        if miss:
+            raise ValueError('missing parameter(s): ' + ', '.join(miss))
+        p = {k: float(params[k]) for k in s.keys}
+        pr = s.predict(p, float(tol_pct))
+        base = os.path.splitext(os.path.basename(path))[0]
+        if not pr['confident'] and fallback and ccx_path() and s.meta.get('template'):
+            res = cae_ai.solve_case(s.meta['template'], p, os.path.join(self.workdir, base + '_runs'), f'{base}_{len(s.runs):03d}')
+            s.add(p, res)
+            if pr['inside_range']:
+                s.fit()
+                s.save(path)
+                s.export_cpp(path[:-4] + '.hpp')
+            vtk = cae_ai.write_vtk(self._path(base + '_check.vtk'), res['xyz'], {'von_mises_MPa': res['vm'], 'displacement_mm': res['umag']})
+            why = 'outside the trained range' if not pr['inside_range'] else f"estimated error {pr['error_estimate_pct']} % > {tol_pct} %"
+            return {'source': 'real solver (CalculiX)', 'max_von_mises_MPa': round(float(res['vm'].max()), 2),
+                    'max_displacement_mm': round(float(res['umag'].max()), 4), 'surrogate_said': {'vm': round(pr['vm_max'], 2),
+                    'umag': round(pr['umag_max'], 4)}, 'files': [os.path.basename(vtk)],
+                    'plain_english': f"The surrogate was not sure here ({why}), so I ran the real solver: max von Mises "
+                                     f"{float(res['vm'].max()):.2f} MPa, max displacement {float(res['umag'].max()):.4f} mm (surrogate guess "
+                                     f"{pr['vm_max']:.2f} MPa)." + (' The run was added to the surrogate, so it is better here next time.'
+                                                                    if pr['inside_range'] else '')}
+        X = s.runs[0]['xyz']
+        vtk = cae_ai.write_vtk(self._path(base + '_prediction.vtk'), X, {'von_mises_MPa': pr['vm'], 'displacement_mm': pr['umag']})
+        return {'source': 'surrogate', 'max_von_mises_MPa': round(pr['vm_max'], 2), 'max_displacement_mm': round(pr['umag_max'], 4),
+                'error_estimate_pct': pr['error_estimate_pct'], 'inside_range': pr['inside_range'], 'confident': pr['confident'],
+                'files': [os.path.basename(vtk)],
+                'plain_english': f"Surrogate prediction: max von Mises {pr['vm_max']:.2f} MPa, max displacement {pr['umag_max']:.4f} mm "
+                                 f"(estimated error {pr['error_estimate_pct']} %"
+                                 + ('' if pr['confident'] else ', NOT confident: check with the real solver') + '). '
+                                 f"Field saved as {os.path.basename(vtk)} for ParaView."}
+
+    def result_insight(self, file, yield_MPa=235.0, safety_factor=1.0, baseline=None):
+        from . import cae_ai
+        r = cae_ai.insight(self._path(file), float(yield_MPa), float(safety_factor), self._path(baseline) if baseline else None)
+        r['vtk'] = os.path.basename(r['vtk'])
+        r['plain_english'] = r.pop('report_draft') + f" Fields saved as {r['vtk']} for ParaView."
+        return r
 
     def geometry_clean(self, plates=None, file=None, merge_tol=2.0):
         from . import geoclean

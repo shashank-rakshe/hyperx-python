@@ -10,7 +10,7 @@ support levels:
 import os, re, shutil
 
 ANALYSES = {   # analysis type -> words that point to it
-    'static': r'stress|deflect|displace|strength|static|yield|load case|utili[sz]ation|safety factor|deform',
+    'static': r'surrogate|reduced.order|\brom\b|parametric study|design space|stress|deflect|displace|strength|static|yield|load case|utili[sz]ation|safety factor|deform',
     'modal': r'frequenc|natural|vibrat|resonan|eigen|\bmodes?\b|propeller excitation|hz\b',
     'buckling': r'buckl|stability|critical (load|stress)|elastic buckling',
     'ultimate': r'plastic|ultimate|nonlinear|non-linear|collapse|large deformation|residual strength',
@@ -57,6 +57,9 @@ ENGINES = [
      'ship structural drawings (PDF) -> member model XML'),
     ('ShipBrain surfaces + piping', {'cad', 'mesh'}, 'runs', 'surface_extract(file, kind="mid"|"outer") / pipe_extract(file)', [], None,
      'mid / outer surfaces of thin solids, pipe runs and 1D pipe models from STEP (OpenCascade)'),
+    ('ShipBrain AI surrogate', {'static'}, 'runs', 'surrogate_build(ranges) -> surrogate_predict(name, params); result_insight(file.frd)',
+     ['ccx', 'ccx.exe'], None, 'POD + RBF reduced-order model trained on CalculiX runs: ~1 ms per answer, error estimate, '
+                                'falls back to the real solve when unsure; hotspots / refinement / report from any result'),
     ('ShipBrain mesher', {'mesh'}, 'runs', 'build_structure / plates_mesh / panel_mesh / cad_mesh / structure_to_mesh', [], None,
      'own conforming 1D + 2D mesher; no free nodes'),
 ]

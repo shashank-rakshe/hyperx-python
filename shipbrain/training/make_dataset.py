@@ -593,7 +593,102 @@ def t_pipes(r, tools):
             result_msg('pipe_extract', out), {'role': 'assistant', 'content': ans}]
 
 
+_SUR = {}                                     # built surrogates: name -> (args, result), built once per dataset run
+_SUR_SETS = [('deck_plate', {'L': [1500, 3000], 'B': [600, 900], 't': [8, 16], 'p': [0.02, 0.08]}),
+             ('tank_wall', {'L': [800, 2000], 'B': [500, 800], 't': [10, 20], 'p': [0.05, 0.15]}),
+             ('hatch_cover', {'L': [1000, 2500], 'B': [400, 700], 't': [6, 12], 'p': [0.01, 0.04]})]
+
+
+def _sur_ready(r, tools):
+    from shipbrain.solver import ccx_path
+    if not ccx_path():
+        return None
+    name, rng = r.choice(_SUR_SETS)
+    if name not in _SUR:
+        args = {'name': name, 'ranges': rng, 'n': 10, 'max_runs': 14}
+        _SUR[name] = (args, tools.call('surrogate_build', args))
+    return name
+
+
+def t_sur_build(r, tools):
+    name = _sur_ready(r, tools)
+    if not name or 'error' in _SUR[name][1]:
+        return None
+    args, out = _SUR[name]
+    rg = args['ranges']
+    q = r.choice(['Build a surrogate model for a clamped {n}: length {L0}-{L1} mm, breadth {B0}-{B1} mm, thickness {t0}-{t1} mm, '
+                  'pressure {p0}-{p1} MPa', 'Make an AI reduced-order model of the {n} (L {L0}..{L1}, B {B0}..{B1}, t {t0}..{t1}, '
+                  'p {p0}..{p1} MPa) so I get stresses instantly', 'Train a fast stress predictor for the {n} over L={L0}-{L1}, '
+                  'B={B0}-{B1}, t={t0}-{t1}, p={p0}-{p1}']).format(
+        n=name.replace('_', ' '), L0=rg['L'][0], L1=rg['L'][1], B0=rg['B'][0], B1=rg['B'][1], t0=rg['t'][0], t1=rg['t'][1],
+        p0=rg['p'][0], p1=rg['p'][1])
+    return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('surrogate_build', args)},
+            result_msg('surrogate_build', out), {'role': 'assistant', 'content': out['plain_english']}]
+
+
+def t_sur_predict(r, tools):
+    name = _sur_ready(r, tools)
+    if not name or 'error' in _SUR[name][1]:
+        return None
+    rg = _SUR[name][0]['ranges']
+    P = {k: round(r.uniform(lo, hi), 3 if k == 'p' else 0) for k, (lo, hi) in rg.items()}
+    if r.random() < 0.15:
+        P['L'] = round(rg['L'][1] * 1.3)                       # outside the trained range: real solve
+    q = r.choice(['Using the {n} surrogate, what is the stress for L={L:g}, B={B:g}, t={t:g} mm and p={p:g} MPa?',
+                  '{n} model: predict max stress and deflection, L {L:g} mm, B {B:g} mm, t {t:g} mm, {p:g} MPa',
+                  'Quick check with the surrogate {n}: {L:g} x {B:g} plate, {t:g} mm thick, pressure {p:g} MPa']).format(n=name, **P)
+    args = {'name': name, 'params': P}
+    out = tools.call('surrogate_predict', args)
+    if 'error' in out:
+        return None
+    return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('surrogate_predict', args)},
+            result_msg('surrogate_predict', out), {'role': 'assistant', 'content': out['plain_english']}]
+
+
+def t_insight(r, tools):
+    import glob
+    name = _sur_ready(r, tools)
+    if not name:
+        return None
+    frds = sorted(glob.glob(os.path.join(tools.workdir, name + '_runs', '*.frd')))
+    if len(frds) < 2:
+        return None
+    f = os.path.relpath(r.choice(frds), tools.workdir)
+    args = {'file': f}
+    q = r.choice(['Check the result {f}: is it OK?', 'Where are the hotspots in {f}?', 'Write a short result summary for {f}',
+                  'Post-process {f} and tell me if the mesh is fine enough'])
+    if r.random() < 0.3:
+        args['yield_MPa'] = float(r.choice([235, 315, 355]))
+        q += f" (yield {args['yield_MPa']:g} MPa)"
+    if r.random() < 0.25:
+        args['baseline'] = os.path.relpath(frds[0], tools.workdir)
+        q += f" and compare with {args['baseline']}"
+    out = tools.call('result_insight', args)
+    if 'error' in out:
+        return None
+    return [{'role': 'user', 'content': q.format(f=f)}, {'role': 'assistant', 'content': tool_block('result_insight', args)},
+            result_msg('result_insight', out), {'role': 'assistant', 'content': out['plain_english']}]
+
+
 CHAT = [
+    ('How can AI help the CAE chain without replacing the solver?',
+     'Add it as a layer at each stage. Modelling: recognise features (holes, fillets, pipes) and clean geometry automatically '
+     '(repair_model, pipe_extract, surface_extract). Meshing: flag elements that need refinement from the stress jump inside each '
+     'element (result_insight). Analysis: a surrogate trained on real solver runs predicts stress and displacement in about 1 ms '
+     '(surrogate_build / surrogate_predict); it gives an error estimate and runs the real solver when it is not sure. '
+     'Post-processing: hotspots, comparison with a baseline, POD compression of result fields. Reporting: a draft text from the '
+     'numbers, reviewed by an engineer. The solver stays the reference.'),
+    ('Which library should I use for AI surrogates of FE results?',
+     'For parametric studies with tens to hundreds of runs, POD + RBF (numpy/SciPy) is enough, runs on a CPU and needs no GPU; '
+     'ShipBrain uses it and checks it by leave-one-out. For many different geometries and meshes, graph networks (MeshGraphNets in '
+     'PyTorch / PyTorch Geometric, or NVIDIA PhysicsNeMo) or neural operators (FNO, DeepONet) are the next step, but they need a '
+     'large dataset and a GPU to train. JAX (e.g. JAX-FEM) is for differentiable simulation: shape optimisation, material '
+     'calibration. ONNX Runtime runs a trained network from C++; for POD + RBF ShipBrain writes a plain C++ header instead.'),
+    ('What is the practical roadmap to use AI in our FE work?',
+     '1. Save every run in one format (parameters, mesh, loads, results): this dataset is the most valuable asset. '
+     '2. Pick one repetitive analysis (e.g. a plate or panel under pressure) and build a surrogate as a pilot. '
+     '3. Validate it against the real solver (leave-one-out and new checks), keep an error estimate and fall back to the solver '
+     'when it is not confident. 4. Call it from the CAD/FE program (C++ header or Python API), then extend to the other stages.'),
     ('Why are stiffeners modelled with shell webs instead of beams?',
      'Shell webs share nodes with the plate, so the stiffener and its attached plating bend together without needing beam offsets, '
      'stresses are available in the web and flange, and tripping/web buckling can be seen. Beams (CBAR with offsets) are lighter and fine '
@@ -648,7 +743,8 @@ def make_rules_task(entries):
 TASKS = [('mesh', 30, lambda r, T: t_mesh(r, T)), ('mesh_fix', 6, lambda r, T: t_mesh(r, T, 'fix')),
          ('mesh_assume', 6, lambda r, T: t_mesh(r, T, 'assume')), ('plate', 12, t_plate), ('stiff', 12, t_stiff),
          ('buckle', 5, t_buckle), ('section', 8, t_section), ('calc', 4, t_calc), ('chat', 3, t_chat), ('plates', 4, t_plates), ('program', 12, t_program), ('cad_bank', 14, t_cad_bank),
-         ('fileinfo', 4, t_fileinfo), ('convert', 4, t_convert), ('edit', 5, t_edit), ('clean', 3, t_clean), ('fe_repair', 3, t_fe_repair)]
+         ('fileinfo', 4, t_fileinfo), ('convert', 4, t_convert), ('edit', 5, t_edit), ('clean', 3, t_clean), ('fe_repair', 3, t_fe_repair),
+         ('sur_build', 1, t_sur_build), ('sur_predict', 4, t_sur_predict), ('insight', 3, t_insight)]
 
 
 def main(argv=None):
@@ -708,9 +804,8 @@ def main(argv=None):
                     fb += 1
     if a.feedback:
         print(f'added {fb} liked conversation(s) from the app (x3)')
-    for fn in os.listdir(work):
-        os.remove(os.path.join(work, fn))
-    os.rmdir(work)
+    import shutil
+    shutil.rmtree(work, ignore_errors=True)                 # tool outputs incl. study run folders
 
 
 if __name__ == '__main__':

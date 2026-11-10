@@ -1147,3 +1147,24 @@ def test_mid_and_outer_surface(tmp_path):
     out = agent.Tools(tmp_path).call('surface_extract', {'file': 'm.step', 'kind': 'mid', 'mesh_size': 100})
     assert out['file'].endswith('_mid_surface.step') and os.path.exists(tmp_path / out['file'])
     assert out['mesh']['nodes'] > 0
+
+
+def test_surrogate_predicts_and_falls_back(tmp_path):
+    from shipbrain import cae_ai, solver as _sv
+    if not _sv.ccx_path():
+        pytest.skip('CalculiX not installed')
+    T = agent.Tools(tmp_path)
+    rng = {'L': [600, 1200], 'B': [300, 500], 't': [6, 12], 'p': [0.02, 0.08]}
+    r = T.call('surrogate_build', {'name': 'sp', 'ranges': rng, 'n': 12, 'max_runs': 16})
+    assert r['runs'] >= 12 and r['accuracy_leave_one_out']['umag_peak']['mean_pct'] < 10
+    assert os.path.exists(tmp_path / 'sp.hpp') and os.path.exists(tmp_path / 'sp.npz')
+    P = {'L': 900, 'B': 400, 't': 9, 'p': 0.05}
+    pr = T.call('surrogate_predict', {'name': 'sp', 'params': P, 'fallback': False})
+    real = cae_ai.solve_case(cae_ai.plate_template('clamped'), P, str(tmp_path / 'chk'), 'chk')
+    assert abs(pr['max_displacement_mm'] / real['umag'].max() - 1) < 0.08
+    assert abs(pr['max_von_mises_MPa'] / real['vm'].max() - 1) < 0.15
+    out = T.call('surrogate_predict', {'name': 'sp', 'params': dict(P, L=2000)})      # outside the trained range
+    assert out['source'].startswith('real solver')
+    ins = T.call('result_insight', {'file': 'chk/chk.frd', 'yield_MPa': 235, 'baseline': 'chk/chk.frd'})
+    assert ins['pass'] and ins['hotspots'] and ins['vs_baseline']['peak_change_pct'] == 0
+    assert 'PASS' in ins['plain_english'] and os.path.exists(tmp_path / 'chk' / ins['vtk'])
