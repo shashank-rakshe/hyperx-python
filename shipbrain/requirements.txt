@@ -1,0 +1,7 @@
+# app (the core runs on the Python standard library alone)
+numpy
+gmsh            # optional: mesh any STEP/IGES/STL (cad_mesh tool)
+pymupdf         # optional: read PDFs into the knowledge base
+# cadquery      # optional: --allow-code cadquery_build tool
+# CalculiX (ccx) on PATH: optional, solve_calculix tool
+# training (GPU machine / Colab only): unsloth trl datasets

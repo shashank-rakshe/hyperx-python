@@ -1,0 +1,19 @@
+# private / heavy - never commit
+ship_src/
+knowledge/
+rules_index.json
+data/
+shipbrain_work/
+shipbrain_model/
+*.gguf
+*.llamafile
+*.safetensors
+*.bin
+*.pt
+# build
+build/
+dist/
+*.spec
+packaging/_entry.py
+__pycache__/
+.pytest_cache/

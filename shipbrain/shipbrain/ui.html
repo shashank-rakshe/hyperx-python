@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShipBrain</title>
+<style>
+:root{--bg:#f7f6f3;--panel:#fff;--side:#efede8;--ink:#1f1e1c;--mute:#6b6862;--line:#dedad2;--acc:#1d5fa8;--acc2:#e8f0fa;
+--tool:#f3f1ec;--ok:#2e7d4f;--err:#b3261e;--code:#f1efe9;--stiff:#d2691e;--frame:#2e7d4f;--plate:#1d5fa8}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1b1b1a;--panel:#232322;--side:#151514;--ink:#ecebe7;--mute:#9b988f;
+--line:#3a3936;--acc:#7fb1ea;--acc2:#24303d;--tool:#2a2a28;--code:#2c2b29;--ok:#7cc79a;--err:#f2867c;--stiff:#f0a060;--frame:#7cc79a;--plate:#7fb1ea}}
+:root[data-theme=dark]{--bg:#1b1b1a;--panel:#232322;--side:#151514;--ink:#ecebe7;--mute:#9b988f;--line:#3a3936;--acc:#7fb1ea;--acc2:#24303d;
+--tool:#2a2a28;--code:#2c2b29;--ok:#7cc79a;--err:#f2867c;--stiff:#f0a060;--frame:#7cc79a;--plate:#7fb1ea}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+#side{width:250px;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:12px;gap:8px;flex-shrink:0}
+#side h1{font-size:17px;margin:4px 6px 8px;letter-spacing:.2px}#side h1 span{color:var(--acc)}
+.btn{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;text-align:left}
+.btn:hover{border-color:var(--acc)}
+#chats{flex:1;overflow:auto;display:flex;flex-direction:column;gap:2px}
+.chat{padding:6px 8px;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px;color:var(--mute);border:0;background:none;text-align:left}
+.chat.on,.chat:hover{background:var(--panel);color:var(--ink)}
+#status{font-size:12px;color:var(--mute);padding:6px;border-top:1px solid var(--line)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;background:var(--err)}.dot.ok{background:var(--ok)}
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+#log{flex:1;overflow:auto;padding:24px 16px 8px}
+.wrap{max-width:780px;margin:0 auto}
+.msg{margin:0 0 18px}.msg.user .b{background:var(--acc2);border-radius:12px;padding:10px 14px;display:inline-block;max-width:100%;white-space:pre-wrap}
+.msg.user{text-align:right}.msg.user .b{text-align:left}
+.b p{margin:.4em 0}.b pre{background:var(--code);padding:10px;border-radius:8px;overflow:auto;font-size:13px}
+.b code{background:var(--code);padding:1px 4px;border-radius:4px;font-size:13px}.b pre code{padding:0;background:none}
+.b table{border-collapse:collapse;font-size:14px}.b td,.b th{border:1px solid var(--line);padding:3px 8px}
+details.tool{background:var(--tool);border:1px solid var(--line);border-radius:8px;margin:8px 0;font-size:13px}
+details.tool summary{padding:6px 10px;cursor:pointer;color:var(--mute)}details.tool summary b{color:var(--ink)}
+details.tool pre{margin:0;padding:8px 10px;overflow:auto;max-height:320px;border-top:1px solid var(--line);white-space:pre-wrap}
+.err{color:var(--err)}
+#empty{text-align:center;color:var(--mute);margin-top:12vh}
+#empty h2{color:var(--ink);font-weight:600}
+.ex{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:18px}
+.ex button{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;max-width:340px;font-size:14px;text-align:left}
+#composer{padding:10px 16px 16px}
+#box{display:flex;gap:8px;align-items:flex-end;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px}
+#in{flex:1;border:0;outline:0;resize:none;background:none;color:var(--ink);font:inherit;max-height:200px;min-height:24px;padding:4px}
+#send{background:var(--acc);color:#fff;border:0;border-radius:9px;padding:7px 14px}#send:disabled{opacity:.5}
+#up{background:none;border:0;font-size:18px;color:var(--mute);padding:4px 6px}
+#right{width:420px;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;flex-shrink:0}
+#right.hide{display:none}
+#cv{width:100%;height:340px;display:block;background:var(--bg);touch-action:none}
+.legend{font-size:12px;color:var(--mute);padding:6px 10px;display:flex;gap:12px}.legend i{display:inline-block;width:10px;height:3px;margin-right:4px;vertical-align:middle}
+#files{flex:1;overflow:auto;padding:8px 10px;font-size:14px;border-top:1px solid var(--line)}
+#files a{color:var(--acc);display:block;padding:2px 0;text-decoration:none}
+.hdr{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;font-weight:600;font-size:14px}
+#settings{display:none;position:fixed;inset:0;background:#0006;align-items:center;justify-content:center;padding:16px}
+#settings.on{display:flex}#settings .card{background:var(--panel);border-radius:12px;padding:18px;width:min(440px,100%)}
+#settings label{display:block;font-size:13px;color:var(--mute);margin-top:10px}
+#settings input{width:100%;padding:7px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--ink);font:inherit}
+#top{display:none}
+@media (max-width:900px){#side{display:none}#top{display:flex;gap:6px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line)}#top b{flex:1}#top b span{color:var(--acc)}#right{position:fixed;right:0;top:0;bottom:0;width:min(420px,100%);z-index:5}}
+</style>
+</head>
+<body>
+<nav id="side">
+  <h1>Ship<span>Brain</span></h1>
+  <button class="btn" onclick="newChat()">+ New chat</button>
+  <div id="chats"></div>
+  <button class="btn" onclick="toggleRight()">3D view &amp; files</button>
+  <button class="btn" onclick="openSettings()">Settings</button>
+  <div id="status"><span class="dot"></span>checking…</div>
+</nav>
+<main id="main">
+  <div id="top"><b>Ship<span>Brain</span></b><button class="btn" onclick="newChat()">New</button><button class="btn" onclick="toggleRight()">3D</button><button class="btn" onclick="openSettings()">⚙</button></div>
+  <div id="log"><div class="wrap" id="msgs"></div></div>
+  <div id="composer"><div class="wrap">
+    <div id="box">
+      <button id="up" title="Upload STEP / IGES / STL / drawing" onclick="document.getElementById('file').click()">+</button>
+      <input type="file" id="file" hidden onchange="upload(this.files[0])">
+      <textarea id="in" rows="1" placeholder="Ask, or give a command: mesh a deck panel 4.8 x 3.2 m, t=12, FB150x12 at 800…"></textarea>
+      <button id="send" onclick="send()">Send</button>
+    </div>
+  </div></div>
+</main>
+<aside id="right" class="hide">
+  <div class="hdr">3D view <button class="btn" style="padding:2px 8px" onclick="toggleRight()">×</button></div>
+  <canvas id="cv"></canvas>
+  <div class="legend"><span><i style="background:var(--plate)"></i>plate</span><span><i style="background:var(--stiff)"></i>stiffeners</span><span><i style="background:var(--frame)"></i>frames</span><span>drag = rotate, wheel = zoom</span></div>
+  <div class="hdr">Files (workspace)</div>
+  <div id="files"></div>
+</aside>
+<div id="settings"><div class="card">
+  <b>Model server</b>
+  <label>URL (llama-server :8080, Ollama :11434, LM Studio :1234)</label><input id="s_url">
+  <label>Model name (Ollama / LM Studio; "local" for llama-server)</label><input id="s_model">
+  <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn" onclick="closeSettings()">Cancel</button><button class="btn" onclick="saveSettings()">Save</button></div>
+</div></div>
+<script>
+const $=id=>document.getElementById(id);
+let store={chats:[],cur:null};
+try{store=JSON.parse(localStorage.getItem('shipbrain'))||store}catch(e){}
+const save=()=>{try{localStorage.setItem('shipbrain',JSON.stringify(store))}catch(e){}};
+const cur=()=>store.chats.find(c=>c.id===store.cur);
+const EX=["Mesh a deck panel 4800 x 3200 mm, plate 12 mm, flat bar 150x12 stiffeners at 800 mm, one T-bar web frame 400x10/150x15 in the middle, 5 m water head, clamped edges",
+"Check a plate field 2400 x 800 x 11 mm under 0.06 MPa, simply supported",
+"What section modulus does HP 200x10 give with 700 mm of 12 mm plating?",
+"Find the rule for where a carling starts when it butts on a girder"];
+function esc(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+function md(t){
+  const parts=t.split(/```/);let h='';
+  parts.forEach((p,i)=>{
+    if(i%2){const nl=p.indexOf('\n');const lang=p.slice(0,nl).trim();if(lang==='tool')return;h+='<pre><code>'+esc(p.slice(nl+1))+'</code></pre>';return}
+    let s=esc(p);
+    s=s.replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/^#{1,4} (.*)$/gm,'<b>$1</b>');
+    s=s.replace(/((?:^\|.*\|\s*$\n?)+)/gm,tb=>{const rows=tb.trim().split('\n').filter(r=>!/^\|[\s\-:|]+\|$/.test(r));
+      return '<table>'+rows.map(r=>'<tr>'+r.slice(1,-1).split('|').map(c=>'<td>'+c.trim()+'</td>').join('')+'</tr>').join('')+'</table>'});
+    s=s.replace(/^\s*[-*] (.*)$/gm,'• $1');
+    h+=s.split(/\n{2,}/).map(x=>x.startsWith('<table')?x:'<p>'+x.replace(/\n/g,'<br>')+'</p>').join('');
+  });return h}
+function render(){
+  const c=cur(),box=$('msgs');
+  $('chats').innerHTML='';
+  store.chats.slice().reverse().forEach(ch=>{const b=document.createElement('button');b.className='chat'+(ch.id===store.cur?' on':'');
+    b.textContent=ch.title||'New chat';b.onclick=()=>{store.cur=ch.id;save();render()};$('chats').appendChild(b)});
+  if(!c||!c.msgs.length){box.innerHTML='<div id="empty"><h2>Ship structure assistant</h2><div>CAD · FE mesh · FEA checks · rule book — running on this PC</div><div class="ex">'+
+    EX.map(e=>'<button>'+esc(e)+'</button>').join('')+'</div></div>';
+    box.querySelectorAll('.ex button').forEach(b=>b.onclick=()=>{$('in').value=b.textContent;send()});return}
+  box.innerHTML='';c.msgs.forEach(m=>box.appendChild(view(m)));$('log').scrollTop=1e9}
+function view(m){
+  const d=document.createElement('div');d.className='msg '+m.role;
+  if(m.role==='user'){d.innerHTML='<div class="b"></div>';d.firstChild.textContent=m.content;return d}
+  let h='';(m.steps||[]).forEach(s=>{
+    if(s.kind==='text')h+='<div class="b">'+md(s.text)+'</div>';
+    else if(s.kind==='tool')h+='<details class="tool"><summary>⚙ <b>'+esc(s.name)+'</b> '+(s.result?(s.result.error?'<span class="err">failed</span>':'done'):'running…')+
+      '</summary><pre>'+esc(JSON.stringify(s.args,null,1))+(s.result?'\n\n→ '+esc(JSON.stringify(s.result,null,1)):'')+'</pre></details>';
+    else if(s.kind==='error')h+='<div class="err">'+esc(s.text)+'</div>'});
+  d.innerHTML=h||'<div class="b" style="color:var(--mute)">…</div>';return d}
+function newChat(){const id=Date.now().toString(36);store.chats.push({id,title:'',msgs:[]});store.cur=id;save();render();$('in').focus()}
+async function send(){
+  const t=$('in').value.trim();if(!t)return;$('in').value='';autosize();
+  if(!cur())newChat();const c=cur();if(!c.title)c.title=t.slice(0,48);
+  c.msgs.push({role:'user',content:t});const a={role:'assistant',content:'',steps:[]};c.msgs.push(a);render();$('send').disabled=true;
+  const hist=[];c.msgs.slice(0,-1).forEach(m=>hist.push({role:m.role,content:m.content}));
+  let node=$('msgs').lastChild;
+  try{
+    const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:hist})});
+    const rd=r.body.getReader(),dec=new TextDecoder();let buf='';
+    for(;;){const {value,done}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});
+      let i;while((i=buf.indexOf('\n\n'))>=0){const line=buf.slice(0,i);buf=buf.slice(i+2);if(!line.startsWith('data: '))continue;
+        const ev=JSON.parse(line.slice(6));const last=a.steps[a.steps.length-1];
+        if(ev.type==='text'){if(last&&last.kind==='text')last.text+=ev.delta;else a.steps.push({kind:'text',text:ev.delta})}
+        else if(ev.type==='tool_call'){a.steps.push({kind:'tool',name:ev.name,args:ev.args})}
+        else if(ev.type==='tool_result'){const t=a.steps.filter(s=>s.kind==='tool').pop();if(t&&!t.result)t.result=ev.result;else a.steps.push({kind:'tool',name:ev.name,args:{},result:ev.result});
+          if(ev.mesh){drawMesh(ev.mesh);$('right').classList.remove('hide')}loadFiles()}
+        else if(ev.type==='done'){a.content=ev.content||a.steps.filter(s=>s.kind==='text').map(s=>s.text).join('\n')}
+        else if(ev.type==='error'){a.steps.push({kind:'error',text:ev.message})}
+        const nv=view(a);node.replaceWith(nv);node=nv;$('log').scrollTop=1e9}}
+  }catch(e){a.steps.push({kind:'error',text:String(e)})}
+  if(!a.content)a.content=a.steps.filter(s=>s.kind==='text').map(s=>s.text).join('\n')||'(tool run)';
+  // the model needs to see tool results in later turns
+  a.steps.filter(s=>s.kind==='tool'&&s.result).forEach(s=>{a.content+='\n[tool '+s.name+' -> '+JSON.stringify(s.result).slice(0,800)+']'});
+  save();render();$('send').disabled=false}
+async function upload(f){if(!f)return;const b64=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result.split(',')[1]);fr.readAsDataURL(f)});
+  const r=await (await fetch('/api/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:f.name,data:b64})})).json();
+  $('in').value=($('in').value+' ').trimStart()+'[uploaded '+r.saved+'] ';$('in').focus();loadFiles()}
+async function loadFiles(){try{const r=await (await fetch('/api/files')).json();
+  $('files').innerHTML=r.files.map(f=>'<a href="/files/'+encodeURIComponent(f)+'">'+esc(f)+'</a>').join('')||'<span style="color:var(--mute)">no files yet</span>'}catch(e){}}
+async function status(){try{const s=await (await fetch('/api/status')).json();
+  $('status').innerHTML='<span class="dot'+(s.model_ok?' ok':'')+'"></span>'+(s.model_ok?'model connected':'no model (tools + search only)')+
+  '<br>'+s.tools.length+' tools · '+s.knowledge_chunks+' knowledge chunks';$('s_url').value=s.server||'';$('s_model').value=s.model||''}catch(e){$('status').textContent='app offline'}}
+function openSettings(){$('settings').classList.add('on')}function closeSettings(){$('settings').classList.remove('on')}
+async function saveSettings(){await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({server:$('s_url').value,model:$('s_model').value})});closeSettings();status()}
+function toggleRight(){$('right').classList.toggle('hide');resize()}
+const inp=$('in');function autosize(){inp.style.height='auto';inp.style.height=Math.min(inp.scrollHeight,200)+'px'}
+inp.addEventListener('input',autosize);inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
+// ---------------- 3D wireframe viewer
+let M=null,rx=0.9,rz=0.6,zoom=1;const cv=$('cv'),cx=cv.getContext('2d');
+function resize(){const r=cv.getBoundingClientRect();cv.width=r.width*devicePixelRatio;cv.height=r.height*devicePixelRatio;paint()}
+function drawMesh(m){M=m;const xs=m.xyz;let lo=[1e18,1e18,1e18],hi=[-1e18,-1e18,-1e18];xs.forEach(p=>p.forEach((v,i)=>{lo[i]=Math.min(lo[i],v);hi[i]=Math.max(hi[i],v)}));
+  M.c=lo.map((v,i)=>(v+hi[i])/2);M.s=Math.max(...hi.map((v,i)=>v-lo[i]))||1;zoom=1;setTimeout(resize,30)}
+function paint(){const W=cv.width,H=cv.height;cx.clearRect(0,0,W,H);if(!M)return;
+  const st=getComputedStyle(document.documentElement),col=[st.getPropertyValue('--plate'),st.getPropertyValue('--stiff'),st.getPropertyValue('--frame')];
+  const k=0.8*Math.min(W,H)/M.s*zoom,cz=Math.cos(rz),sz=Math.sin(rz),cxr=Math.cos(rx),sxr=Math.sin(rx);
+  const P=M.xyz.map(p=>{const x=p[0]-M.c[0],y=p[1]-M.c[1],z=p[2]-M.c[2];const x1=x*cz-y*sz,y1=x*sz+y*cz;return [W/2+x1*k,H/2-(y1*cxr-z*sxr)*k*-1]});
+  cx.lineWidth=Math.max(0.6,devicePixelRatio*0.5);
+  for(let g=0;g<3;g++){cx.strokeStyle=col[g];cx.globalAlpha=g?0.95:0.55;cx.beginPath();
+    M.edges.forEach(e=>{if(e[2]!==g)return;const a=P[e[0]],b=P[e[1]];cx.moveTo(a[0],a[1]);cx.lineTo(b[0],b[1])});cx.stroke()}cx.globalAlpha=1}
+let drag=null;cv.onpointerdown=e=>{drag=[e.clientX,e.clientY];cv.setPointerCapture(e.pointerId)};cv.onpointerup=()=>drag=null;
+cv.onpointermove=e=>{if(!drag)return;rz+=(e.clientX-drag[0])*0.01;rx+=(e.clientY-drag[1])*0.01;drag=[e.clientX,e.clientY];paint()};
+cv.onwheel=e=>{e.preventDefault();zoom*=e.deltaY<0?1.15:1/1.15;paint()};window.onresize=resize;
+render();status();loadFiles();setInterval(status,15000);
+</script>
+</body>
+</html>
