@@ -923,7 +923,16 @@ def mesh_plates(plates_in, h, tol=None, close_gap=True, all_quad=True, smooth=3,
                     bar_elems.append((bi, chain[k], chain[k + 1]))
                     on_seg.update((chain[k], chain[k + 1]))
     if repair:
-        elems, bar_elems, rep = _repair(node_xyz, elems, bar_elems, plates, on_seg, max(tol, snap / 2))
+        corners = set(ns[0] for ns in seg_nodes) | set(ns[-1] for ns in seg_nodes)
+        line_of = {}
+        for k, ns in enumerate(seg_nodes):
+            for g in ns:
+                line_of.setdefault(g, set()).add(k)
+            for a_, b_ in zip(ns[:-1], ns[1:]):
+                g = reg.get((node_xyz[a_] + node_xyz[b_]) / 2)
+                if g in on_seg:
+                    line_of.setdefault(g, set()).add(k)
+        elems, bar_elems, rep = _repair(node_xyz, elems, bar_elems, plates, on_seg, max(tol, snap / 2), corners, line_of)
         report['repair'] = rep
     # renumber only used nodes (no free nodes by construction)
     used_nodes = sorted(set(g for _, e in elems for g in e) | set(g for _, a_, b_ in bar_elems for g in (a_, b_)))
@@ -979,10 +988,19 @@ def _elem_quality(X, e, plate):
     return amin, area, inv
 
 
-def _repair(X, elems, bars, plates, fixed, weld_tol, min_angle=5.0, rounds=6):
+def _repair(X, elems, bars, plates, fixed, weld_tol, corners=(), line_of=None, min_angle=5.0, rounds=6):
     """global clean-up of the finished mesh: merge nodes closer than weld_tol, then remove elements with a corner below
     min_angle / no area by collapsing their shortest side. Every merge renames a node in ALL elements (and beams), so
-    plates stay joined; a merge is undone if it would turn a neighbouring element inside out."""
+    plates stay joined; a merge is undone if it would turn a neighbouring element inside out. Joint / boundary line end
+    points (corners) never move; other nodes on a line only slide along that same line."""
+    line_of = line_of or {}
+
+    def movable(src, dst):
+        if src in corners:
+            return False
+        if src not in fixed:
+            return True
+        return bool(line_of.get(src, set()) & line_of.get(dst, set()))
     rep = {'merged_close_nodes': 0, 'collapsed_bad_elements': 0, 'removed_elements': 0}
     alias = {}
 
@@ -1010,9 +1028,9 @@ def _repair(X, elems, bars, plates, fixed, weld_tol, min_angle=5.0, rounds=6):
         cl.setdefault(uf.find(k), []).append(g)
     for mem in cl.values():
         if len(mem) > 1:
-            keep = min(mem, key=lambda g: (g not in fixed, g))
+            keep = min(mem, key=lambda g: (g not in corners, g not in fixed, g))
             for g in mem:
-                if g != keep:
+                if g != keep and (g not in corners or np.linalg.norm(X[g] - X[keep]) <= weld_tol / 4):
                     alias[g] = keep
                     rep['merged_close_nodes'] += 1
     for _ in range(rounds):
@@ -1040,18 +1058,25 @@ def _repair(X, elems, bars, plates, fixed, weld_tol, min_angle=5.0, rounds=6):
             for m in np.argsort(L):
                 a, b = e[m], e[(m + 1) % len(e)]
                 for src, dst in ((b, a), (a, b)) if (a in fixed) >= (b in fixed) else ((a, b), (b, a)):
-                    if src in fixed and dst not in fixed:
+                    if not movable(src, dst):
                         continue
                     ok = True
                     for kk in of_node.get(src, ()):
                         if kk == k or kk in dead:
                             continue
                         pj, ej = elems[kk]
-                        if dst in ej:
-                            continue                         # becomes a triangle / vanishes - checked when cleaned
-                        ej2 = [dst if g == src else g for g in ej]
+                        ej2 = []
+                        for g in ej:
+                            g = dst if g == src else g
+                            if not ej2 or ej2[-1] != g:
+                                ej2.append(g)
+                        while len(ej2) > 1 and ej2[0] == ej2[-1]:
+                            ej2.pop()
+                        if len(ej2) < 3:
+                            continue                         # vanishes
                         a2, ar2, inv2 = _elem_quality(X, ej2, plates[pj])
-                        if inv2:
+                        L2 = max(np.linalg.norm(X[ej2[(m2 + 1) % len(ej2)]] - X[ej2[m2]]) for m2 in range(len(ej2)))
+                        if inv2 or abs(ar2) <= 1e-6 * L2 ** 2:
                             ok = False
                             break
                     if ok:
@@ -1069,9 +1094,12 @@ def _repair(X, elems, bars, plates, fixed, weld_tol, min_angle=5.0, rounds=6):
     for pi, e in elems:
         e2 = clean(e)
         if len(e2) >= 3:
-            cur.append((pi, e2))
-        else:
-            rep['removed_elements'] += 1
+            L = max(np.linalg.norm(X[e2[(m + 1) % len(e2)]] - X[e2[m]]) for m in range(len(e2)))
+            if abs(_elem_quality(X, e2, plates[pi])[1]) > 1e-4 * L ** 2:
+                cur.append((pi, e2))
+                continue
+            rep['dropped_zero_area'] = rep.get('dropped_zero_area', 0) + 1     # flat sliver: no area, nothing lost
+        rep['removed_elements'] += 1
     nb = []
     for bi, a, b in bars:
         a, b = root(a), root(b)
