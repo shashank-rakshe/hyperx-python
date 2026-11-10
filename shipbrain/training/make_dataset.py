@@ -195,9 +195,9 @@ def t_section(r, tools):
     w = res['with_plate']
     return [{'role': 'user', 'content': f'Section modulus of {prof_text(p, r)} with {be:g} mm of {t:g} mm plating?'},
             {'role': 'assistant', 'content': tool_block('section_props', args)}, result_msg('section_props', res),
-            {'role': 'assistant', 'content': f"Profile alone: A = {res['A']:g} mm2. With plating: I = {w['I'] / 1e4:.1f} cm4, "
-                                             f"Z at toe **{w['Z_toe'] / 1e3:.1f} cm3**, Z at plate {w['Z_plate'] / 1e3:.1f} cm3, neutral axis "
-                                             f"{w['z_na']:.1f} mm below plate mid-plane."}]
+            {'role': 'assistant', 'content': f"Profile alone: A = {res['A']:g} mm2. With plating: I = {w['I_cm4']:g} cm4, "
+                                             f"Z at toe **{w['Z_toe_cm3']:g} cm3**, Z at plate {w['Z_plate_cm3']:g} cm3, neutral axis "
+                                             f"{w['z_na_mm']:g} mm below plate mid-plane."}]
 
 
 def t_calc(r, tools):

@@ -54,7 +54,9 @@ def stiffener_check(span, spacing, t_plate, profile, q, end='clamped', E=206000.
 def section(profile, t_plate=None, b_eff=None):
     out = {k: round(v, 3) for k, v in profile_props(profile).items()}
     if t_plate and b_eff:
-        out['with_plate'] = {k: round(v, 3) for k, v in with_plate(profile, t_plate, b_eff).items()}
+        w = with_plate(profile, t_plate, b_eff)
+        out['with_plate'] = {'A_mm2': round(w['A'], 1), 'z_na_mm': round(w['z_na'], 1), 'I_cm4': round(w['I'] / 1e4, 1),
+                             'Z_plate_cm3': round(w['Z_plate'] / 1e3, 1), 'Z_toe_cm3': round(w['Z_toe'] / 1e3, 1)}
     return out
 
 
