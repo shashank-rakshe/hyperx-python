@@ -1,0 +1,47 @@
+# ShipBrain: start a training run on the free Kaggle GPU, wait for it, and save the scores in the repo.
+# Started by a change to shipbrain/training/TRAIN_REQUEST.json (the assistant does this) or by hand (Actions tab).
+# One-time setup by the owner: repository secrets KAGGLE_USERNAME and KAGGLE_KEY (Kaggle -> Settings -> API -> Create New Token).
+# The trained model stays PRIVATE on Kaggle; only scores and the log tail are written here (branch kaggle-runs).
+name: shipbrain-train
+on:
+  push:
+    paths: ['shipbrain/training/TRAIN_REQUEST.json']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: shipbrain-train
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Check the Kaggle secrets
+        env: {KAGGLE_USERNAME: '${{ secrets.KAGGLE_USERNAME }}', KAGGLE_KEY: '${{ secrets.KAGGLE_KEY }}'}
+        run: |
+          if [ -z "$KAGGLE_USERNAME" ] || [ -z "$KAGGLE_KEY" ]; then
+            echo "::error::Add the repository secrets KAGGLE_USERNAME and KAGGLE_KEY (Settings > Secrets and variables > Actions)"; exit 1; fi
+      - name: Start, wait, fetch the results
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          SB_BRANCH: ${{ github.ref_name }}
+        run: |
+          pip -q install kaggle
+          python shipbrain/training/kaggle_run.py auto --request shipbrain/training/TRAIN_REQUEST.json --out kaggle_out
+      - name: Save scores and log to branch kaggle-runs
+        if: always()
+        run: |
+          [ -d kaggle_out ] || exit 0
+          RUN=$(date -u +%Y%m%d-%H%M)
+          git config user.name "shipbrain-bot"; git config user.email "shipbrain-bot@users.noreply.github.com"
+          git fetch origin kaggle-runs || true
+          if git rev-parse --verify origin/kaggle-runs >/dev/null 2>&1; then git checkout -B kaggle-runs origin/kaggle-runs; else git checkout --orphan kaggle-runs; git rm -rfq . ; fi
+          mkdir -p runs/$RUN
+          cp kaggle_out/*.json runs/$RUN/ 2>/dev/null || true
+          tail -n 200 kaggle_out/run.log > runs/$RUN/log_tail.txt 2>/dev/null || true
+          cp kaggle_out/status.txt runs/$RUN/ 2>/dev/null || true
+          cp -r runs/$RUN/. latest/ 2>/dev/null || (mkdir -p latest && cp -r runs/$RUN/. latest/)
+          git add runs latest && git commit -qm "Kaggle training run $RUN" && git push -q origin kaggle-runs
