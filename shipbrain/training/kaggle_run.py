@@ -40,6 +40,7 @@ def start(a):
     src = open(os.path.join(HERE, 'kaggle', 'kernel.py')).read()
     src = re.sub(r"^BASE = .*$", f"BASE = {a.base!r}", src, flags=re.M)
     src = re.sub(r"^N_TRAIN = .*$", f"N_TRAIN = {a.n}", src, flags=re.M)
+    src = re.sub(r"^DRAFT = .*$", f"DRAFT = {a.draft!r}", src, flags=re.M)
     open(os.path.join(d, 'kernel.py'), 'w').write(src)
     meta = {'id': f'{user()}/{SLUG}', 'title': SLUG, 'code_file': 'kernel.py', 'language': 'python', 'kernel_type': 'script',
             'is_private': True, 'enable_gpu': True, 'enable_internet': True, 'dataset_sources': a.dataset or [],
@@ -73,7 +74,8 @@ def watch(a):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('cmd', choices=['start', 'status', 'watch', 'fetch'])
-    ap.add_argument('--base', default='unsloth/Qwen3-4B-Instruct-2507')
+    ap.add_argument('--base', default='unsloth/Qwen3-1.7B')
+    ap.add_argument('--draft', default='unsloth/Qwen3-0.6B', help="draft model for speculative decoding ('' = none)")
     ap.add_argument('--n', type=int, default=4000)
     ap.add_argument('--dataset', action='append', help='your PRIVATE Kaggle dataset with rules_index.json, e.g. user/ship-rules')
     ap.add_argument('--out', default='kaggle_out')

@@ -105,7 +105,7 @@ class H(BaseHTTPRequestHandler):
 
 
 # ---------------------------------------------------------------------- local model launcher
-def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None):
+def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None, draft=None, extra=''):
     """start llama-server (for .gguf) or the llamafile itself; returns the base URL once /health answers"""
     path = os.path.abspath(path)
     if path.endswith('.gguf'):
@@ -113,9 +113,12 @@ def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None):
         if not exe:
             sys.exit('llama-server not found. Download llama.cpp (CPU build) and put llama-server on PATH, or pass --llama-bin, '
                      'or use a .llamafile model.')
-        cmd = [exe, '-m', path, '--port', str(port), '-c', str(ctx), '--host', '127.0.0.1']
+        cmd = [exe, '-m', path, '--port', str(port), '-c', str(ctx), '--host', '127.0.0.1',
+               '--cache-reuse', '256']                       # re-use the cached system prompt between questions
         if mmproj:
             cmd += ['--mmproj', mmproj]
+        if draft:                                            # speculative decoding: a tiny model of the same family drafts,
+            cmd += ['-md', os.path.abspath(draft), '--draft-max', '16', '--draft-min', '2']   # the main model only checks
     else:                                                            # llamafile: model + server in one executable
         if os.name != 'nt' and not os.access(path, os.X_OK):
             os.chmod(path, 0o755)
@@ -123,6 +126,9 @@ def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None):
         cmd += ['--server', '--nobrowser', '--port', str(port), '-c', str(ctx), '--host', '127.0.0.1']
     if threads:
         cmd += ['-t', str(threads)]
+    if extra:
+        import shlex
+        cmd += shlex.split(extra)
     print('starting model:', ' '.join(cmd))
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
     url = f'http://127.0.0.1:{port}'
@@ -149,7 +155,10 @@ def main(argv=None):
     ap.add_argument('--model', help='.gguf (starts llama-server) or .llamafile (starts itself)')
     ap.add_argument('--mmproj', help='vision projector .gguf (image input)')
     ap.add_argument('--llama-bin', help='path to llama-server')
-    ap.add_argument('--threads', type=int)
+    ap.add_argument('--threads', type=int, help='CPU threads for the model (default: llama.cpp picks the physical cores)')
+    ap.add_argument('--draft', help='small draft model .gguf of the same family (e.g. Qwen3-0.6B q8_0) for faster generation')
+    ap.add_argument('--llama-args', default='', help='extra llama-server arguments, e.g. "-fa on --mlock"')
+    ap.add_argument('--full-prompt', action='store_true', help='long tool descriptions (for an UNtrained base model; slower)')
     ap.add_argument('--ctx', type=int, default=8192)
     ap.add_argument('--knowledge', action='append', default=[], help='folder or file to learn from (repeatable)')
     ap.add_argument('--plugin', action='append', default=[], help='python file / folder with TOOLS = {...} (e.g. your ship_mcp.py)')
@@ -166,7 +175,8 @@ def main(argv=None):
 
     proc = None
     if a.model:
-        a.server, proc = start_model(a.model, 8081, a.threads, a.ctx, a.mmproj, a.llama_bin)
+        a.server, proc = start_model(a.model, 8081, a.threads, a.ctx, a.mmproj, a.llama_bin, a.draft, a.llama_args)
+    agent.PROMPT_COMPACT = not a.full_prompt
     emb = knowledge.Embedder(a.embed_server, a.embed_model) if a.embed_server else None
     kb = knowledge.load(a.knowledge, cache_dir=os.path.join(a.workdir, '.index'), embedder=emb)
     from .examples import Examples

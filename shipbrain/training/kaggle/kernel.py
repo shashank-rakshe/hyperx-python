@@ -7,7 +7,8 @@ Settings come from env-style constants below (kaggle_run.py rewrites them).
 """
 import glob, json, os, shutil, subprocess, sys
 
-BASE = 'unsloth/Qwen3-4B-Instruct-2507'
+BASE = 'unsloth/Qwen3-1.7B'        # fast on a CPU; 'unsloth/Qwen3-4B-Instruct-2507' = better answers, ~2x slower
+DRAFT = 'unsloth/Qwen3-0.6B'      # tiny draft model for speculative decoding on the CPU ('' = skip)
 N_TRAIN = 4000
 N_EVAL = 200
 EVAL_LIMIT = 60
@@ -33,6 +34,11 @@ sh(f'python training/make_dataset.py --n {N_TRAIN} --eval-n {N_EVAL} --out data/
 sh(f'python training/evaluate.py --local {BASE} --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_before.json')
 sh(f'python training/finetune.py --data data/train.jsonl --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
 sh(f'python training/evaluate.py --local /kaggle/working/shipbrain_model/lora --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_after.json')
+if DRAFT:      # same data, 1 epoch: the draft learns the tool format, so the main model accepts more of its guesses
+    sh(f'EPOCHS=1 python training/finetune.py --data data/train.jsonl --base {DRAFT} --out /kaggle/working/draft_model --quant q8_0')
+    for f in glob.glob('/kaggle/working/draft_model/*.gguf'):
+        shutil.move(f, '/kaggle/working/' + os.path.basename(f).replace('shipbrain-', 'shipbrain-draft-'))
+    shutil.rmtree('/kaggle/working/draft_model', ignore_errors=True)
 for f in glob.glob('/kaggle/working/shipbrain_model/*.gguf'):
     shutil.move(f, '/kaggle/working/' + os.path.basename(f))
 shutil.rmtree('/kaggle/working/shipbrain_model/ckpt', ignore_errors=True)

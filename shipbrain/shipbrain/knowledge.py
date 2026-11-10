@@ -42,9 +42,6 @@ def _chunks(text, size=900):
 def _read(path):
     ext = os.path.splitext(path)[1].lower()
     if ext == '.pdf':
-        md = _mineru(path)
-        if md:
-            return md
         try:
             import pypdfium2                         # Apache-2.0 / BSD
         except ImportError:
@@ -57,28 +54,6 @@ def _read(path):
     if ext in TEXT_EXT:
         return open(path, encoding='utf-8', errors='replace').read()
     return None
-
-
-def _mineru(path):
-    """optional, OFF by default: MinerU has licence conditions (see README); only if you have cleared them.
-    Used only when SHIPBRAIN_MINERU=1 and the `mineru` command is installed. Results are cached next to the PDF."""
-    import shutil, subprocess
-    if os.environ.get('SHIPBRAIN_MINERU') != '1' or not shutil.which('mineru'):
-        return None
-    cache = path + '.mineru.md'
-    if os.path.exists(cache) and os.path.getmtime(cache) >= os.path.getmtime(path):
-        return open(cache, encoding='utf-8').read()
-    out = path + '.mineru_out'
-    try:
-        subprocess.run(['mineru', '-p', path, '-o', out], check=True, capture_output=True, timeout=3600)
-    except Exception:
-        return None
-    mds = [os.path.join(r, f) for r, _, fs in os.walk(out) for f in fs if f.endswith('.md')]
-    if not mds:
-        return None
-    text = '\n\n'.join(open(m, encoding='utf-8').read() for m in mds)
-    open(cache, 'w', encoding='utf-8').write(text)
-    return text
 
 
 class Knowledge:

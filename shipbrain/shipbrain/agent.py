@@ -14,6 +14,7 @@ from . import mesh as _mesh, fea as _fea, solver as _solver, platemesh as _pm, m
 
 TOOL_RE = re.compile(r'```tool\s*\n(.*?)\n?```', re.S)
 MAX_STEPS = 6
+PROMPT_COMPACT = True          # set False (app: --full-prompt) for an untrained base model
 MESH_TOOLS = ('panel_mesh', 'plates_mesh', 'cad_mesh', 'fatigue_mesh', 'drawing_to_3d')
 
 
@@ -436,8 +437,48 @@ Tools:
 """
 
 
-def system_prompt(tools):
-    return SYSTEM.format(tools=tools.describe())
+SYSTEM_COMPACT = """You are ShipBrain, an assistant for ship structure CAD, FE meshing, FEA and drawings. Units mm, N, MPa.
+Write plain simple English, explain terms, give units; use a result's plain_english text. Ask file_info first about uploaded files.
+Numbers/meshes/files only from tools; use calc for arithmetic; cite [ids] of retrieved knowledge or memory.
+Call a tool with ONLY:
+```tool
+{{"name": "<tool>", "args": {{...}}}}
+```
+then wait for TOOL_RESULT. Missing value: assume a sensible one and say so. End with a short answer: done, key numbers, files, warnings.
+Tools: {tools}
+"""
+
+
+def system_prompt(tools, compact=True):
+    """compact (default): tool names + argument names only (~4x fewer tokens -> much faster first answer on a CPU);
+    the fine-tuned model learns the details from the training data. compact=False: full descriptions (untrained models)."""
+    if not compact:
+        return SYSTEM.format(tools=tools.describe())
+    items = []
+    for n, (_, d, sch) in tools.t.items():
+        req = set(sch.get('required', []))
+        args = ','.join(k if k in req else k + '?' for k in sch.get('properties', {}))
+        first = re.split(r'(?<=[.:])\s', d, 1)[0][:70].rstrip('.:')
+        items.append(f'{n}({args}) {first}')
+    return SYSTEM_COMPACT.format(tools='; '.join(items))
+
+
+def compact_result(res, limit=2500):
+    """shorter tool results for the model (CPU prompt time): lists cut to 12 items, floats rounded, total capped"""
+    def c(x, depth=0):
+        if isinstance(x, float):
+            return float(f'{x:.5g}')
+        if isinstance(x, dict):
+            return {k: c(v, depth + 1) for k, v in x.items() if k not in ('xyz', 'edges')}
+        if isinstance(x, (list, tuple)):
+            out = [c(v, depth + 1) for v in x[:12]]
+            if len(x) > 12:
+                out.append(f'... {len(x) - 12} more')
+            return out
+        return x
+    txt = json.dumps(c(res), default=str, separators=(',', ':'))
+    return txt if len(txt) <= limit else txt[:limit] + '...(cut)'
+
 
 
 def parse_tool_call(text):
@@ -480,7 +521,8 @@ class LLM:
 
     def stream(self, messages):
         """yield text pieces"""
-        body = {'model': self.model, 'messages': messages, 'temperature': self.temperature, 'max_tokens': self.max_tokens, 'stream': True}
+        body = {'model': self.model, 'messages': messages, 'temperature': self.temperature, 'max_tokens': self.max_tokens, 'stream': True,
+                'cache_prompt': True}          # llama.cpp: re-use the already-read system prompt (others ignore it)
         with urllib.request.urlopen(self._req('/v1/chat/completions', body), timeout=self.timeout) as r:
             for raw in r:
                 line = raw.decode('utf-8', 'replace').strip()
@@ -529,7 +571,7 @@ def retrieve(tools, question, k=3, min_score=3.0):
 
 def run(llm, tools, history, max_steps=MAX_STEPS):
     """history: [{'role','content'}] of the chat so far (user last). Yields UI events (dicts)."""
-    msgs = [{'role': 'system', 'content': system_prompt(tools)}]
+    msgs = [{'role': 'system', 'content': system_prompt(tools, PROMPT_COMPACT)}]
     ctx, used = retrieve(tools, history[-1]['content'])
     if ctx:
         msgs.append({'role': 'system', 'content': ctx})
@@ -564,7 +606,7 @@ def run(llm, tools, history, max_steps=MAX_STEPS):
         if call['name'] in MESH_TOOLS and 'error' not in res and tools.last_mesh:
             ev['mesh'] = tools.last_mesh
         yield ev
-        msgs.append({'role': 'user', 'content': f"TOOL_RESULT {call['name']}: " + json.dumps(res, default=str)[:6000]})
+        msgs.append({'role': 'user', 'content': f"TOOL_RESULT {call['name']}: " + compact_result(res)})
     yield {'type': 'done', 'content': '(stopped after %d tool steps)' % max_steps}
 
 

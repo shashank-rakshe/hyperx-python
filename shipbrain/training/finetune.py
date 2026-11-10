@@ -21,7 +21,7 @@ import argparse, json, os
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--data', default='data/train.jsonl', nargs='+')
-    ap.add_argument('--base', default='unsloth/Qwen3-4B-Instruct-2507')
+    ap.add_argument('--base', default='unsloth/Qwen3-1.7B')
     ap.add_argument('--out', default='shipbrain_model')
     ap.add_argument('--quant', default='q4_k_m', help='GGUF quantisation: q4_k_m (small), q5_k_m, q8_0 (largest, best)')
     ap.add_argument('--no-gguf', action='store_true')

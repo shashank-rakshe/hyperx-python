@@ -70,7 +70,7 @@ def tool_block(name, args):
 
 
 def result_msg(name, res):
-    return {'role': 'user', 'content': f'TOOL_RESULT {name}: ' + json.dumps(res, default=str)[:6000]}
+    return {'role': 'user', 'content': f'TOOL_RESULT {name}: ' + agent.compact_result(res)}       # same as at run time
 
 
 # ------------------------------------------------------------------ tasks

@@ -94,6 +94,23 @@ CadQuery, a few hundred MB with it).
 `packaging/make_llamafile.md` explains how to pack the model into `shipbrain.llamafile`.
 Then run `shipbrain.exe --model shipbrain.llamafile`.
 
+## Fast on a CPU
+
+How ShipBrain keeps answers quick without a GPU:
+
+| Measure | Effect |
+|---|---|
+| small model, quantised: **Qwen3-1.7B q4_k_m (~1.1 GB)** is the default; 4B (~2.5 GB) is an option for better answers | 1.7B writes about 2x faster than 4B |
+| knowledge lives in the search index and tools, not in the weights | the model stays small; new repos and documents need no retraining |
+| **compact system prompt**: tool names and argument names only (~870 tokens instead of ~2,800). The training data uses the same prompt | the first answer starts about 3x sooner |
+| **prompt cache** (`cache_prompt`, `--cache-reuse`): the fixed system prompt is read once and reused | later questions skip that part |
+| **shorter tool results** (lists cut, numbers rounded) in both the app and the training data | less to read after each tool call |
+| **speculative decoding**: `--draft shipbrain-draft-q8_0.gguf` (a Qwen3-0.6B fine-tuned on the same data; the Kaggle run makes it) | typically 1.5-2x faster writing, same answers |
+| extra llama.cpp settings: `--llama-args "-fa on --mlock"`, `--threads <physical cores>` | depends on the CPU |
+
+Measure your PC: `python -m shipbrain.bench --server http://127.0.0.1:8081`. It reports prompt-reading and writing speed
+in tokens per second, checks that the prompt cache works, and gives tips.
+
 ## Known limits (measured on a real engine-room structure model: 703 plates, 565 stiffeners)
 
 - **Size:** the whole structure meshes in about 2 minutes on 4 CPU cores (≈ 42,000 elements at 400 mm).
@@ -198,13 +215,6 @@ pyNastran (BSD), ezdxf (MIT), pdfplumber (MIT), pypdfium2 (Apache/BSD), Pillow (
 separate program), llama.cpp (MIT) and llamafile (Apache-2.0). Training uses Qwen3 (Apache-2.0), Unsloth (Apache-2.0),
 Transformers and PEFT (Apache-2.0). PyMuPDF (AGPL or paid) was replaced. ANSYS and Abaqus are only targets of the file
 converters and are never needed.
-
-## Optional: MinerU for PDFs (off by default)
-
-[MinerU](https://github.com/opendatalab/MinerU) turns PDFs (scans, tables, formulas) into Markdown. ShipBrain uses it for the
-knowledge base when it is installed and `SHIPBRAIN_MINERU=1` is set. It is not bundled. **Check its licence first:**
-it is Apache-2.0 with extra terms. A commercial licence is needed above USD 20 M monthly revenue or 100 M monthly users,
-counted together with affiliates, and an online service must say that it uses MinerU.
 
 ## Credits (ideas, no code copied)
 
