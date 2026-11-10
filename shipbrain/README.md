@@ -131,6 +131,19 @@ user lives on that user's PC and is read at run time, so nobody needs their own 
 | CPU / GPU | `--gpu auto` | uses the card when it works, else the CPU |
 | company data for training | private Kaggle dataset | gives that company its own private model; the public model never sees it |
 
+## Frames, beams and pipe supports: Awatif's solver inside
+
+`frame_solve` checks 3D frames, beams, columns, portals and pipe supports with the linear solver of
+[Awatif](https://github.com/madil4/awatif) (MIT): its own compiled C++/Eigen code (`shipbrain/vendor/awatif/lSolver.wasm`,
+unchanged, with its source and licence) runs from Python through `wasmtime`; nothing else to install. The input follows
+Awatif's rules: line loads go L/2 to each end of every element of the line mesh, load cases G / Q / W, its combinations
+ULS-1 (1.35G + 1.5Q + 0.9W) and ULS-2 (1.35G + 1.05Q + 1.5W), plus SLS. Sections: pipe, rect, I, box or A / Iy / Iz / J;
+moment releases; self weight. Output: governing combination and member, stress (axial + bending) and utilisation,
+deflections, reactions, a Markdown report. A pipe model from `pipe_extract` is solved directly (supports and loads at
+coordinates). Checked: cantilever tip deflection and root moment exact; simply supported UDL moment exact, deflection
+within 1 % (Awatif's lumped line loads; finer mesh = closer). Without wasmtime, ShipBrain's own numpy frame solver
+(exact fixed-end loads) is used and the answer says so. Buckling, shear and local checks are not included.
+
 ## Skills and hooks: teach it workflows without retraining
 
 **Skills** are small Markdown files with the steps of a workflow. For every question the best matching skill is given to

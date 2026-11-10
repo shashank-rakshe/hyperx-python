@@ -18,6 +18,7 @@ open(entry, 'w').write('from shipbrain.server import main\nmain()\n')
 cmd = [sys.executable, '-m', 'PyInstaller', '--onefile', '--name', 'shipbrain', '--paths', ROOT,
        '--add-data', f"{os.path.join(ROOT, 'shipbrain', 'ui.html')}{sep}shipbrain",
        '--add-data', f"{os.path.join(ROOT, 'shipbrain', 'skill_library')}{sep}shipbrain/skill_library",
+       '--add-data', f"{os.path.join(ROOT, 'shipbrain', 'vendor')}{sep}shipbrain/vendor",
        '--add-data', f"{os.path.join(ROOT, 'examples')}{sep}examples",
        '--collect-all', 'pypdfium2', '--collect-all', 'pdfplumber', '--collect-submodules', 'scipy.spatial', '--collect-submodules', 'scipy.ndimage',
        '--collect-all', 'ezdxf', '--collect-all', 'pyNastran', entry]

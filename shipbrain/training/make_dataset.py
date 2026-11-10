@@ -702,6 +702,47 @@ def t_add_skill(r, tools):
             result_msg('add_skill', out), {'role': 'assistant', 'content': out['plain_english']}]
 
 
+def t_frame(r, tools):
+    """beam / portal / pipe-support questions -> frame_solve (Awatif's solver) -> governing member, PASS/FAIL"""
+    from shipbrain import awatif
+    if not awatif.available():
+        return None
+    kind = r.choice(['cantilever', 'beam', 'portal'])
+    sec = r.choice([{'I': [300, 150, 7, 11]}, {'I': [400, 200, 8, 13]}, {'box': [200, 200, 8]}, {'pipe': [168.3, 7.1]},
+                    {'rect': [100, 200]}])
+    stxt = {'I': 'I {0}x{1}x{2}x{3}', 'box': 'box {0}x{1}x{2}', 'pipe': 'pipe OD {0} x {1}', 'rect': 'rectangle {0} x {1}'}
+    k0 = next(iter(sec))
+    st = stxt[k0].format(*sec[k0])
+    if kind == 'cantilever':
+        L, P = float(r.choice([1500, 2000, 3000])), float(r.choice([2000, 5000, 10000]))
+        args = {'name': 'cantilever', 'nodes': {'A': [0, 0, 0], 'B': [L, 0, 0]}, 'members': [{'id': 'M1', 'n1': 'A', 'n2': 'B', 'section': sec}],
+                'supports': {'A': 'fixed'}, 'loads': {'Q': [{'node': 'B', 'F': [0, 0, -P]}]}, 'combinations': {'ULS': {'Q': 1.5}, 'SLS': {'Q': 1.0}}}
+        q = r.choice([f'Cantilever {L:g} mm, {st}, tip load {P:g} N: stress and deflection?',
+                      f'Check a {L:g} mm long {st} cantilever with {P / 1000:g} kN at the free end (factor 1.5 for ULS)'])
+    elif kind == 'beam':
+        L, w = float(r.choice([3000, 4000, 6000])), float(r.choice([5, 10, 20]))
+        args = {'name': 'beam', 'nodes': {'A': [0, 0, 0], 'B': [L, 0, 0]}, 'members': [{'id': 'M1', 'n1': 'A', 'n2': 'B', 'section': sec}],
+                'supports': {'A': '1234', 'B': '23'}, 'loads': {'G': [{'self_weight': 1}], 'Q': [{'member': 'M1', 'w': [0, 0, -w]}]}}
+        q = r.choice([f'Simply supported beam {L:g} mm, {st}, live load {w:g} N/mm plus self weight. Is it OK?',
+                      f'{st} beam spanning {L / 1000:g} m, pinned at both ends, {w:g} kN/m imposed load: check it'])
+    else:
+        H, B, wl = float(r.choice([3000, 4000, 5000])), float(r.choice([5000, 6000, 8000])), float(r.choice([5000, 8000, 12000]))
+        col = {'I': [300, 300, 10, 15]}
+        args = {'name': 'portal', 'nodes': {'A': [0, 0, 0], 'B': [0, 0, H], 'C': [B, 0, H], 'D': [B, 0, 0]},
+                'members': [{'id': 'C1', 'n1': 'A', 'n2': 'B', 'section': col}, {'id': 'B1', 'n1': 'B', 'n2': 'C', 'section': sec},
+                            {'id': 'C2', 'n1': 'D', 'n2': 'C', 'section': col}],
+                'supports': {'A': 'fixed', 'D': 'fixed'},
+                'loads': {'G': [{'self_weight': 1}, {'member': 'B1', 'w': [0, 0, -5]}], 'Q': [{'member': 'B1', 'w': [0, 0, -8]}],
+                          'W': [{'node': 'B', 'F': [wl, 0, 0]}]}}
+        q = (f'Portal frame {B / 1000:g} m wide, {H / 1000:g} m high, columns I 300x300x10x15 fixed at the base, beam {st}; '
+             f'dead 5 N/mm + self weight, live 8 N/mm on the beam, wind {wl / 1000:g} kN at the top. Check it.')
+    out = tools.call('frame_solve', args)
+    if 'error' in out:
+        return None
+    return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('frame_solve', args)},
+            result_msg('frame_solve', out), {'role': 'assistant', 'content': out['plain_english']}]
+
+
 _SUR = {}                                     # built surrogates: name -> (args, result), built once per dataset run
 _SUR_SETS = [('deck_plate', {'L': [1500, 3000], 'B': [600, 900], 't': [8, 16], 'p': [0.02, 0.08]}),
              ('tank_wall', {'L': [800, 2000], 'B': [500, 800], 't': [10, 20], 'p': [0.05, 0.15]}),
@@ -853,7 +894,7 @@ TASKS = [('mesh', 30, lambda r, T: t_mesh(r, T)), ('mesh_fix', 6, lambda r, T: t
          ('mesh_assume', 6, lambda r, T: t_mesh(r, T, 'assume')), ('plate', 12, t_plate), ('stiff', 12, t_stiff),
          ('buckle', 5, t_buckle), ('section', 8, t_section), ('calc', 4, t_calc), ('chat', 3, t_chat), ('plates', 4, t_plates), ('program', 12, t_program), ('cad_bank', 14, t_cad_bank),
          ('fileinfo', 4, t_fileinfo), ('convert', 4, t_convert), ('edit', 5, t_edit), ('clean', 3, t_clean), ('fe_repair', 3, t_fe_repair),
-         ('sur_build', 1, t_sur_build), ('units', 5, t_units), ('profile', 2, t_profile), ('add_skill', 2, t_add_skill), ('sur_predict', 4, t_sur_predict), ('insight', 3, t_insight)]
+         ('sur_build', 1, t_sur_build), ('units', 5, t_units), ('profile', 2, t_profile), ('add_skill', 2, t_add_skill), ('frame', 5, t_frame), ('sur_predict', 4, t_sur_predict), ('insight', 3, t_insight)]
 
 
 def main(argv=None):

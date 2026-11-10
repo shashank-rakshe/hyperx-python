@@ -10,7 +10,7 @@ support levels:
 import os, re, shutil
 
 ANALYSES = {   # analysis type -> words that point to it
-    'static': r'surrogate|reduced.order|\brom\b|parametric study|design space|stress|deflect|displace|strength|static|yield|load case|utili[sz]ation|safety factor|deform',
+    'static': r'frame|portal|truss|cantilever|beam|column|pipe support|surrogate|reduced.order|\brom\b|parametric study|design space|stress|deflect|displace|strength|static|yield|load case|utili[sz]ation|safety factor|deform',
     'modal': r'frequenc|natural|vibrat|resonan|eigen|\bmodes?\b|propeller excitation|hz\b',
     'buckling': r'buckl|stability|critical (load|stress)|elastic buckling',
     'ultimate': r'plastic|ultimate|nonlinear|non-linear|collapse|large deformation|residual strength',
@@ -60,6 +60,8 @@ ENGINES = [
     ('ShipBrain AI surrogate', {'static'}, 'runs', 'surrogate_build(ranges) -> surrogate_predict(name, params); result_insight(file.frd)',
      ['ccx', 'ccx.exe'], None, 'POD + RBF reduced-order model trained on CalculiX runs: ~1 ms per answer, error estimate, '
                                 'falls back to the real solve when unsure; hotspots / refinement / report from any result'),
+    ('Awatif frame solver (built in)', {'static'}, 'runs', 'frame_solve(nodes, members, supports, loads)', [], None,
+     'linear static 3D frames, beams and pipe supports; load cases + ULS combinations; Awatif C++ solver (MIT) via wasmtime'),
     ('ShipBrain mesher', {'mesh'}, 'runs', 'build_structure / plates_mesh / panel_mesh / cad_mesh / structure_to_mesh', [], None,
      'own conforming 1D + 2D mesher; no free nodes'),
 ]

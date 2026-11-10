@@ -1223,3 +1223,38 @@ def test_skills_and_hooks(tmp_path):
     T.load_plugin(str(plug))
     assert T.hook('tool_result', 'calc', {}, {}) == ['units are MPa'] and T.hook('tool_result', 'x', {}, {}) == []
     assert T.hook('question', 'what yield?') == ['site rule: yield 355']
+
+
+def test_awatif_frame_solver(tmp_path):
+    from shipbrain import awatif, frame3d
+    E, I = 206000.0, 1e7
+    sec = {'A': 5000, 'Iy': I, 'Iz': I / 2, 'J': 1e6, 'cz': 100, 'cy': 50}
+    cant = {'nodes': {'A': [0, 0, 0], 'B': [2000, 0, 0]}, 'members': [{'id': 'M1', 'n1': 'A', 'n2': 'B', 'section': sec}],
+            'supports': {'A': 'fixed'}, 'loads': {'LC1': [{'node': 'B', 'F': [0, 0, -1000]}]}, 'combinations': {'LC1': {'LC1': 1}}}
+    for out in (awatif.analyse(cant) if awatif.available() else None, frame3d.analyse(cant)):
+        if out is None:
+            continue
+        r = out['combinations']['LC1']
+        assert abs(r['displacements']['B'][2] + 1000 * 2000 ** 3 / (3 * E * I)) < 1e-3          # PL^3 / 3EI
+        assert abs(r['members']['M1']['My_max'] - 2e6) < 1 and abs(r['members']['M1']['sigma_max'] - 20.0) < 1e-6
+    ss = {'nodes': {'A': [0, 0, 0], 'B': [4000, 0, 0]}, 'members': [{'id': 'M1', 'n1': 'A', 'n2': 'B', 'section': sec}],
+          'supports': {'A': '1234', 'B': '23'}, 'loads': {'G': [{'member': 'M1', 'w': [0, 0, -10]}]}, 'combinations': {'G': {'G': 1}}}
+    hand = 5 * 10 * 4000 ** 4 / (384 * E * I)
+    r = frame3d.analyse(ss)['combinations']['G']
+    assert abs(r['max_displacement_mm'] / hand - 1) < 1e-3 and abs(r['members']['M1']['My_max'] - 2e7) < 1
+    if awatif.available():                                   # Awatif lumps line loads to the nodes: moment exact, deflection ~1 %
+        r = awatif.analyse(ss)['combinations']['G']
+        assert abs(r['max_displacement_mm'] / hand - 1) < 0.015 and abs(r['members']['M1']['My_max'] - 2e7) < 1
+        assert abs(r['sum_reactions'][2] - 40000) < 1e-3
+    T = agent.Tools(tmp_path)
+    out = T.call('frame_solve', {'nodes': {'A': [0, 0, 0], 'B': [0, 0, 4000], 'C': [6000, 0, 4000], 'D': [6000, 0, 0]},
+                                 'members': [{'id': 'C1', 'n1': 'A', 'n2': 'B', 'section': {'I': [300, 300, 10, 15]}},
+                                             {'id': 'B1', 'n1': 'B', 'n2': 'C', 'section': {'I': [400, 200, 8, 13]}},
+                                             {'id': 'C2', 'n1': 'D', 'n2': 'C', 'section': {'I': [300, 300, 10, 15]}}],
+                                 'supports': {'A': 'fixed', 'D': 'fixed'},
+                                 'loads': {'G': [{'member': 'B1', 'w': [0, 0, -5]}], 'Q': [{'member': 'B1', 'w': [0, 0, -10]}],
+                                           'W': [{'node': 'B', 'F': [8000, 0, 0]}]}})
+    assert set(out['combinations']) == {'ULS-1', 'ULS-2', 'SLS'} if awatif.available() else 'SLS' in out['combinations']
+    sls = out['combinations']['SLS']['sum_reactions']
+    assert abs(sls[0] + 8000) < 1e-3 and abs(sls[2] - 15 * 6000) < 1e-3                        # equilibrium
+    assert 'PASS' in out['plain_english'] and os.path.exists(tmp_path / out['files'][0])

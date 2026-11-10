@@ -178,8 +178,16 @@ class FEModel:
                    'C3D8': 'hexa', 'C3D8R': 'hexa', 'C3D8I': 'hexa', 'C3D4': 'tetra', 'C3D6': 'penta', 'C3D10': 'tetra', 'C3D20': 'hexa'}
         mode, etype, eset, sets, sections, mat, mats_by_name = None, None, '', {}, [], None, {}
         cont = []
+        pipe_notes = {}                                   # ** SHIPBRAIN PIPE ELSET=P1 OD=114.3 WALL=6.02
         for raw in open(path, errors='replace'):
             s = raw.strip()
+            if s.upper().startswith('** SHIPBRAIN PIPE'):
+                kv = dict(x.split('=', 1) for x in s.split()[3:] if '=' in x)
+                try:
+                    pipe_notes[kv['ELSET'].upper()] = (float(kv['OD']), float(kv['WALL']))
+                except (KeyError, ValueError):
+                    pass
+                continue
             if not s or s.startswith('**'):
                 continue
             if s.startswith('*'):
@@ -267,7 +275,13 @@ class FEModel:
                 pr['t'] = (sec['data'] or [1.0])[0]
             elif sec['kind'] == 'bar':
                 d = sec['data'] or [1.0, 1.0]
-                if (sec['section'] or '').startswith('RECT') and len(d) >= 2:
+                pipe = pipe_notes.get((sec['elset'] or '').upper())
+                if pipe or ((sec['section'] or '').startswith('PIPE') and len(d) >= 2):    # ShipBrain pipe note / PIPE section
+                    D, t = pipe if pipe else (2 * d[0], d[1])
+                    di = max(D - 2 * t, 0.0)
+                    I = math.pi / 64 * (D ** 4 - di ** 4)
+                    pr.update(A=math.pi / 4 * (D ** 2 - di ** 2), I1=I, I2=I, J=2 * I, od=D, wall=t)
+                elif (sec['section'] or '').startswith('RECT') and len(d) >= 2:
                     h, b = d[0], d[1]
                     pr.update(A=b * h, I1=b * h ** 3 / 12, I2=h * b ** 3 / 12, J=b * h ** 3 / 3 if b > h else h * b ** 3 / 3)
                 else:
@@ -369,6 +383,8 @@ class FEModel:
             elif p['kind'] == 'solid':
                 L += [f'*SOLID SECTION, ELSET=P{pid}, MATERIAL=M{mid}', '']
             else:
+                if p.get('od') and p.get('wall'):               # CalculiX's PIPE needs B32R: keep B31 + RECT, remember the pipe
+                    L.append(f"** SHIPBRAIN PIPE ELSET=P{pid} OD={p['od']:.5f} WALL={p['wall']:.5f}")
                 h = math.sqrt(12 * p['I1'] / p['A'])
                 L += [f'*BEAM SECTION, ELSET=P{pid}, MATERIAL=M{mid}, SECTION=RECT', f"{h:.5f}, {p['A'] / h:.5f}",
                       ', '.join(f'{v:.4f}' for v in (p.get('orient') or [0, 0, 1]))]

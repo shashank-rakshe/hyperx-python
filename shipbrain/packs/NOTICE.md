@@ -43,6 +43,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2026 k-tanaka
 
+## awatif
+
+- Source: https://github.com/madil4/awatif (commit c962730396ba)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2025 Mohamed Adil
+
 ## cad-automation-tools
 
 - Source: local copy of cad-automation-tools (upstream release) (commit working-tree)

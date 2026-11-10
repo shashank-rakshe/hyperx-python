@@ -198,6 +198,15 @@ class Tools:
                       'a report draft and a ParaView .vtk of the fields.',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'yield_MPa': num_, 'safety_factor': num_,
                                                          'baseline': {'type': 'string'}}, 'required': ['file']})
+        self.register('frame_solve', self.frame_solve, 'Linear static 3D frame / beam / pipe-support check with Awatif\'s solver (built in, '
+                      'no install): nodes, members (section: pipe [OD,t] | rect [b,h] | I [h,b,tw,tf] | box [h,b,t] | A,Iy,Iz,J; '
+                      'release start|end|both), supports (fixed|pinned|roller|dof list), loads per case G/Q/W (node F [Fx,Fy,Fz,Mx,My,Mz] '
+                      '| member w [wx,wy,wz] N/mm | self_weight), combinations (default ULS-1, ULS-2, SLS). Or file = a 1D model '
+                      '(e.g. from pipe_extract) with supports/loads given at coordinates "at": [x,y,z]. Writes a report.',
+                      {'type': 'object', 'properties': {'nodes': {'type': 'object'}, 'members': {'type': 'array'},
+                                                         'supports': {'type': ['object', 'array']}, 'loads': {'type': 'object'},
+                                                         'combinations': {'type': 'object'}, 'file': {'type': 'string'},
+                                                         'name': {'type': 'string'}, 'divisions': {'type': 'integer'}}})
         self.register('fatigue_mesh', self.fatigue_mesh, 'Fatigue hot-spot local model: cut a box around the hot spot from a plate assembly, '
                       'mesh it t x t, give the read-out points at 0.5t / 1.5t; with solve=true also run CalculiX and return the '
                       'extrapolated hot-spot stress (1.5 s(0.5t) - 0.5 s(1.5t)).',
@@ -575,6 +584,31 @@ class Tools:
         from .userprofile import convert_many
         out = convert_many(values)
         return {'converted': out, 'plain_english': '; '.join(f"{v['value']:g} {v['from']} = {v['result']:g} {v['to']}" for v in out)}
+
+    def frame_solve(self, nodes=None, members=None, supports=None, loads=None, combinations=None, file=None, name=None,
+                    divisions=10):
+        from . import awatif, frame3d
+        if file:
+            from .femodel import FEModel
+            sup = supports if isinstance(supports, list) else [{'node': k, 'type': v} for k, v in (supports or {}).items()]
+            model = frame3d.from_femodel(FEModel.read(self._path(file)), sup, loads or {}, combinations)
+            divisions = 1
+        else:
+            if not (nodes and members):
+                raise ValueError('give nodes + members (+ supports, loads), or file = a 1D beam / pipe model')
+            model = {'nodes': nodes, 'members': members, 'supports': supports or {}, 'loads': loads or {},
+                     **({'combinations': combinations} if combinations else {})}
+        if not model.get('supports'):
+            raise ValueError('no supports given: the frame would fly away')
+        out = awatif.analyse(model, divisions=int(divisions))
+        base = re.sub(r'[^A-Za-z0-9_\-]', '_', str(name or (os.path.splitext(os.path.basename(file))[0] if file else 'frame')))[:40]
+        rep = base + '_frame_report.md'
+        with open(self._path(rep), 'w', encoding='utf-8') as fh:
+            fh.write(frame3d.report(out, f'{base}: frame check') + f"\n\nSolver: {out.get('solver', '')}\n")
+        short = {k: {'max_displacement_mm': v['max_displacement_mm'], 'at_node': v['at_node'], 'sum_reactions': v['sum_reactions'],
+                     'members': dict(list(v['members'].items())[:8])} for k, v in out['combinations'].items()}
+        return {'governing': out['governing'], 'combinations': short, 'combination_factors': out['combination_factors'],
+                'solver': out.get('solver'), 'files': [rep], 'plain_english': out['plain_english'] + f' Report: {rep}.'}
 
     def geometry_clean(self, plates=None, file=None, merge_tol=2.0):
         from . import geoclean
