@@ -804,3 +804,19 @@ def test_repair_removes_degenerate_elements_and_keeps_corners():
                if len(e['nodes']) == 4 else 0.5 * np.linalg.norm(np.cross(X[e['nodes'][1] - 1] - X[e['nodes'][0] - 1], X[e['nodes'][2] - 1] - X[e['nodes'][0] - 1]))
                for e in m.elems if e['group'] == 'P')
     assert abs(area - 2000 * 1000) < 0.01 * 2000 * 1000
+
+
+# ------------------------------------------------------------------ dimension arithmetic on drawings
+def test_drawing_dimension_check(tmp_path):
+    ezdxf = pytest.importorskip('ezdxf')
+    doc = ezdxf.new()
+    ms = doc.modelspace()
+    for i, t in enumerate(['101.6P x 24 = 2438.4', '6 @ 800 = 4800', '1200 + 800 + 400 = 2500', '5 x 700 = 3500', 't=12', 'FR.23']):
+        ms.add_text(t, dxfattribs={'insert': (0, i * 100), 'height': 50})
+    p = str(tmp_path / 'd.dxf')
+    doc.saveas(p)
+    t = agent.Tools(tmp_path)
+    r = t.call('drawing_check', {'file': 'd.dxf'})
+    assert len(r['checked']) == 4 and len(r['wrong']) == 1
+    assert r['wrong'][0]['computed'] == 2400 and 'should be 2400' in r['plain_english']
+    assert r['numbers_by_class'].get('plate thickness') == 1 and r['numbers_by_class'].get('frame number') == 1

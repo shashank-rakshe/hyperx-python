@@ -171,3 +171,76 @@ def compare_vector(a, b, page_a=0, page_b=0, tol=None, max_list=60):
     return {'lines': {'removed': len(removed), 'added': len(added), 'style_changed': len(restyled)},
             'texts': {'changed': len(tchanged), 'removed': len(tremoved), 'added': len(tadded), 'changed_by_class': by_class},
             'details': details, 'tolerance': tol, 'plain_english': text}
+
+
+# ====================================================================== dimension arithmetic on a drawing
+_EXPR = [
+    # 24 x 101.6 = 2438.4   |   101.6P x 24 = 2438.4   |   6 * 800 = 4800
+    (re.compile(r'(\d+(?:\.\d+)?)\s*P?\s*[xX×*]\s*(\d+(?:\.\d+)?)\s*P?\s*=\s*(\d+(?:\.\d+)?)'), lambda a, b: a * b, 'x'),
+    # 6 @ 800 = 4800  (6 spaces at 800)
+    (re.compile(r'(\d+(?:\.\d+)?)\s*@\s*(\d+(?:\.\d+)?)\s*=\s*(\d+(?:\.\d+)?)'), lambda a, b: a * b, '@'),
+    # 1200 + 800 + 400 = 2400 (two or more terms)
+    (re.compile(r'((?:\d+(?:\.\d+)?\s*\+\s*)+\d+(?:\.\d+)?)\s*=\s*(\d+(?:\.\d+)?)'), None, '+'),
+]
+
+
+def drawing_texts(path, page=0):
+    """text lines of a drawing: DXF texts, PDF text layer, or OCR (only if Tesseract is installed) for scans"""
+    low = path.lower()
+    if low.endswith('.dxf'):
+        return [t['text'] for t in _dxf_items(path)[1]], 'dxf'
+    if low.endswith('.pdf'):
+        import pdfplumber
+        with pdfplumber.open(path) as d:
+            txt = d.pages[page].extract_text() or ''
+        if txt.strip():
+            return txt.splitlines(), 'pdf text layer'
+    try:                                              # scan / image: optional OCR (Tesseract, Apache-2.0)
+        import pytesseract
+        from PIL import Image
+        if low.endswith('.pdf'):
+            import pypdfium2
+            pdf = pypdfium2.PdfDocument(path)
+            img = pdf[page].render(scale=300 / 72, grayscale=True).to_pil()
+            pdf.close()
+        else:
+            img = Image.open(path)
+        return pytesseract.image_to_string(img).splitlines(), 'OCR'
+    except Exception:
+        return [], 'no text (scanned drawing; install Tesseract + pytesseract for OCR)'
+
+
+def check_dimensions(path, page=0, tol=0.5):
+    """find sums and products written on a drawing (24 x 101.6 = 2438.4, 6 @ 800 = 4800, 1200 + 800 = 2000) and check them;
+    also count the numbers by class (plate thickness, weld size, section size, ...)"""
+    lines, how = drawing_texts(path, page)
+    checked, wrong = [], []
+    for ln in lines:
+        s = ' '.join(str(ln).split())
+        for rx, fn, kind in _EXPR:
+            for m in rx.finditer(s):
+                if kind == '+':
+                    val = sum(float(x) for x in re.split(r'\s*\+\s*', m.group(1)))
+                    stated = float(m.group(2))
+                else:
+                    val, stated = fn(float(m.group(1)), float(m.group(2))), float(m.group(3))
+                ok = abs(val - stated) <= max(tol, 1e-3 * abs(stated))
+                rec = {'text': m.group(0), 'computed': round(val, 3), 'stated': stated, 'ok': ok}
+                checked.append(rec)
+                if not ok:
+                    wrong.append(rec)
+    classes = {}
+    for ln in lines:
+        for w in str(ln).split():
+            c = number_class(w)
+            if c != 'label / other text':
+                classes[c] = classes.get(c, 0) + 1
+    if not lines:
+        text = f'No text could be read from this drawing: {how}.'
+    else:
+        text = (f'Read {len(lines)} text lines ({how}). Found {len(checked)} written calculation(s); '
+                + ('all are correct.' if checked and not wrong else
+                   f'{len(wrong)} do not add up: ' + '; '.join(f"'{w['text']}' should be {w['computed']:g}" for w in wrong[:10]) + '.'
+                   if wrong else 'nothing to check.'))
+    return {'source': how, 'lines': len(lines), 'checked': checked[:100], 'wrong': wrong[:100], 'numbers_by_class': classes,
+            'plain_english': text}

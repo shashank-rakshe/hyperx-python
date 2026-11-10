@@ -165,6 +165,10 @@ class Tools:
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'z': {'type': 'number'}, 't_plate': {'type': 'number'},
                                                          'layers': {'type': 'object'}, 'mesh': {'type': 'boolean'}, 'element_size': {'type': 'number'}},
                        'required': ['file']})
+        self.register('drawing_check', self.drawing_check, 'Check the arithmetic written on a drawing (PDF, DXF, image with OCR): '
+                      'products and sums like "24 x 101.6 = 2438.4", "6 @ 800 = 4800", "1200 + 800 = 2000"; lists the ones that do '
+                      'not add up and counts numbers by class (plate thickness, weld size, section size ...).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'page': {'type': 'integer'}}, 'required': ['file']})
         self.register('compare_structures', self.compare_structures, 'Compare two versions of a structure model member by member '
                       '(structure JSON, or ship XML through your plugin): plates (thickness, grade), stiffeners (section, grade), brackets, '
                       'openings - same / changed / moved / added / removed, with positions.',
@@ -336,6 +340,10 @@ class Tools:
         if mesh:
             out['mesh'] = self.plates_mesh(r['plates'], base + '_mesh', element_size, beams=r['beams'])
         return out
+
+    def drawing_check(self, file, page=0):
+        from .drawdiff import check_dimensions
+        return check_dimensions(self._path(file), int(page))
 
     def compare_structures(self, a, b, tol=5.0, move_tol=300.0):
         from . import members
