@@ -52,7 +52,15 @@ PyMAPDL and Abaqus need their own licensed software on your PC. ShipBrain writes
 | `drawing_to_3d` | DXF structural plan → 3D: outline/opening layers → plate with holes; girder/web/frame layers → vertical plates; stiffener layers → 1D beams. Writes a STEP and a 1D + 2D mesh. Scanned drawings need the vision model or redrawn DXF lines |
 | `compare_drawings` | two drawings (PDF page, PNG/JPG, DXF), aligned automatically: red = removed, green = added, % same, list of changed areas |
 | `compare_mesh_drawing` | FE mesh vs drawing (plan view at a height): % of mesh lines on drawn lines, coverage, and the shift that would line them up (calibration error) with an overlay image |
+| `compare_drawings` (vector) | for PDFs with real lines/text and for DXF it also says **what** changed: lines added/removed, line style changed (solid ↔ dashed, thin ↔ heavy, layer), texts changed/added/removed, each number classified (plate thickness, weld size, section size, frame, dimension, off-centre-line, elevation), e.g. *"text changed '12' → '14' (plate thickness)"*, *"girder line solid → dashed"* |
 | `file_info` | plain-English description of any uploaded file (FE model, STEP, DXF, PDF, image, JSON, XML, text) |
+
+**Structure models (member level)**
+
+| Tool | What it does |
+|---|---|
+| `compare_structures` | two versions of a structure model, member by member: plates (thickness, grade), stiffeners (section, grade), brackets, openings → same / changed / moved / added / removed, with positions. Reads structure JSON, or your ship XML through your private plugin (its `xml_to_members` is picked up automatically) |
+| `structure_to_mesh` | structure model → cleaned → global 1D + 2D mesh (plates with thickness and openings as shells, stiffeners as beams with their sections), plus a STEP |
 
 **Other tools:** `cadquery_build` (checked CAD), `solve_calculix`, `plate_check`, `stiffener_check`, `plate_buckling`, `section_props`,
 `calc`, `knowledge_search` with automatic RAG, and your plugins (e.g. your private `ship_mcp.py`).
@@ -75,7 +83,21 @@ CadQuery, a few hundred MB with it).
 `packaging/make_llamafile.md` explains how to pack the model into `shipbrain.llamafile`.
 Then run `shipbrain.exe --model shipbrain.llamafile`.
 
+## Known limits (measured on a real engine-room structure model: 703 plates, 565 stiffeners)
+
+- **Size:** the whole structure meshes in about 2 minutes on 4 CPU cores (≈ 42,000 elements at 400 mm).
+- **Connectivity:** with 15 mm snapping, 92 % of the elements are in one connected piece. Most of the remaining loose
+  pieces are brackets that attach to stiffener webs, while the stiffeners are 1D beams in the model. Next fix: model
+  bracketed stiffeners as shell webs, or tie the brackets to the beam nodes.
+- **Slivers:** real data has lines a few mm apart, which still give some sliver elements and near-duplicate nodes.
+  Next fix: merge nearly coincident lines before meshing.
+- The synthetic test models in `tests/` are fully clean: 1 part, no free or duplicate nodes, no bad elements.
+
 ## Making the model ("modify the LLM weights")
+
+**Easiest: open `training/ShipBrain_train_colab.ipynb` in Google Colab** (File → Upload notebook, Runtime → T4 GPU) and
+run the cells. It clones the code, makes the data, scores the base model, fine-tunes, scores again, writes the GGUF, and
+uploads it to a **private** Hugging Face repo using a token stored in Colab's *Secrets* panel as `HF_TOKEN`.
 
 The model is fine-tuned with QLoRA, which changes a small set of extra weights and then merges them into the model. This is
 the same kind of fine-tuning that is done to GPT-style models. It needs a GPU **once**. A free Colab T4 is enough. After that
@@ -122,7 +144,7 @@ publish the model: a model fine-tuned with your rule index can repeat it.
 ## Tests
 
 ```bash
-python -m pytest tests -q        # 38 tests: meshers, conformity, 1D+2D, cleaning, fatigue, formats + same solver answer through
+python -m pytest tests -q        # 43 tests: structure compare + mesh, semantic drawing diff, meshers, conformity, 1D+2D, cleaning, fatigue, formats + same solver answer through
                                  # each, edit ops, 1D/2D/3D conversions, DXF->3D, drawing and mesh-vs-drawing comparison,
                                  # CadQuery, RAG, plugins, agent loop + GUI server vs a mock model
 ```
@@ -146,10 +168,18 @@ Do **not** commit ship drawings, XMLs, rule texts, `rules_index.json`, generated
 **This repository is public.** `.gitignore` already excludes these files. Keep them on the company drive and point the app at them with
 `--knowledge` / `--plugin`.
 
+## Optional: MinerU for PDFs
+
+[MinerU](https://github.com/opendatalab/MinerU) turns PDFs (scans, tables, formulas) into Markdown. ShipBrain uses it for the
+knowledge base when it is installed and `SHIPBRAIN_MINERU=1` is set. It is not bundled. **Check its licence first:**
+it is Apache-2.0 with extra terms. A commercial licence is needed above USD 20 M monthly revenue or 100 M monthly users,
+counted together with affiliates, and an online service must say that it uses MinerU.
+
 ## Credits (ideas, no code copied)
 
 - [agent3dify](https://github.com/neka-nat/agent3dify) (MIT): a fixed script contract with one JSON result line; a stall guard for repair loops.
 - [text-to-cad](https://github.com/earthtojake/text-to-cad) (MIT): check the user's sizes against the built solid, not against the model's words; an example corpus with prompts.
 - [solidcraft](https://github.com/tangency-labs/solidcraft) (MIT/Apache-2.0): a verified example and oracle set; small tool replies.
 - [CAD2Program](https://manycore-research.github.io/CAD2Program/): small models do better emitting short parametric primitives than free B-rep code.
+- [CADCraft](https://github.com/storytold/cadcraft) (MIT/Apache-2.0): DXF as the drawing exchange format.
 - [ShipSpace-GA](https://github.com/kodendaal/ShipSpace-GA) (MIT, data CC BY 4.0): an arrangement generator, planned as a source of bulkhead and deck positions.

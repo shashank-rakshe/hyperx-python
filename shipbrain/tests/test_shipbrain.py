@@ -472,3 +472,84 @@ def test_agent_fe_tools(tmp_path):
     e = t.call('fe_edit', {'file': 'm.bdf', 'ops': [{'op': 'mirror', 'axis': 'y', 'value': 1000}, {'op': 'refine'}]})
     assert e['parts'] == 1 and e['model']['elements'] == 4 * 2 * len(f.elems)
     assert 'error' in t.call('fe_edit', {'file': 'm.bdf', 'ops': [{'op': '__class__'}]})
+
+
+# ------------------------------------------------------------------ structure models (member level)
+def _structure():
+    pan = lambda pid, o, u, w, plates, st: {'id': pid, 'cs': {'origin': o, 'uaxis': u, 'waxis': w}, 'plates': plates,
+                                             'holes': [], 'stiffeners': st, 'brackets': []}
+    deck = pan('DECK', [0, 0, 0], [1, 0, 0], [0, 0, 1],
+               [{'name': 'D1', 'thk': 12.0, 'grade': 'A', 'contour': [[0, 0], [6000, 0], [6000, 4000], [0, 4000], [0, 0]]}],
+               [{'name': f'L{k}', 'sec': 'FB150', 'grade': 'A', 'trace': [[0, y], [6000, y]], 'incl': [0, 0, -1]} for k, y in enumerate((800, 1600, 2400, 3200))])
+    gir = pan('GIR', [0, 2000, 0], [1, 0, 0], [0, -1, 0],
+              [{'name': 'G1', 'thk': 10.0, 'grade': 'A', 'contour': [[0, 0], [6000, 0], [6000, -600], [0, -600]]}], [])
+    return {'sections': {'FB150': {'type': 'FlatBar', 'H': 150.0, 't': 12.0}, 'HP200': {'type': 'Other', 'params': [200.0, 90.0, 10.0]}},
+            'blocks': [{'id': 'B1', 'panels': [deck, gir]}]}
+
+
+def test_compare_structures_finds_each_change():
+    import copy
+    from shipbrain import members
+    A = _structure()
+    B = copy.deepcopy(A)
+    B['blocks'][0]['panels'][0]['plates'][0]['thk'] = 14.0                    # thickness change
+    del B['blocks'][0]['panels'][0]['stiffeners'][3]                           # removed
+    B['blocks'][0]['panels'][0]['stiffeners'][0]['sec'] = 'HP200'             # section change
+    s = B['blocks'][0]['panels'][0]['stiffeners'][1]
+    s['trace'] = [[u, v + 150] for u, v in s['trace']]                        # moved 150 mm
+    r = members.compare(A, B)
+    assert r['counts'] == {'removed': 1, 'added': 0, 'changed': 2, 'moved': 1}
+    assert 'thk 12.0 -> 14.0' in str(r['details']['changed']) and 'FB150 -> HP200' in str(r['details']['changed'])
+    assert members.compare(A, A)['match_ratio'] == 1.0
+
+
+def test_structure_to_mesh(tmp_path):
+    t = agent.Tools(tmp_path)
+    json.dump(_structure(), open(tmp_path / 's.json', 'w'))
+    r = t.call('structure_to_mesh', {'file': 's.json', 'element_size': 250})
+    assert r['check']['parts'] == 1 and r['bars'] > 0 and r['check']['verdict'] == 'ok', r.get('plain_english')
+    assert 'connected piece' in r['plain_english']
+
+
+# ------------------------------------------------------------------ semantic drawing comparison
+def test_number_classes():
+    from shipbrain.drawdiff import number_class
+    assert number_class('a5') == 'weld size' and number_class('6 TYP.') == 'weld size'
+    assert number_class('t=12') == 'plate thickness' and number_class('FB150x12') == 'section size'
+    assert number_class('FR.23') == 'frame number' and number_class('2400') == 'dimension'
+
+
+def test_semantic_dxf_compare(tmp_path):
+    ezdxf = pytest.importorskip('ezdxf')
+    from shipbrain.drawdiff import compare_vector
+
+    def plan(path, rev):
+        doc = ezdxf.new()
+        doc.linetypes.add('DASHED', [0.5, 0.25, -0.25])
+        ms = doc.modelspace()
+        ms.add_line((0, 1000), (6000, 1000), dxfattribs={'layer': 'GIRDER'})
+        ms.add_line((0, 3000), (6000, 3000), dxfattribs={'layer': 'GIRDER', 'linetype': 'DASHED' if rev else 'CONTINUOUS'})
+        ms.add_text('t=14' if rev else 't=12', dxfattribs={'insert': (500, 2000), 'height': 80})
+        if rev:
+            ms.add_line((3000, 0), (3000, 4000), dxfattribs={'layer': 'WEB'})
+        doc.saveas(path)
+        return path
+    r = compare_vector(plan(str(tmp_path / 'a.dxf'), 0), plan(str(tmp_path / 'b.dxf'), 1))
+    assert r['lines'] == {'removed': 0, 'added': 1, 'style_changed': 1}
+    assert r['texts']['changed'] == 1 and r['texts']['changed_by_class'] == {'plate thickness': 1}
+
+
+def test_semantic_pdf_compare(tmp_path):
+    pymupdf = pytest.importorskip('pymupdf')
+    from shipbrain.drawdiff import compare_vector
+
+    def pdf(path, rev):
+        d = pymupdf.open()
+        pg = d.new_page()
+        pg.draw_line((50, 100), (500, 100), width=1.5)
+        pg.draw_line((50, 300), (500, 300), width=0.3, dashes='[4 2] 0' if rev else None)
+        pg.insert_text((60, 200), 'FB150x12' if not rev else 'HP200x10', fontsize=9)
+        d.save(path)
+        return path
+    r = compare_vector(pdf(str(tmp_path / 'a.pdf'), 0), pdf(str(tmp_path / 'b.pdf'), 1))
+    assert r['lines']['style_changed'] == 1 and r['texts']['changed_by_class'] == {'section size': 1}

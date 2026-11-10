@@ -43,6 +43,20 @@ def args_match(ref, got, ignore=('name', 'k', 'query')):
     return not bad, bad
 
 
+class LocalModel:
+    """score a model inside Python (Colab GPU) without a server: base name or a LoRA / merged folder"""
+    def __init__(self, name, max_new_tokens=700):
+        from unsloth import FastLanguageModel
+        self.model, self.tok = FastLanguageModel.from_pretrained(name, max_seq_length=6144, load_in_4bit=True)
+        FastLanguageModel.for_inference(self.model)
+        self.n = max_new_tokens
+
+    def stream(self, messages):
+        ids = self.tok.apply_chat_template(messages, add_generation_prompt=True, return_tensors='pt').to(self.model.device)
+        out = self.model.generate(input_ids=ids, max_new_tokens=self.n, do_sample=False)
+        yield self.tok.decode(out[0][ids.shape[1]:], skip_special_tokens=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--server', default='http://127.0.0.1:8080')
@@ -50,8 +64,9 @@ def main():
     ap.add_argument('--data', default='data/eval.jsonl')
     ap.add_argument('--out', default='eval_result.json')
     ap.add_argument('--limit', type=int, default=0)
+    ap.add_argument('--local', help='score this model directly in Python (HF name or LoRA folder) instead of a server')
     a = ap.parse_args()
-    llm = agent.LLM(a.server, a.model, temperature=0.0, max_tokens=700)
+    llm = LocalModel(a.local) if a.local else agent.LLM(a.server, a.model, temperature=0.0, max_tokens=700)
     rows = [json.loads(l) for l in open(a.data, encoding='utf-8')]
     rows = rows[:a.limit] if a.limit else rows
     per, details = {}, []

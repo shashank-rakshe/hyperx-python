@@ -47,6 +47,7 @@ def calc(expression):
 class Tools:
     def __init__(self, workdir, kb=None, allow_code=False, examples=None):
         self.examples = examples
+        self.converters = []          # e.g. xml_to_members from your private plugin
         self.workdir = os.path.abspath(workdir)
         os.makedirs(self.workdir, exist_ok=True)
         self.kb = kb
@@ -152,6 +153,17 @@ class Tools:
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'z': {'type': 'number'}, 't_plate': {'type': 'number'},
                                                          'layers': {'type': 'object'}, 'mesh': {'type': 'boolean'}, 'element_size': {'type': 'number'}},
                        'required': ['file']})
+        self.register('compare_structures', self.compare_structures, 'Compare two versions of a structure model member by member '
+                      '(structure JSON, or ship XML through your plugin): plates (thickness, grade), stiffeners (section, grade), brackets, '
+                      'openings - same / changed / moved / added / removed, with positions.',
+                      {'type': 'object', 'properties': {'a': {'type': 'string'}, 'b': {'type': 'string'}, 'tol': {'type': 'number'},
+                                                         'move_tol': {'type': 'number'}}, 'required': ['a', 'b']})
+        self.register('structure_to_mesh', self.structure_to_mesh, 'Make a global 1D+2D FE mesh from a structure model (structure JSON or '
+                      'ship XML through your plugin): plates with thickness and openings -> shells, stiffeners -> beams with their sections. '
+                      'Also writes the plates/beams JSON and (if CadQuery is installed) a STEP.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'element_size': {'type': 'number'},
+                                                         'merge_tol': {'type': 'number', 'description': 'snap tolerance for near-misses, mm (default 10)'},
+                                                         'step': {'type': 'boolean'}}, 'required': ['file']})
         self.register('list_files', self.list_files, 'List the files in the workspace (uploads and results).', {'type': 'object', 'properties': {}})
         if self.allow_code:
             self.register('cadquery_build', self.cadquery_build,
@@ -261,6 +273,14 @@ class Tools:
         out = os.path.join(self.workdir, f'compare_{os.path.splitext(os.path.basename(a))[0]}_vs_{os.path.splitext(os.path.basename(b))[0]}.png')
         r = drawings.compare_drawings(self._path(a), self._path(b), out, page_a, page_b)
         r['overlay'] = os.path.basename(out)
+        try:                                                # vector drawings: also say WHAT changed (lines, styles, numbers)
+            from .drawdiff import compare_vector
+            v = compare_vector(self._path(a), self._path(b), page_a, page_b)
+            if v['lines']['removed'] + v['lines']['added'] + len(v['details']) or (v['texts']['changed'] + v['texts']['added']):
+                r['semantic'] = {k: v[k] for k in ('lines', 'texts', 'details')}
+                r['plain_english'] += ' ' + v['plain_english']
+        except Exception as ex:
+            r['semantic'] = f'not available ({type(ex).__name__}: scanned drawing or unreadable vector content)'
         return r
 
     def compare_mesh_drawing(self, mesh, drawing, box, level=0.0, axis='z', page=0):
@@ -283,6 +303,31 @@ class Tools:
         out['spec'] = base + '_plates.json'
         if mesh:
             out['mesh'] = self.plates_mesh(r['plates'], base + '_mesh', element_size, beams=r['beams'])
+        return out
+
+    def compare_structures(self, a, b, tol=5.0, move_tol=300.0):
+        from . import members
+        A, B = members.load(self._path(a), self.converters), members.load(self._path(b), self.converters)
+        return members.compare(A, B, tol, move_tol)
+
+    def structure_to_mesh(self, file, element_size=300.0, merge_tol=10.0, step=False):
+        from . import members, geoclean
+        r = members.to_plates(members.load(self._path(file), self.converters))
+        base = os.path.splitext(os.path.basename(file))[0]
+        json.dump(r, open(self._path(base + '_plates.json'), 'w'))
+        plates, act = geoclean.clean_plates(r['plates'], merge_tol=merge_tol)
+        spec = {'name': base + '_fem', 'plates': plates, 'beams': r['beams'], 'element_size': element_size}
+        out = self._mesh_result(*_pm.build_plates(spec, self.workdir))
+        out['cleaning'] = act[:30] + ([f'... and {len(act) - 30} more'] if len(act) > 30 else [])
+        out['notes'] = r['notes']
+        if step:
+            from .drawings import plates_to_step
+            out['step'] = os.path.basename(plates_to_step(plates, self._path(base + '.step'), r['beams'])['step'])
+        c = out['check']
+        out['plain_english'] = (f"Made a global mesh of {base}: {out['nodes']} nodes, {out['elements']} elements "
+                                f"({out['quads']} shells, {out['bars']} beams). {c['parts']} connected piece(s)"
+                                + (f", the largest has {c['part_sizes'][0]} elements" if c['parts'] > 1 else '') + '. '
+                                + ('Mesh check: ok.' if c['verdict'] == 'ok' else 'Mesh check found: ' + c['verdict'] + '.'))
         return out
 
     def mesh_check(self, file):
@@ -311,6 +356,16 @@ class Tools:
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         n = 0
+        conv = getattr(mod, 'xml_to_members', None)
+        if conv is None:                                  # plugin folder that also holds an XML kit module
+            for cand in ('ship_xml_kit',):
+                if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(path)), cand + '.py')):
+                    try:
+                        conv = getattr(importlib.import_module(cand), 'xml_to_members', None)
+                    except Exception:
+                        conv = None
+        if conv:
+            self.converters.append(conv)
         for name, (fn, desc, schema) in getattr(mod, 'TOOLS', {}).items():
             if name not in self.t:
                 self.register(name, fn, desc, schema)

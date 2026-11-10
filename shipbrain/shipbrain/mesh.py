@@ -305,7 +305,7 @@ def _f8(v):
     if isinstance(v, int):
         return f'{v:<8d}'
     v = float(v)
-    if v == 0:
+    if v == 0 or abs(v) < 1e-30:
         return '0.      '
     for fmt in ('{:.7g}', '{:.6g}', '{:.5g}', '{:.4g}', '{:.3g}'):
         s = fmt.format(v)
@@ -314,6 +314,11 @@ def _f8(v):
             s = mant + ('-' if ex.startswith('-') else '+') + ex.lstrip('+-').lstrip('0')
         if '.' not in s and 'e' not in s and '+' not in s[1:] and '-' not in s[1:]:
             s += '.'
+        if len(s) <= 8:
+            return f'{s:<8s}'
+    for p in range(4, -1, -1):                       # small / large values: Nastran exponent form, e.g. -9.73-4
+        mant, ex = f'{v:.{p}e}'.split('e')
+        s = mant + ('-' if ex.startswith('-') else '+') + ex.lstrip('+-').lstrip('0')
         if len(s) <= 8:
             return f'{s:<8s}'
     raise ValueError(v)

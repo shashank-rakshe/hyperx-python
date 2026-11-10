@@ -71,6 +71,13 @@ def clean_plates(plates, merge_tol=2.0, min_area=100.0, max_warp=5.0, tol=1e-3):
         else:
             out[i]['holes'][k - 1][j] = v
     X = np.array([get(*p) for p in pts]) if pts else np.zeros((0, 3))
+    pl0 = []
+    for d in out:
+        P = np.array(d['outline'], float)
+        nv = np.zeros(3)
+        for j in range(len(P)):
+            nv += np.cross(P[j], P[(j + 1) % len(P)])
+        pl0.append((P[0], nv / (np.linalg.norm(nv) or 1)))
     done, snapped = set(), 0
     for a in range(len(pts)):
         if a in done:
@@ -82,11 +89,63 @@ def clean_plates(plates, merge_tol=2.0, min_area=100.0, max_warp=5.0, tol=1e-3):
             spread = max(np.linalg.norm(X[b] - c) for b in group)
             if spread > tol:
                 for b in group:
-                    setp(*pts[b], c)
-                snapped += len(group)
+                    o_b, n_b = pl0[pts[b][0]]
+                    if abs((c - o_b) @ n_b) <= max(0.5, 10 * tol):       # only if it stays in that plate's plane
+                        setp(*pts[b], c)
+                        snapped += 1
         done.update(group)
     if snapped:
         act.append(f'Snapped {snapped} plate corner(s) that were less than {merge_tol:g} mm apart onto common points (closes small gaps/overlaps between parts).')
+    # snap corners onto a nearby EDGE of another plate (T-joints that stop a few mm short / overshoot)
+    edges = []
+    for i, d in enumerate(out):
+        for L in [d['outline']] + d['holes']:
+            for j in range(len(L)):
+                edges.append((i, np.asarray(L[j], float), np.asarray(L[(j + 1) % len(L)], float)))
+    if edges:
+        cell = max(merge_tol * 4, 50.0)
+        grid = {}
+        for k, (i, a, b) in enumerate(edges):
+            lo = np.floor((np.minimum(a, b) - merge_tol) / cell).astype(int)
+            hi = np.floor((np.maximum(a, b) + merge_tol) / cell).astype(int)
+            if np.prod(hi - lo + 1) > 4000:                       # very long edge: index its end cells only
+                for c in (lo, hi):
+                    grid.setdefault(tuple(c), []).append(k)
+                continue
+            for x in range(lo[0], hi[0] + 1):
+                for y in range(lo[1], hi[1] + 1):
+                    for z in range(lo[2], hi[2] + 1):
+                        grid.setdefault((x, y, z), []).append(k)
+        on_edge = 0
+        planes = []
+        for d in out:
+            P = np.array(d['outline'], float)
+            nv = np.zeros(3)
+            for j in range(len(P)):
+                nv += np.cross(P[j], P[(j + 1) % len(P)])
+            planes.append((P[0], nv / (np.linalg.norm(nv) or 1)))
+        for i, d in enumerate(out):
+            o_i, n_i = planes[i]
+            for L in [d['outline']] + d['holes']:
+                for j in range(len(L)):
+                    p = np.asarray(L[j], float)
+                    best = None
+                    for k in grid.get(tuple(np.floor(p / cell).astype(int)), ()):
+                        q, a, b = edges[k]
+                        if q == i:
+                            continue
+                        ab = b - a
+                        t = float(np.clip((p - a) @ ab / (ab @ ab + 1e-30), 0, 1))
+                        x = a + t * ab
+                        dist = float(np.linalg.norm(p - x))
+                        in_plane = abs((x - o_i) @ n_i) <= max(0.5, 10 * tol)     # never pull a corner out of its own plane
+                        if tol < dist <= merge_tol and in_plane and (best is None or dist < best[0]):
+                            best = (dist, x)
+                    if best is not None:
+                        L[j] = best[1]
+                        on_edge += 1
+        if on_edge:
+            act.append(f'Moved {on_edge} plate corner(s) onto a nearby edge of another plate (gaps/overshoots up to {merge_tol:g} mm at T-joints).')
     # flatten, small parts, duplicates
     final, seen = [], {}
     for d in out:

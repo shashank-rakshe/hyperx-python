@@ -406,7 +406,14 @@ def mesh_plates(plates_in, h, tol=None, close_gap=True, all_quad=True, smooth=3,
     h = float(h)
     beams = beams or []
     tol = tol or max(1e-3, h * 1e-3)
-    plates = [Plate(d, tol) for d in plates_in]
+    plates, bad = [], []
+    for d in plates_in:
+        try:
+            plates.append(Plate(d, tol))
+        except ValueError as e:                       # one bad plate must not stop a whole ship model
+            bad.append(str(e))
+    if not plates:
+        raise ValueError('no usable plates: ' + '; '.join(bad[:5]))
     ids = [p.id for p in plates]
     if len(set(ids)) != len(ids):
         raise ValueError('plate ids must be unique')
@@ -425,7 +432,7 @@ def mesh_plates(plates_in, h, tol=None, close_gap=True, all_quad=True, smooth=3,
     node_xyz = reg.xyz
     elems = []                                                     # (plate index, [global ids])
     on_seg = set(i for s in seg_nodes for i in s)
-    report = {'plates': len(plates), 'joint_segments': len(segs), 'gap_snaps': moved, 'skipped': []}
+    report = {'plates': len(plates), 'joint_segments': len(segs), 'gap_snaps': moved, 'skipped': list(bad)}
     for pi, P in enumerate(plates):
         mine = []
         for (a, b), ns in zip(segs, seg_nodes):
@@ -453,10 +460,15 @@ def mesh_plates(plates_in, h, tol=None, close_gap=True, all_quad=True, smooth=3,
         if len(P2) < 3:
             report['skipped'].append(P.id)
             continue
-        T = Tri2D(P2, _delaunay(P2))
+        try:
+            T = Tri2D(P2, _delaunay(P2))
+        except Exception as ex:                       # degenerate plate (all points in a line): skip, report
+            report['skipped'].append(f'{P.id}: could not be triangulated ({type(ex).__name__})')
+            continue
         lost = [c for c in cons if not T.recover(*c)]
         if lost:
-            raise RuntimeError(f'plate {P.id}: {len(lost)} joint/boundary edges could not be recovered - try a smaller element size')
+            report['skipped'].append(f'{P.id}: {len(lost)} joint/boundary edges could not be kept - try a smaller element size')
+            continue
         T.incircle_flips(cons)
         # keep triangles inside the plate (outside outline / inside holes removed)
         keep = []
