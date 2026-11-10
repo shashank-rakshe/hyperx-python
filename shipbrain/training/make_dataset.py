@@ -206,7 +206,7 @@ def t_calc(r, tools):
     res = tools.call('calc', {'expression': expr})
     return [{'role': 'user', 'content': f'Pressure in MPa of {h} m sea water head?'},
             {'role': 'assistant', 'content': tool_block('calc', {'expression': expr})}, result_msg('calc', res),
-            {'role': 'assistant', 'content': f"p = rho g h = 1.025 t/m3 x 9.81 x {h} m = **{res['value']:.4f} MPa** ({res['value'] * 1000:.1f} kPa)."}]
+            {'role': 'assistant', 'content': 'p = rho g h = 1.025 t/m3 x 9.81 x %s m = **%s MPa** (value from calc).' % (h, format(float('%.5g' % res['value']), 'g'))}]
 
 
 def t_plates(r, tools):
@@ -285,6 +285,47 @@ def t_cad(r, tools):
            + '; '.join(res['checks']) + f".\nFiles: {', '.join(res['files'])}.")
     return [{'role': 'user', 'content': user}, {'role': 'assistant', 'content': tool_block('cadquery_build', args)},
             result_msg('cadquery_build', res), {'role': 'assistant', 'content': ans}]
+
+
+def t_program(r, tools):
+    """natural-language structure request -> build_structure with a SHORT building-block program (CAD2Program lesson)"""
+    L = float(r.choice([4000, 4800, 6000, 7200, 8000, 9600]))
+    B = float(r.choice([2400, 3000, 3200, 4000, 4800]))
+    t = float(r.choice([8, 10, 12, 14]))
+    ng, nw = r.choice([0, 1, 2]), r.choice([0, 1, 2])
+    hg, tg, hw, tw = float(r.choice([400, 600, 800])), float(r.choice([10, 12])), float(r.choice([600, 800, 1000])), float(r.choice([9, 10, 12]))
+    ys = [round(B * (k + 1) / (ng + 1)) for k in range(ng)]
+    xs = [round(L * (k + 1) / (nw + 1)) for k in range(nw)]
+    sp = float(r.choice([500, 600, 700, 800]))
+    prof = r.choice(['FB150x12', 'FB120x10', 'HP200x10', 'HP180x9', 'L200x90x10/14', 'T300x10/100x12'])
+    lines = [f'deck L={L:g} B={B:g} t={t:g}'] + [f'girder y={y:g} h={hg:g} t={tg:g}' for y in ys] + [f'web x={x:g} h={hw:g} t={tw:g}' for x in xs]
+    words = [f"{r.choice(['Deck', 'deck panel', 'Deck structure'])} {mm_or_m(L, r)} x {mm_or_m(B, r)}, {t:g} mm plate"]
+    if ys:
+        words.append(f"{len(ys)} girder{'s' if len(ys) > 1 else ''} {hg:g}x{tg:g} at y = {', '.join(f'{y:g}' for y in ys)}")
+    if xs:
+        words.append(f"web frame{'s' if len(xs) > 1 else ''} {hw:g}x{tw:g} at x = {', '.join(f'{x:g}' for x in xs)}")
+    if r.random() < 0.4 and L >= 4800:
+        ox, oy = round(L * 0.65), round(B * 0.35)
+        w, h = 800.0, 600.0
+        if all(not (oy < y < oy + h) for y in ys) and all(not (ox < x < ox + w) for x in xs):
+            lines.append(f'opening x={ox:g} y={oy:g} w={w:g} h={h:g}')
+            words.append(f'an opening {w:g}x{h:g} at ({ox:g}, {oy:g})')
+    lines.append(f'stiffeners spacing={sp:g} profile={prof}')
+    words.append(f'{prof} stiffeners every {sp:g}')
+    if r.random() < 0.6:
+        head = r.choice([3, 5, 8])
+        lines.append(f'load p={round(head * 0.01005, 4):g}')
+        words.append(f'{head} m water head')
+    lines += ['fix x=0', 'fix x=L']
+    words.append('ends clamped')
+    prog = '; '.join(lines)
+    user = r.choice(['Build ', 'Model ', 'Mesh this: ', 'Create FE model - ', 'structure banao: ']) + ', '.join(words)
+    args = {'program': prog, 'name': f'deck_{int(L)}x{int(B)}'}
+    res = tools.call('build_structure', dict(args))
+    if 'error' in res:
+        return None
+    return [{'role': 'user', 'content': user}, {'role': 'assistant', 'content': tool_block('build_structure', args)},
+            result_msg('build_structure', res), {'role': 'assistant', 'content': res['plain_english'] + f"\nFiles: {', '.join(res['files'].values())}."}]
 
 
 def _small_model(r, tools):
@@ -411,7 +452,7 @@ def make_rules_task(entries):
 
 TASKS = [('mesh', 30, lambda r, T: t_mesh(r, T)), ('mesh_fix', 6, lambda r, T: t_mesh(r, T, 'fix')),
          ('mesh_assume', 6, lambda r, T: t_mesh(r, T, 'assume')), ('plate', 12, t_plate), ('stiff', 12, t_stiff),
-         ('buckle', 5, t_buckle), ('section', 8, t_section), ('calc', 4, t_calc), ('chat', 3, t_chat), ('plates', 10, t_plates),
+         ('buckle', 5, t_buckle), ('section', 8, t_section), ('calc', 4, t_calc), ('chat', 3, t_chat), ('plates', 4, t_plates), ('program', 12, t_program),
          ('fileinfo', 4, t_fileinfo), ('convert', 4, t_convert), ('edit', 5, t_edit), ('clean', 3, t_clean)]
 
 

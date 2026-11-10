@@ -29,6 +29,7 @@ simple English, and to call `file_info` first when you ask about an uploaded fil
 | Tool | What it does | Verified |
 |---|---|---|
 | `panel_mesh` | stiffened panel (plate + FlatBar/T/L/HP stiffeners + frames), shell or beam stiffeners | CalculiX vs Roark 0.2 % |
+| `build_structure` | **short building-block programs** (lesson of CAD2Program): `deck L=6000 B=4000 t=12; girder y=1000 h=600 t=12; web x=3000 h=800 t=10; opening ...; stiffeners spacing=500 profile=FB150x12; load p=0.05; fix x=0` -> plates + 1D stiffeners (cut at openings, none on girders) -> mesh / STEP. About 7x fewer characters for the model to write than coordinates, so it is faster on a CPU and makes fewer mistakes; clear error messages for wrong input |
 | `plates_mesh` | **global structure mesh, 1D + 2D**: any assembly of flat plates (deck, girders, webs, brackets, floors, bulkheads, openings) as all-quad shells, plus 1D stiffeners (CBAR with offsets) that share the plate nodes. Joints share nodes by construction; the geometry is cleaned first | 0 free / duplicate nodes, 1 part; Roark −0.1 % / 0.0 %; 1D+2D vs structured mesher within 3 % |
 | `cad_mesh` | STEP/BREP → cleaned → thin solids to mid-surface plates → mesh | STEP grillage → one connected mesh |
 | `fatigue_mesh` | **fatigue hot-spot model**: cuts a box around the hot spot, meshes it t × t, finds the 0.5t / 1.5t read-out points; with `solve` it runs CalculiX and returns s_hs = 1.5 s(0.5t) − 0.5 s(1.5t) per surface | test |
@@ -258,7 +259,7 @@ converters and are never needed.
 - [agent3dify](https://github.com/neka-nat/agent3dify) (MIT): a fixed script contract with one JSON result line; a stall guard for repair loops; checking the model's projected views against the drawing.
 - [text-to-cad](https://github.com/earthtojake/text-to-cad) (MIT): check the user's sizes against the built solid, not against the model's words; an example corpus with prompts.
 - [solidcraft](https://github.com/tangency-labs/solidcraft) (MIT/Apache-2.0): a verified example and oracle set; small tool replies.
-- [CAD2Program](https://manycore-research.github.io/CAD2Program/): small models do better emitting short parametric primitives than free B-rep code.
+- [CAD2Program](https://manycore-research.github.io/CAD2Program/): small models do better emitting short parametric primitives than free B-rep code; used for `build_structure`.
 - [Voitta](https://github.com/voitta-ai/voitta-rag) (voitta-rag is AGPL-3.0, so nothing was copied): hybrid search, re-indexing only changed files, search scope, assistant memory with like/dislike, tools over MCP.
 - [CAD-pdf-chatbot](https://github.com/adityawalture/CAD-pdf-chatbot) (no licence, so nothing copied): checking written dimension arithmetic, OCR fallback for scans.
 - [CADCraft](https://github.com/storytold/cadcraft) (MIT/Apache-2.0): DXF as the drawing exchange format.

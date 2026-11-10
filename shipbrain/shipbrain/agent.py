@@ -176,6 +176,13 @@ class Tools:
                                                          'views': {'type': 'array', 'description': '["front","top","side"]'},
                                                          'page': {'type': 'integer'}, 'crops': {'type': 'object', 'description': '{"front": [x0,y0,x1,y1]}'}},
                        'required': ['model', 'drawing']})
+        self.register('build_structure', self.build_structure, 'Build a ship structure from a SHORT program of building blocks (preferred '
+                      'over plates_mesh: far fewer numbers to write). One line per block, "name key=value": deck L B t; opening x y w h; '
+                      'girder y h t; web x h t; bulkhead x h t; lbulkhead y h t; stiffeners spacing profile(FB150x12|HP200x10|'
+                      'T400x10/150x15|L250x90x10/12) dir; bracket x y size t; load p; fix x=0|x=L|y=0|y=B|edges. Makes the 1D+2D mesh '
+                      '(and STEP with step=true).',
+                      {'type': 'object', 'properties': {'program': {'type': 'string'}, 'name': {'type': 'string'}, 'element_size': {'type': 'number'},
+                                                         'step': {'type': 'boolean'}}, 'required': ['program']})
         self.register('drawing_to_model', self.drawing_to_model, 'Read a SHIP structural drawing (PDF deck plans / elevations / sections) '
                       'into a member model XML with the ship drawing reader (frame / OFF C.L / deck-height calibration, line-style and '
                       'label rules); optional coverage score against a reference XML. Takes minutes.',
@@ -385,6 +392,20 @@ class Tools:
         if method == 'members':
             return members.compare(A, B, tol or 5.0, move_tol)
         return members.coverage(A, B, tol or 50.0)
+
+    def build_structure(self, program, name='structure', element_size=None, step=False):
+        from . import shipprog
+        name = re.sub(r'[^A-Za-z0-9_\-]', '_', str(name))[:40]
+        spec, desc = shipprog.build(program, name, element_size)
+        out = self.plates_mesh(spec['plates'], name, spec['element_size'], spec['loads'], spec['fix'], beams=spec['beams'])
+        if step and 'error' not in out:
+            from .drawings import plates_to_step
+            out['step'] = os.path.basename(plates_to_step(spec['plates'], self._path(name + '.step'), spec['beams'])['step'])
+        c = out.get('check', {})
+        out['plain_english'] = (f"Built {desc}. Mesh: {out.get('nodes')} nodes, {out.get('elements')} elements "
+                                f"({out.get('quads')} shells, {out.get('bars')} beams), {c.get('parts')} connected piece(s); "
+                                f"check: {c.get('verdict')}.")
+        return out
 
     def drawing_to_model(self, file, settings=None, reference=None, pages=None, raster=False):
         """ship drawing (PDF) -> member model XML with the ship drawing reader (its rules + calibration); optional coverage

@@ -892,3 +892,22 @@ def test_coverage_ignores_how_members_are_split():
     deck['plates'][1]['thk'] = 14.0                                # half of the deck thicker
     c = members.coverage(A, B)
     assert abs(c['stiffeners_A_found_in_B'] - 0.75) < 0.02 and abs(c['plates_A_same_thickness'] - (27.6 - 12) / 27.6) < 0.03   # 12 of 27.6 m2 now thicker
+
+
+# ------------------------------------------------------------------ building-block programs
+def test_build_structure_program(tmp_path):
+    from shipbrain import shipprog
+    prog = ('deck L=6000 B=4000 t=12; girder y=1000 h=600 t=12; girder y=3000 h=600 t=12; web x=3000 h=800 t=10; '
+            'opening x=4200 y=1600 w=1000 h=800; stiffeners spacing=500 profile=FB150x12; load p=0.05; fix x=0; fix x=L')
+    spec, desc = shipprog.build(prog)
+    assert len(spec['plates']) == 4 and len(spec['plates'][0]['holes']) == 1
+    ys = sorted({b['a'][1] for b in spec['beams']})
+    assert 1000 not in ys and 3000 not in ys and len(ys) == 5                   # no stiffener on a girder
+    cut = [b for b in spec['beams'] if b['a'][1] == 2000]
+    assert len(cut) == 2 and cut[0]['b'][0] == 4200 and cut[1]['a'][0] == 5200  # cut at the opening
+    assert shipprog.parse_profile('T400x10/150x15') == {'type': 'TBar', 'h': 400, 't': 10, 'bf': 150, 'tf': 15}
+    t = agent.Tools(tmp_path)
+    r = t.call('build_structure', {'program': prog, 'name': 'g'})
+    assert r['check']['parts'] == 1 and r['check']['verdict'] == 'ok' and r['bars'] > 0
+    assert 'missing t' in t.call('build_structure', {'program': 'deck L=6000 B=4000'})['error']
+    assert 'unknown building block' in t.call('build_structure', {'program': 'deck L=6 B=4 t=1; frame x=3'})['error']
