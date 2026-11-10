@@ -141,18 +141,29 @@ class Plate:
                 yield L[i], L[(i + 1) % len(L)]
 
 
-def close_gaps(plates, tol, factor=0.75):
-    """snap plate vertices that sit just off another plate's plane (mid-surface gap) onto that plane"""
+def close_gaps(plates, tol, factor=0.75, moulded=True):
+    """snap plate vertices that sit just off another plate's plane onto that plane.
+    gap reached: factor * (tP + tQ) / 2 (mid-surfaces of CAD solids stop t/2 short) and, with moulded=True, also
+    tQ + tP / 2 (moulded-line offsets: the plate was drawn to the far face of the plate it sits on). A vertex is only moved
+    when its plate reaches well away from Q (so a small plate lying flat near Q is not squashed onto it)."""
     moved = 0
     for P in plates:
+        allv = np.vstack(P.loops3)
         for Q in plates:
             if P is Q or abs(P.n @ Q.n) > 0.98:
                 continue
+            if np.any(P.bb[1] + 50 + Q.t < Q.bb[0]) or np.any(Q.bb[1] + 50 + Q.t < P.bb[0]):
+                continue
             gap = factor * (P.t + Q.t) / 2 + tol
+            if moulded:
+                gap = max(gap, 1.05 * Q.t + P.t / 2 + tol)
             d = Q.n - (Q.n @ P.n) * P.n                     # direction inside P's plane that changes distance to Q
             if np.linalg.norm(d) < 1e-6:
                 continue
             d = _unit(d)
+            far = np.abs((allv - Q.o) @ Q.n).max()
+            if far <= 2 * gap:
+                continue
             for L in P.loops3:
                 for i in range(len(L)):
                     s = Q.plane_dist(L[i])
@@ -163,6 +174,107 @@ def close_gaps(plates, tol, factor=0.75):
                             moved += 1
         P.frame(tol)
     return moved
+
+
+def tie_brackets(plates, beams, tol, reach=1.15):
+    """1D stiffeners have no web, so a bracket welded to a stiffener web (same plane as the web, one edge along the web
+    toe / flange) would float. Such an edge - parallel to the beam, in the web plane, at most reach * profile height (+ flange)
+    from the beam line and on the side the web hangs to - is moved onto the beam line (projected into the bracket's plane).
+    The bracket then meets the plate under the stiffener along the beam line and shares its nodes with plate and beam
+    (the bracket area over the web depth stands in for the web there). Edges touching another plate are never moved.
+    Returns [(plate id, beam id, distance mm)]."""
+    out = []
+    if not beams:
+        return out
+    BL = []
+    for bm in beams:
+        a, b = np.array(bm['a'], float), np.array(bm['b'], float)
+        L = np.linalg.norm(b - a)
+        if L <= tol:
+            continue
+        nrm = _unit(np.array(bm.get('normal', [0, 0, -1]), float))
+        pr = bm.get('profile') or {}
+        reach_mm = reach * float(pr.get('h', 0) or 0) + float(pr.get('tf', 0) or 0) + 10 * tol
+        BL.append((a, (b - a) / L, L, nrm, reach_mm, str(bm.get('id', ''))))
+    if not BL:
+        return out
+
+    def touches(p, P):
+        for Q in plates:
+            if Q is P or np.any(p < Q.bb[0] - Q.t) or np.any(p > Q.bb[1] + Q.t):
+                continue
+            if abs(Q.plane_dist(p)) <= Q.t / 2 + P.t / 2 + tol and Q.in_or_on(Q.to2(p), Q.t + tol)[0]:
+                return True
+        return False
+    for P in plates:
+        lo, hi = P.bb
+        cand = []
+        for a, dv, Lb, nrm, rch, bid in BL:
+            if abs(P.n @ dv) > 0.035:                          # bracket plane must contain the beam direction
+                continue
+            if abs(P.n @ nrm) > 0.26:                          # ... and (roughly) the web direction
+                continue
+            off = P.plane_dist(a)
+            if abs(off) > P.t + 30 + tol:                       # web plane = bracket plane (lapped: a few mm off)
+                continue
+            if np.any(np.minimum(a, a + dv * Lb) > hi + rch) or np.any(np.maximum(a, a + dv * Lb) < lo - rch):
+                continue
+            a_in = a - off * P.n                                  # beam line projected into the bracket plane
+            w = _unit(nrm - (nrm @ P.n) * P.n - (nrm @ dv) * dv)  # web direction inside the bracket plane
+            cand.append((a_in, dv, Lb, w, rch, bid))
+        if not cand:
+            continue
+        n = len(P.loops3[0])
+        for k in range(n):
+            L3 = P.loops3[0]
+            p, q = L3[k], L3[(k + 1) % n]
+            e = q - p
+            le = np.linalg.norm(e)
+            if le <= 10 * tol:
+                continue
+            for a_in, dv, Lb, w, rch, bid in cand:
+                if abs(e @ dv) / le < 0.985:
+                    continue
+                sp, sq = (p - a_in) @ w, (q - a_in) @ w
+                tp, tq = (p - a_in) @ dv, (q - a_in) @ dv
+                if not (5 * tol < sp <= rch and 5 * tol < sq <= rch):
+                    continue
+                ov = min(max(tp, tq), Lb) - max(min(tp, tq), 0)
+                if ov < 0.5 * le:
+                    continue
+                if touches(p, P) or touches(q, P):
+                    continue
+                new = L3.copy()
+                new[k] = p - sp * w
+                new[(k + 1) % n] = q - sq * w
+                old2 = P.loops2[0]
+                q2 = np.c_[(new - P.o) @ P.u, (new - P.o) @ P.v]
+                if abs(_area2(q2)) < 1e-3 * abs(_area2(old2)) or not _simple(q2) or np.sign(_area2(q2)) != np.sign(_area2(old2)):
+                    continue
+                P.loops3[0] = new
+                P.frame(tol)
+                out.append((P.id, bid, round(float(max(sp, sq)), 1)))
+                break
+    return out
+
+
+def _area2(Q):
+    x, y = Q[:, 0], Q[:, 1]
+    return 0.5 * float(x @ np.roll(y, -1) - y @ np.roll(x, -1))
+
+
+def _simple(Q):
+    """polygon without self-crossings (2D)"""
+    n = len(Q)
+    for i in range(n):
+        a, b = Q[i], Q[(i + 1) % n]
+        for j in range(i + 2, n):
+            if i == 0 and j == n - 1:
+                continue
+            c, d = Q[j], Q[(j + 1) % n]
+            if (_orient(a, b, c) * _orient(a, b, d) < 0) and (_orient(c, d, a) * _orient(c, d, b) < 0):
+                return False
+    return True
 
 
 def intersections(plates, tol):
@@ -399,13 +511,265 @@ def _quad_score(Q):
     return worst
 
 
+# ====================================================================== global segment graph (joint + boundary lines)
+def _close_pairs(X, r):
+    """index pairs (i < j) of points closer than r (spatial hash)"""
+    X = np.asarray(X, float)
+    if len(X) < 2 or r <= 0:
+        return []
+    cell, grid, out = r, {}, []
+    keys = np.floor(X / cell).astype(int)
+    for i, k in enumerate(map(tuple, keys)):
+        grid.setdefault(k, []).append(i)
+    for k, mem in grid.items():
+        near = [j for dx in (-1, 0, 1) for dy in (-1, 0, 1) for dz in (-1, 0, 1) for j in grid.get((k[0] + dx, k[1] + dy, k[2] + dz), ())]
+        near = np.array(near)
+        for i in mem:
+            js = near[near > i]
+            if len(js):
+                d = np.linalg.norm(X[js] - X[i], axis=1)
+                out += [(i, int(j)) for j in js[d <= r]]
+    return out
+
+
+class _UF:
+    def __init__(self, n):
+        self.p = list(range(n))
+
+    def find(self, a):
+        while self.p[a] != a:
+            self.p[a] = self.p[self.p[a]]
+            a = self.p[a]
+        return a
+
+    def union(self, a, b):
+        self.p[self.find(b)] = self.find(a)
+
+
+def _seg_owners(plates, segs, beam_lines, tol):
+    """which plates (and beams) each split segment belongs to: lies in the plate plane and inside / on the plate"""
+    A = np.array([s[0] for s in segs], float).reshape(-1, 3)
+    B = np.array([s[1] for s in segs], float).reshape(-1, 3)
+    M = (A + B) / 2
+    lo, hi = np.minimum(A, B), np.maximum(A, B)
+    own_p = [set() for _ in segs]
+    own_b = [set() for _ in segs]
+    for pi, P in enumerate(plates):
+        c = np.all(hi >= P.bb[0] - tol, 1) & np.all(lo <= P.bb[1] + tol, 1)
+        c &= (np.abs((A - P.o) @ P.n) <= 2 * tol) & (np.abs((B - P.o) @ P.n) <= 2 * tol)
+        idx = np.where(c)[0]
+        if len(idx):
+            q = np.c_[(M[idx] - P.o) @ P.u, (M[idx] - P.o) @ P.v]
+            for k in idx[P.in_or_on(q, 2 * tol)]:
+                own_p[k].add(pi)
+    for bi, (a, b) in enumerate(beam_lines):
+        d = b - a
+        L = float(np.linalg.norm(d))
+        if L <= tol:
+            continue
+        d = d / L
+        ok = np.ones(len(segs), bool)
+        for X in (A, B):
+            s = (X - a) @ d
+            r = np.linalg.norm(X - a - s[:, None] * d, axis=1)
+            ok &= (r <= tol) & (s >= -tol) & (s <= L + tol)
+        for k in np.where(ok)[0]:
+            own_b[k].add(bi)
+    return own_p, own_b
+
+
+class SegGraph:
+    """joint / boundary / beam lines of the whole assembly as one graph: vertices V, edges {(i, j): [plates, beams]}.
+    Every rule here acts on the global graph, so all plates sharing a line see the very same change (nodes stay shared)."""
+
+    def __init__(self, segs, own_p, own_b, tol):
+        reg = Registry(tol)
+        self.E = {}
+        for (a, b), op, ob in zip(segs, own_p, own_b):
+            if not op and not ob:
+                continue
+            i, j = reg.get(a), reg.get(b)
+            if i != j:
+                self._add(self.E, i, j, op, ob)
+        self.V = [np.array(p, float) for p in reg.xyz]
+        self.stats = {'welded_points': 0, 'split_at_points': 0, 'collapsed_short': 0}
+
+    @staticmethod
+    def _add(E, i, j, op, ob):
+        k = (i, j) if i < j else (j, i)
+        if k in E:
+            E[k][0] |= op
+            E[k][1] |= ob
+        else:
+            E[k] = [set(op), set(ob)]
+
+    def _rekey(self, mp):
+        E2 = {}
+        for (i, j), (op, ob) in self.E.items():
+            i2, j2 = mp.get(i, i), mp.get(j, j)
+            if i2 != j2:
+                self._add(E2, i2, j2, op, ob)
+        self.E = E2
+
+    def incident(self):
+        ip, ib = {}, {}
+        for (i, j), (op, ob) in self.E.items():
+            for v in (i, j):
+                ip.setdefault(v, set()).update(op)
+                ib.setdefault(v, set()).update(ob)
+        return ip, ib
+
+    def used(self):
+        return sorted({v for k in self.E for v in k})
+
+    def weld(self, r):
+        """points closer than r become one point; the point fixed by the most plates / beams is kept"""
+        used = self.used()
+        pairs = _close_pairs([self.V[v] for v in used], r)
+        if not pairs:
+            return 0
+        uf = _UF(len(used))
+        for a, b in pairs:
+            uf.union(a, b)
+        ip, ib = self.incident()
+        cl = {}
+        for k, v in enumerate(used):
+            cl.setdefault(uf.find(k), []).append(v)
+        mp = {}
+        for mem in cl.values():
+            if len(mem) > 1:
+                keep = max(mem, key=lambda v: (len(ip.get(v, ())), len(ib.get(v, ())), -v))
+                mp.update({v: keep for v in mem if v != keep})
+        self._rekey(mp)
+        self.stats['welded_points'] += len(mp)
+        return len(mp)
+
+    def split_near(self, r):
+        """a point lying within r of another line (end point a few mm off a joint line, near-collinear overlapping
+        lines) splits that line there: both then run through the same point and overlapping parts become one line"""
+        used = self.used()
+        if not used:
+            return 0
+        X = np.array([self.V[v] for v in used])
+        ua = np.array(used)
+        new, n = {}, 0
+        for (i, j), (op, ob) in self.E.items():
+            a, b = self.V[i], self.V[j]
+            d = b - a
+            L2 = float(d @ d)
+            lo, hi = np.minimum(a, b) - r, np.maximum(a, b) + r
+            c = np.where(np.all(X >= lo, 1) & np.all(X <= hi, 1))[0]
+            ts = []
+            if len(c):
+                W = X[c] - a
+                t = (W @ d) / L2
+                dist = np.linalg.norm(W - t[:, None] * d, axis=1)
+                for k in np.where((t > 1e-9) & (t < 1 - 1e-9) & (dist <= r))[0]:
+                    v = int(ua[c[k]])
+                    if v != i and v != j:
+                        ts.append((float(t[k]), v))
+            if ts:
+                chain = [i] + [v for _, v in sorted(ts)] + [j]
+                n += len(ts)
+                for p, q in zip(chain[:-1], chain[1:]):
+                    if p != q:
+                        self._add(new, p, q, op, ob)
+            else:
+                self._add(new, i, j, op, ob)
+        self.E = new
+        self.stats['split_at_points'] += n
+        return n
+
+    def collapse_short(self, min_len, r, plates, beam_lines):
+        """lines shorter than min_len become a point - only when the moved point stays (within r) in the plane of every
+        plate and on every beam line that uses it"""
+        total = 0
+        for _ in range(20):
+            ip, ib = self.incident()
+            short = sorted((float(np.linalg.norm(self.V[i] - self.V[j])), i, j) for i, j in self.E)
+            short = [s for s in short if s[0] < min_len]
+            if not short:
+                break
+            touched, mp = set(), {}
+
+            def ok(src, dst):
+                p = self.V[dst]
+                for k in ip.get(src, ()):
+                    if abs(plates[k].plane_dist(p)) > r:
+                        return False
+                for k in ib.get(src, ()):
+                    a, b = beam_lines[k]
+                    d = _unit(b - a)
+                    w = p - a
+                    if np.linalg.norm(w - (w @ d) * d) > r:
+                        return False
+                return True
+            for _, i, j in short:
+                if i in touched or j in touched:
+                    continue
+                order = sorted([(j, i), (i, j)], key=lambda sd: (len(ip.get(sd[0], ())), len(ib.get(sd[0], ()))))
+                for src, dst in order:
+                    if ok(src, dst):
+                        mp[src] = dst
+                        touched.update((src, dst))
+                        break
+            if not mp:
+                break
+            self._rekey(mp)
+            total += len(mp)
+        self.stats['collapsed_short'] += total
+        return total
+
+
 # ====================================================================== mesher
-def mesh_plates(plates_in, h, tol=None, close_gap=True, all_quad=True, smooth=3, beams=None):
+def _keep_regions(T, P2, cons, loops2):
+    """triangles inside the plate: regions bounded by joint / boundary lines are kept or dropped as a whole
+    (robust when a boundary was snapped a few mm); a region that leaks (open boundary) falls back to the centroid test"""
+    tris = [t for t in T.T if t is not None]
+    if not tris:
+        return []
+    C = np.array([P2[t].mean(0) for t in tris])
+    ins = _inside(C, loops2)
+    area = np.array([abs(_orient(*P2[t])) for t in tris]) + 1e-30
+    uf = _UF(len(tris))
+    idx = {id(t): k for k, t in enumerate(tris)}
+    tri_of = {}
+    for k, t in enumerate(tris):
+        for m in range(3):
+            tri_of.setdefault(tuple(sorted((t[m], t[(m + 1) % 3]))), []).append(k)
+    for e, ts in tri_of.items():
+        if len(ts) == 2 and e not in cons:
+            uf.union(ts[0], ts[1])
+    reg = {}
+    for k in range(len(tris)):
+        reg.setdefault(uf.find(k), []).append(k)
+    keep = []
+    for mem in reg.values():
+        mem = np.array(mem)
+        f = float(area[mem][ins[mem]].sum() / area[mem].sum())
+        if f >= 0.95:
+            keep += list(mem)
+        elif f > 0.05:
+            keep += list(mem[ins[mem]])
+    return [tris[k] for k in sorted(keep)]
+
+
+def mesh_plates(plates_in, h, tol=None, close_gap=True, all_quad=True, smooth=3, beams=None, snap_tol=None, min_seg=None,
+                bracket_ties=True, repair=True):
     """beams: 1D stiffeners [{"id", "a": [x,y,z], "b": [x,y,z], "profile": {...}, "normal": [0,0,-1]}] - their lines are
-    put into the plates' meshes so the CBARs share the plate nodes; offset = normal * (t_plate/2 + profile centroid)"""
+    put into the plates' meshes so the CBARs share the plate nodes; offset = normal * (t_plate/2 + profile centroid)
+    snap_tol   (default 5 % of h): joint / boundary line end points closer than this are one point; a point this close to
+               another line splits it (near-collinear, overlapping or slightly offset lines become one line)
+    min_seg    (default h / 10): shorter joint / boundary lines are collapsed to a point (when that keeps every plate flat)
+    bracket_ties: plates (brackets) lying in a 1D stiffener's web plane with an edge along the web toe are pulled onto the
+               beam line so they share nodes with beam and plate (see tie_brackets); report['bracket_ties'] lists them
+    repair:    after meshing, nodes closer than snap_tol / 2 are merged and elements with a corner < 5 deg or ~no area are
+               removed by collapsing their shortest side (globally, so nodes stay shared)"""
     h = float(h)
     beams = beams or []
     tol = tol or max(1e-3, h * 1e-3)
+    snap = max(tol, 0.05 * h if snap_tol is None else float(snap_tol))
+    min_len = h / 10 if min_seg is None else float(min_seg)
     plates, bad = [], []
     for d in plates_in:
         try:
@@ -417,14 +781,27 @@ def mesh_plates(plates_in, h, tol=None, close_gap=True, all_quad=True, smooth=3,
     ids = [p.id for p in plates]
     if len(set(ids)) != len(ids):
         raise ValueError('plate ids must be unique')
+    ties = tie_brackets(plates, beams, tol) if bracket_ties and beams else []
     moved = close_gaps(plates, tol) if close_gap else 0
     H = 2 * h if all_quad else h                                   # triangles at 2h -> split -> quads at h
     beam_lines = [(np.array(b['a'], float), np.array(b['b'], float)) for b in beams]
     segs = [e for P in plates for e in P.edges3()] + intersections(plates, tol) + beam_lines
     segs = split_segments(segs, tol)
+    own_p, own_b = _seg_owners(plates, segs, beam_lines, tol)
+    G = SegGraph(segs, own_p, own_b, tol)
+    if snap > tol:
+        for _ in range(4):
+            n = G.weld(snap) + G.split_near(snap)
+            if min_len > tol:
+                n += G.collapse_short(min_len, snap, plates, beam_lines)
+            if not n:
+                break
+    edges = list(G.E.items())
     reg = Registry(tol)
+    vid = {}
     seg_nodes = []
-    for a, b in segs:
+    for (i, j), _ in edges:
+        a, b = G.V[i], G.V[j]
         n = max(1, int(math.ceil(np.linalg.norm(b - a) / H - 1e-9)))
         seg_nodes.append([reg.get(a + (b - a) * k / n) for k in range(n + 1)])
     m = Mesh()
@@ -432,31 +809,33 @@ def mesh_plates(plates_in, h, tol=None, close_gap=True, all_quad=True, smooth=3,
     node_xyz = reg.xyz
     elems = []                                                     # (plate index, [global ids])
     on_seg = set(i for s in seg_nodes for i in s)
-    report = {'plates': len(plates), 'joint_segments': len(segs), 'gap_snaps': moved, 'skipped': list(bad)}
+    report = {'plates': len(plates), 'joint_segments': len(edges), 'gap_snaps': moved, 'skipped': list(bad),
+              'line_clean_up': dict(G.stats), 'bracket_ties': [list(t) for t in ties]}
+    mine_of = [[] for _ in plates]
+    for ((i, j), (op, ob)), ns in zip(edges, seg_nodes):
+        for pi in op:
+            mine_of[pi].append(ns)
     for pi, P in enumerate(plates):
-        mine = []
-        for (a, b), ns in zip(segs, seg_nodes):
-            if abs(P.plane_dist(a)) <= tol * 2 and abs(P.plane_dist(b)) <= tol * 2 and P.in_or_on(P.to2((a + b) / 2), tol * 2)[0]:
-                mine.append(ns)
+        mine = [ns for ns in mine_of[pi] if len(set(ns)) > 1]
         fixed_ids = sorted(set(i for ns in mine for i in ns))
         loc = {g: k for k, g in enumerate(fixed_ids)}
         pts = [P.to2(node_xyz[g]) for g in fixed_ids]
-        cons = set(tuple(sorted((loc[ns[k]], loc[ns[k + 1]]))) for ns in mine for k in range(len(ns) - 1))
+        cons = set(tuple(sorted((loc[ns[k]], loc[ns[k + 1]]))) for ns in mine for k in range(len(ns) - 1) if ns[k] != ns[k + 1])
         # interior points on a hex grid, kept away from constraints
         allp = np.vstack(P.loops2)
         lo, hi = allp.min(0), allp.max(0)
         dy = H * math.sqrt(3) / 2
         ys = np.arange(lo[1] + dy / 2, hi[1], dy)
         grid = [(x + (H / 2 if r % 2 else 0), y) for r, y in enumerate(ys) for x in np.arange(lo[0] + H / 2, hi[0], H)]
-        G = np.array(grid) if grid else np.zeros((0, 2))
-        if len(G):
-            G = G[_inside(G, P.loops2)]
+        Gp = np.array(grid) if grid else np.zeros((0, 2))
+        if len(Gp) and pts:
+            Gp = Gp[_inside(Gp, P.loops2)]
             F = np.array(pts)
-            dmin = np.full(len(G), np.inf)
+            dmin = np.full(len(Gp), np.inf)
             for (i, j) in cons:
-                dmin = np.minimum(dmin, _seg_dist2d(G, F[i], F[j]))
-            G = G[dmin > 0.6 * H]
-        P2 = np.vstack([np.array(pts), G]) if len(G) else np.array(pts)
+                dmin = np.minimum(dmin, _seg_dist2d(Gp, F[i], F[j]))
+            Gp = Gp[dmin > 0.6 * H]
+        P2 = np.vstack([np.array(pts).reshape(-1, 2), Gp]) if len(Gp) else np.array(pts).reshape(-1, 2)
         if len(P2) < 3:
             report['skipped'].append(P.id)
             continue
@@ -470,12 +849,7 @@ def mesh_plates(plates_in, h, tol=None, close_gap=True, all_quad=True, smooth=3,
             report['skipped'].append(f'{P.id}: {len(lost)} joint/boundary edges could not be kept - try a smaller element size')
             continue
         T.incircle_flips(cons)
-        # keep triangles inside the plate (outside outline / inside holes removed)
-        keep = []
-        for t in T.T:
-            c = P2[t].mean(0)
-            if _inside(c[None], P.loops2)[0]:
-                keep.append(t)
+        keep = _keep_regions(T, P2, cons, P.loops2)
         # Laplacian smoothing of interior points (never inverts a triangle)
         nfix = len(pts)
         if smooth and len(P2) > nfix:
@@ -533,26 +907,24 @@ def mesh_plates(plates_in, h, tol=None, close_gap=True, all_quad=True, smooth=3,
                     on_seg.add(mids[k])
             for k in range(len(X)):
                 elems.append((pi, [G_[k], mids[k], c, mids[k - 1]]))
-    # 1D beams along their (split, discretised) segments, through the same mid-nodes as the shells
+    # 1D beams along their (split, cleaned, discretised) lines, through the same mid-nodes as the shells
     from .mesh import profile_props
     bar_elems = []
-    for bi, bm in enumerate(beams):
-        a, b = beam_lines[bi]
-        d = b - a
-        L2 = d @ d
-        pts = []
-        for (p, q), ns in zip(segs, seg_nodes):
-            # sub-segment lies on this beam line?
-            if all(np.linalg.norm(np.cross(x - a, d)) / math.sqrt(L2) <= tol and -tol <= (x - a) @ d / math.sqrt(L2) <= math.sqrt(L2) + tol for x in (p, q)):
-                chain = ns
-                if all_quad:
-                    chain = []
-                    for k in range(len(ns) - 1):
-                        chain += [ns[k], reg.get((node_xyz[ns[k]] + node_xyz[ns[k + 1]]) / 2)]
-                    chain.append(ns[-1])
-                for k in range(len(chain) - 1):
+    for ((i, j), (op, ob)), ns in zip(edges, seg_nodes):
+        for bi in ob:
+            chain = ns
+            if all_quad:
+                chain = []
+                for k in range(len(ns) - 1):
+                    chain += [ns[k], reg.get((node_xyz[ns[k]] + node_xyz[ns[k + 1]]) / 2)]
+                chain.append(ns[-1])
+            for k in range(len(chain) - 1):
+                if chain[k] != chain[k + 1]:
                     bar_elems.append((bi, chain[k], chain[k + 1]))
                     on_seg.update((chain[k], chain[k + 1]))
+    if repair:
+        elems, bar_elems, rep = _repair(node_xyz, elems, bar_elems, plates, on_seg, max(tol, snap / 2))
+        report['repair'] = rep
     # renumber only used nodes (no free nodes by construction)
     used_nodes = sorted(set(g for _, e in elems for g in e) | set(g for _, a_, b_ in bar_elems for g in (a_, b_)))
     new = {g: k + 1 for k, g in enumerate(used_nodes)}
@@ -567,24 +939,145 @@ def mesh_plates(plates_in, h, tol=None, close_gap=True, all_quad=True, smooth=3,
     for pi, e in elems:
         P = plates[pi]
         m.add('quad' if len(e) == 4 else 'tri', [new[g] for g in e], pid_of[(P.group, P.t)], P.id)
+    by_beam = {}
+    for b_i, n1, n2 in bar_elems:
+        by_beam.setdefault(b_i, []).append((n1, n2))
     for bi, bm in enumerate(beams):
         sp = profile_props(bm['profile'])
         nrm = _unit(np.array(bm.get('normal', [0, 0, -1]), float))
         mid_pt = (beam_lines[bi][0] + beam_lines[bi][1]) / 2
-        host = [P for P in plates if abs(P.plane_dist(mid_pt)) <= 2 * tol and P.in_or_on(P.to2(mid_pt), 2 * tol)[0]]
+        host = [P for P in plates if abs(P.plane_dist(mid_pt)) <= 2 * snap and P.in_or_on(P.to2(mid_pt), 2 * tol)[0]]
         tp = max((P.t for P in host), default=0.0)
         off = nrm * (tp / 2 + sp['zc'])
         pid = 1000 + bi
         m.props[pid] = {'kind': 'bar', 'A': sp['A'], 'I1': sp['I_vert'], 'I2': sp['I_lat'], 'J': sp['J'], 'offset': float(-(tp / 2 + sp['zc'])),
                         'name': str(bm.get('id', f'BEAM{bi + 1}'))}
-        for b_i, n1, n2 in bar_elems:
-            if b_i == bi:
-                m.add('bar', [new[n1], new[n2]], pid, str(bm.get('id', f'BEAM{bi + 1}')), orient=tuple(-nrm), offset=tuple(off))
+        for n1, n2 in by_beam.get(bi, ()):
+            m.add('bar', [new[n1], new[n2]], pid, str(bm.get('id', f'BEAM{bi + 1}')), orient=tuple(-nrm), offset=tuple(off))
     if all_quad and smooth:
         _smooth3d(m, plates, set(new[g] for g in on_seg if g in new))
     m.plates = plates
     m.report = report
     return m
+
+
+def _elem_quality(X, e, plate):
+    """(min corner angle deg, area, inverted?) of a shell element in its plate's plane"""
+    Q = np.array([plate.to2(X[g]) for g in e])
+    n = len(Q)
+    area = _area2(Q)
+    amin, inv = 180.0, False
+    for k in range(n):
+        a, b, c = Q[k - 1], Q[k], Q[(k + 1) % n]
+        if _orient(a, b, c) <= 0:
+            inv = True
+        u, v = a - b, c - b
+        nu, nv = np.linalg.norm(u), np.linalg.norm(v)
+        if nu == 0 or nv == 0:
+            return 0.0, 0.0, True
+        amin = min(amin, math.degrees(math.acos(max(-1, min(1, (u @ v) / (nu * nv))))))
+    return amin, area, inv
+
+
+def _repair(X, elems, bars, plates, fixed, weld_tol, min_angle=5.0, rounds=6):
+    """global clean-up of the finished mesh: merge nodes closer than weld_tol, then remove elements with a corner below
+    min_angle / no area by collapsing their shortest side. Every merge renames a node in ALL elements (and beams), so
+    plates stay joined; a merge is undone if it would turn a neighbouring element inside out."""
+    rep = {'merged_close_nodes': 0, 'collapsed_bad_elements': 0, 'removed_elements': 0}
+    alias = {}
+
+    def root(g):
+        while g in alias:
+            g = alias[g]
+        return g
+
+    def clean(e):
+        out = []
+        for g in e:
+            g = root(g)
+            if not out or out[-1] != g:
+                out.append(g)
+        while len(out) > 1 and out[0] == out[-1]:
+            out.pop()
+        return out
+    used = sorted(set(g for _, e in elems for g in e) | set(g for _, a, b in bars for g in (a, b)))
+    pairs = _close_pairs([X[g] for g in used], weld_tol)
+    uf = _UF(len(used))
+    for a, b in pairs:
+        uf.union(a, b)
+    cl = {}
+    for k, g in enumerate(used):
+        cl.setdefault(uf.find(k), []).append(g)
+    for mem in cl.values():
+        if len(mem) > 1:
+            keep = min(mem, key=lambda g: (g not in fixed, g))
+            for g in mem:
+                if g != keep:
+                    alias[g] = keep
+                    rep['merged_close_nodes'] += 1
+    for _ in range(rounds):
+        cur = []
+        for pi, e in elems:
+            e2 = clean(e)
+            if len(e2) >= 3:
+                cur.append((pi, e2))
+            else:
+                rep['removed_elements'] += 1
+        elems = cur
+        of_node = {}
+        for k, (pi, e) in enumerate(elems):
+            for g in e:
+                of_node.setdefault(g, []).append(k)
+        n_fix = 0
+        dead = set()
+        for k, (pi, e) in enumerate(elems):
+            if k in dead or any(g in alias for g in e):
+                continue
+            amin, area, inv = _elem_quality(X, e, plates[pi])
+            L = [np.linalg.norm(X[e[(m + 1) % len(e)]] - X[e[m]]) for m in range(len(e))]
+            if amin >= min_angle and not inv and abs(area) > 1e-6 * max(L) ** 2:
+                continue
+            for m in np.argsort(L):
+                a, b = e[m], e[(m + 1) % len(e)]
+                for src, dst in ((b, a), (a, b)) if (a in fixed) >= (b in fixed) else ((a, b), (b, a)):
+                    if src in fixed and dst not in fixed:
+                        continue
+                    ok = True
+                    for kk in of_node.get(src, ()):
+                        if kk == k or kk in dead:
+                            continue
+                        pj, ej = elems[kk]
+                        if dst in ej:
+                            continue                         # becomes a triangle / vanishes - checked when cleaned
+                        ej2 = [dst if g == src else g for g in ej]
+                        a2, ar2, inv2 = _elem_quality(X, ej2, plates[pj])
+                        if inv2:
+                            ok = False
+                            break
+                    if ok:
+                        alias[src] = dst
+                        dead.update(of_node.get(src, ()))
+                        n_fix += 1
+                        break
+                else:
+                    continue
+                break
+        rep['collapsed_bad_elements'] += n_fix
+        if not n_fix:
+            break
+    cur = []
+    for pi, e in elems:
+        e2 = clean(e)
+        if len(e2) >= 3:
+            cur.append((pi, e2))
+        else:
+            rep['removed_elements'] += 1
+    nb = []
+    for bi, a, b in bars:
+        a, b = root(a), root(b)
+        if a != b:
+            nb.append((bi, a, b))
+    return cur, nb, rep
 
 
 def _smooth3d(m, plates, fixed, iters=3):

@@ -1,0 +1,2 @@
+# packs built with --private-only (refused licences): never commit or share them
+*.private.sbpack
