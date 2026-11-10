@@ -989,3 +989,41 @@ def test_cad_eval_end_to_end(tmp_path):
     assert bad['built'] and not bad['pass'] and bad['turns'] == 2 and any(c.startswith('FAIL volume') for c in bad['builds'][0]['checks'])
     assert summ['n'] == 2 and summ['built_pct'] == 100.0 and summ['pass_first_pct'] == 50.0 and summ['pass_within_3_pct'] == 50.0
     assert d['summary'] == summ and summ['avg_code_chars'] > 0
+
+
+# ------------------------------------------------------------------ engine router + more CalculiX analyses
+def test_engine_router_choices():
+    from shipbrain import engines
+    assert engines.classify('What is the natural frequency of this deck?') == ['modal']
+    assert engines.classify('Ship collision with a quay, how much deformation?') == ['impact']
+    c = engines.choose('Contact between bolted flange faces')
+    assert c['plan'][0]['engines'][0]['engine'] == 'MoFEM' and 'mofem' in c['plan'][0]['engines'][0]['use']
+    c = engines.choose('Make a 3D model of a lifting lug')
+    assert c['analyses'] == ['cad'] and c['plan'][0]['engines'][0]['support'] == 'runs'
+
+
+@pytest.mark.skipif(not solver.ccx_path(), reason='CalculiX not installed')
+def test_modal_and_buckling_match_handbook(tmp_path):
+    import math
+    E, nu, rho = 206000.0, 0.3, 7.85e-9
+    a, b, t = 1000.0, 800.0, 10.0
+    fx = [{'x': 0, 'dof': '3'}, {'x': a, 'dof': '3'}, {'y': 0, 'dof': '3'}, {'y': b, 'dof': '3'}, {'x': 0, 'y': 0, 'dof': '12'}, {'x': a, 'y': 0, 'dof': '2'}]
+    platemesh.build_plates({'name': 'm', 'element_size': 25, 'fix': fx,   # 25 mm: converged (50 mm is ~3 % stiff)
+                            'plates': [{'id': 'P', 't': t, 'outline': [[0, 0, 0], [a, 0, 0], [a, b, 0], [0, b, 0]]}]}, str(tmp_path), formats=('inp',))
+    f11 = math.pi / 2 * (1 / a ** 2 + 1 / b ** 2) * math.sqrt(E * t ** 3 / (12 * (1 - nu ** 2)) / (rho * t))
+    r = agent.Tools(tmp_path).call('analysis_run', {'file': 'm.inp', 'analysis': 'modal', 'n_modes': 3})
+    assert abs(r['frequencies_hz'][0] / f11 - 1) < 0.03
+    a, b = 2000.0, 1000.0
+    fx = [{'x': 0, 'dof': '3'}, {'x': a, 'dof': '3'}, {'y': 0, 'dof': '3'}, {'y': b, 'dof': '3'}, {'x': 0, 'dof': '1'}, {'x': 0, 'y': 0, 'dof': '2'}]
+    m, _ = platemesh.build_plates({'name': 'k', 'element_size': 25, 'fix': fx,
+                                   'plates': [{'id': 'P', 't': t, 'outline': [[0, 0, 0], [a, 0, 0], [a, b, 0], [0, b, 0]]}]}, str(tmp_path), formats=())
+    f = FEModel.from_mesh(m)
+    edge = sorted([n for n, x in f.nodes.items() if abs(x[0] - a) < 1e-6], key=lambda n: f.nodes[n][1])
+    ys = [f.nodes[n][1] for n in edge]
+    for i, n in enumerate(edge):
+        trib = ((ys[i + 1] - ys[i]) if i < len(ys) - 1 else 0) / 2 + ((ys[i] - ys[i - 1]) if i > 0 else 0) / 2
+        f.loads.append({'type': 'force', 'node': n, 'dir': [-1, 0, 0], 'value': 10.0 * t * trib})
+    f.write(str(tmp_path / 'k.inp'))
+    r = agent.Tools(tmp_path).call('analysis_run', {'file': 'k.inp', 'analysis': 'buckling', 'n_modes': 2})
+    scr = 4 * math.pi ** 2 * E / (12 * (1 - nu ** 2)) * (t / b) ** 2
+    assert abs(r['load_factors'][0] * 10.0 / scr - 1) < 0.03

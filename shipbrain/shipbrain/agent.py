@@ -183,6 +183,16 @@ class Tools:
                       '(and STEP with step=true).',
                       {'type': 'object', 'properties': {'program': {'type': 'string'}, 'name': {'type': 'string'}, 'element_size': {'type': 'number'},
                                                          'step': {'type': 'boolean'}}, 'required': ['program']})
+        self.register('choose_engine', self.choose_engine, 'FIRST step for any analysis question: classifies it (static, natural '
+                      'frequencies, buckling, ultimate/plastic, contact, impact/collision, fatigue, fracture, CFD, heat, CAD, mesh) and '
+                      'names the best engine installed on this PC (CalculiX, Nastran/ANSYS/Abaqus decks, MoFEM, OpenCourant, OpenFOAM, '
+                      'Code_Aster, Elmer, CadQuery ...) and the ShipBrain tool to call next.',
+                      {'type': 'object', 'properties': {'question': {'type': 'string'}}, 'required': ['question']})
+        self.register('analysis_run', self.analysis_run, 'Run an analysis of a mesh file in the workspace (.inp written by ShipBrain) '
+                      'with CalculiX: "static" (displacement, von Mises), "modal" (natural frequencies in Hz), "buckling" (load '
+                      'factors for the loads in the model).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'analysis': {'type': 'string', 'enum': ['static', 'modal', 'buckling']},
+                                                         'n_modes': {'type': 'integer'}}, 'required': ['file', 'analysis']})
         self.register('drawing_to_model', self.drawing_to_model, 'Read a SHIP structural drawing (PDF deck plans / elevations / sections) '
                       'into a member model XML with the ship drawing reader (frame / OFF C.L / deck-height calibration, line-style and '
                       'label rules); optional coverage score against a reference XML. Takes minutes.',
@@ -406,6 +416,16 @@ class Tools:
                                 f"({out.get('quads')} shells, {out.get('bars')} beams), {c.get('parts')} connected piece(s); "
                                 f"check: {c.get('verdict')}.")
         return out
+
+    def choose_engine(self, question):
+        from . import engines
+        return engines.choose(question)
+
+    def analysis_run(self, file, analysis='static', n_modes=10):
+        r = _solver.run_analysis(self._path(file), analysis, int(n_modes))
+        if 'frd' in r:
+            r['frd'] = os.path.basename(r['frd'])
+        return r
 
     def drawing_to_model(self, file, settings=None, reference=None, pages=None, raster=False):
         """ship drawing (PDF) -> member model XML with the ship drawing reader (its rules + calibration); optional coverage
