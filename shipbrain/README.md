@@ -78,6 +78,17 @@ PyMAPDL and Abaqus need their own licensed software on your PC. ShipBrain writes
 | 👍 / 👎 on answers | a 👎 with your correction is remembered at once. All rated chats go to `feedback.jsonl`, and `make_dataset.py --feedback` turns the liked ones into training data for the next fine-tune |
 | MCP server | `claude mcp add shipbrain -- python -m shipbrain.mcp_server --knowledge D:\ship_src`: Claude Code or other agents use the same tools |
 
+**Engines and solvers (small brain, real solvers)**
+
+ShipBrain builds the CAD and the mesh itself. The analysis runs in a solver that is already on the workstation:
+
+| Tool | What it does |
+|---|---|
+| `choose_engine` | question -> analysis type (static, natural frequencies, buckling, ultimate, contact, impact, fatigue, fracture, CFD, heat, CAD, mesh) -> the best engine and the next tool; guide-only answers use the engine's knowledge pack (e.g. MoFEM tutorials) |
+| `find_solvers` / `remember_solver` | finds CalculiX, MSC / NX Nastran, MYSTRAN, ANSYS, Abaqus, OpenFOAM, Code_Aster on the PATH and in their usual install folders, plus a user list |
+| `solve` | the chosen solver runs the ShipBrain model in batch (static / modal / buckling): input written, solver run, results read back in plain English. CalculiX is tested here (static, natural frequencies 0.3 %, buckling 0.6 % vs handbook); the Nastran (.f06), ANSYS (APDL result export) and Abaqus (odb extract script) adapters follow their documented batch interfaces and must be checked once on the workstation (`python -m shipbrain.solvers --check`) |
+| `analysis_run` | static / modal / buckling directly with CalculiX |
+
 **Other tools:** `cadquery_build` (checked CAD), `solve_calculix`, `plate_check`, `stiffener_check`, `plate_buckling`, `section_props`,
 `calc`, `knowledge_search` with automatic RAG, and your plugins (e.g. your private `ship_mcp.py`).
 

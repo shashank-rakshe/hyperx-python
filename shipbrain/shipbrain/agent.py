@@ -188,6 +188,18 @@ class Tools:
                       'names the best engine installed on this PC (CalculiX, Nastran/ANSYS/Abaqus decks, MoFEM, OpenCourant, OpenFOAM, '
                       'Code_Aster, Elmer, CadQuery ...) and the ShipBrain tool to call next.',
                       {'type': 'object', 'properties': {'question': {'type': 'string'}}, 'required': ['question']})
+        self.register('find_solvers', self.find_solvers, 'List the FE / CFD solvers installed on THIS workstation (CalculiX, MSC / NX '
+                      'Nastran, MYSTRAN, ANSYS, Abaqus, OpenFOAM, Code_Aster) with their paths, so the user can choose one.',
+                      {'type': 'object', 'properties': {}})
+        self.register('remember_solver', self.remember_solver, 'Add a solver installed in an unusual folder: name (calculix | nastran | '
+                      'mystran | ansys | abaqus | openfoam) and the full path of its executable.',
+                      {'type': 'object', 'properties': {'name': {'type': 'string'}, 'path': {'type': 'string'}}, 'required': ['name', 'path']})
+        self.register('solve', self.solve, 'Run an analysis of a ShipBrain model (.inp / .bdf in the workspace) with the solver the user '
+                      'chose (found on this PC): writes that solver\'s input, runs it in batch, reads the results back. '
+                      'analysis: static | modal | buckling.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'solver': {'type': 'string'},
+                                                         'analysis': {'type': 'string', 'enum': ['static', 'modal', 'buckling']},
+                                                         'n_modes': {'type': 'integer'}}, 'required': ['file', 'solver']})
         self.register('analysis_run', self.analysis_run, 'Run an analysis of a mesh file in the workspace (.inp written by ShipBrain) '
                       'with CalculiX: "static" (displacement, von Mises), "modal" (natural frequencies in Hz), "buckling" (load '
                       'factors for the loads in the model).',
@@ -420,6 +432,25 @@ class Tools:
     def choose_engine(self, question):
         from . import engines
         return engines.choose(question)
+
+    def find_solvers(self):
+        from . import solvers
+        f = solvers.find()
+        txt = ('Solvers on this PC: ' + '; '.join(f"{x['solver']} ({x['path']})" for x in f) + '.') if f else \
+              'No solver was found on this PC. Tell me where one is installed (remember_solver), or install CalculiX (free).'
+        return {'solvers': f, 'plain_english': txt}
+
+    def remember_solver(self, name, path):
+        from . import solvers
+        return solvers.remember(name, path)
+
+    def solve(self, file, solver, analysis='static', n_modes=10):
+        from . import solvers
+        r = solvers.run(self._path(file), solver.lower(), analysis, int(n_modes))
+        for k in ('frd', 'f06'):
+            if k in r:
+                r[k] = os.path.basename(r[k])
+        return r
 
     def analysis_run(self, file, analysis='static', n_modes=10):
         r = _solver.run_analysis(self._path(file), analysis, int(n_modes))

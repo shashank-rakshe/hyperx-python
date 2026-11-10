@@ -1027,3 +1027,31 @@ def test_modal_and_buckling_match_handbook(tmp_path):
     r = agent.Tools(tmp_path).call('analysis_run', {'file': 'k.inp', 'analysis': 'buckling', 'n_modes': 2})
     scr = 4 * math.pi ** 2 * E / (12 * (1 - nu ** 2)) * (t / b) ** 2
     assert abs(r['load_factors'][0] * 10.0 / scr - 1) < 0.03
+
+
+# ------------------------------------------------------------------ solvers on the workstation
+def test_solver_discovery_and_run(tmp_path, monkeypatch):
+    from shipbrain import solvers
+    fake = tmp_path / 'ANSYS241.exe'
+    fake.write_text('')
+    monkeypatch.setattr(solvers, 'USER_LIST', str(tmp_path / 'solvers.json'))
+    solvers.remember('ansys', str(fake))
+    assert any(s['solver'] == 'ansys' and s['found_by'] == 'your solvers.json' for s in solvers.find())
+    f06 = tmp_path / 'x.f06'
+    f06.write_text('\n'.join([
+        '                                             D I S P L A C E M E N T   V E C T O R', ' ',
+        '      POINT ID.   TYPE          T1             T2             T3             R1             R2             R3',
+        '             1      G      0.0            0.0            1.000000E-01   0.0            0.0            0.0',
+        '             2      G      3.000000E-02   0.0           -4.000000E-01   0.0            0.0            0.0', '1',
+        '                                              R E A L   E I G E N V A L U E S',
+        '   MODE    EXTRACTION      EIGENVALUE            RADIANS             CYCLES            GENERALIZED         GENERALIZED',
+        '        1         1        1.546576E+05        3.932653E+02        6.259110E+01        1.000000E+00        1.546576E+05', '1']))
+    r = solvers.read_f06(str(f06))
+    assert abs(r['max_displacement'] - 0.401123) < 1e-5 and r['eigen_column_cycles'] == [62.5911]
+    if solver.ccx_path():
+        a, b = 1000.0, 800.0
+        fx = [{'x': 0, 'dof': '3'}, {'x': a, 'dof': '3'}, {'y': 0, 'dof': '3'}, {'y': b, 'dof': '3'}, {'x': 0, 'y': 0, 'dof': '12'}, {'x': a, 'y': 0, 'dof': '2'}]
+        platemesh.build_plates({'name': 'p', 'element_size': 50, 'fix': fx, 'loads': [{'plates': ['P'], 'pressure': 0.02}],
+                                'plates': [{'id': 'P', 't': 10, 'outline': [[0, 0, 0], [a, 0, 0], [a, b, 0], [0, b, 0]]}]}, str(tmp_path))
+        r = agent.Tools(tmp_path).call('solve', {'file': 'p.bdf', 'solver': 'calculix', 'analysis': 'static'})
+        assert r['max_displacement_mm'] > 0 and 'max displacement' in r['plain_english']
