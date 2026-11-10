@@ -748,15 +748,17 @@ def build_pack(src, out_dir, cache_dir=None, private_only=False, max_kb=DEFAULT_
     allowed = bool(lic['allowed'])
     usage = ('ok: permissive licence, keep the attribution' if allowed else
              'PRIVATE ONLY: do not use for training, do not redistribute')
-    if own:                    # your own code: train your PRIVATE model on it, never publish the pack or that model
+    if own == 'public':        # your own code, cleaned of names, shared by its author: knowledge + training, public
+        allowed, usage = True, "author's own code, shared for training (names removed)"
+    elif own:                  # your own code: train your PRIVATE model on it, never publish the pack or that model
         allowed, usage = True, 'OWN PRIVATE CODE: train only a private model on it, never publish'
     pack = {'format': FORMAT, 'name': name, 'repo': url, 'commit': commit, 'license': lic['license'],
-            'license_reason': lic['reason'], 'allowed_for_training': allowed, 'private_only': own or not allowed, 'own': bool(own),
+            'license_reason': lic['reason'], 'allowed_for_training': allowed, 'private_only': (own is True) or (not allowed and own != 'public'), 'own': bool(own),
             'usage': usage,
             'attribution': lic['attribution'], 'built': time.strftime('%Y-%m-%d'), 'stats': stats, 'chunks': chunks}
     raw = json.dumps(pack, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
     os.makedirs(out_dir, exist_ok=True)
-    fn = os.path.join(out_dir, name + ('.sbpack' if allowed and not own else '.private.sbpack'))
+    fn = os.path.join(out_dir, name + ('.sbpack' if allowed and own in (False, None, 'public') else '.private.sbpack'))
     buf = io.BytesIO()
     with gzip.GzipFile(fileobj=buf, mode='wb', compresslevel=9, mtime=0) as g:
         g.write(raw)
@@ -784,8 +786,8 @@ def write_notice(out_dir):
                 p = read_pack(os.path.join(out_dir, fn))
             except Exception:
                 continue
-            if fn.endswith('.private.sbpack') and not str(p.get('repo', '')).startswith(('http://', 'https://', 'git@')):
-                continue                                   # your own private code from a local folder: name and path stay out
+            if p.get('own') and p.get('private_only'):
+                continue                                   # your own private code: name and path stay out
             src = p['repo'] if str(p['repo']).startswith(('http', 'git@')) else f"local copy of {p['name']} (upstream release)"
             rows.append(f"## {p['name']}\n\n- Source: {src} (commit {p['commit'][:12]})\n- Licence: {p['license']}\n"
                         f"- Use: {p.get('usage', '')}\n" + ''.join(f'- {a}\n' for a in p['attribution'] if '/' not in a or 'http' in a))
@@ -839,6 +841,8 @@ def main(argv=None):
         s.add_argument('--max-kb', type=int, default=DEFAULT_BUDGET_KB, help='text kept per repo, KB (docs first)')
         s.add_argument('--private-only', action='store_true',
                        help='build refused repos anyway, marked "do not use for training / do not redistribute"')
+        s.add_argument('--own-public', action='store_true',
+                       help='YOUR OWN code with names already removed (training/scrub.py): a normal pack, shared and trained on')
         s.add_argument('--own', action='store_true',
                        help='YOUR OWN code (company tools): saved as .private.sbpack (git ignores it), allowed to train a '
                             'PRIVATE model; the training kernel then keeps that model off GitHub')
@@ -862,7 +866,8 @@ def main(argv=None):
     results, rc = [], 0
     for r in repos:
         try:
-            results.append(build_pack(r, a.out, a.cache, a.private_only or a.own, a.max_kb, own=a.own))
+            results.append(build_pack(r, a.out, a.cache, a.private_only or a.own or a.own_public, a.max_kb,
+                                          own='public' if a.own_public else a.own))
         except Exception as e:
             print(f'FAILED {r}: {type(e).__name__}: {e}')
             rc = 1

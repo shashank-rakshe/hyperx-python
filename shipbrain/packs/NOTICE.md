@@ -9,6 +9,12 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - https://github.com/manycore-research/CAD2Program contributors
 
+## LibreCAD
+
+- Source: local copy of LibreCAD (upstream release) (commit working-tree)
+- Licence: GPL
+- Use: PRIVATE ONLY: do not use for training, do not redistribute
+
 ## M3D
 
 - Source: local copy of M3D (upstream release) (commit working-tree)
@@ -37,6 +43,12 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2026 k-tanaka
 
+## cad-automation-tools
+
+- Source: local copy of cad-automation-tools (upstream release) (commit working-tree)
+- Licence: none
+- Use: author's own code, shared for training (names removed)
+
 ## cadcore
 
 - Source: local copy of cadcore (upstream release) (commit working-tree)
@@ -58,6 +70,12 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2024 Bruce D. Lucas
+
+## inkscape
+
+- Source: local copy of inkscape (upstream release) (commit working-tree)
+- Licence: LGPL + MPL-2.0
+- Use: PRIVATE ONLY: do not use for training, do not redistribute
 
 ## lapin
 
@@ -86,6 +104,12 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: BSD
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2011-2024 Steven Doyle
+
+## qcad
+
+- Source: local copy of qcad (upstream release) (commit working-tree)
+- Licence: unknown
+- Use: PRIVATE ONLY: do not use for training, do not redistribute
 
 ## solidcraft
 

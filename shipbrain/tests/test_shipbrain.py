@@ -283,7 +283,8 @@ def test_dataset_generation(tmp_path):
     import make_dataset
     make_dataset.main(['--n', '40', '--eval-n', '5', '--no-cad', '--out', str(tmp_path / 't.jsonl'), '--eval-out', str(tmp_path / 'e.jsonl')])
     rows = [json.loads(l) for l in open(tmp_path / 't.jsonl')]
-    assert len(rows) == 40
+    real = [r for r in rows if r["task"].startswith("private_") or r["task"] == "real_model"]
+    assert len(rows) - len(real) == 40 and len(real) in (0, 48)        # + the cleaned real-model samples
     for r in rows:
         roles = [m['role'] for m in r['messages']]
         rest = [x for x in roles if x != 'system']

@@ -879,6 +879,17 @@ def main(argv=None):
                     tools.profile.update()
                 counts[name] = counts.get(name, 0) + 1
         print(path, sum(counts.values()), 'samples', counts)
+    real = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'real_models_train.jsonl.gz')
+    if os.path.exists(real):                            # tool runs on real (cleaned) models: real sizes, real results
+        import gzip
+        n_real = 0
+        with open(a.out, 'a', encoding='utf-8') as f, gzip.open(real, 'rt', encoding='utf-8') as g:
+            for line in g:
+                r = json.loads(line)
+                msgs = [m for m in r['messages'] if m['role'] != 'system']
+                f.write(json.dumps({'task': r.get('task', 'real_model'), 'messages': [sysmsg] + msgs}) + '\n')
+                n_real += 1
+        print(f'added {n_real} samples from real models ({os.path.basename(real)})')
     fb = 0
     with open(a.out, 'a', encoding='utf-8') as f:
         for path in a.feedback:
