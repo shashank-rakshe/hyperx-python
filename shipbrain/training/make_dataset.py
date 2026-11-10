@@ -593,6 +593,89 @@ def t_pipes(r, tools):
             result_msg('pipe_extract', out), {'role': 'assistant', 'content': ans}]
 
 
+_UNIT_SETS = {
+    'in-lbf-psi': {'len': 'in', 'p': 'psi', 'stress': 'psi', 'defl': 'in', 'L': (60, 120), 'B': (20, 36), 't': (0.25, 0.75), 'q': (5, 25)},
+    'm-kN-kPa': {'len': 'm', 'p': 'kPa', 'stress': 'MPa', 'defl': 'mm', 'L': (1.6, 3.2), 'B': (0.5, 0.9), 't': (0.008, 0.016), 'q': (20, 120)},
+    'ft-kip-ksi': {'len': 'ft', 'p': 'psi', 'stress': 'ksi', 'defl': 'in', 'L': (5, 10), 'B': (2, 3), 't': (0.03, 0.06), 'q': (5, 20)},
+}
+
+
+def t_units(r, tools):
+    """a user working in other units: convert in -> plate_check in mm/MPa -> convert out -> answer in the user's units"""
+    system = r.choice(list(_UNIT_SETS))
+    U = _UNIT_SETS[system]
+    L, B = round(r.uniform(*U['L']), 2), round(r.uniform(*U['B']), 2)
+    t, q = round(r.uniform(*U['t']), 3), round(r.uniform(*U['q']), 1)
+    bc = r.choice(['simply', 'clamped'])
+    with_profile = r.random() < 0.5
+    if with_profile:                                         # the profile says the units: the question may omit them
+        tools.profile.update(units=system)
+        user = r.choice([f'Check a plate {L:g} x {B:g}, {t:g} thick, pressure {q:g}, {bc} edges',
+                         f'Stress and deflection of a {bc} plate {L:g} by {B:g}, t = {t:g}, q = {q:g}?'])
+    else:
+        lu, pu = U['len'], U['p']
+        user = r.choice([f'Check a plate {L:g} {lu} x {B:g} {lu}, {t:g} {lu} thick, under {q:g} {pu}, {bc} edges',
+                         f'My plate is {L:g}x{B:g} {lu}, thickness {t:g} {lu}, pressure {q:g} {pu} ({bc}). Max stress and deflection?'])
+    cin = {'values': [{'value': L, 'from': U['len'], 'to': 'mm'}, {'value': B, 'from': U['len'], 'to': 'mm'},
+                      {'value': t, 'from': U['len'], 'to': 'mm'}, {'value': q, 'from': U['p'], 'to': 'MPa'}]}
+    r1 = tools.call('convert_units', cin)
+    a_, b_, t_, q_ = (c['result'] for c in r1['converted'])
+    if b_ > a_:
+        a_, b_ = b_, a_
+    args = {'a': a_, 'b': b_, 't': t_, 'q': q_, 'boundary': bc}
+    r2 = tools.call('plate_check', args)
+    outs = [(r2['sigma_max_MPa'], 'MPa', U['stress']), (r2['w_max_mm'], 'mm', U['defl'])]
+    need = [{'value': v, 'from': f, 'to': t_} for v, f, t_ in outs if f != t_]
+    conv = {}
+    tail = []
+    if need:
+        cout = {'values': need}
+        r3 = tools.call('convert_units', cout)
+        conv = {c['from']: c['result'] for c in r3['converted']}
+        tail = [{'role': 'assistant', 'content': tool_block('convert_units', cout)}, result_msg('convert_units', r3)]
+    s_u = _q(conv.get('MPa', r2['sigma_max_MPa']))
+    w_u = _q(conv.get('mm', r2['w_max_mm']))
+    extra_s = f" ({_q(r2['sigma_max_MPa'])} MPa)" if U['stress'] != 'MPa' else ''
+    extra_w = f" ({_q(r2['w_max_mm'])} mm)" if U['defl'] != 'mm' else ''
+    ans = (f"Max bending stress **{s_u} {U['stress']}**{extra_s}, max deflection **{w_u} {U['defl']}**{extra_w}, Roark, {bc} edges. "
+           f"Utilisation vs 235 MPa: {r2['utilisation']:g}.")
+    return [{'role': 'user', 'content': user}, {'role': 'assistant', 'content': tool_block('convert_units', cin)},
+            result_msg('convert_units', r1), {'role': 'assistant', 'content': tool_block('plate_check', args)},
+            result_msg('plate_check', r2)] + tail + [{'role': 'assistant', 'content': ans}]
+
+
+def t_profile(r, tools):
+    """the user tells how they work -> set_profile"""
+    units = r.choice(list(_UNIT_SETS) + ['mm-N-MPa'])
+    mat = r.choice([('ASTM A36', 250), ('S355', 355), ('AH36', 355), ('S235', 235), ('6061-T6 aluminium', 240), ('316L stainless', 170)])
+    code = r.choice(['AISC 360', 'Eurocode 3', 'DNV', 'ABS', 'Lloyd\'s Register', 'ASME VIII', None])
+    field = r.choice(['offshore structures', 'pressure vessels', 'machine design', 'bridges', 'ship structures', 'automotive', None])
+    lang = r.choice([None, None, 'Hindi', 'German', 'Spanish'])
+    bits = [{'in-lbf-psi': 'I work in inches, pounds and psi', 'm-kN-kPa': 'we use metres, kN and kPa',
+             'ft-kip-ksi': 'our drawings are in feet, kips and ksi', 'mm-N-MPa': 'I use mm and MPa'}[units],
+            f'our material is {mat[0]} (yield {mat[1]} MPa)']
+    if code:
+        bits.append(f'we design to {code}')
+    if field:
+        bits.append(f'I work on {field}')
+    if lang:
+        bits.append(f'please answer in {lang}')
+    r.shuffle(bits)
+    q = r.choice(['FYI: ', 'Please remember: ', 'For all my questions: ', '']) + ', '.join(bits)
+    args = {'units': units, 'material': mat[0], 'yield_MPa': float(mat[1])}
+    if code:
+        args['design_code'] = code
+    if field:
+        args['field'] = field
+    if lang:
+        args['language'] = lang
+    out = tools.call('set_profile', args)
+    tools.profile.data.clear()                               # samples after this one must not see this profile
+    tools.profile.update()
+    return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('set_profile', args)},
+            result_msg('set_profile', out), {'role': 'assistant', 'content': out['plain_english']}]
+
+
 _SUR = {}                                     # built surrogates: name -> (args, result), built once per dataset run
 _SUR_SETS = [('deck_plate', {'L': [1500, 3000], 'B': [600, 900], 't': [8, 16], 'p': [0.02, 0.08]}),
              ('tank_wall', {'L': [800, 2000], 'B': [500, 800], 't': [10, 20], 'p': [0.05, 0.15]}),
@@ -744,7 +827,7 @@ TASKS = [('mesh', 30, lambda r, T: t_mesh(r, T)), ('mesh_fix', 6, lambda r, T: t
          ('mesh_assume', 6, lambda r, T: t_mesh(r, T, 'assume')), ('plate', 12, t_plate), ('stiff', 12, t_stiff),
          ('buckle', 5, t_buckle), ('section', 8, t_section), ('calc', 4, t_calc), ('chat', 3, t_chat), ('plates', 4, t_plates), ('program', 12, t_program), ('cad_bank', 14, t_cad_bank),
          ('fileinfo', 4, t_fileinfo), ('convert', 4, t_convert), ('edit', 5, t_edit), ('clean', 3, t_clean), ('fe_repair', 3, t_fe_repair),
-         ('sur_build', 1, t_sur_build), ('sur_predict', 4, t_sur_predict), ('insight', 3, t_insight)]
+         ('sur_build', 1, t_sur_build), ('units', 5, t_units), ('profile', 2, t_profile), ('sur_predict', 4, t_sur_predict), ('insight', 3, t_insight)]
 
 
 def main(argv=None):
@@ -791,6 +874,9 @@ def main(argv=None):
                 ctx, _ = agent.retrieve(tools, msgs[0]['content'])          # same RAG context as at run time
                 head = [sysmsg] + ([{'role': 'system', 'content': ctx}] if ctx else [])
                 f.write(json.dumps({'task': name, 'messages': head + msgs}) + '\n')
+                if tools.profile.data:                          # a task set a profile for its own sample only
+                    tools.profile.data.clear()
+                    tools.profile.update()
                 counts[name] = counts.get(name, 0) + 1
         print(path, sum(counts.values()), 'samples', counts)
     fb = 0

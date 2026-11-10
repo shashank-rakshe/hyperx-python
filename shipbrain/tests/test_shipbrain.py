@@ -1168,3 +1168,19 @@ def test_surrogate_predicts_and_falls_back(tmp_path):
     ins = T.call('result_insight', {'file': 'chk/chk.frd', 'yield_MPa': 235, 'baseline': 'chk/chk.frd'})
     assert ins['pass'] and ins['hotspots'] and ins['vs_baseline']['peak_change_pct'] == 0
     assert 'PASS' in ins['plain_english'] and os.path.exists(tmp_path / 'chk' / ins['vtk'])
+
+
+def test_units_and_user_profile(tmp_path):
+    from shipbrain.userprofile import convert
+    assert convert(1, 'in', 'mm') == 25.4 and abs(convert(10, 'psi', 'MPa') - 0.0689476) < 1e-6
+    assert convert(1, 'kN.m', 'N.mm') == 1e6 and abs(convert(1, 'cm4', 'mm4') - 1e4) < 1e-6
+    assert abs(convert(10, 'msw', 'MPa') - 0.1005) < 1e-3
+    with pytest.raises(ValueError):
+        convert(1, 'psi', 'mm')
+    T = agent.Tools(tmp_path)
+    assert agent.retrieve(T, 'check a plate')[0] is None                  # no profile: nothing added
+    T.call('set_profile', {'units': 'in-lbf-psi', 'material': 'ASTM A36', 'yield_MPa': 250, 'language': 'Spanish'})
+    ctx = agent.retrieve(agent.Tools(tmp_path), 'check a plate')[0]           # saved on disk: a new session sees it
+    assert 'inch, lbf, psi' in ctx and 'A36' in ctx and 'Spanish' in ctx
+    assert 'error' in T.call('set_profile', {'units': 'cubits'})
+    assert 'ships a specialty' in agent.system_prompt(T)

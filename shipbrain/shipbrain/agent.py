@@ -80,6 +80,14 @@ class Tools:
                       {'type': 'object', 'properties': {'text': {'type': 'string'}, 'tags': {'type': 'array'}}, 'required': ['text']})
         self.register('recall', self.recall, 'Search the assistant memory (facts and corrections taught by the user).',
                       {'type': 'object', 'properties': {'query': {'type': 'string'}}, 'required': ['query']})
+        self.register('set_profile', self.set_profile, 'Save how THIS user works, used in every later answer: units (mm-N-MPa | m-kN-kPa | '
+                      'in-lbf-psi | ft-kip-ksi | mm-kN-MPa), material, yield_MPa, E_MPa, design_code, field, language, notes.',
+                      {'type': 'object', 'properties': {k: ({'type': 'number'} if k in ('yield_MPa', 'E_MPa') else {'type': 'string'})
+                                                         for k in ('units', 'material', 'yield_MPa', 'E_MPa', 'design_code', 'field',
+                                                                   'language', 'notes')}})
+        self.register('convert_units', self.convert_units, 'Convert values between units (tools use mm, N, MPa, t): values = '
+                      '[{"value", "from", "to"}], e.g. in->mm, psi->MPa, kN.m->N.mm, cm4->mm4, msw->MPa.',
+                      {'type': 'object', 'properties': {'values': {'type': 'array'}}, 'required': ['values']})
         self.register('memory_feedback', self.memory_feedback, 'Like (good=true) or dislike a memory by id; forget=true deletes it.',
                       {'type': 'object', 'properties': {'id': {'type': 'string'}, 'good': {'type': 'boolean'}, 'forget': {'type': 'boolean'}},
                        'required': ['id']})
@@ -511,6 +519,23 @@ class Tools:
         r['plain_english'] = r.pop('report_draft') + f" Fields saved as {r['vtk']} for ParaView."
         return r
 
+    @property
+    def profile(self):
+        from .userprofile import Profile
+        if getattr(self, '_profile', None) is None or self._profile.path != os.path.join(self.workdir, 'profile.json'):
+            self._profile = Profile(self.workdir)
+        return self._profile
+
+    def set_profile(self, **kw):
+        ch = self.profile.update(**kw)
+        return {'saved': ch, 'profile': dict(self.profile.data),
+                'plain_english': 'Saved: ' + ', '.join(f'{k} = {v}' for k, v in ch.items()) + '. I will use this in every answer from now on.'}
+
+    def convert_units(self, values):
+        from .userprofile import convert_many
+        out = convert_many(values)
+        return {'converted': out, 'plain_english': '; '.join(f"{v['value']:g} {v['from']} = {v['result']:g} {v['to']}" for v in out)}
+
     def geometry_clean(self, plates=None, file=None, merge_tol=2.0):
         from . import geoclean
         if file:
@@ -749,11 +774,12 @@ class Tools:
 
 
 # ====================================================================== prompt
-SYSTEM = """You are ShipBrain, an engineering assistant for ship structures: CAD, FE meshing, FEA and CFD set-up.
-Units: mm, N, MPa, tonne (1 m sea-water head = 0.01005 MPa).
+SYSTEM = """You are ShipBrain, an engineering assistant for CAD, FE meshing, FEA, CFD set-up and drawings, for any field
+(ships and offshore are a specialty). Tools work in mm, N, MPa, tonne (1 m sea-water head = 0.01005 MPa); if the user
+works in other units (see the user profile or the question), convert with convert_units before and after the tools.
 
 Rules:
-0. Write in plain, simple English: short sentences, everyday words, explain an engineering term the first time you use it,
+0. Write in plain, simple words, in the user's language (English unless the profile or the question says otherwise): short sentences, everyday words, explain an engineering term the first time you use it,
    always give units. When a tool result has a "plain_english" text, use it. If the user asks about an uploaded file,
    call file_info first and explain what you found.
 1. Numbers, meshes and files come from tools, never from memory. Use calc for arithmetic.
@@ -771,8 +797,9 @@ Tools:
 """
 
 
-SYSTEM_COMPACT = """You are ShipBrain, an assistant for ship structure CAD, FE meshing, FEA and drawings. Units mm, N, MPa.
-Write plain simple English, explain terms, give units; use a result's plain_english text. Ask file_info first about uploaded files.
+SYSTEM_COMPACT = """You are ShipBrain, an engineering assistant for CAD, meshing, FEA, CFD set-up and drawings (any field; ships a specialty).
+Tools use mm, N, MPa; other units: convert_units in and out, answer in the user\'s units. Follow the user profile.
+Write plain simple words (the user's language), explain terms, give units; use a result's plain_english text. Ask file_info first about uploaded files.
 Numbers/meshes/files only from tools; use calc for arithmetic; cite [ids] of retrieved knowledge or memory.
 Call a tool with ONLY:
 ```tool
@@ -885,6 +912,10 @@ CAD_WORDS = re.compile(r'\b(cad|cadquery|step|stl|solid|3d|3-d|part|extrude)\b|m
 def retrieve(tools, question, k=3, min_score=3.0):
     """RAG: best rule-book / notes chunks and (for CAD requests) verified CadQuery examples, as one context message"""
     parts, used = [], []
+    prof = getattr(tools, 'profile', None)
+    if prof is not None and prof.context():
+        parts.append(prof.context())
+        used.append('profile')
     if tools.memory is not None:
         for m in tools.memory.recall(question, 3):
             parts.append(f"[memory {m['id']}] (taught by the user) {m['text']}")

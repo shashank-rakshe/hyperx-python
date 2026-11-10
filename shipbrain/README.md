@@ -115,6 +115,22 @@ CadQuery, a few hundred MB with it).
 `packaging/make_llamafile.md` explains how to pack the model into `shipbrain.llamafile`.
 Then run `shipbrain.exe --model shipbrain.llamafile`.
 
+## One universal model, every user different
+
+The model weights are the same for everybody and hold only general engineering skill (public data). What differs per
+user lives on that user's PC and is read at run time, so nobody needs their own retraining:
+
+| Per user | Where | How |
+|---|---|---|
+| units, material and yield, design code, field of work, answer language | `profile.json` in the work folder | say it once ("I work in inches and psi, A36, AISC") -> `set_profile`; given to the model with every question |
+| other units in a question | `convert_units` | inch / ft / psi / ksi / kip / kN.m / cm4 / msw ... converted into the tools' mm-N-MPa and the answer back |
+| facts and corrections | memory | `remember`, thumbs up / down |
+| books, rules, standards, company documents | knowledge folder + `.sbpack` packs | searched and cited |
+| own scripts and tools | plugins folder | loaded as extra tools |
+| installed solvers | `find_solvers` / `remember_solver` | whatever is on that workstation |
+| CPU / GPU | `--gpu auto` | uses the card when it works, else the CPU |
+| company data for training | private Kaggle dataset | gives that company its own private model; the public model never sees it |
+
 ## Small NVIDIA GPU (e.g. an older 4 GB card)
 
 `python -m shipbrain --model shipbrain-q4_k_m.gguf` now checks for an NVIDIA GPU (`nvidia-smi`) and, when the model fits,
