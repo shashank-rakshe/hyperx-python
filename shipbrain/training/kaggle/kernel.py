@@ -98,10 +98,13 @@ extra = f'--knowledge {rules[0]}' if rules else ''
 PRIVATE_TRAIN = sorted(f for f in glob.glob('/kaggle/input/**/*.jsonl*', recursive=True)
                        if 'eval' not in os.path.basename(f).lower() and '/shipbrain_model' not in f)
 PRIVATE_EVAL = sorted(f for f in glob.glob('/kaggle/input/**/*eval*.jsonl*', recursive=True))
-PRIVATE = bool(rules or PRIVATE_TRAIN)
+OWN_PACKS = sorted(glob.glob('/kaggle/input/**/*.private.sbpack', recursive=True))
+for f in OWN_PACKS:                      # your own code packs (built with repopack --own): knowledge + training, private model
+    shutil.copy(f, 'packs/')
+PRIVATE = bool(rules or PRIVATE_TRAIN or OWN_PACKS)
 if PRIVATE:
     UPLOAD_MODEL = False                 # a model trained on company data is never published (GitHub repo is public)
-    print('private data attached:', rules + PRIVATE_TRAIN + PRIVATE_EVAL, '- the model will NOT be uploaded to GitHub', flush=True)
+    print('private data attached:', rules + PRIVATE_TRAIN + PRIVATE_EVAL + OWN_PACKS, '- the model will NOT be uploaded to GitHub', flush=True)
 # ---- continue from an older ShipBrain model: attach that run's output (Add Input -> Notebook Output) and start with
 #      SB_CONTINUE=1 python k.py   (default: train fresh from the base model on ALL data - recommended, nothing is forgotten)
 if os.environ.get('SB_CONTINUE') == '1':

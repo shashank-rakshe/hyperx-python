@@ -38,7 +38,6 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Copyright (c) 2026 ArtCraft Team and the CADCraft contributors
 - Copyright (c) 2014 John Slegers
 
-
 ## lapin
 
 - Source: https://github.com/Ciuntuc-BIM-Studio/lapin.git (commit 2b82c50e77a9)

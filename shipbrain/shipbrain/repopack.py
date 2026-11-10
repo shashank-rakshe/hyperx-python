@@ -661,7 +661,7 @@ def dedupe(chunks, threshold=0.85):
 
 
 # ====================================================================== build
-def build_pack(src, out_dir, cache_dir=None, private_only=False, max_kb=DEFAULT_BUDGET_KB, name=None, log=print):
+def build_pack(src, out_dir, cache_dir=None, private_only=False, max_kb=DEFAULT_BUDGET_KB, name=None, log=print, own=False):
     """one repo -> out_dir/<name>.sbpack. Returns a summary dict (with 'refused' and 'reason' when the licence says no)."""
     name = name or repo_name(src)
     tree, url, commit = open_repo(src, cache_dir, log)
@@ -746,14 +746,17 @@ def build_pack(src, out_dir, cache_dir=None, private_only=False, max_kb=DEFAULT_
     finally:
         tree.close()
     allowed = bool(lic['allowed'])
+    usage = ('ok: permissive licence, keep the attribution' if allowed else
+             'PRIVATE ONLY: do not use for training, do not redistribute')
+    if own:                    # your own code: train your PRIVATE model on it, never publish the pack or that model
+        allowed, usage = True, 'OWN PRIVATE CODE: train only a private model on it, never publish'
     pack = {'format': FORMAT, 'name': name, 'repo': url, 'commit': commit, 'license': lic['license'],
-            'license_reason': lic['reason'], 'allowed_for_training': allowed, 'private_only': not allowed,
-            'usage': 'ok: permissive licence, keep the attribution' if allowed else
-                     'PRIVATE ONLY: do not use for training, do not redistribute',
+            'license_reason': lic['reason'], 'allowed_for_training': allowed, 'private_only': own or not allowed, 'own': bool(own),
+            'usage': usage,
             'attribution': lic['attribution'], 'built': time.strftime('%Y-%m-%d'), 'stats': stats, 'chunks': chunks}
     raw = json.dumps(pack, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
     os.makedirs(out_dir, exist_ok=True)
-    fn = os.path.join(out_dir, name + ('.sbpack' if allowed else '.private.sbpack'))
+    fn = os.path.join(out_dir, name + ('.sbpack' if allowed and not own else '.private.sbpack'))
     buf = io.BytesIO()
     with gzip.GzipFile(fileobj=buf, mode='wb', compresslevel=9, mtime=0) as g:
         g.write(raw)
@@ -835,6 +838,9 @@ def main(argv=None):
         s.add_argument('--max-kb', type=int, default=DEFAULT_BUDGET_KB, help='text kept per repo, KB (docs first)')
         s.add_argument('--private-only', action='store_true',
                        help='build refused repos anyway, marked "do not use for training / do not redistribute"')
+        s.add_argument('--own', action='store_true',
+                       help='YOUR OWN code (company tools): saved as .private.sbpack (git ignores it), allowed to train a '
+                            'PRIVATE model; the training kernel then keeps that model off GitHub')
     ls = sub.add_parser('list', help='show the packs in a folder')
     ls.add_argument('folder', nargs='?', default='packs')
     a = ap.parse_args(argv)
@@ -855,7 +861,7 @@ def main(argv=None):
     results, rc = [], 0
     for r in repos:
         try:
-            results.append(build_pack(r, a.out, a.cache, a.private_only, a.max_kb))
+            results.append(build_pack(r, a.out, a.cache, a.private_only or a.own, a.max_kb, own=a.own))
         except Exception as e:
             print(f'FAILED {r}: {type(e).__name__}: {e}')
             rc = 1
