@@ -31,6 +31,7 @@ DEFAULT_BUDGET_KB = 1500             # raw text kept per repo
 
 DOC_EXT = ('.md', '.markdown', '.rst', '.txt', '.html', '.htm')
 CODE_EXT = ('.py', '.rs', '.ts', '.tsx', '.js', '.jsx', '.mjs')
+DECK_EXT = ('.rad', '.inp', '.bdf', '.k', '.key', '.fem')    # solver input decks: keyword blocks are good format examples
 SKIP_DIRS = {'.git', 'node_modules', 'vendor', 'vendored', 'third_party', 'third-party', 'thirdparty', 'external', 'extern',
              'deps', 'dist', 'build', 'target', 'out', '__pycache__', '.venv', 'venv', 'env', 'site-packages', '.tox',
              '.mypy_cache', '.pytest_cache', 'coverage', '.next', '.cache', 'bower_components'}
@@ -315,6 +316,8 @@ def _kind(path):
         return 'doc'
     if low.endswith(CODE_EXT):
         return 'code'
+    if low.endswith(DECK_EXT):
+        return 'deck'
     if low.endswith('.json') and re.search(r'schema|example|sample|recipe', low):
         return 'json'
     return None
@@ -327,7 +330,7 @@ def _priority(path, kind):
         tier = 0
     elif kind == 'doc':
         tier = 1 if len(dirs) <= 2 else 2
-    elif any(d in EXAMPLE_DIRS for d in dirs) or kind == 'json':
+    elif any(d in EXAMPLE_DIRS for d in dirs) or kind in ('json', 'deck'):
         tier = 1
     elif any(d in TEST_DIRS for d in dirs) or re.match(r'(test_|.*_test\.|.*\.test\.|.*\.spec\.)', name):
         tier = 4
@@ -567,6 +570,25 @@ def chunk_code(text, lang):
     return _pack_pieces(pieces)
 
 
+def chunk_deck(text, keep=10):
+    """solver input deck (Radioss /KEYWORD, Abaqus *KEYWORD, Nastran cards): one entry per keyword block, keeping its
+    header, comments and first lines; long node / element lists are cut (they hold no knowledge)"""
+    blocks, cur = [], []
+    for line in text.splitlines():
+        if line[:1] in ('/', '*') and not line.startswith('**') and cur:
+            blocks.append(cur)
+            cur = []
+        cur.append(line.rstrip())
+    if cur:
+        blocks.append(cur)
+    pieces = []
+    for b in blocks:
+        body = [l for l in b[1:] if l.strip()]
+        txt = '\n'.join([b[0]] + body[:keep]) + (f'\n... (+{len(body) - keep} more lines)' if len(body) > keep else '')
+        pieces.append((b[0][:60].strip(), txt))
+    return _pack_pieces(pieces)
+
+
 def chunk_file(path, text):
     low = path.lower()
     if low.endswith(('.md', '.markdown')):
@@ -577,6 +599,8 @@ def chunk_file(path, text):
         return chunk_html(text)
     if low.endswith('.py'):
         return chunk_python(text)
+    if low.endswith(DECK_EXT):
+        return chunk_deck(text)
     if low.endswith('.rs'):
         return chunk_code(text, 'rs')
     if low.endswith(('.ts', '.tsx', '.js', '.jsx', '.mjs')):

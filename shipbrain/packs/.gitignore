@@ -1,2 +1,5 @@
 # packs built with --private-only (refused licences): never commit or share them
 *.private.sbpack
+
+# knowledge-only (AGPL-3.0, shared unchanged with its licence; never used for training):
+!OpenCourantRP.private.sbpack

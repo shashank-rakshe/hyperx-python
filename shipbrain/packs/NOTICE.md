@@ -9,6 +9,14 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - https://github.com/manycore-research/CAD2Program contributors
 
+## OpenCourantRP
+
+- Source: https://github.com/CAMLAB-UChile/OpenCourantRP.git (commit cec23cbdd405)
+- Licence: AGPL-3.0 (https://www.gnu.org/licenses/agpl-3.0.html), copyright the OpenCourantRP authors (CAMLAB-UChile)
+- Use: KNOWLEDGE ONLY. The pack holds the project's text unchanged (docs, example decks, code chunks) and is shared under
+  its own AGPL-3.0 licence, separate from ShipBrain's code. It is searched and cited in answers; it is NEVER used for
+  training (allowed_for_training = false) and no code from it is copied into ShipBrain.
+
 ## ShipSpace-GA
 
 - Source: https://github.com/kodendaal/ShipSpace-GA (commit 78405b9521ce)
