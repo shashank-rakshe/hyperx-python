@@ -54,6 +54,7 @@ PyMAPDL and Abaqus need their own licensed software on your PC. ShipBrain writes
 | `compare_mesh_drawing` | FE mesh vs drawing (plan view at a height): % of mesh lines on drawn lines, coverage, and the shift that would line them up (calibration error) with an overlay image |
 | `compare_drawings` (vector) | for PDFs with real lines/text and for DXF it also says **what** changed: lines added/removed, line style changed (solid ↔ dashed, thin ↔ heavy, layer), texts changed/added/removed, each number classified (plate thickness, weld size, section size, frame, dimension, off-centre-line, elevation), e.g. *"text changed '12' → '14' (plate thickness)"*, *"girder line solid → dashed"* |
 | `drawing_check` | checks the arithmetic written on a drawing: products and sums such as `24 x 101.6 = 2438.4`, `6 @ 800 = 4800`, `1200 + 800 = 2000`; lists the ones that do not add up. Reads DXF and PDF text; scans only if Tesseract OCR is installed (optional, Apache-2.0) |
+| `cad_view_check` | checks a 3D model against a drawing view: projects the model (front / top / side), compares the lines both ways and the proportions, and gives PASS / WARN / FAIL with hints (missing hole, extra feature, wrong size) and an overlay image |
 | `file_info` | plain-English description of any uploaded file (FE model, STEP, DXF, PDF, image, JSON, XML, text) |
 
 **Structure models (member level)**
@@ -252,7 +253,7 @@ converters and are never needed.
 
 ## Credits (ideas, no code copied)
 
-- [agent3dify](https://github.com/neka-nat/agent3dify) (MIT): a fixed script contract with one JSON result line; a stall guard for repair loops.
+- [agent3dify](https://github.com/neka-nat/agent3dify) (MIT): a fixed script contract with one JSON result line; a stall guard for repair loops; checking the model's projected views against the drawing.
 - [text-to-cad](https://github.com/earthtojake/text-to-cad) (MIT): check the user's sizes against the built solid, not against the model's words; an example corpus with prompts.
 - [solidcraft](https://github.com/tangency-labs/solidcraft) (MIT/Apache-2.0): a verified example and oracle set; small tool replies.
 - [CAD2Program](https://manycore-research.github.io/CAD2Program/): small models do better emitting short parametric primitives than free B-rep code.

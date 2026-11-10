@@ -169,6 +169,13 @@ class Tools:
                       'products and sums like "24 x 101.6 = 2438.4", "6 @ 800 = 4800", "1200 + 800 = 2000"; lists the ones that do '
                       'not add up and counts numbers by class (plate thickness, weld size, section size ...).',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'page': {'type': 'integer'}}, 'required': ['file']})
+        self.register('cad_view_check', self.cad_view_check, 'Check a 3D model (STEP in the workspace) against a 2D drawing view: '
+                      'projects the model (front / top / side ...), compares lines both ways and proportions -> PASS / WARN / FAIL '
+                      'with hints (missing hole, extra feature, wrong size) and an overlay. crop = [x0,y0,x1,y1] pixels of the view.',
+                      {'type': 'object', 'properties': {'model': {'type': 'string'}, 'drawing': {'type': 'string'},
+                                                         'views': {'type': 'array', 'description': '["front","top","side"]'},
+                                                         'page': {'type': 'integer'}, 'crops': {'type': 'object', 'description': '{"front": [x0,y0,x1,y1]}'}},
+                       'required': ['model', 'drawing']})
         self.register('compare_structures', self.compare_structures, 'Compare two versions of a structure model member by member '
                       '(structure JSON, or ship XML through your plugin): plates (thickness, grade), stiffeners (section, grade), brackets, '
                       'openings - same / changed / moved / added / removed, with positions.',
@@ -350,6 +357,18 @@ class Tools:
         """the built-in ship tools (shiptools/): rule search, member checks, XML read/write, OCR label fixes ..."""
         d = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'shiptools')
         return self.load_plugin(d) if os.path.exists(os.path.join(d, 'ship_mcp.py')) else 0
+
+    def cad_view_check(self, model, drawing, views=('front',), page=0, crops=None):
+        from .cadview import compare_view
+        out, crops = [], crops or {}
+        for v in views:
+            png = os.path.join(self.workdir, f'view_{os.path.splitext(os.path.basename(model))[0]}_{v}.png')
+            r = compare_view(self._path(model), self._path(drawing), v, int(page), crops.get(v), png)
+            r['overlay'] = os.path.basename(png)
+            out.append(r)
+        worst = min(out, key=lambda r: r['score'])
+        return {'views': out, 'verdict': worst['verdict'] if all(r['verdict'] != 'FAIL' for r in out) else 'FAIL',
+                'overlay': worst['overlay'], 'plain_english': ' '.join(r['plain_english'] for r in out)}
 
     def compare_structures(self, a, b, tol=5.0, move_tol=300.0):
         from . import members

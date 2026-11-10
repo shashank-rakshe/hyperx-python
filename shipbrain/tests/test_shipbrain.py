@@ -852,3 +852,23 @@ def test_deckrules_tool_is_importable():
     d = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'shiptools', 'deckrules_tool')
     sys.path.insert(0, d)
     from deckrules import numclass, textnorm   # noqa: F401  (pure-python parts, no OCR engine needed)
+
+
+# ------------------------------------------------------------------ 3D model vs drawing view
+def test_cad_view_check(tmp_path):
+    cq = pytest.importorskip('cadquery')
+    from PIL import Image
+    from shipbrain.cadview import model_segments
+    from shipbrain.drawings import render_lines
+    good = cq.Workplane('XY').box(200, 60, 100).faces('>Y').workplane().hole(40)
+    segs = model_segments(good, 'front')
+    P = np.array([p for s in segs for p in s])
+    lo, hi = P.min(0), P.max(0)
+    img = render_lines(segs, (lo[0] - 10, hi[0] + 10, lo[1] - 10, hi[1] + 10), (600, 1100), width=2)
+    Image.fromarray(img.astype('uint8')).save(tmp_path / 'front.png')
+    t = agent.Tools(tmp_path)
+    for name, m, want in (('good', good, 'PASS'), ('nohole', cq.Workplane('XY').box(200, 60, 100), 'WARN'),
+                          ('tall', cq.Workplane('XY').box(200, 60, 140).faces('>Y').workplane().hole(40), 'FAIL')):
+        cq.exporters.export(m, str(tmp_path / f'{name}.step'))
+        r = t.call('cad_view_check', {'model': f'{name}.step', 'drawing': 'front.png', 'views': ['front']})
+        assert r['verdict'] == want, (name, r['plain_english'])
