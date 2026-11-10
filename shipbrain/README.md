@@ -111,6 +111,28 @@ How ShipBrain keeps answers quick without a GPU:
 Measure your PC: `python -m shipbrain.bench --server http://127.0.0.1:8081`. It reports prompt-reading and writing speed
 in tokens per second, checks that the prompt cache works, and gives tips.
 
+## Weight-space tools (`training/weightspace.py`)
+
+**Grow the model skill by skill, without growing its size (adapter merging / task arithmetic).** Train one small LoRA
+add-on per skill or per new repo: a short, cheap run on the free GPU or overnight on the CPU. Then fold all add-ons into
+**one** model with `merge --method ties` (or `dare`, `linear`). The merged model has the same size and CPU speed as the
+base, so a new repo needs only a new add-on, not a full retrain.
+
+**Repair without training ("weight-space programming", after the MIT CSAIL 2026 idea; own implementation).**
+`edit --good good.jsonl --bad bad.jsonl --eval data/eval.jsonl`:
+1. Find the direction in the model's hidden states that separates bad behaviour (rambling, repeating, breaking the tool
+   format) from good behaviour (clean tool calls).
+2. Project that direction out of the output matrices of a few layers.
+3. Keep the edit **only if the ShipBrain test score goes up**. Shorter answers decide a tie, because shorter is faster on
+   a CPU.
+
+The patch is saved separately and can be undone. As in the original work, this removes obstacles; it **cannot add a
+skill** the model never learned, and it does not make the model smaller. Size and speed come from the base model,
+quantisation and the measures in "Fast on a CPU".
+
+Status: both tools are tested on a tiny local model (the merge arithmetic is exact, the edit loop runs end to end).
+Real gains have to be measured on the trained ShipBrain model.
+
 ## Known limits (measured on a real engine-room structure model: 703 plates, 565 stiffeners)
 
 - **Size:** the whole structure meshes in about 2 minutes on 4 CPU cores (≈ 42,000 elements at 400 mm).

@@ -52,7 +52,8 @@ class LocalModel:
         self.n = max_new_tokens
 
     def stream(self, messages):
-        ids = self.tok.apply_chat_template(messages, add_generation_prompt=True, return_tensors='pt').to(self.model.device)
+        ids = self.tok.apply_chat_template(messages, add_generation_prompt=True, return_tensors='pt')
+        ids = (ids['input_ids'] if not hasattr(ids, 'shape') else ids).to(self.model.device)    # transformers 4 and 5
         out = self.model.generate(input_ids=ids, max_new_tokens=self.n, do_sample=False)
         yield self.tok.decode(out[0][ids.shape[1]:], skip_special_tokens=True)
 
