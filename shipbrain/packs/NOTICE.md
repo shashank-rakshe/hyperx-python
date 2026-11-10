@@ -9,6 +9,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - https://github.com/manycore-research/CAD2Program contributors
 
+## M3D
+
+- Source: local copy of M3D (upstream release) (commit working-tree)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2024 M3dFea (Roy Blows)
+
 ## OpenCourantRP
 
 - Source: https://github.com/CAMLAB-UChile/OpenCourantRP.git (commit cec23cbdd405)
@@ -30,6 +37,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2026 k-tanaka
 
+## cadcore
+
+- Source: local copy of cadcore (upstream release) (commit working-tree)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2025-2026 Dmytro Yatskovskyi
+
 ## cadcraft
 
 - Source: https://github.com/storytold/cadcraft (commit a3d9348f63c2)
@@ -37,6 +51,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2026 ArtCraft Team and the CADCraft contributors
 - Copyright (c) 2014 John Slegers
+
+## diff3d
+
+- Source: local copy of diff3d (upstream release) (commit working-tree)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2024 Bruce D. Lucas
 
 ## lapin
 
@@ -58,6 +79,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2022 [Authors](http://mofem.eng.gla.ac.uk/mofem/html/authors.html)
+
+## pyOptistruct
+
+- Source: local copy of pyOptistruct (upstream release) (commit working-tree)
+- Licence: BSD
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2011-2024 Steven Doyle
 
 ## solidcraft
 
