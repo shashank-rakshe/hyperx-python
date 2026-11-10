@@ -30,7 +30,7 @@ MAX_JSON = 30_000
 DEFAULT_BUDGET_KB = 1500             # raw text kept per repo
 
 DOC_EXT = ('.md', '.markdown', '.rst', '.txt', '.html', '.htm')
-CODE_EXT = ('.py', '.rs', '.ts', '.tsx', '.js', '.jsx', '.mjs')
+CODE_EXT = ('.py', '.rs', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cs')
 DECK_EXT = ('.rad', '.inp', '.bdf', '.k', '.key', '.fem')    # solver input decks: keyword blocks are good format examples
 SKIP_DIRS = {'.git', 'node_modules', 'vendor', 'vendored', 'third_party', 'third-party', 'thirdparty', 'external', 'extern',
              'deps', 'dist', 'build', 'target', 'out', '__pycache__', '.venv', 'venv', 'env', 'site-packages', '.tox',
@@ -533,10 +533,12 @@ def chunk_python(text):
 _ITEM = {
     'rs': (re.compile(r'^(pub(\([^)]*\))?\s+)?(async\s+|unsafe\s+|const\s+|extern\s+"C"\s+)*(fn|struct|enum|trait|impl|mod|const|static|type|macro_rules!)\b'),
            re.compile(r'^\s{4}(pub(\([^)]*\))?\s+)?(async\s+|unsafe\s+|const\s+)*fn\s')),
+    'cs': (re.compile(r'^\s{0,4}(\[[^\]]*\]\s*)*((public|internal|private|protected|static|sealed|abstract|partial|readonly|file)\s+)*(class|struct|record|interface|enum)\s'),
+           re.compile(r'^\s{4,8}((public|internal|private|protected|static|override|virtual|abstract|async|sealed|new)\s+)+[\w<>\[\],. ?]+\s+\w+\s*(<[^>]*>)?\(')),
     'js': (re.compile(r'^(export\s+)?(default\s+)?(async\s+)?(function\*?|class|const|let|var|interface|type|enum|abstract\s+class)\b'),
            re.compile(r'^\s{2,4}(public\s+|private\s+|protected\s+|static\s+|async\s+|get\s+|set\s+|readonly\s+)*[A-Za-z_$][\w$]*\s*(<[^>]*>)?\([^;]*$')),
 }
-_NAME = re.compile(r'(?:fn|struct|enum|trait|impl(?:<[^>]*>)?|mod|const|static|type|function\*?|class|let|var|interface)\s+([A-Za-z_$][\w$:<>, ]*)')
+_NAME = re.compile(r'(?:fn|struct|enum|trait|impl(?:<[^>]*>)?|mod|const|static|type|function\*?|class|record|let|var|interface)\s+([A-Za-z_$][\w$:<>, ]*)')
 
 
 def chunk_code(text, lang):
@@ -603,6 +605,8 @@ def chunk_file(path, text):
         return chunk_deck(text)
     if low.endswith('.rs'):
         return chunk_code(text, 'rs')
+    if low.endswith('.cs'):
+        return chunk_code(text, 'cs')
     if low.endswith(('.ts', '.tsx', '.js', '.jsx', '.mjs')):
         return chunk_code(text, 'js')
     return chunk_text(text)

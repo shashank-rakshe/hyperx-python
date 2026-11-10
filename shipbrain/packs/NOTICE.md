@@ -12,10 +12,9 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 ## OpenCourantRP
 
 - Source: https://github.com/CAMLAB-UChile/OpenCourantRP.git (commit cec23cbdd405)
-- Licence: AGPL-3.0 (https://www.gnu.org/licenses/agpl-3.0.html), copyright the OpenCourantRP authors (CAMLAB-UChile)
-- Use: KNOWLEDGE ONLY. The pack holds the project's text unchanged (docs, example decks, code chunks) and is shared under
-  its own AGPL-3.0 licence, separate from ShipBrain's code. It is searched and cited in answers; it is NEVER used for
-  training (allowed_for_training = false) and no code from it is copied into ShipBrain.
+- Licence: AGPL-3.0
+- Use: PRIVATE ONLY: do not use for training, do not redistribute
+- Copyright (C) 2007 Free Software Foundation, Inc
 
 ## ShipSpace-GA
 
@@ -38,6 +37,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2026 ArtCraft Team and the CADCraft contributors
 - Copyright (c) 2014 John Slegers
+
+## lapin
+
+- Source: https://github.com/Ciuntuc-BIM-Studio/lapin.git (commit 2b82c50e77a9)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2026 Ciuntuc BIM Studio S.R.L
 
 ## solidcraft
 
