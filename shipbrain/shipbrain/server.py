@@ -105,7 +105,42 @@ class H(BaseHTTPRequestHandler):
 
 
 # ---------------------------------------------------------------------- local model launcher
-def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None, draft=None, extra=''):
+def gpu_info():
+    """(name, total MB) of the first NVIDIA GPU, or None"""
+    exe = shutil.which('nvidia-smi')
+    if not exe:
+        return None
+    try:
+        out = subprocess.run([exe, '--query-gpu=name,memory.total', '--format=csv,noheader,nounits'], capture_output=True,
+                             text=True, timeout=10).stdout.strip().splitlines()
+        name, mb = out[0].rsplit(',', 1)
+        return name.strip(), int(float(mb))
+    except Exception:
+        return None
+
+
+def gpu_layers_for(choice, model_path):
+    """--gpu auto|on|off|<layers>: all layers on the GPU when the model + its working memory fit, else none"""
+    if str(choice).isdigit():
+        return int(choice)
+    if choice == 'off':
+        return 0
+    info = gpu_info()
+    if not info:
+        if choice == 'on':
+            print('no NVIDIA GPU found (nvidia-smi): running on the CPU')
+        return 0
+    name, mb = info
+    need = os.path.getsize(model_path) / 2 ** 20 * 1.2 + 1300 if os.path.exists(model_path) else 2600   # weights + 8k context
+    if need > mb - 300:
+        print(f'GPU {name} ({mb} MB) is too small for the whole model (~{need:.0f} MB): running on the CPU '
+              f'(try --gpu 20 to put part of it on the GPU)')
+        return 0
+    print(f'GPU {name} ({mb} MB): the model runs on the GPU (~{need:.0f} MB)')
+    return 999
+
+
+def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None, draft=None, extra='', gpu_layers=0):
     """start llama-server (for .gguf) or the llamafile itself; returns the base URL once /health answers"""
     path = os.path.abspath(path)
     if path.endswith('.gguf'):
@@ -119,11 +154,15 @@ def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None, draf
             cmd += ['--mmproj', mmproj]
         if draft:                                            # speculative decoding: a tiny model of the same family drafts,
             cmd += ['-md', os.path.abspath(draft), '--draft-max', '16', '--draft-min', '2']   # the main model only checks
+            if gpu_layers:
+                cmd += ['-ngld', str(gpu_layers)]
     else:                                                            # llamafile: model + server in one executable
         if os.name != 'nt' and not os.access(path, os.X_OK):
             os.chmod(path, 0o755)
         cmd = ([path] if os.name == 'nt' else ['sh', path]) if not path.endswith('.exe') else [path]
         cmd += ['--server', '--nobrowser', '--port', str(port), '-c', str(ctx), '--host', '127.0.0.1']
+    if gpu_layers:                                   # NVIDIA GPU: the layers live in graphics memory (needs a CUDA build)
+        cmd += ['-ngl', str(gpu_layers)]
     if threads:
         cmd += ['-t', str(threads)]
     if extra:
@@ -171,6 +210,8 @@ def main(argv=None):
     ap.add_argument('--llama-bin', help='path to llama-server')
     ap.add_argument('--threads', type=int, help='CPU threads for the model (default: llama.cpp picks the physical cores)')
     ap.add_argument('--draft', help='small draft model .gguf of the same family (e.g. Qwen3-0.6B q8_0) for faster generation')
+    ap.add_argument('--gpu', default='auto', help='NVIDIA GPU for the model: auto (use it when the model fits) | on | off | '
+                                                  '<number of layers>; needs the CUDA build of llama.cpp')
     ap.add_argument('--llama-args', default='', help='extra llama-server arguments, e.g. "-fa on --mlock"')
     ap.add_argument('--full-prompt', action='store_true', help='long tool descriptions (for an UNtrained base model; slower)')
     ap.add_argument('--ctx', type=int, default=8192)
@@ -190,7 +231,8 @@ def main(argv=None):
 
     proc = None
     if a.model:
-        a.server, proc = start_model(a.model, 8081, a.threads, a.ctx, a.mmproj, a.llama_bin, a.draft, a.llama_args)
+        a.server, proc = start_model(a.model, 8081, a.threads, a.ctx, a.mmproj, a.llama_bin, a.draft, a.llama_args,
+                                     gpu_layers_for(a.gpu, a.model) if a.model.endswith('.gguf') or 'llamafile' in a.model else 0)
     agent.PROMPT_COMPACT = not a.full_prompt
     emb = knowledge.Embedder(a.embed_server, a.embed_model) if a.embed_server else None
     kb = knowledge.load(a.knowledge, cache_dir=os.path.join(a.workdir, '.index'), embedder=emb)

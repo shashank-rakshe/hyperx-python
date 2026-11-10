@@ -115,6 +115,20 @@ CadQuery, a few hundred MB with it).
 `packaging/make_llamafile.md` explains how to pack the model into `shipbrain.llamafile`.
 Then run `shipbrain.exe --model shipbrain.llamafile`.
 
+## Small NVIDIA GPU (e.g. an older 4 GB card)
+
+`python -m shipbrain --model shipbrain-q4_k_m.gguf` now checks for an NVIDIA GPU (`nvidia-smi`) and, when the model fits,
+puts all of it on the GPU (`--gpu auto`, the default; `--gpu off` = CPU, `--gpu 20` = only 20 layers on the GPU).
+It needs the **CUDA build** of llama.cpp (`llama-server` from the llama.cpp releases, file name with `cuda`) or a llamafile.
+
+| Card memory | Fits on the GPU | Expected |
+|---|---|---|
+| 4 GB | 1.7B q4 (1.1 GB) + 0.6B draft + 8k context, about 3 GB in total | answers several times faster than on the CPU |
+| 4 GB | 4B q4 (2.5 GB) does not fit with its context: use `--gpu 24` (part on the GPU) or stay with 1.7B | |
+
+Training stays on Kaggle (free 16 GB T4): 4 GB is too little to fine-tune even the 1.7B model comfortably. The CAE tools
+(mesher, surrogate, CalculiX) run on the CPU and do not need the GPU.
+
 ## Fast on a CPU
 
 How ShipBrain keeps answers quick without a GPU:
