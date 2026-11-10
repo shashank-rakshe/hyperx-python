@@ -911,3 +911,81 @@ def test_build_structure_program(tmp_path):
     assert r['check']['parts'] == 1 and r['check']['verdict'] == 'ok' and r['bars'] > 0
     assert 'missing t' in t.call('build_structure', {'program': 'deck L=6000 B=4000'})['error']
     assert 'unknown building block' in t.call('build_structure', {'program': 'deck L=6 B=4 t=1; frame x=3'})['error']
+
+
+# ------------------------------------------------------------------ CAD oracle eval (agent)
+def _cad_eval():
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'training'))
+    import cad_eval
+    return cad_eval
+
+
+def test_cad_eval_oracle_file():
+    import glob, re
+    ce = _cad_eval()
+    rows = ce.load(ce.DEFAULT_DATA)
+    ids = [r['id'] for r in rows]
+    assert 40 <= len(rows) <= 70 and len(set(ids)) == len(ids)
+    for r in rows:
+        assert len(r['prompt']) > 30 and 'cadquery' not in r['prompt'].lower() and 'result' not in r['prompt']
+        e = r['expect']
+        assert len(e['bbox']) == 3 and all(x > 0 for x in e['bbox']) and e['volume'] > 0 and e['n_solids'] >= 1 and 0 < e['tol'] <= 0.01
+        assert r['source'] == f"solidcraft tests/oracle/{r['id']} (MIT OR Apache-2.0)" and r['reference_ok'] is True
+    here = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'examples', 'cadquery')
+    ported = {m.group(1) for f in glob.glob(os.path.join(here, 'sc_*.py'))
+              for m in [re.search(r'tests/oracle/([\w\-]+)', open(f, encoding='utf-8').read())] if m}
+    assert len(ported) >= 20 and not ported & set(ids)            # held out: none of the ported training examples
+
+
+class MockCADLLM(BaseHTTPRequestHandler):
+    """a 'model' that answers the box item with a correct cadquery_build call and every other item with a wrong part
+    (claiming its own, matching expect - the eval must score against the ITEM's expect, not the model's)"""
+    def log_message(self, *a):
+        pass
+
+    def do_GET(self):
+        b = b'{"data": [{"id": "local"}]}'
+        self.send_response(200)
+        self.send_header('Content-Length', str(len(b)))
+        self.end_headers()
+        self.wfile.write(b)
+
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+        last = body['messages'][-1]['content']
+        if last.startswith('TOOL_RESULT'):
+            text = 'Done.'
+        elif 'rectangular block 40 mm' in last:
+            text = '```tool\n' + json.dumps({'name': 'cadquery_build', 'args': {
+                'code': 'import cadquery as cq\nresult = cq.Workplane().box(40, 30, 20)', 'name': 'box',
+                'expect': {'bbox': [40, 30, 20], 'volume': 24000}}}) + '\n```'
+        else:
+            text = '```tool\n' + json.dumps({'name': 'cadquery_build', 'args': {
+                'code': 'import cadquery as cq\nresult = cq.Workplane().box(10, 10, 10)', 'name': 'wrong',
+                'expect': {'volume': 1000}}}) + '\n```'
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/event-stream')
+        self.end_headers()
+        for i in range(0, len(text), 9):
+            self.wfile.write(b'data: ' + json.dumps({'choices': [{'delta': {'content': text[i:i + 9]}}]}).encode() + b'\n\n')
+        self.wfile.write(b'data: [DONE]\n\n')
+
+
+def test_cad_eval_end_to_end(tmp_path):
+    pytest.importorskip('cadquery')
+    ce = _cad_eval()
+    s = ThreadingHTTPServer(('127.0.0.1', 0), MockCADLLM)
+    threading.Thread(target=s.serve_forever, daemon=True).start()
+    try:
+        out = tmp_path / 'r.json'
+        summ = ce.main(['--server', f'http://127.0.0.1:{s.server_address[1]}', '--ids', '01-box,02-cylinder', '--out', str(out),
+                        '--workdir', str(tmp_path / 'w'), '--no-examples'])
+    finally:
+        s.shutdown()
+    d = json.load(open(out))
+    by = {x['id']: x for x in d['details']}
+    assert by['01-box']['pass'] and by['01-box']['pass_first'] and len(by['01-box']['builds']) == 1
+    bad = by['02-cylinder']
+    assert bad['built'] and not bad['pass'] and bad['turns'] == 2 and any(c.startswith('FAIL volume') for c in bad['builds'][0]['checks'])
+    assert summ['n'] == 2 and summ['built_pct'] == 100.0 and summ['pass_first_pct'] == 50.0 and summ['pass_within_3_pct'] == 50.0
+    assert d['summary'] == summ and summ['avg_code_chars'] > 0

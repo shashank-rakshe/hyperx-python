@@ -2,7 +2,7 @@
 ship_src/
 knowledge/
 rules_index.json
-data/
+/data/
 shipbrain_work/
 shipbrain_model/
 *.gguf
