@@ -948,6 +948,12 @@ def run(llm, tools, history, max_steps=MAX_STEPS):
     if ctx:
         msgs.append({'role': 'system', 'content': ctx})
         yield {'type': 'context', 'sources': used}
+    from . import chatstate                                  # long chat: oldest turns -> notes made by code (never lost)
+    fixed = sum(chatstate.tokens(m['content']) for m in msgs)
+    history, note = chatstate.compact(list(history), getattr(tools, 'workdir', None), fixed_tokens=fixed)
+    if note:
+        msgs.append({'role': 'system', 'content': note})
+        yield {'type': 'context', 'sources': ['chat notes']}
     msgs += list(history)
     seen = set()
     for step in range(max_steps):

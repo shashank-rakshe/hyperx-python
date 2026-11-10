@@ -64,6 +64,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Copyright (c) 2026 ArtCraft Team and the CADCraft contributors
 - Copyright (c) 2014 John Slegers
 
+## compact-state-skill
+
+- Source: https://github.com/BrijeshParmar/compact-state-skill (commit bcab3b207338)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2026 Brijesh Parmar
+
 ## diff3d
 
 - Source: local copy of diff3d (upstream release) (commit working-tree)

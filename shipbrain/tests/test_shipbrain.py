@@ -1185,3 +1185,22 @@ def test_units_and_user_profile(tmp_path):
     assert 'inch, lbf, psi' in ctx and 'A36' in ctx and 'Spanish' in ctx
     assert 'error' in T.call('set_profile', {'units': 'cubits'})
     assert 'ships a specialty' in agent.system_prompt(T)
+
+
+def test_long_chat_keeps_decisions_and_files(tmp_path):
+    from shipbrain import chatstate
+    h = [{'role': 'user', 'content': 'We use S355 steel. Never use gmsh.'}, {'role': 'assistant', 'content': 'Noted.'},
+         {'role': 'user', 'content': 'Mesh deck_A.step and save deck_A.bdf'}, {'role': 'assistant', 'content': 'Done: deck_A.bdf. ' + 'x' * 3000}]
+    for i in range(30):
+        h += [{'role': 'user', 'content': f'what is the stress in plate P{i:03d}? ' + 'y' * 600}, {'role': 'assistant', 'content': 'z' * 900}]
+    h.append({'role': 'user', 'content': 'check deck_A again'})
+    kept, note = chatstate.compact(h, str(tmp_path), ctx=8192)
+    assert kept[-1]['content'] == 'check deck_A again' and kept[0]['role'] == 'user' and len(kept) < len(h)
+    assert sum(chatstate.tokens(m['content']) for m in kept) + chatstate.tokens(note) <= 8192 - chatstate.RESERVE
+    assert '"We use S355 steel. Never use gmsh."' in note and 'deck_A.bdf' in note and 'check deck_A again' in note
+    assert os.path.exists(tmp_path / '.state' / (chatstate.chat_id(h) + '.md'))
+    short = h[:4] + [h[-1]]
+    assert chatstate.compact(short, str(tmp_path))[1] is None                 # fits: nothing changed
+    f = tmp_path / '.state' / (chatstate.chat_id(h) + '.md')
+    f.write_text('# my notes (edited)\n## Decisions\n- use S460 instead\n')
+    assert 'S460' in chatstate.compact(h, str(tmp_path))[1]                  # the user's corrected notes win

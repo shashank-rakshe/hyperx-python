@@ -251,6 +251,8 @@ def main(argv=None):
 
     proc = None
     if a.model:
+        from . import chatstate
+        chatstate.CTX_TOKENS = a.ctx                       # long chats are fitted to this window
         a.server, proc = start_model(a.model, 8081, a.threads, a.ctx, a.mmproj, a.llama_bin, a.draft, a.llama_args,
                                      gpu_layers_for(a.gpu, a.model) if a.model.endswith('.gguf') or 'llamafile' in a.model else 0)
     agent.PROMPT_COMPACT = not a.full_prompt

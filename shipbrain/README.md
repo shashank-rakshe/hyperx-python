@@ -131,6 +131,14 @@ user lives on that user's PC and is read at run time, so nobody needs their own 
 | CPU / GPU | `--gpu auto` | uses the card when it works, else the CPU |
 | company data for training | private Kaggle dataset | gives that company its own private model; the public model never sees it |
 
+## Long chats on a small model
+
+The model's window is small (8k tokens by default, `--ctx`). When a chat no longer fits, the oldest turns are replaced by
+notes made **by code**, so nothing important is paraphrased away (idea from
+[compact-state](https://github.com/BrijeshParmar/compact-state-skill), MIT): **State now**, **Decisions** (the user's
+words, verbatim, dated), **IDs and paths** (every file name and id), **Next**. They are also saved as
+`.state/<chat id>.md` in the work folder; to correct them, edit the file and add ` (edited)` to its first line.
+
 ## Small NVIDIA GPU (e.g. an older 4 GB card)
 
 `python -m shipbrain --model shipbrain-q4_k_m.gguf` now checks for an NVIDIA GPU (`nvidia-smi`) and, when the model fits,
