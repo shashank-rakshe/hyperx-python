@@ -13,7 +13,8 @@ from .memory import Memory
 def build(a):
     kb = knowledge.load(a.knowledge, cache_dir=os.path.join(a.workdir, '.index'))
     from .examples import Examples
-    t = agent.Tools(a.workdir, kb, allow_code=a.allow_code, examples=Examples(), memory=Memory(os.path.join(a.workdir, '.memory')))
+    t = agent.Tools(a.workdir, kb, allow_code=a.allow_code, examples=Examples(), memory=Memory(os.path.join(a.workdir, '.memory')),
+                    repo_kb=_repo_kb(a.packs))
     for p in a.plugin:
         try:
             t.load_plugin(p)
@@ -44,9 +45,24 @@ def handle(tools, msg):
         return {'jsonrpc': '2.0', 'id': mid, 'error': {'code': -32000, 'message': str(e)}}
 
 
+DEFAULT_PACKS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'packs')
+
+
+def _repo_kb(folder):
+    """knowledge packs of shared repos, in their own index"""
+    if not folder or not os.path.isdir(folder):
+        return None
+    from .repopack import load_packs
+    rk = knowledge.Knowledge()
+    n = load_packs(folder, rk)
+    print(f'repo packs: {n} chunks from {len(getattr(rk, "packs", []) or [])} repos', file=sys.stderr)
+    return rk
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument('--workdir', default='shipbrain_work')
+    ap.add_argument('--packs', default=DEFAULT_PACKS, help='folder of repo knowledge packs (.sbpack); "" = none')
     ap.add_argument('--knowledge', action='append', default=[])
     ap.add_argument('--plugin', action='append', default=[])
     ap.add_argument('--allow-code', action='store_true')

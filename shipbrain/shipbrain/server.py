@@ -142,6 +142,20 @@ def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None, draf
     sys.exit('the model server did not start within 10 minutes')
 
 
+DEFAULT_PACKS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'packs')
+
+
+def _repo_kb(folder):
+    """knowledge packs of shared repos, in their own index"""
+    if not folder or not os.path.isdir(folder):
+        return None
+    from .repopack import load_packs
+    rk = knowledge.Knowledge()
+    n = load_packs(folder, rk)
+    print(f'repo packs: {n} chunks from {len(getattr(rk, "packs", []) or [])} repos', file=sys.stderr)
+    return rk
+
+
 def main(argv=None):
     if len(sys.argv) > 1 and sys.argv[1] == '--cq-run':          # child process of cadrun inside the frozen exe
         from . import cadrun
@@ -163,6 +177,7 @@ def main(argv=None):
     ap.add_argument('--knowledge', action='append', default=[], help='folder or file to learn from (repeatable)')
     ap.add_argument('--plugin', action='append', default=[], help='python file / folder with TOOLS = {...} (e.g. your ship_mcp.py)')
     ap.add_argument('--workdir', default='shipbrain_work')
+    ap.add_argument('--packs', default=DEFAULT_PACKS, help='folder of repo knowledge packs (.sbpack); "" = none')
     ap.add_argument('--embed-server', help='OpenAI-compatible embeddings server for meaning-based search, e.g. http://127.0.0.1:8090 '
                                            '(llama-server -m nomic-embed-text-v1.5.Q8_0.gguf --embedding --port 8090)')
     ap.add_argument('--embed-model', default='local')
@@ -182,7 +197,8 @@ def main(argv=None):
     from .examples import Examples
     ex = Examples(a.examples)
     from .memory import Memory
-    tools = agent.Tools(a.workdir, kb, allow_code=a.allow_code, examples=ex, memory=Memory(os.path.join(a.workdir, '.memory')))
+    tools = agent.Tools(a.workdir, kb, allow_code=a.allow_code, examples=ex, memory=Memory(os.path.join(a.workdir, '.memory')),
+                        repo_kb=_repo_kb(a.packs))
     for p in a.plugin:
         try:
             print(f'plugin {p}: {tools.load_plugin(p)} tools')

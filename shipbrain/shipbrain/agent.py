@@ -46,7 +46,8 @@ def calc(expression):
 
 # ====================================================================== tool registry
 class Tools:
-    def __init__(self, workdir, kb=None, allow_code=False, examples=None, memory=None):
+    def __init__(self, workdir, kb=None, allow_code=False, examples=None, memory=None, repo_kb=None):
+        self.repo_kb = repo_kb        # knowledge packs of shared git repos (separate, so they never crowd ship knowledge)
         self.examples = examples
         self.memory = memory
         self.converters = []          # e.g. xml_to_members from your private plugin
@@ -186,10 +187,15 @@ class Tools:
 
     # ------------------------------------------------------------------ implementations
     def knowledge_search(self, query, k=5, scope=None):
-        if not self.kb or not len(self.kb):
+        k = int(k)
+        bases = [b for b in (self.kb, self.repo_kb) if b is not None and len(b)]
+        if scope and self.repo_kb is not None and ('repo' in scope.lower() or any(scope.lower() in str(s_.get('name', '') if isinstance(s_, dict) else s_).lower() for s_ in getattr(self.repo_kb, 'packs', []) or [])):
+            bases = [self.repo_kb]
+        if not bases:
             return {'results': [], 'note': 'knowledge folder is empty - start the app with --knowledge DIR'}
+        hits = sorted((h for b in bases for h in b.search(query, k, scope=scope)), key=lambda h: -h['score'])[:k]
         return {'results': [{'id': h['id'], 'source': h['source'], 'title': h['title'], 'text': h['text'][:700], 'score': h['score']}
-                            for h in self.kb.search(query, int(k), scope=scope)]}
+                            for h in hits]}
 
     def _mem(self):
         if self.memory is None:
@@ -559,6 +565,13 @@ def retrieve(tools, question, k=3, min_score=3.0):
         for h in tools.kb.search(question, k):
             if h['score'] >= min_score or getattr(tools.kb, 'embedder', None):
                 parts.append(f"[{h['id']}] ({h['source']}) {h['text'][:600]}")
+                used.append(h['id'])
+    rk = getattr(tools, 'repo_kb', None)
+    names = [str(n.get('name', '') if isinstance(n, dict) else n).lower() for n in (getattr(rk, 'packs', None) or [])]
+    if rk is not None and len(rk) and (CAD_WORDS.search(question) or any(n in question.lower() for n in names)):
+        for h in rk.search(question, 2):
+            if h['score'] >= 3 * min_score:                       # repo text only when clearly relevant
+                parts.append(f"[{h['id']}] ({h['source']}) {h['text'][:500]}")
                 used.append(h['id'])
     if tools.examples is not None and CAD_WORDS.search(question) and not re.search(r'\bmesh', question, re.I):
         for e in tools.examples.search(question, 2):
