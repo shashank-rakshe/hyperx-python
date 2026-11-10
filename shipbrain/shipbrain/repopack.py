@@ -781,6 +781,8 @@ def write_notice(out_dir):
                 p = read_pack(os.path.join(out_dir, fn))
             except Exception:
                 continue
+            if fn.endswith('.private.sbpack') and not str(p.get('repo', '')).startswith(('http://', 'https://', 'git@')):
+                continue                                   # your own private code from a local folder: name and path stay out
             rows.append(f"## {p['name']}\n\n- Source: {p['repo']} (commit {p['commit'][:12]})\n- Licence: {p['license']}\n"
                         f"- Use: {p.get('usage', '')}\n" + ''.join(f'- {a}\n' for a in p['attribution']))
     text = ('# Third-party notices for ShipBrain repo packs\n\n'

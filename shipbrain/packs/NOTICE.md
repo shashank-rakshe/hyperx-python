@@ -38,12 +38,20 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Copyright (c) 2026 ArtCraft Team and the CADCraft contributors
 - Copyright (c) 2014 John Slegers
 
+
 ## lapin
 
 - Source: https://github.com/Ciuntuc-BIM-Studio/lapin.git (commit 2b82c50e77a9)
 - Licence: MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2026 Ciuntuc BIM Studio S.R.L
+
+## mayo
+
+- Source: https://github.com/fougue/mayo (commit 265eb5b8ce42)
+- Licence: BSD
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2016, Fougue SAS <https://www.fougue.pro>
 
 ## mofem-cephas
 

@@ -1098,3 +1098,52 @@ def test_fe_mesh_repair(tmp_path):
           for e in m.elems.values()]
     assert all(z > 0 for z in nz) or all(z < 0 for z in nz)                    # one consistent side
     assert m.check()['all_elements_parts'] == 1
+
+
+def _tube(cq, od, w, L, base, d):
+    return cq.Solid.makeCylinder(od / 2, L, cq.Vector(*base), cq.Vector(*d)).cut(
+        cq.Solid.makeCylinder(od / 2 - w, L, cq.Vector(*base), cq.Vector(*d)))
+
+
+def test_pipe_extract_bend_tee_gap_and_bolt(tmp_path):
+    cq = pytest.importorskip('cadquery')
+    from shipbrain import surfex
+    path = cq.Workplane('XY').moveTo(0, 0).lineTo(500, 0).radiusArc((650, 150), -150).lineTo(650, 450)
+    elbow = cq.Workplane('YZ').circle(57.15).circle(51.13).sweep(path, transition='round').val()
+    f = surfex.pipes(elbow)
+    assert [s['length'] for s in f['straights']] == [500.0, 300.0] and f['straights'][0]['wall'] == 6.02
+    assert len(f['bends']) == 1 and f['bends'][0]['angle_deg'] == 90.0 and f['bends'][0]['bend_radius'] == 150.0
+    assert len(f['runs']) == 1
+    parts = [_tube(cq, 114.3, 6.02, 1000, (0, 0, 0), (1, 0, 0)), _tube(cq, 60.3, 3.91, 343, (500, 57, 0), (0, 1, 0)),
+             _tube(cq, 114.3, 6.02, 500, (1100, 0, 0), (1, 0, 0)), cq.Solid.makeCylinder(10, 60, cq.Vector(0, 500, 0))]
+    cq.exporters.export(cq.Compound.makeCompound(parts), str(tmp_path / 'piping.step'))
+    out = agent.Tools(tmp_path).call('pipe_extract', {'file': 'piping.step'})
+    r = out['report']
+    assert r['straight_pipes'] == 3 and r['rods_bolts_left_out'] == 1 and r['sizes'] == [60.3, 114.3]
+    m = surfex.pipe_fe_model(surfex.pipes(cq.Compound.makeCompound(parts)))
+    assert m.check()['all_elements_parts'] == 1                     # tee and the valve gap are joined
+    assert {'TEE', 'GAP'} <= set(m.summary()['groups'])
+
+
+def test_mid_and_outer_surface(tmp_path):
+    cq = pytest.importorskip('cadquery')
+    from shipbrain import surfex
+    plate = cq.Workplane('XY').box(1000, 500, 12).val()
+    bent = (cq.Workplane('XZ').polyline([(0, 0), (400, 0), (400, 300), (390, 300), (390, 10), (0, 10)]).close().extrude(200)
+            .val().translate(cq.Vector(0, 1000, 0)))
+    block = cq.Workplane('XY').box(100, 100, 100).val().translate(cq.Vector(2000, 0, 0))
+    tube = _tube(cq, 114.3, 6.0, 800, (0, -1000, 0), (1, 0, 0))
+    comp = cq.Compound.makeCompound([plate, bent, block, tube])
+    g, rep = surfex.extract(comp, 'mid')
+    assert rep['thin_solids'] == 3 and len(rep['not_thin']) == 1
+    assert sorted(g) == [6.0, 10.0, 12.0]
+    mid = g[12.0][0]
+    assert abs(mid.Area() - 500000) < 1 and abs(mid.Center().z) < 1e-6          # plate mid-plane at z = 0
+    cyl = [f for f in g[6.0] if f.geomType() == 'CYLINDER']
+    assert cyl and abs(surfex.recognize(cyl[0])[1].Cylinder().Radius() - (57.15 - 3.0)) < 1e-6
+    go, _ = surfex.extract(comp, 'outer')
+    assert abs(go[12.0][0].Area() - 500000) < 1 and abs(abs(go[12.0][0].Center().z) - 6) < 1e-6
+    cq.exporters.export(comp, str(tmp_path / 'm.step'))
+    out = agent.Tools(tmp_path).call('surface_extract', {'file': 'm.step', 'kind': 'mid', 'mesh_size': 100})
+    assert out['file'].endswith('_mid_surface.step') and os.path.exists(tmp_path / out['file'])
+    assert out['mesh']['nodes'] > 0

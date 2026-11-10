@@ -154,6 +154,18 @@ class Tools:
                                                          'fillets_below': num_, 'chamfers_below': num_, 'faces_below': num_,
                                                          'bosses_below': num_, 'sew': {'type': 'boolean'}, 'mesh_size': num_},
                        'required': ['file']})
+        self.register('surface_extract', self.surface_extract, 'Mid-surface or outer-surface extraction from a solid CAD model (STEP/BREP): '
+                      'every thin solid (flat, bent or curved plate, pipe wall) gives its mid (or outer) surface and thickness, '
+                      'grouped by thickness (Mid_Surface_10T ...) in a STEP file; faces saved as B-splines are recognised first. '
+                      'mesh_size meshes the flat mid-surfaces with the own mesher.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'kind': {'type': 'string', 'description': 'mid | outer'},
+                                                         'max_thickness': num_, 'round_to': num_, 'mesh_size': num_}, 'required': ['file']})
+        self.register('pipe_extract', self.pipe_extract, 'Piping from a CAD model (STEP/BREP): straight pipes and bends (OD, wall, '
+                      'bend radius and angle, length), joined into runs; wall from the model (hollow pipe) or the pipe schedule; '
+                      'writes a 1D FE model of the piping (pipe-section beams, bends split every 15 deg).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'schedule': {'type': 'string', 'description': 'SCH10|SCH40|SCH80|SCH160'},
+                                                         'element_size': num_, 'to': {'type': 'array', 'description': '["bdf","inp"]'}},
+                       'required': ['file']})
         self.register('fatigue_mesh', self.fatigue_mesh, 'Fatigue hot-spot local model: cut a box around the hot spot from a plate assembly, '
                       'mesh it t x t, give the read-out points at 0.5t / 1.5t; with solve=true also run CalculiX and return the '
                       'extrapolated hot-spot stress (1.5 s(0.5t) - 0.5 s(1.5t)).',
@@ -373,6 +385,47 @@ class Tools:
         if mesh_size:
             res['mesh'] = self.cad_mesh(out, element_size=mesh_size)
         return res
+
+    def surface_extract(self, file, kind='mid', max_thickness=60.0, round_to=0.5, mesh_size=None):
+        from . import surfex
+        from .cadplates import import_cad
+        kind = 'outer' if str(kind).lower().startswith('out') else 'mid'
+        groups, rep = surfex.extract(import_cad(self._path(file)), kind, max_t=float(max_thickness), round_to=float(round_to))
+        if not groups:
+            raise ValueError('no thin solids found (no face pairs closer than max_thickness): ' + '; '.join(rep['not_thin'][:5]))
+        out = os.path.splitext(os.path.basename(file))[0] + f'_{kind}_surface.step'
+        surfex.save_groups(groups, self._path(out), kind)
+        nt = len(rep['not_thin'])
+        rep['not_thin'] = rep['not_thin'][:10]
+        res = {'file': out, 'report': rep,
+               'plain_english': f"Extracted {rep['surfaces']} {kind} surface(s) from {rep['thin_solids']} of {rep['solids']} solids, "
+                                f"grouped by thickness: " + ', '.join(f'{k}: {v}' for k, v in rep['thickness_groups'].items()) + '. '
+                                + (f'{nt} solid(s) are not thin (blocks, castings) and were left out. ' if nt else '') + f'Saved {out}.'}
+        if mesh_size:
+            plates = surfex.groups_to_plates(groups, float(mesh_size))
+            if plates:
+                res['mesh'] = self.plates_mesh(plates, name=os.path.splitext(out)[0], element_size=float(mesh_size))
+        return res
+
+    def pipe_extract(self, file, schedule='SCH40', element_size=200.0, to=('bdf', 'inp')):
+        from . import surfex
+        from .cadplates import import_cad
+        found = surfex.pipes(import_cad(self._path(file)), schedule=schedule)
+        r = found['report']
+        if not (found['straights'] or found['bends']):
+            raise ValueError('no pipes found (no outward cylinders or tori that go all the way round)')
+        m = surfex.pipe_fe_model(found, float(element_size))
+        base = os.path.splitext(os.path.basename(file))[0] + '_piping'
+        files = [os.path.basename(m.write(self._path(base + '.' + e))) for e in to]
+        with open(self._path(base + '.json'), 'w') as fh:
+            json.dump({k: v for k, v in found.items()}, fh, indent=1)
+        sizes = ', '.join(f'{d:g}' for d in r['sizes'][:10])
+        c = m.check()
+        return {'files': files + [base + '.json'], 'report': r, 'straights': found['straights'][:12], 'bends': found['bends'][:8],
+                'runs': [len(x) for x in found['runs'][:12]],
+                'plain_english': f"Found {r['straight_pipes']} straight pipe(s) and {r['bends']} bend(s) in {r['runs']} connected run(s), "
+                                 f"total {r['total_length_m']} m; outside diameters {sizes} mm. 1D FE model: {m.summary()['elements']} pipe "
+                                 f"beams in {c.get('all_elements_parts')} part(s), saved as {', '.join(files)}."}
 
     def geometry_clean(self, plates=None, file=None, merge_tol=2.0):
         from . import geoclean

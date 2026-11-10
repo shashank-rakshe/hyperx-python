@@ -527,6 +527,72 @@ def t_fe_repair(r, tools):
             result_msg('repair_model', out), {'role': 'assistant', 'content': out['plain_english']}]
 
 
+def t_surface(r, tools):
+    """thin-solid model -> surface_extract (mid or outer) -> thickness groups"""
+    import cadquery as cq
+    parts, n = [], r.randint(2, 5)
+    for k in range(n):
+        t = float(r.choice([6, 8, 10, 12, 14, 16, 20]))
+        L, B = float(r.choice([600, 800, 1200, 1600])), float(r.choice([300, 400, 600]))
+        if r.random() < 0.3:                                   # bent plate (angle)
+            p = cq.Workplane('XZ').polyline([(0, 0), (L / 2, 0), (L / 2, B / 2), (L / 2 - t, B / 2), (L / 2 - t, t), (0, t)]).close().extrude(B).val()
+        else:
+            p = cq.Workplane('XY').box(L, B, t).val()
+        parts.append(p.translate(cq.Vector(0, k * 1500.0, 0)))
+    if r.random() < 0.4:
+        parts.append(cq.Workplane('XY').box(150, 150, 150).val().translate(cq.Vector(5000, 0, 0)))   # a block: not thin
+    name = r.choice(['deck_panel', 'tank_top', 'foundation', 'web_frame', 'casing']) + f'_{r.randint(100, 999)}.step'
+    cq.exporters.export(cq.Compound.makeCompound(parts), os.path.join(tools.workdir, name))
+    kind = r.choice(['mid', 'mid', 'outer'])
+    q = r.choice({'mid': ['Extract the mid surface of {f}', 'Make a mid-surface model from {f} for shell meshing',
+                          '{f}: midsurface extraction please', 'Get mid surfaces with thickness from {f}'],
+                  'outer': ['Extract the outer surface of {f}', 'Give me the outer skin surfaces of {f}',
+                            '{f}: outer surface extraction']}[kind]).format(f=name)
+    args = {'file': name, 'kind': kind}
+    mesh = kind == 'mid' and r.random() < 0.3
+    if mesh:
+        q += ' and mesh it at 100 mm'
+        args['mesh_size'] = 100.0
+    out = tools.call('surface_extract', args)
+    if 'error' in out:
+        return None
+    ans = out['plain_english']
+    if mesh and isinstance(out.get('mesh'), dict) and 'nodes' in out['mesh']:
+        ans += f" Mesh: {out['mesh']['nodes']} nodes, {out['mesh'].get('elements')} elements."
+    return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('surface_extract', args)},
+            result_msg('surface_extract', out), {'role': 'assistant', 'content': ans}]
+
+
+def t_pipes(r, tools):
+    """piping model (straights, elbows, tee, bolts) -> pipe_extract -> sizes, runs, 1D FE model"""
+    import cadquery as cq
+    od, w = r.choice([(60.3, 3.912), (88.9, 5.486), (114.3, 6.02), (168.275, 7.112), (219.075, 8.179)])
+    L1, L2, R = float(r.choice([400, 600, 900])), float(r.choice([300, 500, 800])), round(od * r.choice([1.0, 1.5]), 1)
+    hollow = r.random() < 0.5
+    path = cq.Workplane('XY').moveTo(0, 0).lineTo(L1, 0).radiusArc((L1 + R, R), -R).lineTo(L1 + R, R + L2)
+    prof = cq.Workplane('YZ').circle(od / 2)
+    if hollow:
+        prof = prof.circle(od / 2 - w)
+    parts = [prof.sweep(path, transition='round').val()]
+    for k in range(r.randint(0, 3)):
+        parts.append(cq.Solid.makeCylinder(8, 50, cq.Vector(-300.0 - 40 * k, 300, 0)))   # bolts: left out
+    name = r.choice(['pump_skid', 'cooling_line', 'fuel_pipe', 'ballast_line']) + f'_{r.randint(100, 999)}.step'
+    cq.exporters.export(cq.Compound.makeCompound(parts), os.path.join(tools.workdir, name))
+    sch = r.choice(['SCH40', 'SCH40', 'SCH80'])
+    q = r.choice(['Find the pipes in {f}', 'Extract the piping from {f} and make a beam model', 'Pipe structure of {f}: sizes and bends?',
+                  '{f}: recognise pipes, wall {s}', 'Make a 1D pipe FE model from {f} ({s})']).format(f=name, s=sch)
+    args = {'file': name}
+    if sch in q:
+        args['schedule'] = sch
+    out = tools.call('pipe_extract', args)
+    if 'error' in out:
+        return None
+    b = out['bends'][0] if out['bends'] else None
+    ans = out['plain_english'] + (f" Bend: OD {b['od']:g} mm, radius {b['bend_radius']:g} mm, {b['angle_deg']:g} deg." if b else '')
+    return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('pipe_extract', args)},
+            result_msg('pipe_extract', out), {'role': 'assistant', 'content': ans}]
+
+
 CHAT = [
     ('Why are stiffeners modelled with shell webs instead of beams?',
      'Shell webs share nodes with the plate, so the stiffener and its attached plating bend together without needing beam offsets, '
@@ -610,6 +676,8 @@ def main(argv=None):
     if has_cq and not a.no_cad:
         tasks.append(('cad', 6, t_cad))
         tasks.append(('repair', 5, t_repair))
+        tasks.append(('surface', 4, t_surface))
+        tasks.append(('pipes', 4, t_pipes))
     if len(kb):
         tasks.append(('rules', 25, make_rules_task([d for d in kb.docs if d.get('id')])))
     sysmsg = {'role': 'system', 'content': agent.system_prompt(tools)}

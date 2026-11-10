@@ -20,7 +20,7 @@ ANALYSES = {   # analysis type -> words that point to it
     'fracture': r'crack|fracture|j-integral|stress intensity',
     'cfd': r'\bcfd\b|flow|resistance|drag|wind load|current|wave load|sloshing|hydrodynamic|propulsion|wake',
     'heat': r'thermal|temperature|heat|fire|insulation',
-    'cad': r'3d model|\bcad\b|step file|solid model|drawing to|make a model|cadquery',
+    'cad': r'3d model|\bcad\b|step file|solid model|drawing to|make a model|cadquery|mid.?surface|outer surface|piping|pipes?\b',
     'mesh': r'\bmesh|elements?\b|bdf|\.inp|nastran deck|shell model',
 }
 
@@ -55,6 +55,8 @@ ENGINES = [
      'parts from text with size checks; ship structures from building-block programs'),
     ('Ship drawing reader', {'cad'}, 'runs', 'drawing_to_model(file) -> compare_structures', [], None,
      'ship structural drawings (PDF) -> member model XML'),
+    ('ShipBrain surfaces + piping', {'cad', 'mesh'}, 'runs', 'surface_extract(file, kind="mid"|"outer") / pipe_extract(file)', [], None,
+     'mid / outer surfaces of thin solids, pipe runs and 1D pipe models from STEP (OpenCascade)'),
     ('ShipBrain mesher', {'mesh'}, 'runs', 'build_structure / plates_mesh / panel_mesh / cad_mesh / structure_to_mesh', [], None,
      'own conforming 1D + 2D mesher; no free nodes'),
 ]
