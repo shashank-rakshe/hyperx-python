@@ -233,6 +233,9 @@ publish the model: a model fine-tuned with your rule index can repeat it.
 | CAD parts you trust | `examples/cadquery/your_part.py` with `# Prompt:` / `# Tags:` lines, then `python -m shipbrain.examples verify` | verified examples are retrieved when the model writes CAD code |
 | drawings → model pairs (your `ship_pairs.py` tiles) | fine-tune the vision model (Qwen3-VL) as in the ship-rules repo | reading images needs a vision model |
 
+**Your own models as private training data:** `python training/private_samples.py run --workdir <folder> --files a.stp b.stp` runs the pipe and surface tools on your real files once; `python training/private_samples.py make --runs runs.jsonl` turns the results into chat samples. Upload the `.jsonl` as a PRIVATE Kaggle dataset; never commit it.
+**Your own code:** `python -m shipbrain.repopack build --repo <your code folder> --out packs --own` makes a `.private.sbpack` (git ignores it) that is searched at run time and may train your private model.
+
 ## Tests
 
 ```bash
