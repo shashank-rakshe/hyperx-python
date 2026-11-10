@@ -69,6 +69,11 @@ def tool_block(name, args):
     return '```tool\n' + json.dumps({'name': name, 'args': args}, separators=(', ', ': ')) + '\n```'
 
 
+def _q(x):
+    """a number as the model sees it in the shortened tool result (5 significant digits)"""
+    return f'{float(f"{x:.5g}"):g}'
+
+
 def result_msg(name, res):
     return {'role': 'user', 'content': f'TOOL_RESULT {name}: ' + agent.compact_result(res)}       # same as at run time
 
@@ -156,7 +161,7 @@ def t_plate(r, tools):
                      f'plate {a:g}x{b:g} t{t:g}, q={q:g} N/mm2, edges {bc}: stress and deflection?'])
     args = {'a': a, 'b': b, 't': t, 'q': q, 'boundary': bc}
     res = tools.call('plate_check', args)
-    ans = (f"Max bending stress **{res['sigma_max_MPa']:g} MPa**, max deflection **{res['w_max_mm']:g} mm** "
+    ans = (f"Max bending stress **{_q(res['sigma_max_MPa'])} MPa**, max deflection **{_q(res['w_max_mm'])} mm** "
            f"(Roark, {bc} edges, a/b = {res['aspect']:g}, beta = {res['beta']:g}). Utilisation vs 235 MPa: {res['utilisation']:g}."
            + (' ' + res['note'].split('; ', 1)[1] + '.' if '; ' in res['note'] else ''))
     return [{'role': 'user', 'content': user}, {'role': 'assistant', 'content': tool_block('plate_check', args)},
@@ -171,7 +176,7 @@ def t_stiff(r, tools):
     args = {'span': span, 'spacing': s, 't_plate': t, 'profile': p, 'q': q, 'end': end}
     res = tools.call('stiffener_check', args)
     ans = (f"Section modulus with {res['effective_breadth_mm']:g} mm plating: Z_toe = {res['Z_toe_cm3']:g} cm3, Z_plate = {res['Z_plate_cm3']:g} cm3.\n"
-           f"Stress at toe **{res['sigma_toe_MPa']:g} MPa**, at plate {res['sigma_plate_MPa']:g} MPa, deflection {res['deflection_mm']:g} mm "
+           f"Stress at toe **{_q(res['sigma_toe_MPa'])} MPa**, at plate {res['sigma_plate_MPa']:g} MPa, deflection {res['deflection_mm']:g} mm "
            f"({end} ends). Utilisation {res['utilisation']:g} " + ('- OK.' if res['utilisation'] <= 1 else '- **exceeds yield, increase the profile**.'))
     return [{'role': 'user', 'content': user}, {'role': 'assistant', 'content': tool_block('stiffener_check', args)},
             result_msg('stiffener_check', res), {'role': 'assistant', 'content': ans}]
@@ -449,6 +454,79 @@ def t_clean(r, tools):
             result_msg('geometry_clean', out), {'role': 'assistant', 'content': ans}]
 
 
+_REPAIR_ASK = {
+    'holes_below': ['holes smaller than {v:g} mm', 'holes below {v:g}', 'bolt holes dia {v:g}', 'all holes up to {v:g} mm', 'openings < {v:g} mm'],
+    'fillets_below': ['fillets below R{v:g}', 'rounds smaller than {v:g} mm', 'fillets up to r{v:g}', 'blends below {v:g} mm radius'],
+    'chamfers_below': ['chamfers below {v:g}', 'chamfers under {v:g} mm', 'bevels up to {v:g} mm'],
+    'bosses_below': ['pins under {v:g} mm', 'small bosses below dia {v:g}', 'studs smaller than {v:g} mm'],
+}
+
+
+def t_repair(r, tools):
+    """uploaded CAD part + the user's clean-up words -> repair_model with the sizes read from the words -> verified result"""
+    import cadquery as cq
+    L, B, T = float(r.choice([160, 200, 240, 300])), float(r.choice([80, 100, 120])), float(r.choice([12, 16, 20]))
+    hd, big, fr, ch, bd = (float(r.choice([10, 12, 14, 18, 22])), float(r.choice([40, 50, 60])), float(r.choice([5, 6, 8])),
+                           float(r.choice([1.5, 2])), float(r.choice([8, 10])))
+    b = cq.Workplane('XY').box(L, B, T).edges('|Z').fillet(fr)
+    if r.random() < 0.6:
+        b = b.edges('>Z').chamfer(ch)
+    b = b.faces('<Z').workplane().pushPoints([(-L / 3, 0), (L / 3, 0)]).hole(hd)
+    b = b.faces('<Z').workplane().hole(big)
+    if r.random() < 0.5:
+        b = b.faces('>Z').workplane().center(0, B / 3.5).circle(bd / 2).extrude(T * 0.6)
+    name = r.choice(['bracket', 'lug', 'foundation_plate', 'pad', 'insert']) + f'_{r.randint(100, 999)}.step'
+    cq.exporters.export(b, os.path.join(tools.workdir, name))
+    lim = {'holes_below': hd + r.choice([2, 5, 8]), 'fillets_below': fr + r.choice([2, 4]), 'chamfers_below': ch + r.choice([1, 3]),
+           'bosses_below': bd + r.choice([2, 4])}
+    keys = r.sample(list(lim), r.choice([1, 2, 2, 3]))
+    parts = [r.choice(_REPAIR_ASK[k]).format(v=lim[k]) for k in keys]
+    head = r.choice(['Clean up {f} for FEA: remove ', 'Defeature {f} - remove ', 'Prepare {f} for meshing, take out ',
+                     'I uploaded {f}. Please remove ', '{f}: simplify for FE, remove '])
+    q = head.format(f=name) + (', '.join(parts[:-1]) + ' and ' + parts[-1] if len(parts) > 1 else parts[0])
+    mesh = r.random() < 0.25
+    if mesh:
+        q += r.choice([', then mesh it at 20 mm', ' and mesh with 20 mm elements'])
+    args = {'file': name, **{k: lim[k] for k in keys}}
+    if mesh:
+        args['mesh_size'] = 20.0
+    out = tools.call('repair_model', args)
+    if 'error' in out or not out.get('summary', {}).get('valid'):
+        return None
+    ans = out['plain_english']
+    if mesh and isinstance(out.get('mesh'), dict) and 'error' not in out['mesh']:
+        ans += ' ' + str(out['mesh'].get('plain_english') or f"Mesh: {out['mesh'].get('nodes')} nodes, {out['mesh'].get('elements')} elements.")
+    if any('could not be removed' in a for a in out['actions']):
+        ans += ' The features that were kept would break the solid if removed; remove them by hand in CAD, or mesh them as they are.'
+    return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('repair_model', args)},
+            result_msg('repair_model', out), {'role': 'assistant', 'content': ans}]
+
+
+def t_fe_repair(r, tools):
+    """dirty FE mesh (duplicates, a loose bit, a collapsed node) -> repair_model -> what was fixed"""
+    from shipbrain.femodel import FEModel
+    name, res = _small_model(r, tools)
+    src = name + r.choice(['.bdf', '.inp'])
+    m = FEModel.read(os.path.join(tools.workdir, src))
+    eids = list(m.elems)
+    for eid in r.sample(eids, min(len(eids), r.randint(1, 4))):
+        m.add_elem(m.elems[eid]['type'], list(m.elems[eid]['nodes']), m.elems[eid]['pid'], 'DUP')
+    if r.random() < 0.6:
+        pid = next(p for p, v in m.props.items() if v.get('kind') == 'shell')
+        a, b, c = (m.add_node([-900, 0, 0]), m.add_node([-800, 0, 0]), m.add_node([-800, 100, 0]))
+        m.add_elem('tria', [a, b, c], pid, 'LOOSE')
+    for n in r.sample(list(m.nodes), 2):
+        m.add_node(m.nodes[n] + 0.001)                               # near-coincident free nodes
+    m.write(os.path.join(tools.workdir, src))
+    q = r.choice(['Repair the mesh {f} before solving', '{f} has duplicates and loose elements, clean it',
+                  'Fix the FE model {f}: merge nodes, remove bad elements', 'Clean up {f} for FEA', 'Check and repair {f}']).format(f=src)
+    out = tools.call('repair_model', {'file': src})
+    if 'error' in out:
+        return None
+    return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('repair_model', {'file': src})},
+            result_msg('repair_model', out), {'role': 'assistant', 'content': out['plain_english']}]
+
+
 CHAT = [
     ('Why are stiffeners modelled with shell webs instead of beams?',
      'Shell webs share nodes with the plate, so the stiffener and its attached plating bend together without needing beam offsets, '
@@ -504,7 +582,7 @@ def make_rules_task(entries):
 TASKS = [('mesh', 30, lambda r, T: t_mesh(r, T)), ('mesh_fix', 6, lambda r, T: t_mesh(r, T, 'fix')),
          ('mesh_assume', 6, lambda r, T: t_mesh(r, T, 'assume')), ('plate', 12, t_plate), ('stiff', 12, t_stiff),
          ('buckle', 5, t_buckle), ('section', 8, t_section), ('calc', 4, t_calc), ('chat', 3, t_chat), ('plates', 4, t_plates), ('program', 12, t_program), ('cad_bank', 14, t_cad_bank),
-         ('fileinfo', 4, t_fileinfo), ('convert', 4, t_convert), ('edit', 5, t_edit), ('clean', 3, t_clean)]
+         ('fileinfo', 4, t_fileinfo), ('convert', 4, t_convert), ('edit', 5, t_edit), ('clean', 3, t_clean), ('fe_repair', 3, t_fe_repair)]
 
 
 def main(argv=None):
@@ -531,6 +609,7 @@ def main(argv=None):
     tasks = list(TASKS)
     if has_cq and not a.no_cad:
         tasks.append(('cad', 6, t_cad))
+        tasks.append(('repair', 5, t_repair))
     if len(kb):
         tasks.append(('rules', 25, make_rules_task([d for d in kb.docs if d.get('id')])))
     sysmsg = {'role': 'system', 'content': agent.system_prompt(tools)}

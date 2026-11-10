@@ -139,12 +139,21 @@ class Tools:
                       'equivalence{tol} | delete{group|box|ids|types} | remove_free_nodes | translate{d:[x,y,z]} | mirror{axis,value} | '
                       'refine | split_quads | renumber{node_start,elem_start} | merge{file} | set_thickness{pid,t} | '
                       'shell_to_solid{layers} (2D->3D) | solid_skin{t} (3D->2D) | edges_to_beams{which:"free"|"joints"} (2D->1D) | '
-                      'beams_to_shells{height,t} (1D->2D)',
+                      'beams_to_shells{height,t} (1D->2D) | remove_degenerate | orient_normals{ref?} | remove_small_parts{min_elements} | repair (all fixes)',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'ops': {'type': 'array'}, 'out': {'type': 'string'}},
                        'required': ['file', 'ops']})
         self.register('geometry_clean', self.geometry_clean, 'Clean unclean geometry before meshing: a plate list (repeated/in-line points, '
                       'corners that almost meet, warped plates, slivers, duplicates, tiny holes) or a STEP file (repair, sew, merge split faces).',
                       {'type': 'object', 'properties': {'plates': {'type': 'array'}, 'file': {'type': 'string'}, 'merge_tol': {'type': 'number'}}})
+        num_ = {'type': 'number'}
+        self.register('repair_model', self.repair_model, 'Repair / clean up an uploaded model for FEA, as the user asks. CAD (STEP/BREP): '
+                      'remove holes, fillets, chamfers, bosses or small faces up to a size (mm, mm2), then sew and fix; '
+                      'FE mesh (bdf/inp): merge nodes, remove degenerate/duplicate elements, fix normals, delete loose bits. '
+                      'request = the user\'s words (sizes are read from it); explicit sizes win. mesh_size meshes the result.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'request': {'type': 'string'}, 'holes_below': num_,
+                                                         'fillets_below': num_, 'chamfers_below': num_, 'faces_below': num_,
+                                                         'bosses_below': num_, 'sew': {'type': 'boolean'}, 'mesh_size': num_},
+                       'required': ['file']})
         self.register('fatigue_mesh', self.fatigue_mesh, 'Fatigue hot-spot local model: cut a box around the hot spot from a plate assembly, '
                       'mesh it t x t, give the read-out points at 0.5t / 1.5t; with solve=true also run CalculiX and return the '
                       'extrapolated hot-spot stress (1.5 s(0.5t) - 0.5 s(1.5t)).',
@@ -325,6 +334,45 @@ class Tools:
         c = m.check()
         return {'file': out, 'steps': log, 'model': m.summary(), 'check': c.get('verdict', 'n/a'),
                 'parts': c.get('all_elements_parts')}
+
+    def repair_model(self, file, request=None, holes_below=None, fillets_below=None, chamfers_below=None, faces_below=None,
+                     bosses_below=None, sew=None, mesh_size=None, min_elements=5):
+        """CAD defeaturing / repair or FE mesh repair, driven by the user's words and/or explicit sizes"""
+        base, ext = os.path.splitext(os.path.basename(file))
+        ext = ext.lower()
+        if ext in ('.bdf', '.dat', '.nas', '.inp'):
+            from .femodel import FEModel
+            m = FEModel.read(self._path(file))
+            before = m.summary()
+            steps = m.repair(min_elements=min_elements)
+            out = base + '_repaired' + ext
+            m.write(self._path(out))
+            c = m.check()
+            s = m.summary()
+            pe = (f"Repaired {file}: merged {steps['equivalence']['merged_nodes']} coincident nodes, removed "
+                  f"{steps['degenerate']['degenerate_or_duplicate_removed']} bad/duplicate elements, turned "
+                  f"{steps['degenerate']['inverted_solids_fixed']} inside-out solids, flipped {steps['normals']['shells_flipped']} shell "
+                  f"normals, deleted {steps['small_parts'].get('elements_removed', 0)} element(s) in small loose parts. "
+                  f"{before['elements']} -> {s['elements']} elements, {c.get('all_elements_parts')} connected part(s). Saved {out}.")
+            return {'file': out, 'steps': steps, 'model': s, 'check': c.get('verdict', 'n/a'), 'plain_english': pe}
+        from . import geofix
+        from .cadplates import import_cad
+        import cadquery as cq
+        args, assumed = geofix.args_from_text(request) if request else ({}, [])
+        for k, v in (('holes_below', holes_below), ('fillets_below', fillets_below), ('chamfers_below', chamfers_below),
+                     ('faces_below', faces_below), ('bosses_below', bosses_below), ('sew', sew)):
+            if v is not None:
+                args[k] = v
+        shp, actions, summ = geofix.repair(import_cad(self._path(file)), **args)
+        out = base + '_repaired.step'
+        cq.exporters.export(cq.Workplane().add(shp), self._path(out))
+        res = {'file': out, 'settings': args, 'actions': actions, 'summary': summ,
+               'plain_english': ' '.join(actions) + f" Faces {summ['faces_before']} -> {summ['faces_after']}, volume change "
+                                f"{summ['volume_change_pct']} %, valid solid: {'yes' if summ['valid'] else 'NO'}. Saved {out}."
+                                + (f" Assumed: {', '.join(assumed)} mm." if assumed else '')}
+        if mesh_size:
+            res['mesh'] = self.cad_mesh(out, element_size=mesh_size)
+        return res
 
     def geometry_clean(self, plates=None, file=None, merge_tol=2.0):
         from . import geoclean

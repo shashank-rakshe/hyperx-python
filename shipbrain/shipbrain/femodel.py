@@ -10,6 +10,8 @@ Convert:  2D -> 3D (shell to solid through the thickness), 3D -> 2D (solid skin)
           1D -> 2D (offset beams to shell webs), quad -> tria.
 Edit:     equivalence (merge coincident nodes), delete by group / box / ids, remove free nodes, mirror, translate,
           refine (split every element in 4 / 8), renumber, merge two models, offset plates, set thickness.
+Repair:   remove degenerate / duplicate elements, fix inside-out solids, consistent shell normals, delete small loose
+          parts; repair() does all of them in one call.
 Units: whatever the input uses (shipbrain: mm, N, MPa, t/mm3).
 """
 import math, os
@@ -489,6 +491,9 @@ class FEModel:
         for ld in self.loads:
             if ld['type'] == 'force':
                 ld['node'] = rep.get(ld['node'], ld['node'])
+        for e in self.elems.values():                      # quad with one collapsed edge -> triangle
+            if e['type'] == 'quad' and _collapsed_quad(e['nodes']):
+                e['type'], e['nodes'] = 'tria', _collapsed_quad(e['nodes'])
         bad = [eid for eid, e in self.elems.items() if len(set(e['nodes'])) < len(e['nodes']) and e['type'] in ('bar', 'quad', 'hexa')]
         for eid in bad:                                    # collapsed elements
             del self.elems[eid]
@@ -501,6 +506,130 @@ class FEModel:
             del self.nodes[n]
             self.spc.pop(n, None)
         return {'removed_free_nodes': len(free)}
+
+    def _drop_elems(self, kill):
+        for eid in kill:
+            self.elems.pop(eid, None)
+        for ld in self.loads:
+            if ld['type'] == 'pressure':
+                ld['elems'] = [e for e in ld['elems'] if e in self.elems]
+
+    def remove_degenerate(self, tol=1e-6):
+        """remove zero-length bars, zero-area shells, zero-volume solids, collapsed and duplicate elements;
+        solids with negative volume (inside-out node order) are turned the right way"""
+        kill, seen, flipped = [], {}, 0
+        for eid in sorted(self.elems):
+            e = self.elems[eid]
+            ns = e['nodes']
+            if any(n not in self.nodes for n in ns):
+                kill.append(eid)
+                continue
+            P = [self.nodes[n] for n in ns]
+            d = DIM[e['type']]
+            if d == 1:
+                size = np.linalg.norm(P[1] - P[0])
+            elif d == 2:
+                c = np.mean(P, 0)
+                size = 0.5 * np.linalg.norm(sum(np.cross(P[k] - c, P[(k + 1) % len(P)] - c) for k in range(len(P))))
+            else:
+                size = _solid_volume(e['type'], P)
+                if size < -tol:
+                    e['nodes'] = _reverse(e['type'], ns)
+                    flipped += 1
+                    size = -size
+            if e['type'] == 'quad' and _collapsed_quad(ns) and abs(size) > tol:
+                e['type'], e['nodes'] = 'tria', _collapsed_quad(ns)          # quad with one collapsed edge -> triangle
+                ns = e['nodes']
+            if len(set(ns)) < len(ns) or abs(size) <= tol:
+                kill.append(eid)
+                continue
+            key = (DIM[e['type']], tuple(sorted(ns)))
+            if key in seen:
+                kill.append(eid)                        # same nodes as an earlier element = duplicate
+            else:
+                seen[key] = eid
+        self._drop_elems(kill)
+        return {'degenerate_or_duplicate_removed': len(kill), 'inverted_solids_fixed': flipped, **self.remove_free_nodes()}
+
+    def orient_normals(self, ref=None):
+        """make neighbouring shell elements point the same way (pressure and top/bottom stress need it).
+        Walks each connected plate field over edges shared by exactly two shells; the first element of each field
+        (or the one nearest ref [x,y,z] direction) sets the side."""
+        sh = [eid for eid, e in self.elems.items() if DIM[e['type']] == 2]
+        edge = {}
+        for eid in sh:
+            ns = self.elems[eid]['nodes']
+            for k in range(len(ns)):
+                edge.setdefault(frozenset((ns[k], ns[(k + 1) % len(ns)])), []).append(eid)
+
+        def dirn(eid, a, b):                         # +1 if the element runs a->b along its node loop
+            ns = self.elems[eid]['nodes']
+            i = ns.index(a)
+            return 1 if ns[(i + 1) % len(ns)] == b else -1
+
+        def normal(eid):
+            P = [self.nodes[n] for n in self.elems[eid]['nodes']]
+            c = np.mean(P, 0)
+            return sum(np.cross(P[k] - c, P[(k + 1) % len(P)] - c) for k in range(len(P)))
+        done, flipped, fields = set(), 0, 0
+        for start in sh:
+            if start in done:
+                continue
+            fields += 1
+            if ref is not None and normal(start) @ np.asarray(ref, float) < 0:
+                self.elems[start]['nodes'] = _reverse(self.elems[start]['type'], self.elems[start]['nodes'])
+                flipped += 1
+            done.add(start)
+            stack = [start]
+            while stack:
+                eid = stack.pop()
+                ns = self.elems[eid]['nodes']
+                for k in range(len(ns)):
+                    a, b = ns[k], ns[(k + 1) % len(ns)]
+                    nb = edge.get(frozenset((a, b)), [])
+                    if len(nb) != 2:                     # free edge or plate joint (3+ plates): stop there
+                        continue
+                    o = nb[0] if nb[1] == eid else nb[1]
+                    if o in done:
+                        continue
+                    if dirn(o, a, b) == 1:               # neighbour runs the shared edge the same way -> opposite normal
+                        self.elems[o]['nodes'] = _reverse(self.elems[o]['type'], self.elems[o]['nodes'])
+                        flipped += 1
+                    done.add(o)
+                    stack.append(o)
+        return {'shell_fields': fields, 'shells_flipped': flipped}
+
+    def remove_small_parts(self, min_elements=5):
+        """delete loose pieces (not connected to the main model) that have fewer than min_elements elements"""
+        parent = {n: n for n in self.nodes}
+
+        def find(a):
+            while parent[a] != a:
+                parent[a] = parent[parent[a]]
+                a = parent[a]
+            return a
+        for e in self.elems.values():
+            r = find(e['nodes'][0])
+            for n in e['nodes'][1:]:
+                parent[find(n)] = r
+        parts = {}
+        for eid, e in self.elems.items():
+            parts.setdefault(find(e['nodes'][0]), []).append(eid)
+        if len(parts) < 2:
+            return {'parts': len(parts), 'small_parts_removed': 0}
+        biggest = max(len(v) for v in parts.values())
+        kill = [eid for v in parts.values() if len(v) < min_elements and len(v) < biggest for eid in v]
+        self._drop_elems(kill)
+        return {'parts': len(parts), 'small_parts_removed': sum(1 for v in parts.values() if len(v) < min_elements and len(v) < biggest),
+                'elements_removed': len(kill), **self.remove_free_nodes()}
+
+    def repair(self, tol=0.01, min_elements=5):
+        """one-call mesh repair: merge coincident nodes, remove degenerate / duplicate elements, fix inside-out solids,
+        make shell normals consistent, delete small loose parts and free nodes"""
+        out = {'equivalence': self.equivalence(tol), 'degenerate': self.remove_degenerate(),
+               'normals': self.orient_normals(), 'small_parts': self.remove_small_parts(min_elements)}
+        out['free_nodes'] = self.remove_free_nodes()
+        return out
 
     def delete(self, group=None, box=None, ids=None, types=None):
         """delete elements by group name, box [[xmin,ymin,zmin],[xmax,ymax,zmax]] (centroid inside), ids or types"""
@@ -853,6 +982,16 @@ def _bar_orient(a, b):
     d = d / (np.linalg.norm(d) or 1)
     v = np.array([0.0, 0.0, 1.0]) if abs(d[2]) < 0.9 else np.array([1.0, 0.0, 0.0])
     return v.tolist()
+
+
+def _collapsed_quad(ns):
+    """triangle nodes if exactly one edge of the quad has collapsed (two neighbouring nodes the same), else None"""
+    if len(set(ns)) != 3:
+        return None
+    for k in range(4):
+        if ns[k] == ns[(k + 1) % 4]:
+            return [ns[i] for i in range(4) if i != k]
+    return None
 
 
 def _reverse(typ, ns):

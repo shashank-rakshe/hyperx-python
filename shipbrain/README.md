@@ -41,6 +41,7 @@ simple English, and to call `file_info` first when you ask about an uploaded fil
 | Tool | What it does |
 |---|---|
 | `fe_convert` | Nastran `.bdf` (read with **pyNastran**) ↔ Abaqus/CalculiX `.inp` ↔ ANSYS APDL `.mac`. Writes driver scripts for **PyMAPDL** (`ansys-mapdl-core`) and **Abaqus/CAE** (Python). Bars, shells, solids, properties, materials, supports and loads are kept: the same CalculiX answer through every format (test) |
+| `repair_model` | **geometry repair for FEA from your words**: upload a STEP and say e.g. *"remove holes below 20, fillets below R10, chamfers under 3 and pins under 12 mm"* — holes (with their edge chamfers), fillets, chamfer strips, bosses/pins and small faces are removed (OpenCascade defeaturing), then sewn and fixed; every removal is re-counted on the result, and anything that would break the solid is kept and reported. FE meshes (bdf/inp): merge nodes, remove degenerate/duplicate elements, fix inside-out solids, consistent shell normals, delete loose bits. `mesh_size` meshes the clean part straight away | test bracket: 23 faces → 7, all 11 small features removed, valid solid |
 | `fe_edit` | equivalence, delete (group / box / ids / type), remove free nodes, translate, **mirror** (half → full breadth), **refine** (supports carried over; converges to Roark), split quads, renumber, merge models, set thickness |
 | element-type conversion (`fe_edit` ops) | 2D → 3D `shell_to_solid` (hexa/penta through the thickness), 3D → 2D `solid_skin`, 2D → 1D `edges_to_beams`, 1D → 2D `beams_to_shells` |
 

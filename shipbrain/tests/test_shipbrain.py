@@ -1055,3 +1055,46 @@ def test_solver_discovery_and_run(tmp_path, monkeypatch):
                                 'plates': [{'id': 'P', 't': 10, 'outline': [[0, 0, 0], [a, 0, 0], [a, b, 0], [0, b, 0]]}]}, str(tmp_path))
         r = agent.Tools(tmp_path).call('solve', {'file': 'p.bdf', 'solver': 'calculix', 'analysis': 'static'})
         assert r['max_displacement_mm'] > 0 and 'max displacement' in r['plain_english']
+
+
+def test_cad_repair_removes_features_from_words(tmp_path):
+    cq = pytest.importorskip('cadquery')
+    from shipbrain import geofix
+    from shipbrain.agent import Tools
+    b = cq.Workplane('XY').box(200, 100, 20).edges('|Z').fillet(8).edges('>Z').chamfer(2)
+    b = b.faces('<Z').workplane().pushPoints([(-60, 0), (60, 0)]).hole(12)
+    b = b.faces('<Z').workplane().hole(40)
+    b = b.faces('>Z').workplane().center(0, 30).circle(5).extrude(15)
+    cq.exporters.export(b, str(tmp_path / 'part.step'))
+    req = 'remove holes below 20, fillets below R10, chamfers under 3 and pins under 12 mm'
+    assert geofix.args_from_text(req)[0] == {'holes_below': 20, 'fillets_below': 10, 'chamfers_below': 3, 'bosses_below': 12}
+    out = Tools(str(tmp_path)).call('repair_model', {'file': 'part.step', 'request': req})
+    s = out['summary']
+    assert s['valid'] and s['solids'] == 1 and s['faces_after'] == 7          # box + the 40 mm hole that was kept
+    assert not any('could not' in a for a in out['actions'])
+    shp = cq.importers.importStep(str(tmp_path / out['file'])).val()
+    cyl = [f for f in shp.Faces() if f.geomType() == 'CYLINDER']
+    assert len(cyl) == 1 and abs(geofix._cyl_info(cyl[0])[0] - 20) < 1e-6
+
+
+def test_fe_mesh_repair(tmp_path):
+    from shipbrain.femodel import FEModel
+    m = FEModel()
+    m.mats[1] = {'E': 2e5, 'nu': .3, 'rho': 7.85e-9, 'name': 'S'}
+    m.props[1] = {'kind': 'shell', 't': 10.0, 'mid': 1}
+    n = {(i, j): m.add_node([i * 100, j * 100, 0]) for i in range(4) for j in range(3)}
+    for i in range(3):
+        for j in range(2):
+            q = [n[i, j], n[i + 1, j], n[i + 1, j + 1], n[i, j + 1]]
+            m.add_elem('quad', q[::-1] if (i + j) % 2 else q, 1)
+    m.add_elem('quad', [n[0, 0], n[1, 0], n[1, 1], n[0, 1]], 1)                 # duplicate
+    m.add_elem('tria', [n[0, 0], n[1, 0], n[2, 0]], 1)                         # zero area
+    a, b, c = m.add_node([1000, 0, 0]), m.add_node([1100, 0, 0]), m.add_node([1100, 100, 0])
+    m.add_elem('tria', [a, b, c], 1)                                           # loose bit
+    r = m.repair()
+    assert r['degenerate']['degenerate_or_duplicate_removed'] == 2
+    assert r['small_parts']['small_parts_removed'] == 1 and len(m.elems) == 6
+    nz = [np.cross(m.nodes[e['nodes'][1]] - m.nodes[e['nodes'][0]], m.nodes[e['nodes'][2]] - m.nodes[e['nodes'][0]])[2]
+          for e in m.elems.values()]
+    assert all(z > 0 for z in nz) or all(z < 0 for z in nz)                    # one consistent side
+    assert m.check()['all_elements_parts'] == 1
