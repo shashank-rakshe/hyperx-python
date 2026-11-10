@@ -872,3 +872,23 @@ def test_cad_view_check(tmp_path):
         cq.exporters.export(m, str(tmp_path / f'{name}.step'))
         r = t.call('cad_view_check', {'model': f'{name}.step', 'drawing': 'front.png', 'views': ['front']})
         assert r['verdict'] == want, (name, r['plain_english'])
+
+
+# ------------------------------------------------------------------ split-independent structure comparison
+def test_coverage_ignores_how_members_are_split():
+    import copy
+    from shipbrain import members
+    A = _structure()
+    B = copy.deepcopy(A)
+    deck = B['blocks'][0]['panels'][0]
+    s0 = deck['stiffeners'][0]                                    # one long stiffener -> two halves (like a yard model)
+    deck['stiffeners'][0] = dict(s0, trace=[[0, 800], [3000, 800]])
+    deck['stiffeners'].append(dict(s0, name='L0b', trace=[[3000, 800], [6000, 800]]))
+    deck['plates'] = [dict(deck['plates'][0], contour=[[0, 0], [3000, 0], [3000, 4000], [0, 4000]]),   # plate split at a seam
+                      dict(deck['plates'][0], name='D2', contour=[[3000, 0], [6000, 0], [6000, 4000], [3000, 4000]])]
+    c = members.coverage(A, B)
+    assert c['stiffeners_A_found_in_B'] == 1.0 and c['plates_A_found_in_B'] == 1.0 and c['plates_A_same_thickness'] == 1.0
+    del deck['stiffeners'][3]                                      # one of four stiffeners removed
+    deck['plates'][1]['thk'] = 14.0                                # half of the deck thicker
+    c = members.coverage(A, B)
+    assert abs(c['stiffeners_A_found_in_B'] - 0.75) < 0.02 and abs(c['plates_A_same_thickness'] - (27.6 - 12) / 27.6) < 0.03   # 12 of 27.6 m2 now thicker

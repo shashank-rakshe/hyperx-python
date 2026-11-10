@@ -176,7 +176,15 @@ class Tools:
                                                          'views': {'type': 'array', 'description': '["front","top","side"]'},
                                                          'page': {'type': 'integer'}, 'crops': {'type': 'object', 'description': '{"front": [x0,y0,x1,y1]}'}},
                        'required': ['model', 'drawing']})
-        self.register('compare_structures', self.compare_structures, 'Compare two versions of a structure model member by member '
+        self.register('drawing_to_model', self.drawing_to_model, 'Read a SHIP structural drawing (PDF deck plans / elevations / sections) '
+                      'into a member model XML with the ship drawing reader (frame / OFF C.L / deck-height calibration, line-style and '
+                      'label rules); optional coverage score against a reference XML. Takes minutes.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'reference': {'type': 'string'}, 'settings': {'type': 'string'},
+                                                         'pages': {'type': 'string'}, 'raster': {'type': 'boolean'}}, 'required': ['file']})
+        self.register('compare_structures', self.compare_structures, 'Compare two structure models. method "coverage" (default): '
+                      'stiffener length and plate area found in the other model with the same section / thickness, both ways, and where '
+                      'the gaps are - works when members are split differently (drawing-read vs yard model). method "members": '
+                      'one-to-one changes between two versions of one model. ',
                       '(structure JSON, or ship XML through your plugin): plates (thickness, grade), stiffeners (section, grade), brackets, '
                       'openings - same / changed / moved / added / removed, with positions.',
                       {'type': 'object', 'properties': {'a': {'type': 'string'}, 'b': {'type': 'string'}, 'tol': {'type': 'number'},
@@ -370,10 +378,41 @@ class Tools:
         return {'views': out, 'verdict': worst['verdict'] if all(r['verdict'] != 'FAIL' for r in out) else 'FAIL',
                 'overlay': worst['overlay'], 'plain_english': ' '.join(r['plain_english'] for r in out)}
 
-    def compare_structures(self, a, b, tol=5.0, move_tol=300.0):
+    def compare_structures(self, a, b, tol=None, move_tol=300.0, method='coverage'):
+        """coverage (default): stiffener length / plate area found in the other model - works when the two models split
+        members differently (drawing-read vs yard model). members: one-to-one member matching (two versions of ONE model)."""
         from . import members
         A, B = members.load(self._path(a), self.converters), members.load(self._path(b), self.converters)
-        return members.compare(A, B, tol, move_tol)
+        if method == 'members':
+            return members.compare(A, B, tol or 5.0, move_tol)
+        return members.coverage(A, B, tol or 50.0)
+
+    def drawing_to_model(self, file, settings=None, reference=None, pages=None, raster=False):
+        """ship drawing (PDF) -> member model XML with the ship drawing reader (its rules + calibration); optional coverage
+        score against a reference XML. Takes minutes for a full drawing."""
+        import subprocess, glob as _g
+        d = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'shiptools', 'deckrules_tool')
+        out = os.path.join(self.workdir, os.path.splitext(os.path.basename(file))[0] + '_read')
+        cmd = [sys.executable, '-m', 'deckrules.build_ship', self._path(file), '--out', out, '--no-verify',
+               '--settings', self._path(settings) if settings else os.path.join(d, 'settings_new_drawing.json')]
+        if pages:
+            cmd += ['--pages', str(pages)]
+        if raster:
+            cmd.append('--raster')
+        r = subprocess.run(cmd, cwd=d, capture_output=True, text=True, timeout=7200)
+        xmls = sorted(_g.glob(os.path.join(out, '*_moulded.xml')), key=os.path.getsize)
+        if not xmls:
+            raise RuntimeError('the drawing reader made no model: ' + (r.stderr or r.stdout)[-600:])
+        questions = [l[10:] for l in r.stdout.splitlines() if l.startswith('QUESTION:')]
+        res = {'model_xml': os.path.relpath(xmls[-1], self.workdir), 'report': os.path.relpath(os.path.join(out, 'BUILD_REPORT.md'), self.workdir),
+               'open_questions': questions[:30],
+               'plain_english': f'Read the drawing into a member model ({os.path.basename(xmls[-1])}). The reader left '
+                                f'{len(questions)} open question(s) for an engineer instead of guessing.'}
+        if reference:
+            c = self.compare_structures(reference, res['model_xml'])
+            res['vs_reference'] = c
+            res['plain_english'] += ' Against the reference (A = reference, B = from the drawing): ' + c['plain_english']
+        return res
 
     def structure_to_mesh(self, file, element_size=300.0, merge_tol=10.0, step=False):
         from . import members, geoclean

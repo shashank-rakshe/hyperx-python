@@ -214,3 +214,123 @@ def load(path, converters=None):
     for fn in (converters or []):
         return fn(path)
     raise ValueError('reading this XML needs your ship plugin (start the app with --plugin <folder with ship_xml_kit.py>)')
+
+
+# ====================================================================== split-independent comparison (coverage)
+def _seg_index(segs, cell):
+    grid = {}
+    for k, (a, b, _) in enumerate(segs):
+        lo = np.floor(np.minimum(a, b) / cell).astype(int)
+        hi = np.floor(np.maximum(a, b) / cell).astype(int)
+        if np.prod(hi - lo + 1) > 5000:
+            grid.setdefault(tuple(lo), []).append(k)
+            continue
+        for x in range(lo[0], hi[0] + 1):
+            for y in range(lo[1], hi[1] + 1):
+                for z in range(lo[2], hi[2] + 1):
+                    grid.setdefault((x, y, z), []).append(k)
+    return grid
+
+
+def _line_cover(src, dst, tol, step):
+    """share of the length of src lines that has a dst line within tol (and with the same section)"""
+    cell = max(tol * 4, 500.0)
+    grid = _seg_index(dst, cell)
+    tot = hit = same = 0.0
+    miss = []
+    for a, b, sec in src:
+        L = float(np.linalg.norm(b - a))
+        n = max(1, int(L // step))
+        for t in (np.arange(n) + 0.5) / n:
+            p = a + t * (b - a)
+            best = None
+            for k in grid.get(tuple(np.floor(p / cell).astype(int)), ()):
+                c, d, s2 = dst[k]
+                cd = d - c
+                u = float(np.clip((p - c) @ cd / (cd @ cd + 1e-12), 0, 1))
+                dist = float(np.linalg.norm(c + u * cd - p))
+                if dist <= tol and (best is None or dist < best[0] or (s2 == sec and best[1] != sec)):
+                    best = (dist, s2)
+            tot += L / n
+            if best:
+                hit += L / n
+                same += L / n if best[1] == sec else 0
+            else:
+                miss.append(p)
+    return tot, hit, same, miss
+
+
+def _area_cover(src, dst, tol, step):
+    """share of plate area of src lying on a dst plate of the same plane (and the same thickness)"""
+    from .platemesh import Plate, _inside
+    P2 = []
+    for d in dst:
+        try:
+            P2.append((Plate({'id': 'x', 't': d['thk'] or 1, 'outline': d['pts'].tolist()}, 1e-3), d['thk']))
+        except ValueError:
+            pass
+    tot = hit = same = 0.0
+    miss = []
+    for d in src:
+        try:
+            P = Plate({'id': 'x', 't': d['thk'] or 1, 'outline': d['pts'].tolist()}, 1e-3)
+        except ValueError:
+            continue
+        L2 = P.loops2[0]
+        lo, hi = L2.min(0), L2.max(0)
+        xs, ys = np.arange(lo[0] + step / 2, hi[0], step), np.arange(lo[1] + step / 2, hi[1], step)
+        if not len(xs) or not len(ys):
+            continue
+        G = np.array([(x, y) for x in xs for y in ys])
+        G = G[_inside(G, P.loops2)]
+        cand = [(Q, t) for Q, t in P2 if abs(abs(Q.n @ P.n) - 1) < 1e-3 and abs(Q.plane_dist(P.o)) <= tol]
+        for g in G:
+            p3 = P.to3(g)
+            ok = [t for Q, t in cand if Q.in_or_on(Q.to2(p3), tol)[0]]
+            tot += step * step
+            if ok:
+                hit += step * step
+                same += step * step if d['thk'] in ok else 0
+            else:
+                miss.append(p3)
+    return tot, hit, same, miss
+
+
+def _clusters(points, cell=2000.0, top=8):
+    grid = {}
+    for p in points:
+        grid.setdefault(tuple(np.floor(np.asarray(p) / cell).astype(int)), []).append(p)
+    big = sorted(grid.values(), key=len, reverse=True)[:top]
+    return [{'around_mm': np.round(np.mean(g, 0), -1).tolist(), 'samples': len(g)} for g in big]
+
+
+def coverage(A, B, tol=50.0, step=200.0):
+    """compare two structure models independent of how members are split: stiffener length and plate area found in the
+    other model (and with the same section / thickness), both ways; where the biggest differences are"""
+    ia, ib = list(iter_items(A)), list(iter_items(B))
+    sa = [(x['a'], x['b'], x['sec']) for x in ia if x['kind'] == 'stiffener']
+    sb = [(x['a'], x['b'], x['sec']) for x in ib if x['kind'] == 'stiffener']
+    pa = [x for x in ia if x['kind'] == 'plate']
+    pb = [x for x in ib if x['kind'] == 'plate']
+    sA = _line_cover(sa, sb, tol, step)
+    sB = _line_cover(sb, sa, tol, step)
+    aA = _area_cover(pa, pb, tol, step * 2)
+    aB = _area_cover(pb, pa, tol, step * 2)
+    r = lambda h, t: round(h / t, 3) if t else None
+    out = {'stiffener_length_m': [round(sA[0] / 1000), round(sB[0] / 1000)],
+           'stiffeners_A_found_in_B': r(sA[1], sA[0]), 'stiffeners_A_same_section': r(sA[2], sA[0]),
+           'stiffeners_B_found_in_A': r(sB[1], sB[0]),
+           'plate_area_m2': [round(aA[0] / 1e6), round(aB[0] / 1e6)],
+           'plates_A_found_in_B': r(aA[1], aA[0]), 'plates_A_same_thickness': r(aA[2], aA[0]),
+           'plates_B_found_in_A': r(aB[1], aB[0]),
+           'where_B_misses_most': _clusters(sA[3] + aA[3]), 'where_B_has_extra': _clusters(sB[3] + aB[3]),
+           'tolerance_mm': tol}
+    pct = lambda v: '-' if v is None else f'{v * 100:.0f} %'
+    out['plain_english'] = (
+        f"Stiffeners: {pct(out['stiffeners_A_found_in_B'])} of A's {out['stiffener_length_m'][0]} m are also in B "
+        f"({pct(out['stiffeners_A_same_section'])} with the same section); {pct(out['stiffeners_B_found_in_A'])} of B's "
+        f"{out['stiffener_length_m'][1]} m are in A. Plates: {pct(out['plates_A_found_in_B'])} of A's "
+        f"{out['plate_area_m2'][0]} m2 are also in B ({pct(out['plates_A_same_thickness'])} with the same thickness); "
+        f"{pct(out['plates_B_found_in_A'])} of B's {out['plate_area_m2'][1]} m2 are in A. "
+        f"This does not depend on how members are split. Biggest gaps are listed with their position.")
+    return out

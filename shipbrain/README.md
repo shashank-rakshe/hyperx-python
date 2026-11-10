@@ -54,14 +54,16 @@ PyMAPDL and Abaqus need their own licensed software on your PC. ShipBrain writes
 | `compare_mesh_drawing` | FE mesh vs drawing (plan view at a height): % of mesh lines on drawn lines, coverage, and the shift that would line them up (calibration error) with an overlay image |
 | `compare_drawings` (vector) | for PDFs with real lines/text and for DXF it also says **what** changed: lines added/removed, line style changed (solid ↔ dashed, thin ↔ heavy, layer), texts changed/added/removed, each number classified (plate thickness, weld size, section size, frame, dimension, off-centre-line, elevation), e.g. *"text changed '12' → '14' (plate thickness)"*, *"girder line solid → dashed"* |
 | `drawing_check` | checks the arithmetic written on a drawing: products and sums such as `24 x 101.6 = 2438.4`, `6 @ 800 = 4800`, `1200 + 800 = 2000`; lists the ones that do not add up. Reads DXF and PDF text; scans only if Tesseract OCR is installed (optional, Apache-2.0) |
-| `cad_view_check` | checks a 3D model against a drawing view: projects the model (front / top / side), compares the lines both ways and the proportions, and gives PASS / WARN / FAIL with hints (missing hole, extra feature, wrong size) and an overlay image |
+| `cad_view_check` | **machine-part** drawings only (front / top / side views): checks a 3D part against a drawing view: projects the model (front / top / side), compares the lines both ways and the proportions, and gives PASS / WARN / FAIL with hints (missing hole, extra feature, wrong size) and an overlay image |
 | `file_info` | plain-English description of any uploaded file (FE model, STEP, DXF, PDF, image, JSON, XML, text) |
 
 **Structure models (member level)**
 
 | Tool | What it does |
 |---|---|
-| `compare_structures` | two versions of a structure model, member by member: plates (thickness, grade), stiffeners (section, grade), brackets, openings → same / changed / moved / added / removed, with positions. Reads structure JSON, or your ship XML through your private plugin (its `xml_to_members` is picked up automatically) |
+| `drawing_to_model` | reads a **ship** structural drawing (PDF deck plans, elevations, sections) with the ship drawing reader (its own frame / OFF C.L / deck-height calibration, line-style and label rules) into a member model XML; lists the reader's open questions; optional score against a reference XML. On a real deckhouse drawing: 4.4 min, 55 blocks |
+| `compare_structures` (default: coverage) | compares two structure models **independent of how members are split** (a drawing-read model and a yard model never split them the same way): share of stiffener length and plate area found in the other model, with the same section / thickness, both ways, and where the biggest gaps are. Real deckhouse, drawing-read vs yard model: plates 78-82 % (72 % same thickness), stiffeners 63-75 % (55 % same section) |
+| `compare_structures` (method "members") | two versions of ONE structure model, member by member: plates (thickness, grade), stiffeners (section, grade), brackets, openings → same / changed / moved / added / removed, with positions. Reads structure JSON, or your ship XML through your private plugin (its `xml_to_members` is picked up automatically) |
 | `structure_to_mesh` | structure model → cleaned → global 1D + 2D mesh (plates with thickness and openings as shells, stiffeners as beams with their sections), plus a STEP |
 
 **Knowledge and memory (ideas from Voitta's knowledge engine, own implementation)**
