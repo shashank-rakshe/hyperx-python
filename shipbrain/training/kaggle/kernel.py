@@ -7,8 +7,8 @@ Settings come from env-style constants below (kaggle_run.py rewrites them).
 """
 import glob, json, os, shutil, subprocess, sys
 
-BASE = 'unsloth/Qwen3-1.7B'        # fast on a CPU; 'unsloth/Qwen3-4B-Instruct-2507' = better answers, ~2x slower
-DRAFT = 'unsloth/Qwen3-0.6B'      # tiny draft model for speculative decoding on the CPU ('' = skip)
+BASE = 'unsloth/Qwen3-VL-4B-Instruct'   # FIXED base model: read again from training/base_model.json after the clone
+DRAFT = 'unsloth/Qwen3-0.6B'           # tiny draft model for speculative decoding on the CPU ('' = skip)
 N_TRAIN = 4000
 N_EVAL = 200
 EVAL_LIMIT = 60
@@ -107,6 +107,13 @@ PRIVATE = bool(rules or PRIVATE_TRAIN or OWN_PACKS)
 if PRIVATE:
     UPLOAD_MODEL = False                 # a model trained on company data is never published (GitHub repo is public)
     print('private data attached:', rules + PRIVATE_TRAIN + PRIVATE_EVAL + OWN_PACKS, '- the model will NOT be uploaded to GitHub', flush=True)
+# ---- the one fixed base model (training/base_model.json): every run trains it fresh on ALL the data, so nothing is lost
+try:
+    _cfg = json.load(open('training/base_model.json'))
+    BASE, DRAFT = _cfg['base'], _cfg.get('draft', DRAFT)
+    print('base model:', BASE, '| draft:', DRAFT, flush=True)
+except Exception as e:
+    print('(base_model.json not read:', e, ')', flush=True)
 # ---- continue from an older ShipBrain model: attach that run's output (Add Input -> Notebook Output) and start with
 #      SB_CONTINUE=1 python k.py   (default: train fresh from the base model on ALL data - recommended, nothing is forgotten)
 if os.environ.get('SB_CONTINUE') == '1':
@@ -119,6 +126,9 @@ if os.environ.get('SB_CONTINUE') == '1':
 sh(f'python training/make_dataset.py --n {N_TRAIN} --eval-n {N_EVAL} --out data/train.jsonl --eval-out data/eval.jsonl {extra}')
 if not sh('python training/repo_tasks.py --packs packs --out data/repo_train.jsonl --eval-out data/repo_eval.jsonl', required=False):
     open('data/repo_train.jsonl', 'w').close()          # knowledge of shared repos is a bonus, not a blocker
+# synthetic P&ID sheets with exact answer keys: teach the (vision) base model to read P&IDs into pid-to-kg's format
+if not sh('python training/synth_pid.py --n 400 --out data/synth_pid_train.jsonl --img-dir data/pid_images', required=False):
+    open('data/synth_pid_train.jsonl', 'w').close()
 # public P&ID drawing sets (real permitted facilities): downloaded here, prepared with pid-to-kg, learned from; never stored
 if not sh('python training/public_pids.py --out data/public_pid_train.jsonl --max-pages 4', required=False):
     open('data/public_pid_train.jsonl', 'w').close()
@@ -141,7 +151,7 @@ report('scoring the base model')
 sh(f'python training/cad_eval.py --local {BASE} --limit 30 --out /kaggle/working/cad_eval_before.json', required=False)
 sh(f'python training/evaluate.py --local {BASE} --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_before.json', required=False)
 report('training the main model')
-sh(f'python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
+sh(f'MAX_LEN=6144 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/synth_pid_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
 report('scoring the trained model')
 sh('python training/cad_eval.py --local /kaggle/working/shipbrain_model/lora --limit 30 --out /kaggle/working/cad_eval_after.json', required=False)
 sh(f'python training/evaluate.py --local /kaggle/working/shipbrain_model/lora --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_after.json', required=False)

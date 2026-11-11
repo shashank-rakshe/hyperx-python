@@ -131,6 +131,22 @@ user lives on that user's PC and is read at run time, so nobody needs their own 
 | CPU / GPU | `--gpu auto` | uses the card when it works, else the CPU |
 | company data for training | private Kaggle dataset | gives that company its own private model; the public model never sees it |
 
+## One model that also sees: fixed base Qwen3-VL-4B-Instruct
+
+The base model is **fixed** in `training/base_model.json`: `Qwen3-VL-4B-Instruct` (Apache-2.0). One model does text,
+tool use, code and pictures; every Kaggle run trains it fresh on all the data, so nothing is lost and nothing changes
+between runs except what it has learned. The draft model `Qwen3-0.6B` (same tokenizer) keeps it quick on a CPU.
+
+- Files: `shipbrain-q4_k_m.gguf` (~2.5 GB) + `shipbrain-mmproj-f16.gguf` (the image part, ~0.8 GB). Keep them in one
+  folder: `python -m shipbrain --model shipbrain-q4_k_m.gguf` finds the image part by itself.
+- `look(file, page, question)`: the model looks at a picture or a PDF page (drawings, scans, sketches, screenshots).
+- `pid_kg read`: the model reads each rendered P&ID sheet into pid-to-kg's format; every sheet is checked with
+  pid-to-kg's own data model (one retry with the error), then `build` runs its QA.
+- Training pictures: `training/synth_pid.py` draws P&ID sheets (ISA-style symbols) with exact answer keys, made at
+  training time (400 per run); the questions are the same ones `pid_kg read` / `look` ask.
+- Honest limit: a 4B model reads drawings far less reliably than a large model; its sheets are drafts for the QA loop.
+  Ship drawings -> XML stay with the rule-based reader (`drawing_to_model`), which the model can now cross-check with `look`.
+
 ## Other people's code, used whole and in its own language
 
 Nothing is rewritten when it can be used as it is, so no core function can go missing:
@@ -239,7 +255,7 @@ How ShipBrain keeps answers quick without a GPU:
 
 | Measure | Effect |
 |---|---|
-| small model, quantised: **Qwen3-1.7B q4_k_m (~1.1 GB)** is the default; 4B (~2.5 GB) is an option for better answers | 1.7B writes about 2x faster than 4B |
+| one fixed base model: **Qwen3-VL-4B-Instruct q4_k_m (~2.5 GB + 0.8 GB image part)** - text, tools, code and drawings in one model (`training/base_model.json`) | answers stay good; the draft model, the GPU and the prompt cache keep it quick |
 | knowledge lives in the search index and tools, not in the weights | the model stays small; new repos and documents need no retraining |
 | **compact system prompt**: tool names and argument names only (~870 tokens instead of ~2,800). The training data uses the same prompt | the first answer starts about 3x sooner |
 | **prompt cache** (`cache_prompt`, `--cache-reuse`): the fixed system prompt is read once and reused | later questions skip that part |
@@ -326,13 +342,13 @@ python training/evaluate.py --server http://127.0.0.1:8080 --data data/eval.json
 
 # 3. fine-tune on the GPU and export a CPU model
 pip install unsloth
-python training/finetune.py --data data/train.jsonl --base unsloth/Qwen3-4B-Instruct-2507 --out shipbrain_model
+python training/finetune.py --data data/train.jsonl --out shipbrain_model
 
 # 4. score again
 python training/evaluate.py --server http://127.0.0.1:8080 --data data/eval.jsonl --out eval_after.json
 ```
 
-Base model: `Qwen3-1.7B` (fast, weaker), `Qwen3-4B-Instruct-2507` (default), `Qwen3-8B` (best, slower). See
+Base model: **fixed** to `Qwen3-VL-4B-Instruct` in `training/base_model.json` (vision built in; do not change between runs). See
 `packaging/make_llamafile.md` for CPU speeds.
 
 The training data includes the retrieved context exactly as the app adds it at run time, so the model learns to use RAG.

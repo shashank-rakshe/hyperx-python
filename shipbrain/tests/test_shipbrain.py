@@ -1296,3 +1296,62 @@ def test_pid_to_knowledge_graph_runs_as_written(tmp_path):
     assert 'LOOP:F-101' in q['output'] and 'interlock' in q['output']
     assert 'built: yes' in T.call('pid_kg', {'action': 'status', 'work': 'work/mini'})['output']
     assert [x['name'] for x in Skills().match('Convert plant.pdf P&IDs into a knowledge graph')] == ['pid-to-kg']
+
+
+def test_vision_look_and_pid_read_plumbing(tmp_path):
+    """a stand-in vision server (same API as llama-server with an mmproj): pictures go out, answers come back,
+    P&ID sheets are validated with pid-to-kg's own model and built into a graph"""
+    pytest.importorskip('duckdb')
+    import shutil
+    from PIL import Image
+    from shipbrain import polyglot
+    ex = open(os.path.join(polyglot.repo_dir('PID-to-Knowledge-Graph'), 'tests', 'fixtures', 'mini_plant', 'extract', 'page_01.json')).read()
+    seen = []
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            self.send_response(200); self.end_headers(); self.wfile.write(b'{"data":[]}')
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            content = body['messages'][-1]['content']
+            imgs = [c for c in content if isinstance(c, dict) and c.get('type') == 'image_url'] if isinstance(content, list) else []
+            seen.append(len(imgs))
+            text = ex if 'P&ID sheet' in json.dumps(content) else 'A tank TK-1 feeding pump P-1.'
+            self.send_response(200); self.end_headers()
+            self.wfile.write(('data: ' + json.dumps({'choices': [{'delta': {'content': text}}]}) + '\n\ndata: [DONE]\n\n').encode())
+    srv = ThreadingHTTPServer(('127.0.0.1', 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        T = agent.Tools(tmp_path)
+        T.llm = agent.LLM(f'http://127.0.0.1:{srv.server_address[1]}')
+        Image.new('RGB', (800, 500), 'white').save(tmp_path / 'sketch.png')
+        r = T.call('look', {'file': 'sketch.png', 'question': 'what is this?'})
+        assert 'TK-1' in r['answer'] and seen[-1] == 1                          # the picture really went to the model
+        page = tmp_path / 'work' / 'mini' / 'pages' / 'page_01'
+        page.mkdir(parents=True)
+        Image.new('RGB', (1400, 1000), 'white').save(page / 'overview.png')
+        out = T.call('pid_kg', {'action': 'read', 'work': 'work/mini'})
+        assert 'page 1:' in out['output'] and os.path.exists(tmp_path / 'work' / 'mini' / 'extract' / 'page_01.json')
+        b = T.call('pid_kg', {'action': 'build', 'work': 'work/mini', 'plant_name': 'Mini'})
+        assert 'nodes' in b['plain_english']
+    finally:
+        srv.shutdown()
+    T2 = agent.Tools(tmp_path)
+    assert 'error' in T2.call('look', {'file': 'sketch.png'})                    # no model running: a clear error
+
+
+def test_synthetic_pid_sheets_are_valid_training_data(tmp_path):
+    pytest.importorskip('matplotlib')
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'training'))
+    import synth_pid
+    synth_pid.main(['--n', '3', '--out', str(tmp_path / 's.jsonl'), '--img-dir', str(tmp_path / 'img'), '--seed', '1'])
+    rows = [json.loads(l) for l in open(tmp_path / 's.jsonl')]
+    assert len(rows) == 3
+    for r in rows:
+        assert os.path.exists(tmp_path / r['images'][0]) and r['messages'][-1]['role'] == 'assistant'
+        if r['messages'][0]['role'] == 'user':                                   # reading task: the answer is pid-to-kg data
+            assert r['messages'][0]['content'].startswith('You read P&ID sheet') and json.loads(r['messages'][-1]['content'])['equipment']

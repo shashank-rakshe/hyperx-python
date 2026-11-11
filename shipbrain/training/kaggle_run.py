@@ -5,7 +5,7 @@ Needs: a Kaggle account with a VERIFIED PHONE number (Kaggle only gives GPU + in
 API token: Kaggle -> Settings -> API -> "Create New Token" -> set KAGGLE_USERNAME and KAGGLE_KEY (or put kaggle.json in
 ~/.kaggle/). Then:
     pip install kaggle
-    python training/kaggle_run.py start  [--base unsloth/Qwen3-1.7B] [--n 4000]
+    python training/kaggle_run.py start  [--n 4000]          (base model: training/base_model.json)
     python training/kaggle_run.py status
     python training/kaggle_run.py fetch   -> ./kaggle_out/ (GGUF, eval_before.json, eval_after.json, log)
 Free quota: about 30 GPU hours per week, one run may last up to 12 hours.
@@ -115,7 +115,7 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('cmd', choices=['start', 'status', 'watch', 'fetch', 'auto'])
     ap.add_argument('--request', help='JSON with base / n / draft / datasets (auto mode)')
-    ap.add_argument('--base', default='unsloth/Qwen3-1.7B')
+    ap.add_argument('--base', default=json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'base_model.json')))['base'])
     ap.add_argument('--draft', default='unsloth/Qwen3-0.6B', help="draft model for speculative decoding ('' = none)")
     ap.add_argument('--n', type=int, default=4000)
     ap.add_argument('--dataset', action='append', help='your PRIVATE Kaggle dataset with rules_index.json, e.g. user/ship-rules')

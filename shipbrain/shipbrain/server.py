@@ -149,6 +149,12 @@ def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None, draf
         if not exe:
             sys.exit('llama-server not found. Download llama.cpp (CPU build) and put llama-server on PATH, or pass --llama-bin, '
                      'or use a .llamafile model.')
+        if not mmproj:                                       # vision model: its image part lies next to it
+            import glob as _g
+            mm = sorted(_g.glob(os.path.join(os.path.dirname(path), '*mmproj*.gguf')))
+            mmproj = mm[0] if mm else None
+            if mmproj:
+                print('image part found:', os.path.basename(mmproj))
         cmd = [exe, '-m', path, '--port', str(port), '-c', str(ctx), '--host', '127.0.0.1',
                '--cache-reuse', '256']                       # re-use the cached system prompt between questions
         if mmproj:
@@ -182,6 +188,9 @@ def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None, draf
         return start_model(path, port, threads, ctx, mmproj, bin_, draft, extra, 0)
     for _ in range(600):
         if proc.poll() is not None:
+            if draft:                                    # the draft model does not pair with this model: run without it
+                print('the draft model could not be used with this model: starting without it')
+                return start_model(path, port, threads, ctx, mmproj, bin_, None, extra, gpu_layers)
             if gpu_layers:                           # old card / driver / wrong llama.cpp build: never leave the user stuck
                 return cpu_again('the model server stopped while loading')
             sys.exit('the model server stopped while loading (not enough RAM? wrong file?)')

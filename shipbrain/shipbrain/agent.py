@@ -218,12 +218,17 @@ class Tools:
         self.register('pid_kg', self.pid_kg, 'P&ID / PFD drawings (PDF) -> process knowledge graph, with the pid-to-kg scripts as written '
                       '(copied repo). action: probe {pdf, pages, plant_name} | render | hints | status | build | query {command: stats | '
                       'describe | upstream | downstream | path | loops | loop | instruments | sql, args: [...], equipment, variable, on} | '
-                      'export {format: graphml | neo4j} | tags {pages} (tags found on each sheet). Reading the sheets (extract/page_NN.json) needs a vision model.',
+                      'export {format: graphml | neo4j} | tags {pages} | read {pages} (the vision model reads each sheet into extract/page_NN.json, '
+                      'checked against the pid-to-kg format; then build).',
                       {'type': 'object', 'properties': {'action': {'type': 'string'}, 'pdf': {'type': 'string'}, 'pages': {'type': 'string'},
                                                          'plant_name': {'type': 'string'}, 'work': {'type': 'string'},
                                                          'command': {'type': 'string'}, 'args': {'type': 'array'},
                                                          'equipment': {'type': 'boolean'}, 'variable': {'type': 'string'},
                                                          'on': {'type': 'string'}, 'format': {'type': 'string'}}, 'required': ['action']})
+        self.register('look', self.look, 'Look at a picture or a PDF page with the model\'s own eyes (vision): file (png / jpg / pdf), page '
+                      '(PDF page, 1 = first), question. Use it for drawings, scans, sketches, screenshots.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'question': {'type': 'string'}, 'page': {'type': 'integer'}},
+                       'required': ['file']})
         self.register('fatigue_mesh', self.fatigue_mesh, 'Fatigue hot-spot local model: cut a box around the hot spot from a plate assembly, '
                       'mesh it t x t, give the read-out points at 0.5t / 1.5t; with solve=true also run CalculiX and return the '
                       'extrapolated hot-spot stress (1.5 s(0.5t) - 0.5 s(1.5t)).',
@@ -694,6 +699,8 @@ class Tools:
                 lines.append(f"page {h.get('page')} ({h.get('page_class')}, text from {h.get('source')}): "
                              f"equipment / lines: {', '.join(sorted(set(eq))) or '-'}; read as ISA instruments (check on the drawing): {', '.join(sorted(set(ins))) or '-'}")
             out = '\n'.join(lines) or 'no hints yet: run probe, render and hints first'
+        elif action == 'read':                                   # the model reads each sheet into extract/page_NN.json
+            out = self._pid_read(repo, wd, pages)
         elif action == 'status':
             pages_dir, ext = os.path.join(wd, 'pages'), os.path.join(wd, 'extract')
             rendered = sorted(os.listdir(pages_dir)) if os.path.isdir(pages_dir) else []
@@ -701,7 +708,7 @@ class Tools:
             kg = os.path.exists(os.path.join(wd, 'kg', 'graph.json'))
             out = (f'{len(rendered)} page(s) rendered, {len(extracted)} sheet extraction(s) written, graph built: {"yes" if kg else "no"}.'
                    + ('' if extracted or not rendered else ' Next: read each sheet (pages/page_NN/ tiles) and write extract/page_NN.json '
-                      '- this needs a vision model (Claude, or ShipBrain started with a vision model --mmproj); follow '
+                      '- pid_kg action read does it with the model\'s vision (or Claude); the format is in '
                       'vendor/PID-to-Knowledge-Graph/repo/skills/pid-to-kg/references/extraction_procedure.md.'))
         else:
             raise ValueError('action: probe | render | hints | status | build | query | export')
@@ -712,6 +719,93 @@ class Tools:
         return {'work': work, 'output': out[-6000:], 'files': files,
                 'plain_english': (out.splitlines()[0] if action == 'build' and out else f'pid-to-kg {action} done.') +
                                  ('' if action != 'query' else ' Answer from the graph: ' + out[:600])}
+
+    def _pid_read(self, repo, wd, pages=None):
+        """read rendered sheets with the vision model; each result is checked with pid-to-kg's own PageExtraction model"""
+        import glob
+        from . import polyglot
+        root = polyglot.repo_dir(repo)
+        sys.path.insert(0, os.path.join(root, 'skills', 'pid-to-kg', 'scripts'))
+        from pidkg.models import PageExtraction
+        example = open(os.path.join(root, 'tests', 'fixtures', 'mini_plant', 'extract', 'page_01.json'), encoding='utf-8').read()
+        want = {int(x) for x in re.findall(r'\d+', str(pages))} if pages else None
+        os.makedirs(os.path.join(wd, 'extract'), exist_ok=True)
+        done = []
+        for pdir in sorted(glob.glob(os.path.join(wd, 'pages', 'page_*'))):
+            n = int(re.findall(r'\d+', os.path.basename(pdir))[-1])
+            if want and n not in want:
+                continue
+            img = os.path.join(pdir, 'overview.png') if os.path.exists(os.path.join(pdir, 'overview.png')) else os.path.join(pdir, 'page.png')
+            hints = os.path.join(wd, 'hints', f'page_{n:02d}.json')
+            tags = ''
+            if os.path.exists(hints):
+                tags = ', '.join(t['text'] for t in json.load(open(hints, encoding='utf-8')).get('tag_candidates', []))[:1500]
+            prompt = pid_read_prompt(n, tags, example)
+            err, data = None, None
+            for attempt in range(2):
+                txt = _strip_think(self.ask_vision([img], prompt + (f'\nYour last answer was invalid: {err}. Fix it.' if err else ''),
+                                                   max_tokens=6000))
+                m = re.search(r'\{.*\}', txt, re.S)
+                try:
+                    data = json.loads(m.group(0) if m else txt)
+                    data['page'] = n
+                    PageExtraction.model_validate(data)
+                    err = None
+                    break
+                except Exception as e:
+                    err = str(e)[:600]
+            if err:
+                done.append(f'page {n}: could not read a valid sheet ({err[:200]})')
+                continue
+            with open(os.path.join(wd, 'extract', f'page_{n:02d}.json'), 'w', encoding='utf-8') as fh:
+                json.dump(data, fh, indent=1)
+            done.append(f"page {n}: {len(data.get('equipment', []))} equipment, {len(data.get('components', []))} components, "
+                        f"{len(data.get('instruments', []))} instruments, {len(data.get('lines', []))} lines (draft: check with build QA)")
+        return '\n'.join(done) or 'no rendered pages: run probe and render first'
+
+    def _image_url(self, path, page=None, max_px=1280):
+        """picture or PDF page -> data URL (PNG), long edge max_px"""
+        import base64, io
+        from PIL import Image
+        if path.lower().endswith('.pdf'):
+            import pypdfium2
+            pdf = pypdfium2.PdfDocument(path)
+            pg = pdf[max(0, int(page or 1) - 1)]
+            w, h = pg.get_size()
+            im = pg.render(scale=max_px / max(w, h)).to_pil()
+            pdf.close()
+        else:
+            im = Image.open(path)
+        im = im.convert('RGB')
+        im.thumbnail((max_px, max_px))
+        buf = io.BytesIO()
+        im.save(buf, 'PNG')
+        return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
+
+    def ask_vision(self, image_paths, prompt, max_tokens=3000, page=None):
+        """one question with pictures to the running model -> its answer text"""
+        llm = getattr(self, 'llm', None)
+        if llm is None:
+            raise RuntimeError('no model is running to look at the picture (start ShipBrain with the model)')
+        content = [{'type': 'image_url', 'image_url': {'url': self._image_url(p, page)}} for p in image_paths]
+        content.append({'type': 'text', 'text': prompt})
+        old = getattr(llm, 'max_tokens', None)
+        try:
+            if old is not None:
+                llm.max_tokens = max_tokens
+            return ''.join(llm.stream([{'role': 'user', 'content': content}]))
+        except Exception as e:
+            if 'image' in str(e).lower() or '400' in str(e) or '500' in str(e):
+                raise RuntimeError('the running model cannot see pictures: start ShipBrain with the vision model and its '
+                                   'image part (the shipbrain-mmproj-*.gguf file next to the model)') from e
+            raise
+        finally:
+            if old is not None:
+                llm.max_tokens = old
+
+    def look(self, file, question='Describe this drawing: what it shows, the main items and their labels.', page=None):
+        ans = _strip_think(self.ask_vision([self._path(file)], question, page=page)).strip()
+        return {'answer': ans, 'plain_english': ans}
 
     def geometry_clean(self, plates=None, file=None, merge_tol=2.0):
         from . import geoclean
@@ -1083,6 +1177,16 @@ class LLM:
 
 
 # ====================================================================== the loop
+def pid_read_prompt(n, tags, example):
+    """the one question used to read a P&ID sheet - at run time (pid_kg read) and in the training data (synth_pid)"""
+    return (f'You read P&ID sheet (page {n}). Write ONE JSON object in exactly the format of the example: schema_version, page, '
+            'sheet, equipment, components, instruments, lines (with from/to and the components in order), signals '
+            '(from -> to, type, purpose), off_page_connectors, boundaries, unreadable. Record only what is drawn; give each item '
+            'a bbox [x0, y0, x1, y1] as fractions of the sheet (0,0 = top left) and a confidence when unsure; never invent tags. '
+            + (f'Tags found by text / OCR on this sheet: {tags}. ' if tags else '')
+            + f'Example of the format (another plant):\n{example}\nAnswer with the JSON only. page = {n}.')
+
+
 def _strip_think(t):
     return re.sub(r'<think>.*?</think>', '', t, flags=re.S)
 
@@ -1130,6 +1234,7 @@ def retrieve(tools, question, k=3, min_score=3.0):
 
 def run(llm, tools, history, max_steps=MAX_STEPS):
     """history: [{'role','content'}] of the chat so far (user last). Yields UI events (dicts)."""
+    tools.llm = llm                                          # look / pid_kg read show pictures to this same model
     msgs = [{'role': 'system', 'content': system_prompt(tools, PROMPT_COMPACT)}]
     ctx, used = retrieve(tools, history[-1]['content'])
     for h in tools.hook('question', history[-1]['content']) if hasattr(tools, 'hook') else []:

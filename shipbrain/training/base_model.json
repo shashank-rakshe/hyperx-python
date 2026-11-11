@@ -1,0 +1,6 @@
+{
+  "base": "unsloth/Qwen3-VL-4B-Instruct",
+  "draft": "unsloth/Qwen3-0.6B",
+  "vision": true,
+  "why": "Fixed base model (chosen 2026-11-11, do not change between runs; every run continues from the last model). One model for text, tools, code AND drawings: vision is built in. Apache-2.0, 256k context, Qwen3 tokenizer (the Qwen3-0.6B draft model speeds it up), runs in llama.cpp with its mmproj, QLoRA on a free 16 GB Kaggle GPU. Same family as the earlier Qwen3-VL ship-drawing model."
+}

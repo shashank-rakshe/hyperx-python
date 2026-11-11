@@ -46,13 +46,17 @@ def args_match(ref, got, ignore=('name', 'k', 'query')):
 class LocalModel:
     """score a model inside Python (Colab GPU) without a server: base name or a LoRA / merged folder"""
     def __init__(self, name, max_new_tokens=700):
-        from unsloth import FastLanguageModel
-        self.model, self.tok = FastLanguageModel.from_pretrained(name, max_seq_length=6144, load_in_4bit=True)
-        FastLanguageModel.for_inference(self.model)
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from model_io import load
+        self.model, self.tok, self.proc = load(name, 6144, train=False)      # text or vision base, same way
         self.n = max_new_tokens
 
     def stream(self, messages):
-        ids = self.tok.apply_chat_template(messages, add_generation_prompt=True, return_tensors='pt')
+        try:
+            ids = self.tok.apply_chat_template(messages, add_generation_prompt=True, return_tensors='pt')
+        except Exception:                                  # vision processor: content lists
+            msgs = [{'role': m['role'], 'content': [{'type': 'text', 'text': m['content']}]} for m in messages]
+            ids = self.proc.apply_chat_template(msgs, add_generation_prompt=True, tokenize=True, return_tensors='pt')
         ids = (ids['input_ids'] if not hasattr(ids, 'shape') else ids).to(self.model.device)    # transformers 4 and 5
         out = self.model.generate(input_ids=ids, max_new_tokens=self.n, do_sample=False)
         yield self.tok.decode(out[0][ids.shape[1]:], skip_special_tokens=True)
