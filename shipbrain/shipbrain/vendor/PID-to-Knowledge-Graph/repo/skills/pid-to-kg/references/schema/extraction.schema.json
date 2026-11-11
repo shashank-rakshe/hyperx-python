@@ -1,0 +1,1110 @@
+{
+  "$defs": {
+    "Boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Unique within the page. Use the tag when the item has one.",
+          "title": "Id",
+          "type": "string"
+        },
+        "tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tag exactly as printed, e.g. 'FIT-0502'.",
+          "title": "Tag"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Descriptive text printed with the item.",
+          "title": "Name"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "new",
+                "existing",
+                "future",
+                "demolish",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "confidence": {
+          "default": 0.9,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "attributes": {
+          "additionalProperties": true,
+          "title": "Attributes",
+          "type": "object"
+        },
+        "direction": {
+          "description": "source/sink for streams entering or leaving; 'area' for a room or zone that area instruments (gas detectors, room temperature) measure",
+          "enum": [
+            "source",
+            "sink",
+            "area"
+          ],
+          "title": "Direction",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "direction"
+      ],
+      "title": "Boundary",
+      "type": "object"
+    },
+    "Component": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Unique within the page. Use the tag when the item has one.",
+          "title": "Id",
+          "type": "string"
+        },
+        "tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tag exactly as printed, e.g. 'FIT-0502'.",
+          "title": "Tag"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Descriptive text printed with the item.",
+          "title": "Name"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "new",
+                "existing",
+                "future",
+                "demolish",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "confidence": {
+          "default": 0.9,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "attributes": {
+          "additionalProperties": true,
+          "title": "Attributes",
+          "type": "object"
+        },
+        "kind": {
+          "description": "Vocabulary in references/ontology.md, e.g. 'gate_valve', 'control_valve'.",
+          "title": "Kind",
+          "type": "string"
+        },
+        "actuator": {
+          "anyOf": [
+            {
+              "enum": [
+                "manual",
+                "pneumatic",
+                "electric",
+                "hydraulic",
+                "solenoid",
+                "self",
+                "none"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actuator"
+        },
+        "fail_position": {
+          "anyOf": [
+            {
+              "enum": [
+                "FO",
+                "FC",
+                "FL",
+                "FI"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fail Position"
+        },
+        "normal_position": {
+          "anyOf": [
+            {
+              "enum": [
+                "open",
+                "closed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normal Position"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size"
+        },
+        "loop": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Override the ISA loop this item belongs to.",
+          "title": "Loop"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "title": "Component",
+      "type": "object"
+    },
+    "Equipment": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Unique within the page. Use the tag when the item has one.",
+          "title": "Id",
+          "type": "string"
+        },
+        "tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tag exactly as printed, e.g. 'FIT-0502'.",
+          "title": "Tag"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Descriptive text printed with the item.",
+          "title": "Name"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "new",
+                "existing",
+                "future",
+                "demolish",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "confidence": {
+          "default": 0.9,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "attributes": {
+          "additionalProperties": true,
+          "title": "Attributes",
+          "type": "object"
+        },
+        "kind": {
+          "description": "Vocabulary in references/ontology.md, e.g. 'tank', 'centrifugal_pump'.",
+          "title": "Kind",
+          "type": "string"
+        },
+        "part_of": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Id of the equipment this is mounted on (agitator on a tank, drive on a pump).",
+          "title": "Part Of"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "title": "Equipment",
+      "type": "object"
+    },
+    "Instrument": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Unique within the page. Use the tag when the item has one.",
+          "title": "Id",
+          "type": "string"
+        },
+        "tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Printed tag. Leave empty for untagged gauges and give 'function'.",
+          "title": "Tag"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Descriptive text printed with the item.",
+          "title": "Name"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "new",
+                "existing",
+                "future",
+                "demolish",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "confidence": {
+          "default": 0.9,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "attributes": {
+          "additionalProperties": true,
+          "title": "Attributes",
+          "type": "object"
+        },
+        "function": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ISA letters for an untagged instrument, e.g. 'PI' for a bare pressure gauge.",
+          "title": "Function"
+        },
+        "location": {
+          "default": "unknown",
+          "description": "field | local_panel | main_panel | behind_panel | dcs | plc | scada | sis | computer | unknown",
+          "title": "Location",
+          "type": "string"
+        },
+        "measures": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProcessRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where the instrument senses the process."
+        },
+        "loop": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Override the ISA loop this instrument belongs to.",
+          "title": "Loop"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "Instrument",
+      "type": "object"
+    },
+    "Line": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Unique within the page, e.g. 'L1'.",
+          "title": "Id",
+          "type": "string"
+        },
+        "line_number": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line Number"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size"
+        },
+        "service": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Fluid/service code or description.",
+          "title": "Service"
+        },
+        "from": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ProcessRef"
+            }
+          ],
+          "title": "From"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ProcessRef"
+            }
+          ],
+          "title": "To"
+        },
+        "path": {
+          "description": "Ids of in-line items in flow order.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Path",
+          "type": "array"
+        },
+        "flow_direction": {
+          "default": "shown",
+          "enum": [
+            "shown",
+            "inferred"
+          ],
+          "title": "Flow Direction",
+          "type": "string"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "new",
+                "existing",
+                "future",
+                "demolish",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "confidence": {
+          "default": 0.85,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        }
+      },
+      "required": [
+        "id",
+        "from",
+        "to"
+      ],
+      "title": "Line",
+      "type": "object"
+    },
+    "OffPageConnector": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Unique within the page. Use the tag when the item has one.",
+          "title": "Id",
+          "type": "string"
+        },
+        "tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tag exactly as printed, e.g. 'FIT-0502'.",
+          "title": "Tag"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Descriptive text printed with the item.",
+          "title": "Name"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "new",
+                "existing",
+                "future",
+                "demolish",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "confidence": {
+          "default": 0.9,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "attributes": {
+          "additionalProperties": true,
+          "title": "Attributes",
+          "type": "object"
+        },
+        "direction": {
+          "enum": [
+            "in",
+            "out"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "other_drawing": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Drawing number the flow continues on/comes from.",
+          "title": "Other Drawing"
+        },
+        "other_item": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Item named at the far end, e.g. '660-TK-004'.",
+          "title": "Other Item"
+        },
+        "line_number": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line Number"
+        }
+      },
+      "required": [
+        "id",
+        "direction"
+      ],
+      "title": "OffPageConnector",
+      "type": "object"
+    },
+    "ProcessRef": {
+      "additionalProperties": false,
+      "description": "A point in the process: an item, or a position on a pipe run.\n\nUse ``item`` for equipment, components and in-line instruments. Use\n``line`` (plus optional ``after``) for a tap or tee on a pipe run, where\n``after`` is the path item immediately upstream of the tap.",
+      "properties": {
+        "item": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Item"
+        },
+        "line": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line"
+        },
+        "after": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "After"
+        }
+      },
+      "title": "ProcessRef",
+      "type": "object"
+    },
+    "SheetInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "drawing_number": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Drawing Number"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revision"
+        },
+        "drawing_type": {
+          "default": "pid",
+          "enum": [
+            "pid",
+            "pfd",
+            "other"
+          ],
+          "title": "Drawing Type",
+          "type": "string"
+        },
+        "issue_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "As printed: 'as-built', 'issued for construction', 'draft', 'superseded'...",
+          "title": "Issue Status"
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotation"
+        },
+        "legend_notes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Legend Notes",
+          "type": "array"
+        }
+      },
+      "title": "SheetInfo",
+      "type": "object"
+    },
+    "Signal": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "title": "From",
+          "type": "string"
+        },
+        "to": {
+          "title": "To",
+          "type": "string"
+        },
+        "type": {
+          "default": "unknown",
+          "description": "electrical | pneumatic | software | hydraulic | capillary | wireless | mechanical | unknown",
+          "title": "Type",
+          "type": "string"
+        },
+        "purpose": {
+          "default": "unknown",
+          "enum": [
+            "control",
+            "measurement",
+            "trip",
+            "alarm",
+            "status",
+            "unknown"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "confidence": {
+          "default": 0.85,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "title": "Signal",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "page": {
+      "description": "1-based page number in the input PDF.",
+      "minimum": 1,
+      "title": "Page",
+      "type": "integer"
+    },
+    "sheet": {
+      "$ref": "#/$defs/SheetInfo"
+    },
+    "equipment": {
+      "items": {
+        "$ref": "#/$defs/Equipment"
+      },
+      "title": "Equipment",
+      "type": "array"
+    },
+    "components": {
+      "items": {
+        "$ref": "#/$defs/Component"
+      },
+      "title": "Components",
+      "type": "array"
+    },
+    "instruments": {
+      "items": {
+        "$ref": "#/$defs/Instrument"
+      },
+      "title": "Instruments",
+      "type": "array"
+    },
+    "lines": {
+      "items": {
+        "$ref": "#/$defs/Line"
+      },
+      "title": "Lines",
+      "type": "array"
+    },
+    "signals": {
+      "items": {
+        "$ref": "#/$defs/Signal"
+      },
+      "title": "Signals",
+      "type": "array"
+    },
+    "off_page_connectors": {
+      "items": {
+        "$ref": "#/$defs/OffPageConnector"
+      },
+      "title": "Off Page Connectors",
+      "type": "array"
+    },
+    "boundaries": {
+      "items": {
+        "$ref": "#/$defs/Boundary"
+      },
+      "title": "Boundaries",
+      "type": "array"
+    },
+    "tiles_reviewed": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tiles Reviewed",
+      "type": "array"
+    },
+    "unreadable": {
+      "description": "Things seen but not legible.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Unreadable",
+      "type": "array"
+    }
+  },
+  "required": [
+    "page"
+  ],
+  "title": "PageExtraction",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

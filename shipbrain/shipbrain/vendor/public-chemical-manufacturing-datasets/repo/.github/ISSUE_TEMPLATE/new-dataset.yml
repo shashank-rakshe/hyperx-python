@@ -1,0 +1,126 @@
+name: Suggest a dataset
+description: Propose a public chemical manufacturing dataset for the list.
+title: "[Dataset] <name of dataset>"
+labels: ["new dataset"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. One bar to clear: the data has to be
+        **publicly downloadable without a license agreement, account wall, or NDA.**
+        Kaggle is fine. A vendor form that emails you a link is not.
+
+        Fill in what you know. If you are unsure about a field, say so rather
+        than guessing — an honest "not sure" is more useful than a wrong page range.
+
+  - type: dropdown
+    id: section
+    attributes:
+      label: Which section does this belong in?
+      options:
+        - P&IDs
+        - Time-series
+        - Neither / not sure
+    validations:
+      required: true
+
+  - type: input
+    id: link
+    attributes:
+      label: Direct link
+      description: Link straight to the file or dataset page, not to a search results page.
+      placeholder: https://...
+    validations:
+      required: true
+
+  - type: input
+    id: process
+    attributes:
+      label: Facility or process
+      description: What is actually being made or treated, and where.
+      placeholder: Municipal wastewater treatment plant in Kansas
+    validations:
+      required: true
+
+  - type: input
+    id: pages
+    attributes:
+      label: Page numbers containing P&IDs
+      description: P&ID entries only. Use PDF page numbers, not the numbers printed on the drawings — they usually disagree.
+      placeholder: 47-60, or 114, 117, 119
+    validations:
+      required: false
+
+  - type: dropdown
+    id: format
+    attributes:
+      label: Format / condition
+      options:
+        - Digital PDF (selectable text)
+        - Scanned images (no text layer)
+        - Digital PDF, mixed text layer
+        - CSV / tabular
+        - MATLAB / other simulation output
+        - Other (describe below)
+    validations:
+      required: true
+
+  - type: input
+    id: size
+    attributes:
+      label: File size
+      description: Approximate download size.
+      placeholder: 33 MB
+    validations:
+      required: false
+
+  - type: input
+    id: terms
+    attributes:
+      label: License or terms
+      description: >
+        The license as actually stated by the source. If it is a government
+        public record with no explicit license, say that — do not assume
+        public record means public domain.
+      placeholder: CC BY 4.0 / US federal government work / public record, no stated license
+    validations:
+      required: true
+
+  - type: textarea
+    id: strengths
+    attributes:
+      label: Why is this worth using?
+      description: >
+        What can someone test with this that they cannot test with what is
+        already on the list? Real vs simulated, unusual unit operations,
+        labeled faults, sampling rate, plant scale.
+    validations:
+      required: true
+
+  - type: input
+    id: paper
+    attributes:
+      label: Research paper (if any)
+      placeholder: https://...
+    validations:
+      required: false
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else in the document
+      description: >
+        For P&IDs especially — legend sheets, PFDs, design basis narratives,
+        and electrical drawings all add value and are worth listing.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: The link works and downloads without an account or signed agreement
+          required: true
+        - label: I checked this dataset is not already on the list
+          required: true

@@ -1,0 +1,40 @@
+name: Report a broken or moved link
+description: A dataset link 404s, redirects somewhere useless, or the document changed.
+title: "[Broken] <name of dataset>"
+labels: ["broken link"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Most entries here are PDFs hosted on state, provincial, and municipal
+        servers. Those get reorganized regularly. Reports are appreciated.
+
+  - type: input
+    id: dataset
+    attributes:
+      label: Which entry?
+      placeholder: Salina WWTP BDR
+    validations:
+      required: true
+
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: What happens?
+      options:
+        - 404 / file not found
+        - Redirects to a homepage or search page
+        - Downloads, but it is a different document than described
+        - Downloads, but the page numbers no longer match
+        - Now requires an account or agreement
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: replacement
+    attributes:
+      label: Working replacement link, if you found one
+      placeholder: https://...
+    validations:
+      required: false

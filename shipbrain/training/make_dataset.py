@@ -778,6 +778,39 @@ def t_code(r, tools):
             result_msg('code_call', out), {'role': 'assistant', 'content': ans}]
 
 
+_PID_Q = [('stats', [], 'How big is the P&ID graph of {p}? Give me the counts'),
+          ('loops', [], 'List the control loops of {p}'),
+          ('downstream', ['TK-100'], 'What is downstream of TK-100 in {p}?'),
+          ('upstream', ['FV-101'], 'What is upstream of FV-101 in {p}?'),
+          ('loop', ['F-101'], 'Explain control loop F-101 in {p}'),
+          ('instruments', [], 'Which instruments are in {p} and what do they measure?'),
+          ('describe', ['FIC-101'], 'What does FIC-101 do in {p}?'),
+          ('path', ['TK-100', 'TK-200'], 'How does the flow go from TK-100 to TK-200 in {p}?')]
+
+
+def t_pid(r, tools):
+    """questions about a plant answered from its P&ID knowledge graph (pid-to-kg's own scripts; example plant from its tests)"""
+    import shutil
+    from shipbrain import polyglot
+    if 'PID-to-Knowledge-Graph' not in polyglot.repos():
+        return None
+    work = 'work/mini_plant'
+    wd = os.path.join(tools.workdir, work)
+    if not os.path.exists(os.path.join(wd, 'kg', 'graph.json')):
+        src = os.path.join(polyglot.repo_dir('PID-to-Knowledge-Graph'), 'tests', 'fixtures', 'mini_plant', 'extract')
+        shutil.copytree(src, os.path.join(wd, 'extract'), dirs_exist_ok=True)
+        if 'error' in tools.call('pid_kg', {'action': 'build', 'work': work, 'plant_name': 'Mini plant'}):
+            return None
+    cmd, args, q = r.choice(_PID_Q)
+    a = {'action': 'query', 'work': work, 'command': cmd, **({'args': args} if args else {})}
+    out = tools.call('pid_kg', a)
+    if 'error' in out or 'not found' in out['output']:
+        return None
+    ans = 'From the P&ID knowledge graph:\n' + out['output'][:1500]
+    return [{'role': 'user', 'content': q.format(p='the mini plant')}, {'role': 'assistant', 'content': tool_block('pid_kg', a)},
+            result_msg('pid_kg', out), {'role': 'assistant', 'content': ans}]
+
+
 _SUR = {}                                     # built surrogates: name -> (args, result), built once per dataset run
 _SUR_SETS = [('deck_plate', {'L': [1500, 3000], 'B': [600, 900], 't': [8, 16], 'p': [0.02, 0.08]}),
              ('tank_wall', {'L': [800, 2000], 'B': [500, 800], 't': [10, 20], 'p': [0.05, 0.15]}),
@@ -929,7 +962,7 @@ TASKS = [('mesh', 30, lambda r, T: t_mesh(r, T)), ('mesh_fix', 6, lambda r, T: t
          ('mesh_assume', 6, lambda r, T: t_mesh(r, T, 'assume')), ('plate', 12, t_plate), ('stiff', 12, t_stiff),
          ('buckle', 5, t_buckle), ('section', 8, t_section), ('calc', 4, t_calc), ('chat', 3, t_chat), ('plates', 4, t_plates), ('program', 12, t_program), ('cad_bank', 14, t_cad_bank),
          ('fileinfo', 4, t_fileinfo), ('convert', 4, t_convert), ('edit', 5, t_edit), ('clean', 3, t_clean), ('fe_repair', 3, t_fe_repair),
-         ('sur_build', 1, t_sur_build), ('units', 5, t_units), ('profile', 2, t_profile), ('add_skill', 2, t_add_skill), ('frame', 5, t_frame), ('code', 2, t_code), ('sur_predict', 4, t_sur_predict), ('insight', 3, t_insight)]
+         ('sur_build', 1, t_sur_build), ('units', 5, t_units), ('profile', 2, t_profile), ('add_skill', 2, t_add_skill), ('frame', 5, t_frame), ('code', 2, t_code), ('pid', 3, t_pid), ('sur_predict', 4, t_sur_predict), ('insight', 3, t_insight)]
 
 
 def main(argv=None):

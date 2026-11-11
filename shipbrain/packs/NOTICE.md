@@ -29,6 +29,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: PRIVATE ONLY: do not use for training, do not redistribute
 - Copyright (C) 2007 Free Software Foundation, Inc
 
+## PID-to-Knowledge-Graph
+
+- Source: https://github.com/ScottDuncanAI/PID-to-Knowledge-Graph (commit 7ee3a82e655c)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2026 The pid-to-kg contributors
+
 ## ShipSpace-GA
 
 - Source: https://github.com/kodendaal/ShipSpace-GA (commit 78405b9521ce)
@@ -111,6 +118,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2022 [Authors](http://mofem.eng.gla.ac.uk/mofem/html/authors.html)
+
+## public-chemical-manufacturing-datasets
+
+- Source: https://github.com/ScottDuncanAI/public-chemical-manufacturing-datasets (commit 3f21a8540cac)
+- Licence: CC-BY-4.0
+- Use: ok: permissive licence, keep the attribution
+- https://github.com/ScottDuncanAI/public-chemical-manufacturing-datasets contributors
 
 ## pyOptistruct
 

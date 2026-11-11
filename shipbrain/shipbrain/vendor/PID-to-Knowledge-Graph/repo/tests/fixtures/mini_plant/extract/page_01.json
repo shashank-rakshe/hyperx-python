@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "page": 1,
+  "sheet": {
+    "drawing_number": "PID-100",
+    "title": "Feed tank and transfer pump",
+    "revision": "A",
+    "drawing_type": "pid",
+    "rotation": 0
+  },
+  "equipment": [
+    {"id": "TK-100", "tag": "TK-100", "kind": "tank", "name": "Feed tank", "bbox": [0.10, 0.30, 0.25, 0.60]},
+    {"id": "P-101", "tag": "P-101", "kind": "centrifugal_pump", "name": "Transfer pump", "bbox": [0.40, 0.55, 0.47, 0.65],
+     "attributes": {"driver": "VFD"}}
+  ],
+  "components": [
+    {"id": "V1", "kind": "gate_valve", "bbox": [0.30, 0.58, 0.32, 0.61]},
+    {"id": "V2", "kind": "check_valve", "bbox": [0.50, 0.58, 0.52, 0.61]},
+    {"id": "FV-101", "tag": "FV-101", "kind": "control_valve", "actuator": "pneumatic", "fail_position": "FC",
+     "bbox": [0.70, 0.58, 0.73, 0.62]},
+    {"id": "V3", "kind": "globe_valve", "bbox": [0.60, 0.40, 0.62, 0.43]}
+  ],
+  "instruments": [
+    {"id": "LT-200", "tag": "LT-200", "location": "field", "measures": {"item": "TK-100"}, "bbox": [0.12, 0.20, 0.15, 0.24]},
+    {"id": "LIC-200", "tag": "LIC-200", "location": "dcs", "bbox": [0.12, 0.10, 0.15, 0.14]},
+    {"id": "LSLL-201", "tag": "LSLL-201", "location": "field", "measures": {"item": "TK-100"}, "bbox": [0.20, 0.62, 0.23, 0.66]},
+    {"id": "PI-102", "tag": "PI-102", "location": "field", "measures": {"line": "L2", "after": "V2"}, "bbox": [0.53, 0.50, 0.55, 0.53]},
+    {"id": "FT-101", "tag": "FT-101", "location": "field", "bbox": [0.62, 0.56, 0.65, 0.62]},
+    {"id": "FIC-101", "tag": "FIC 101", "location": "dcs", "bbox": [0.62, 0.40, 0.65, 0.44]},
+    {"id": "FY-101", "tag": "FY-101", "location": "field", "bbox": [0.70, 0.45, 0.73, 0.49]},
+    {"id": "SIC-101", "tag": "SIC-101", "location": "dcs", "bbox": [0.42, 0.40, 0.45, 0.44]}
+  ],
+  "lines": [
+    {"id": "L1", "line_number": "4\"-PW-001", "from": "TK-100", "to": "P-101", "path": ["V1"]},
+    {"id": "L2", "line_number": "3\"-PW-002", "from": "P-101", "to": "OPC1", "path": ["V2", "FT-101", "FV-101"]},
+    {"id": "L3", "line_number": "1\"-PW-003", "from": {"line": "L2", "after": "V2"}, "to": "TK-100", "path": ["V3"],
+     "notes": "minimum-flow recirculation"}
+  ],
+  "signals": [
+    {"from": "LT-200", "to": "LIC-200", "type": "electrical", "purpose": "measurement"},
+    {"from": "LIC-200", "to": "FIC-101", "type": "software", "purpose": "control"},
+    {"from": "FT-101", "to": "FIC-101", "type": "electrical", "purpose": "measurement"},
+    {"from": "FIC-101", "to": "FY-101", "type": "electrical", "purpose": "control"},
+    {"from": "FY-101", "to": "FV-101", "type": "pneumatic", "purpose": "control"},
+    {"from": "SIC-101", "to": "P-101", "type": "electrical", "purpose": "control"},
+    {"from": "LSLL-201", "to": "P-101", "type": "electrical", "purpose": "trip"}
+  ],
+  "off_page_connectors": [
+    {"id": "OPC1", "direction": "out", "name": "TO PRODUCT TANK", "other_drawing": "PID-200",
+     "other_item": "TK-200", "line_number": "3\"-PW-002", "bbox": [0.92, 0.58, 0.98, 0.62]}
+  ],
+  "boundaries": [
+    {"id": "B1", "name": "RAW WATER SUPPLY", "direction": "source", "bbox": [0.01, 0.40, 0.06, 0.44]}
+  ],
+  "tiles_reviewed": ["r1c1", "r1c2", "r2c1", "r2c2"]
+}

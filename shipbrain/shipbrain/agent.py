@@ -215,6 +215,15 @@ class Tools:
                       'JavaScript through Node.js): repo, file, function, args (JSON list; JS Map = {"__map__": [[key, value], ...]}).',
                       {'type': 'object', 'properties': {'repo': {'type': 'string'}, 'file': {'type': 'string'}, 'function': {'type': 'string'},
                                                          'args': {'type': ['array', 'object']}}, 'required': ['repo', 'file', 'function']})
+        self.register('pid_kg', self.pid_kg, 'P&ID / PFD drawings (PDF) -> process knowledge graph, with the pid-to-kg scripts as written '
+                      '(copied repo). action: probe {pdf, pages, plant_name} | render | hints | status | build | query {command: stats | '
+                      'describe | upstream | downstream | path | loops | loop | instruments | sql, args: [...], equipment, variable, on} | '
+                      'export {format: graphml | neo4j} | tags {pages} (tags found on each sheet). Reading the sheets (extract/page_NN.json) needs a vision model.',
+                      {'type': 'object', 'properties': {'action': {'type': 'string'}, 'pdf': {'type': 'string'}, 'pages': {'type': 'string'},
+                                                         'plant_name': {'type': 'string'}, 'work': {'type': 'string'},
+                                                         'command': {'type': 'string'}, 'args': {'type': 'array'},
+                                                         'equipment': {'type': 'boolean'}, 'variable': {'type': 'string'},
+                                                         'on': {'type': 'string'}, 'format': {'type': 'string'}}, 'required': ['action']})
         self.register('fatigue_mesh', self.fatigue_mesh, 'Fatigue hot-spot local model: cut a box around the hot spot from a plate assembly, '
                       'mesh it t x t, give the read-out points at 0.5t / 1.5t; with solve=true also run CalculiX and return the '
                       'extrapolated hot-spot stress (1.5 s(0.5t) - 0.5 s(1.5t)).',
@@ -635,6 +644,74 @@ class Tools:
         txt = json.dumps(res, default=str)
         return {'result': res if len(txt) < 20000 else txt[:20000] + ' ...(cut)', 'seconds': round(time.time() - t0, 2),
                 'plain_english': f'Ran {function} from {repo}/{file} in its own language ({time.time() - t0:.1f} s).'}
+
+    def pid_kg(self, action, pdf=None, pages=None, plant_name=None, work=None, command='stats', args=None, equipment=False,
+               variable=None, on=None, format='graphml'):
+        from . import polyglot
+        repo, sk = 'PID-to-Knowledge-Graph', 'skills/pid-to-kg/scripts/'
+        name = plant_name or (os.path.splitext(os.path.basename(pdf))[0] if pdf else None)
+        work = work or ('work/' + re.sub(r'[^A-Za-z0-9_\-]+', '_', name).strip('_').lower() if name else None)
+        if not work:
+            raise ValueError('give work (the plant work folder, e.g. work/plant_a) or pdf / plant_name')
+        wd = self._path(work)
+
+        def run(script, *a):
+            r = polyglot.run_script(repo, sk + script, list(a), cwd=self.workdir)
+            if r['returncode']:
+                raise RuntimeError((r['stderr'] or r['stdout']).strip()[-1500:])
+            return r['stdout'].strip()
+        if action == 'probe':
+            if not pdf:
+                raise ValueError('probe needs the pdf')
+            out = run('probe_pdf.py', self._path(pdf), '--work', wd, '--plant-name', name, *(['--pages', pages] if pages else []))
+        elif action == 'render':
+            out = run('render_pages.py', wd, *(['--pages', pages] if pages else []))
+        elif action == 'hints':
+            out = run('make_hints.py', wd, *(['--pages', pages] if pages else []))
+        elif action == 'build':
+            out = run('build_kg.py', wd, *(['--plant-name', plant_name] if plant_name else []))
+        elif action == 'query':
+            flags = (['--equipment'] if equipment else []) + (['--variable', variable] if variable else []) + (['--on', on] if on else [])
+            out = run('kg_query.py', os.path.join(wd, 'kg'), command, *[str(x) for x in (args or [])], *flags)
+        elif action == 'export':
+            out = run('export.py', os.path.join(wd, 'kg'), format)
+        elif action == 'tags':                                   # tags found on each sheet (hints), read with pid-to-kg's ISA parser
+            import glob
+            sys.path.insert(0, os.path.join(polyglot.repo_dir(repo), 'skills', 'pid-to-kg', 'scripts'))
+            from pidkg.isa import parse_isa_tag
+            lines = []
+            for f in sorted(glob.glob(os.path.join(wd, 'hints', 'page_*.json'))):
+                h = json.load(open(f, encoding='utf-8'))
+                if pages and str(h.get('page')) not in re.split(r'[,\s]+', str(pages)):
+                    continue
+                eq, ins = [], []
+                for t in h.get('tag_candidates', []):
+                    p_ = parse_isa_tag(t['text'])
+                    if p_ is not None and not t.get('equipment_like'):
+                        ins.append(f"{t['text']} ({getattr(p_, 'variable', '') or '?'} {getattr(p_, 'role', '') or ''})".replace('  ', ' '))
+                    else:
+                        eq.append(t['text'])
+                lines.append(f"page {h.get('page')} ({h.get('page_class')}, text from {h.get('source')}): "
+                             f"equipment / lines: {', '.join(sorted(set(eq))) or '-'}; read as ISA instruments (check on the drawing): {', '.join(sorted(set(ins))) or '-'}")
+            out = '\n'.join(lines) or 'no hints yet: run probe, render and hints first'
+        elif action == 'status':
+            pages_dir, ext = os.path.join(wd, 'pages'), os.path.join(wd, 'extract')
+            rendered = sorted(os.listdir(pages_dir)) if os.path.isdir(pages_dir) else []
+            extracted = sorted(os.listdir(ext)) if os.path.isdir(ext) else []
+            kg = os.path.exists(os.path.join(wd, 'kg', 'graph.json'))
+            out = (f'{len(rendered)} page(s) rendered, {len(extracted)} sheet extraction(s) written, graph built: {"yes" if kg else "no"}.'
+                   + ('' if extracted or not rendered else ' Next: read each sheet (pages/page_NN/ tiles) and write extract/page_NN.json '
+                      '- this needs a vision model (Claude, or ShipBrain started with a vision model --mmproj); follow '
+                      'vendor/PID-to-Knowledge-Graph/repo/skills/pid-to-kg/references/extraction_procedure.md.'))
+        else:
+            raise ValueError('action: probe | render | hints | status | build | query | export')
+        files = []
+        if action == 'build':
+            files = [os.path.relpath(os.path.join(wd, 'kg', f), self.workdir) for f in ('summary.md', 'qa_report.md', 'graph.json', 'graph.duckdb')
+                     if os.path.exists(os.path.join(wd, 'kg', f))]
+        return {'work': work, 'output': out[-6000:], 'files': files,
+                'plain_english': (out.splitlines()[0] if action == 'build' and out else f'pid-to-kg {action} done.') +
+                                 ('' if action != 'query' else ' Answer from the graph: ' + out[:600])}
 
     def geometry_clean(self, plates=None, file=None, merge_tol=2.0):
         from . import geoclean

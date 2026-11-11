@@ -6,6 +6,9 @@ pyNastran       # robust Nastran .bdf reading (a built-in reader is used if miss
 ezdxf           # DXF drawings: drawing_to_3d, compare_drawings, file_info
 pdfplumber      # vector PDF drawings: lines, line styles, words (MIT)
 pypdfium2       # PDF rendering + text for the knowledge base (Apache-2.0/BSD)
+pydantic        # pid-to-kg (P&ID -> knowledge graph, copied repo): MIT
+duckdb          # pid-to-kg graph store, MIT
+networkx        # pid-to-kg graph queries, BSD
 wasmtime        # runs Awatif's frame solver (frame_solve); Apache-2.0
 pillow          # images for drawing comparison
 shapely         # ship drawing reader (shiptools/deckrules_tool), BSD

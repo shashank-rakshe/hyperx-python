@@ -1279,3 +1279,20 @@ def test_polyglot_runs_copied_code_in_its_own_language(tmp_path):
                                                 'args': [[[0, 0, 0], [1000, 0, 0], [2000, 0, 0]], [[0, 1], [1, 2]],
                                                          {'__map__': [[2, [0, 0, -1000, 0, 0, 0]]]}, {'__map__': [[0, [True] * 6]]}, props]})
     assert abs(r['result']['positions'][8] + 1000 * 2000 ** 3 / (3 * E * I)) < 1e-3          # Awatif's own TypeScript solver
+
+
+def test_pid_to_knowledge_graph_runs_as_written(tmp_path):
+    pytest.importorskip('duckdb')
+    pytest.importorskip('networkx')
+    import shutil
+    from shipbrain import polyglot
+    from shipbrain.skills import Skills
+    src = os.path.join(polyglot.repo_dir('PID-to-Knowledge-Graph'), 'tests', 'fixtures', 'mini_plant', 'extract')
+    shutil.copytree(src, tmp_path / 'work' / 'mini' / 'extract')
+    T = agent.Tools(tmp_path)
+    b = T.call('pid_kg', {'action': 'build', 'work': 'work/mini', 'plant_name': 'Mini plant'})
+    assert '38 nodes, 57 edges' in b['plain_english'] and 'work/mini/kg/graph.json' in b['files']
+    q = T.call('pid_kg', {'action': 'query', 'work': 'work/mini', 'command': 'loops'})
+    assert 'LOOP:F-101' in q['output'] and 'interlock' in q['output']
+    assert 'built: yes' in T.call('pid_kg', {'action': 'status', 'work': 'work/mini'})['output']
+    assert [x['name'] for x in Skills().match('Convert plant.pdf P&IDs into a knowledge graph')] == ['pid-to-kg']

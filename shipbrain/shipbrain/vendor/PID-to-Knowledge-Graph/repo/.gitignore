@@ -1,0 +1,24 @@
+# Source drawings are not redistributed (see README "Test data")
+test_data/
+*.pdf
+
+# Working directories (renders, tiles, hints, extractions)
+work/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Exports that can be regenerated from graph.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

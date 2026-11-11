@@ -29,6 +29,18 @@ from .knowledge import Knowledge
 BUILTIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'skill_library')
 
 
+def vendor_skill_dirs():
+    """skills that come with copied repos (shipbrain/vendor/<name>/repo/skills/<skill>/SKILL.md), used as written"""
+    v = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor')
+    out = []
+    if os.path.isdir(v):
+        for n in sorted(os.listdir(v)):
+            d = os.path.join(v, n, 'repo', 'skills')
+            if os.path.isdir(d):
+                out += [os.path.join(d, k) for k in sorted(os.listdir(d)) if os.path.exists(os.path.join(d, k, 'SKILL.md'))]
+    return out
+
+
 def parse(text, source=''):
     """Markdown with a '---' front matter -> dict(name, description, when, steps, source)"""
     meta, body = {}, text
@@ -47,7 +59,7 @@ def parse(text, source=''):
 class Skills:
     def __init__(self, folders=()):
         self.items = {}
-        for f in [BUILTIN] + [x for x in folders if x]:
+        for f in [BUILTIN] + vendor_skill_dirs() + [x for x in folders if x]:
             self.load_folder(f)
 
     def load_folder(self, folder):
@@ -56,7 +68,7 @@ class Skills:
         n = 0
         for root, _, files in os.walk(folder):
             for fn in sorted(files):
-                if fn.lower().endswith('.md'):
+                if fn.lower().endswith('.md') and ('vendor' not in root.replace('\\', '/').split('/') or fn == 'SKILL.md'):
                     p = os.path.join(root, fn)
                     try:
                         sk = parse(open(p, encoding='utf-8').read(), p)

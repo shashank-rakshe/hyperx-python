@@ -89,7 +89,7 @@ report('started')
 shutil.rmtree('/kaggle/working/src', ignore_errors=True)        # a re-run in the same session must not fail
 sh(f'git clone -b {BRANCH} --depth 1 {REPO} src')
 os.chdir('/kaggle/working/src/shipbrain')
-sh('pip -q install unsloth scipy pyNastran ezdxf pdfplumber pypdfium2 pillow wasmtime')
+sh('pip -q install unsloth scipy pyNastran ezdxf pdfplumber pypdfium2 pillow wasmtime pydantic duckdb networkx rapidocr-onnxruntime')
 sh('python -m shipbrain.polyglot setup awatif', required=False)        # Node packages for the copied TypeScript code
 sh('pip -q install cadquery || echo "cadquery not installed: CAD tasks skipped"')
 sh('(apt-get -qq install -y calculix-ccx >/dev/null 2>&1 || sudo apt-get -qq install -y calculix-ccx >/dev/null 2>&1) || echo "CalculiX not installed: surrogate tasks skipped"', required=False)
@@ -119,6 +119,9 @@ if os.environ.get('SB_CONTINUE') == '1':
 sh(f'python training/make_dataset.py --n {N_TRAIN} --eval-n {N_EVAL} --out data/train.jsonl --eval-out data/eval.jsonl {extra}')
 if not sh('python training/repo_tasks.py --packs packs --out data/repo_train.jsonl --eval-out data/repo_eval.jsonl', required=False):
     open('data/repo_train.jsonl', 'w').close()          # knowledge of shared repos is a bonus, not a blocker
+# public P&ID drawing sets (real permitted facilities): downloaded here, prepared with pid-to-kg, learned from; never stored
+if not sh('python training/public_pids.py --out data/public_pid_train.jsonl --max-pages 4', required=False):
+    open('data/public_pid_train.jsonl', 'w').close()
 sh('cat data/repo_eval.jsonl >> data/eval.jsonl', required=False)
 def _plain(paths):
     out = []
@@ -138,14 +141,14 @@ report('scoring the base model')
 sh(f'python training/cad_eval.py --local {BASE} --limit 30 --out /kaggle/working/cad_eval_before.json', required=False)
 sh(f'python training/evaluate.py --local {BASE} --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_before.json', required=False)
 report('training the main model')
-sh(f'python training/finetune.py --data data/train.jsonl data/repo_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
+sh(f'python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
 report('scoring the trained model')
 sh('python training/cad_eval.py --local /kaggle/working/shipbrain_model/lora --limit 30 --out /kaggle/working/cad_eval_after.json', required=False)
 sh(f'python training/evaluate.py --local /kaggle/working/shipbrain_model/lora --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_after.json', required=False)
 if DRAFT:
     report('training the small draft model')
 if DRAFT:      # same data, 1 epoch: the draft learns the tool format, so the main model accepts more of its guesses
-    sh(f'EPOCHS=1 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl {PRIV} --base {DRAFT} --out /kaggle/working/draft_model --quant q8_0', required=False)
+    sh(f'EPOCHS=1 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl {PRIV} --base {DRAFT} --out /kaggle/working/draft_model --quant q8_0', required=False)
     for f in glob.glob('/kaggle/working/draft_model*/**/*.gguf', recursive=True):
         shutil.move(f, '/kaggle/working/' + os.path.basename(f).replace('shipbrain-', 'shipbrain-draft-'))
     shutil.rmtree('/kaggle/working/draft_model', ignore_errors=True)

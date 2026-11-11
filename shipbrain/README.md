@@ -150,6 +150,23 @@ Nothing is rewritten when it can be used as it is, so no core function can go mi
   only (with their licence), never trained on or copied into the code; brand material (SolidCraft's UI kit, look,
   theme, logo under its brand licence) left out.
 
+## P&ID drawings -> process knowledge graph (pid-to-kg, used as written)
+
+`pid_kg` runs the scripts of [PID-to-Knowledge-Graph](https://github.com/ScottDuncanAI/PID-to-Knowledge-Graph) (MIT),
+copied whole into `shipbrain/vendor/` (its own 78 tests pass on the copy); its `SKILL.md` is loaded as a ShipBrain
+skill as written. Steps: `probe` (vector / outlined / scanned pages), `render` (tiles), `hints` (text / OCR tags) ->
+the sheets are read into `extract/page_NN.json` (needs a vision model: Claude, or ShipBrain started with a vision
+model via `--mmproj`) -> `build` (graph.json, DuckDB, summary.md, qa_report.md) -> `query` (upstream, downstream,
+path, loops, loop, instruments, describe, sql) and `export` (GraphML, Neo4j). Public P&ID sets to try it on are listed
+in the copied [public-chemical-manufacturing-datasets](https://github.com/ScottDuncanAI/public-chemical-manufacturing-datasets)
+(CC-BY-4.0); those drawings may be downloaded and read, not republished.
+
+**The model learns from those public P&IDs:** on Kaggle, `training/public_pids.py` downloads the five sets (Haile, Pahala,
+Virden (scanned), Salina, Ruttan), prepares the first P&ID pages of each with the real tools (probe, render, OCR / text
+tags) and turns the real outputs into training samples. The drawings are used only for training there: they are never
+stored in the repo or in a pack. `pid_kg` action `tags` lists the tags found on each sheet (read with pid-to-kg's
+own ISA parser; to be confirmed when the sheet is read).
+
 ## Frames, beams and pipe supports: Awatif's solver inside
 
 `frame_solve` checks 3D frames, beams, columns, portals and pipe supports with the linear solver of

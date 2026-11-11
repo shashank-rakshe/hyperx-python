@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 390" width="1040" height="390" role="img" aria-labelledby="t d">
+  <title id="t">How the P&amp;ID to Knowledge Graph skill works</title>
+  <desc id="d">Four steps: upload your P&amp;ID PDF; Claude reads each sheet; the scripts build a knowledge graph from what Claude recorded and check it, sending anything doubtful back to Claude to re-check; then you ask questions about the plant.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1e293b; }
+    .title { font-size: 19px; font-weight: 700; text-anchor: middle; }
+    .body { font-size: 14.5px; fill: #475569; text-anchor: middle; }
+    .num { font-size: 15px; font-weight: 700; fill: #ffffff; text-anchor: middle; }
+    .small { font-size: 12px; }
+    .card { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; }
+    .ink { fill: none; stroke: #334155; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+
+  <rect x="0" y="0" width="1040" height="390" rx="16" fill="#f8fafc"/>
+
+  <!-- 1. Your P&ID PDF -->
+  <rect class="card" x="20" y="24" width="220" height="276" rx="12"/>
+  <circle cx="46" cy="50" r="14" fill="#334155"/><text class="num" x="46" y="55">1</text>
+  <path class="ink" d="M98,58 h50 l18,18 v66 h-68 z" fill="#ffffff"/>
+  <path class="ink" d="M148,58 v18 h18"/>
+  <circle cx="117" cy="104" r="9" class="ink"/>
+  <path class="ink" d="M126,104 h22 v18 M108,122 h40" stroke-width="1.6"/>
+  <text class="title" x="130" y="182">Your P&amp;ID PDF</text>
+  <text class="body" x="130" y="210">Upload the P&amp;ID pages</text>
+  <text class="body" x="130" y="230">for one plant. Digital</text>
+  <text class="body" x="130" y="250">and scanned drawings</text>
+  <text class="body" x="130" y="270">both work.</text>
+
+  <line x1="244" y1="162" x2="276" y2="162" stroke="#64748b" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- 2. Claude reads each sheet -->
+  <rect class="card" x="280" y="24" width="220" height="276" rx="12" style="stroke:#2563eb"/>
+  <circle cx="306" cy="50" r="14" fill="#2563eb"/><text class="num" x="306" y="55">2</text>
+  <g stroke="#94a3b8" stroke-width="1.5" fill="#eff6ff">
+    <rect x="345" y="62" width="30" height="24"/><rect x="375" y="62" width="30" height="24"/><rect x="405" y="62" width="30" height="24"/>
+    <rect x="345" y="86" width="30" height="24"/><rect x="375" y="86" width="30" height="24"/><rect x="405" y="86" width="30" height="24"/>
+  </g>
+  <circle cx="414" cy="104" r="20" fill="#ffffff" fill-opacity="0.85" stroke="#2563eb" stroke-width="3"/>
+  <line x1="428" y1="118" x2="444" y2="134" stroke="#2563eb" stroke-width="5" stroke-linecap="round"/>
+  <text class="title" x="390" y="182">Claude reads it</text>
+  <text class="body" x="390" y="210">Each sheet is zoomed in,</text>
+  <text class="body" x="390" y="230">tile by tile. Claude notes</text>
+  <text class="body" x="390" y="250">every vessel, pump, pipe,</text>
+  <text class="body" x="390" y="270">valve and instrument.</text>
+
+  <line x1="504" y1="162" x2="536" y2="162" stroke="#64748b" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- 3. Build and check -->
+  <rect class="card" x="540" y="24" width="220" height="276" rx="12"/>
+  <circle cx="566" cy="50" r="14" fill="#334155"/><text class="num" x="566" y="55">3</text>
+  <g stroke="#334155" stroke-width="2">
+    <line x1="612" y1="78" x2="664" y2="78"/><line x1="664" y1="78" x2="700" y2="116"/>
+    <line x1="612" y1="78" x2="636" y2="124"/><line x1="636" y1="124" x2="700" y2="116"/>
+  </g>
+  <g fill="#ffffff" stroke="#334155" stroke-width="2">
+    <circle cx="612" cy="78" r="10"/><circle cx="664" cy="78" r="10"/><circle cx="636" cy="124" r="10"/><circle cx="700" cy="116" r="10"/>
+  </g>
+  <circle cx="706" cy="66" r="14" fill="#16a34a"/>
+  <path d="M699,66 l5,5 l9,-10" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text class="title" x="650" y="182">Build &amp; check</text>
+  <text class="body" x="650" y="210">Builds a knowledge graph</text>
+  <text class="body" x="650" y="230">of flow, sensors and</text>
+  <text class="body" x="650" y="250">control loops from what</text>
+  <text class="body" x="650" y="270">Claude recorded.</text>
+
+  <line x1="764" y1="162" x2="796" y2="162" stroke="#64748b" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- 4. Ask questions -->
+  <rect class="card" x="800" y="24" width="220" height="276" rx="12"/>
+  <circle cx="826" cy="50" r="14" fill="#334155"/><text class="num" x="826" y="55">4</text>
+  <path d="M846,64 h128 a8,8 0 0 1 8,8 v40 a8,8 0 0 1 -8,8 h-96 l-14,14 v-14 h-18 a8,8 0 0 1 -8,-8 v-40 a8,8 0 0 1 8,-8 z" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text class="small" x="910" y="88" text-anchor="middle">What feeds the</text>
+  <text class="small" x="910" y="105" text-anchor="middle">clarifier?</text>
+  <text class="title" x="910" y="182">Ask questions</text>
+  <text class="body" x="910" y="210">Ask Claude what is</text>
+  <text class="body" x="910" y="230">upstream of a pump or</text>
+  <text class="body" x="910" y="250">which sensor measures a</text>
+  <text class="body" x="910" y="270">line, and check the answer.</text>
+
+  <!-- QA loop back from 3 to 2 -->
+  <path d="M390,314 C390,352 650,352 650,300" fill="none" stroke="#d97706" stroke-width="2.5" stroke-dasharray="7 5"/>
+  <path d="M390,301 L382,317 L398,317 z" fill="#d97706"/>
+  <text x="520" y="372" text-anchor="middle" style="font-size:14px;fill:#b45309">Anything doubtful goes back to Claude to re-check on the drawing</text>
+</svg>

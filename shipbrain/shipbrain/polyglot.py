@@ -198,6 +198,27 @@ def call(name, file, function, args=None, timeout=300):
                      '(see shipbrain/awatif.py) or are read as knowledge')
 
 
+def run_script(name, script, args=(), cwd=None, timeout=3600):
+    """run a script of a copied repo as its authors wrote it (its own command line) -> {'returncode', 'stdout', 'stderr'}"""
+    root = repo_dir(name)
+    path = os.path.normpath(os.path.join(root, script))
+    if not path.startswith(os.path.normpath(root) + os.sep) or not os.path.isfile(path):
+        raise ValueError(f'{script} is not a file of {name}')
+    lang = LANG.get(os.path.splitext(path)[1].lower())
+    if lang == 'python':
+        cmd = [sys.executable, path]
+    elif lang in ('typescript', 'javascript'):
+        if not node_ok():
+            raise RuntimeError('Node.js is needed: install it from nodejs.org')
+        cmd = ['node'] + (['--import', 'tsx'] if lang == 'typescript' else []) + [path]
+    else:
+        raise ValueError(f'{lang or "this"} script is not run directly')
+    env = dict(os.environ, PYTHONIOENCODING='utf-8')
+    r = subprocess.run(cmd + [str(a) for a in args], capture_output=True, text=True, timeout=timeout, cwd=cwd or os.getcwd(),
+                       env=env, encoding='utf-8', errors='replace')
+    return {'returncode': r.returncode, 'stdout': r.stdout[-20000:], 'stderr': r.stderr[-4000:]}
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='cmd', required=True)
