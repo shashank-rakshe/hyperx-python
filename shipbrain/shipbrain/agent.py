@@ -354,6 +354,11 @@ class Tools:
                                                          'name': {'type': 'string'}}, 'required': ['file']})
         self.register('ocx_to_step', self.ocx_to_step, 'OCX model -> STEP 3D CAD (OCXReader when built, else ShipBrain plates + stiffeners).',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
+        self.register('drawing_to_step', self.drawing_to_step, 'A 2D CAD drawing (picture or PDF) of a PART -> 3D STEP with cad3dify\'s '
+                      'loop on ShipBrain\'s own model: write CadQuery code from the drawing, run it, render the 3D result, compare '
+                      'with the drawing and correct the code (refinements rounds). For machine parts and simple brackets / plates.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'refinements': {'type': 'integer'},
+                                                         'out': {'type': 'string'}}, 'required': ['file']})
         self.register('drawing_takeoff', self.drawing_takeoff, 'Construction drawings (electrical / architectural / P&ID) read into '
                       'a CIR file (.cir / .json): quantity takeoff - counts per item with MasterFormat / IFC codes, items to '
                       'review, connections (conductors, home runs, feeders), lengths / areas when a scale is known. '
@@ -1014,6 +1019,23 @@ class Tools:
         worst = min(out, key=lambda r: r['score'])
         return {'views': out, 'verdict': worst['verdict'] if all(r['verdict'] != 'FAIL' for r in out) else 'FAIL',
                 'overlay': worst['overlay'], 'plain_english': ' '.join(r['plain_english'] for r in out)}
+
+    def drawing_to_step(self, file, refinements=2, out=None):
+        from . import cad3dify
+        llm = getattr(self, 'llm', None)
+        if llm is None or not getattr(llm, 'base', None):
+            return {'error': 'drawing_to_step needs the ShipBrain model running (start the app with --model or --url)'}
+        out = out or os.path.splitext(os.path.basename(file))[0] + '.step'
+        r = cad3dify.run(self._path(file), self._path(out), llm.base, refinements, model=getattr(llm, 'model', 'local'),
+                         api_key=getattr(llm, 'key', None))
+        import cadquery as cq
+        s = cq.importers.importStep(r['step']).val()
+        bb = s.BoundingBox()
+        return {'step': os.path.basename(r['step']), 'rounds': r['rounds'], 'volume_mm3': round(s.Volume(), 1),
+                'size_mm': [round(bb.xlen, 1), round(bb.ylen, 1), round(bb.zlen, 1)],
+                'plain_english': f"Made {os.path.basename(r['step'])} from the drawing in {r['rounds']} round(s) (cad3dify): "
+                                 f"{bb.xlen:.0f} x {bb.ylen:.0f} x {bb.zlen:.0f} mm, volume {s.Volume() / 1000:.1f} cm3. "
+                                 'Check it against the drawing (cad_view_check) before use.'}
 
     def drawing_takeoff(self, file, min_confidence=0.0):
         from . import construct

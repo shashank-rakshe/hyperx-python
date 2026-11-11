@@ -98,6 +98,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: none
 - Use: author's own code, shared for training (names removed)
 
+## cad3dify
+
+- Source: https://github.com/neka-nat/cad3dify.git (commit a9c5ae4b4ba1)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2024 Shirokuma (k tanaka)
+
 ## cadcore
 
 - Source: local copy of cadcore (upstream release) (commit working-tree)

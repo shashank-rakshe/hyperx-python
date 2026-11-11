@@ -226,6 +226,25 @@ builds it, unchanged, against the system OpenCascade 7.6 C++ files: on Linux `su
 2.8.5 / 2.8.6 real models become STEP in 0.4-21 s (up to 430,000 STEP entities). OCXReader reads OCX 2.8.x only; for
 3.x files `ocx_to_step` uses ShipBrain's own solids and says why.
 
+## Part drawing -> STEP with a correct-it loop: cad3dify on ShipBrain's own model
+
+[cad3dify](https://github.com/neka-nat/cad3dify) (MIT) is copied whole and run as written: a 2D CAD drawing picture ->
+CadQuery code -> run -> STEP -> render it in 3D -> the model compares the render with the drawing and corrects the
+code, again and again. It was written for paid cloud models; ShipBrain runs it **unchanged on its own local model**
+(a small launcher gives it the local OpenAI-style server and its "execute only" path; the cloud SDKs are not needed).
+
+- Tool `drawing_to_step(file, refinements)`: picture or PDF of a part -> STEP, size and volume.
+- **Training** (`training/cad3dify_tasks.py`, in the Kaggle run) uses **cad3dify's own prompts, taken from its own
+  classes**, so the model is good at exactly the job cad3dify gives it: a three-view drawing of each verified CAD
+  example -> its CadQuery code, and the drawing next to cad3dify's own render of a WRONG version (one dimension
+  changed) -> the corrected code. Here: 94 samples (35 generate, 59 refine) in 30 s.
+- Checked with a stand-in model server: the first round and two refinement rounds run, each sending the picture, and
+  the STEP is right (60 x 40 x 10 box with a 12 mm hole: volume exact).
+- Found on the way (cad3dify bug, not patched - its code stays unchanged): .jpg drawings fail in the refinement step
+  (it saves with Pillow format "JPG"); ShipBrain always hands it a PNG copy, which also makes PDFs work.
+- Needs `pip install "langchain<1" "langchain-openai<1" "langchain-experimental<1" svglib rlPyCairo loguru` (the
+  chat shows this if missing).
+
 ## Construction drawings: ConstructDrawingAI (non-commercial licence)
 
 [ConstructDrawingAI](https://github.com/A-SHOJAEI/ConstructDrawingAI) (PolyForm Noncommercial 1.0.0) is copied whole

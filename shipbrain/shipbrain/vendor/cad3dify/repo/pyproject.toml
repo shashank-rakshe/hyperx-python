@@ -1,0 +1,38 @@
+[tool.poetry]
+name = "cad3dify"
+version = "0.1.0"
+description = ""
+authors = ["neka-nat <nekanat.stock@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+langchain = ">=0.3.18"
+langchain-openai = "^0.2.0"
+svglib = "^1.5.1"
+langchain-experimental = "^0.3.1"
+cadquery = "^2.4.0"
+rlpycairo = "^0.3.0"
+loguru = "^0.7.2"
+langchainhub = "^0.1.15"
+streamlit = "^1.37.1"
+numpy = "1.26.4"
+langchain-google-vertexai = {version = "^2.0.1", optional = true}
+python-dotenv = "^1.0.1"
+langchain-anthropic = "^0.3.0"
+matplotlib = "^3.9.2"
+langchain-google-genai = "^2.0.7"
+opencv-python = "^4.10.0.84"
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.4.2"
+isort = "^5.13.2"
+
+[tool.poetry.extras]
+vertexai = ["langchain-google-vertexai"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

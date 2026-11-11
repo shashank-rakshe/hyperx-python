@@ -1725,3 +1725,49 @@ def test_real_drawing_datasets_and_copyleft_packs(tmp_path):
                    '<g class="Window Regular"/><g class="Window Regular"/><g class="Wall"/></svg>')
     rooms, doors, windows = construct_real.cubicasa_counts(str(svg))
     assert rooms == {'bedroom': 2, 'bathroom': 1} and doors == 1 and windows == 2
+
+
+def test_cad3dify_runs_on_own_model(tmp_path):
+    """cad3dify (copied whole) runs unchanged on a local OpenAI-style model server: generate + 2 refinement rounds,
+    each with the drawing picture; STEP comes out; its own prompts are what training uses"""
+    for m in ('langchain', 'langchain_openai', 'langchain_experimental', 'svglib', 'loguru'):
+        pytest.importorskip(m)
+    import http.server, socket
+    from PIL import Image
+    from shipbrain import cad3dify, agent
+    code = ('import cadquery as cq\nresult = cq.Workplane("XY").box(60, 40, 10).faces(">Z").workplane().hole(12)\n'
+            'cq.exporters.export(result, "${output_filename}")')
+    calls = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            calls.append(sum(1 for m in body['messages'] if isinstance(m['content'], list) for c in m['content'] if c.get('type') == 'image_url'))
+            out = json.dumps({'id': 'x', 'object': 'chat.completion', 'created': 0, 'model': 'local',
+                              'choices': [{'index': 0, 'finish_reason': 'stop', 'message': {'role': 'assistant', 'content': f'```python\n{code}\n```'}}],
+                              'usage': {'prompt_tokens': 1, 'completion_tokens': 1, 'total_tokens': 2}}).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(out)))
+            self.end_headers()
+            self.wfile.write(out)
+
+        def log_message(self, *a):
+            pass
+    s = socket.socket()
+    s.bind(('127.0.0.1', 0))
+    port = s.getsockname()[1]
+    s.close()
+    srv = http.server.HTTPServer(('127.0.0.1', port), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        Image.new('RGB', (400, 300), 'white').save(tmp_path / 'part.jpg')
+        T = agent.Tools(str(tmp_path))
+        T.llm = agent.LLM(f'http://127.0.0.1:{port}')
+        r = T.call('drawing_to_step', {'file': 'part.jpg', 'refinements': 2})
+        assert r['rounds'] == 3 and calls == [1, 1, 1], (r, calls)
+        assert abs(r['volume_mm3'] - (60 * 40 * 10 - 3.14159265 * 36 * 10)) < 5
+    finally:
+        srv.shutdown()
+    gen, ref = cad3dify.prompts()
+    assert 'cadquery' in gen and '${output_filename}' in gen and 'Corrected code:' in ref('x = 1')

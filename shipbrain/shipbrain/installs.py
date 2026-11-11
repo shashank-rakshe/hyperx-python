@@ -110,6 +110,9 @@ SOFTWARE = {
     'PIL': dict(_pip('pillow', 'to read and draw pictures', mod='PIL')),
     'psutil': _pip('psutil', 'to read CPU / memory of this PC'),
     'numpy': _pip('numpy', 'for all calculations'),
+    'langchain': dict(_pip('langchain<1', 'for drawing_to_step (cad3dify runs on LangChain 0.3)', mod='langchain'),
+                      link='https://pypi.org/project/langchain/',
+                      steps={'all': 'pip install "langchain<1" "langchain-openai<1" "langchain-experimental<1" svglib rlPyCairo loguru'}),
     'msgpack': _pip('msgpack', 'for construction drawing sets (CIR files, ConstructDrawingAI)'),
     'pydantic': _pip('pydantic', 'for construction drawing sets (CIR) and P&ID knowledge graphs'),
     'xsdata': _pip('xsdata', 'for OCX ship models: the official OCX classes of every schema version'),
@@ -182,6 +185,8 @@ def detect(error):
         top = m.group(1).split('.')[0]
         if top == 'OCP':
             return 'cadquery'
+        if top in ('langchain_openai', 'langchain_experimental', 'langchain_core', 'svglib', 'loguru', 'reportlab', 'rlPyCairo'):
+            return 'langchain'
         for k, s in SOFTWARE.items():
             if s.get('module') == top:
                 return k
