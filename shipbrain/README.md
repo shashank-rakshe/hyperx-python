@@ -269,6 +269,24 @@ ShipBrain runs its own program, pinned to commit `6c775550` (version 0.6.11):
   instead. Its docs and code are the knowledge pack `packs/cadmpeg.sbpack` (7,202 chunks); 240 training conversations
   come from real runs on its public CC0 / NIST sample files (`training/cadmpeg_tasks.py`).
 
+## Siemens NX automation: NX Open journals (nxopentse) and renaming with links
+
+For users who have NX / Simcenter 3D (reading NX files needs no NX - see above):
+- [nxopentse](https://github.com/theScriptingEngineer/nxopentse) (AGPL-3.0, copied as written in `vendor/nxopentse`; the
+  packaged successor of [NXOpen-CAE-python](https://github.com/theScriptingEngineer/NXOpen-CAE-python), which has no licence
+  file and is therefore not copied) gives 149 NX Open Python functions: CAD (bodies, faces, features, datums, points,
+  splines, assemblies, layers, colours, mass properties) and Simcenter CAE (mesh collectors, nodes, forces / moments /
+  pressure on groups, constraints, solutions, subcases, solver sets, solving, results: load, export, combine, envelope,
+  nodal / elemental values, screenshots).
+- Tool `nx_open`: `find` / `syntax` read the functions from nxopentse's own code (never invented); `journal` writes an
+  NX Open journal that opens the part and calls them in order (results passed on with `"$name"`, repeated with
+  `for_each`, NX constants as `{"nx": "NXOpen..."}`), checked as valid Python, and runs it with NX's `run_journal` when
+  NX is installed - otherwise the answer says how to run it in NX (File > Execute > NX Open..., Alt+F8).
+- Tool `nx_rename`: [NX File Renamer](https://github.com/nahidmubin/Siemens_NX_File_Renamer) (GPL-3.0, copied as written
+  without its .exe) renames a .prt and updates the assemblies / drawings in the same folder with NX's `ug_edit_part_names`
+  (Windows with NX; needs pywin32).
+- Skill `nx-open`, packs `nxopentse` and `Siemens_NX_File_Renamer`, 100 training conversations (`training/nx_tasks.py`).
+
 ## Rhino and NX import
 
 - **Rhino `.3dm`**: `shipbrain/rhino.py` reads it with McNeel's own open library `rhino3dm` (MIT, `pip install rhino3dm`)

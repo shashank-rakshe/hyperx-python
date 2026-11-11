@@ -46,6 +46,9 @@ ENGINES = [
      ['nastran', 'nx_nastran'], None, 'BDF written by ShipBrain; needs a Nastran licence'),
     ('ANSYS MAPDL / PyMAPDL', {'static': 'writes', 'modal': 'writes', 'buckling': 'writes', 'ultimate': 'knowledge', 'contact': 'knowledge', 'heat': 'knowledge'}, 'writes',
      'fe_convert(file, to=["mac"]) (+ PyMAPDL script)', ['ansys', 'mapdl', 'ansys241', 'ansys242'], None, 'needs an ANSYS licence'),
+    ('Siemens NX / Simcenter 3D (NX Open journals)', {'static': 'writes', 'modal': 'writes', 'buckling': 'writes', 'cad': 'writes'},
+     'writes', 'nx_open(op="journal", calls=[...]) with nxopentse; nx_rename for renaming with links', ['run_journal', 'run_journal.exe'],
+     'nxopentse', 'paid; ShipBrain writes the journals (nxopentse, AGPL) and runs them when NX is installed'),
     ('Siemens NX / Rhino (RhinoInside.NX)', {'cad'}, 'knowledge', 'native_cad(file) reads NX .prt partly and Rhino .3dm geometry; '
      'STEP to and from NX', ['ugraf', 'ugraf.exe', 'rhino', 'Rhino.exe'], None,
      'paid programs; RhinoInside.NX (no open licence, early beta) links them - ShipBrain gives its download link only'),

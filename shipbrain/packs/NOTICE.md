@@ -21,7 +21,7 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Source: https://github.com/process-intelligence-research/DEXPI-Studio.git (commit 9af5d263b14b)
 - Licence: AGPL-3.0
 - Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
-- Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+- Author: Process Intelligence Research (https://github.com/process-intelligence-research)
 
 ## HuggingArch
 
@@ -91,6 +91,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: CC-BY-4.0 + MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2026 Kirsten Odendaal and Roy de Winter
+
+## Siemens_NX_File_Renamer
+
+- Source: https://github.com/nahidmubin/Siemens_NX_File_Renamer (commit e6ee7f3dc271)
+- Licence: GPL-3.0
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- Author: nahidmubin (https://github.com/nahidmubin)
 
 ## agent3dify
 
@@ -202,6 +209,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: MIT with extra conditions
 - Use: ok UNCHANGED, keep the notice; its licence adds conditions on modifications (never modify it)
 - Copyright 2025 Autodrop3d LLC
+
+## nxopentse
+
+- Source: https://github.com/theScriptingEngineer/nxopentse (commit aae86c584bd0)
+- Licence: AGPL-3.0
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- Author: theScriptingEngineer (https://github.com/theScriptingEngineer)
 
 ## public-chemical-manufacturing-datasets
 

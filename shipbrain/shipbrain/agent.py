@@ -266,6 +266,20 @@ class Tools:
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'op': {'type': 'string', 'enum': [
                           'convert', 'inspect', 'check', 'measure', 'diff']}, 'to': {'type': 'string'}, 'other': {'type': 'string'},
                           'density': {'type': 'number'}}, 'required': ['file']})
+        self.register('nx_open', self.nx_open, 'Siemens NX / Simcenter 3D automation with NX Open Python journals, using nxopentse '
+                      '(149 ready functions: CAD bodies / faces / features / datums / assemblies / mass properties; CAE mesh '
+                      'collectors, loads and constraints on groups, solutions, subcases, solving, results export / combine / '
+                      'envelope, screenshots). op: find (query words) | syntax (name) | journal (calls=[{fn, args, as, '
+                      'for_each:"$name"}], part; NX constants as {"nx": "NXOpen.CAE.CaeSetGroupFilterType.GeomFace"}) -> writes the journal and runs it when NX is installed. Use only functions '
+                      'that find / syntax return.',
+                      {'type': 'object', 'properties': {'op': {'type': 'string', 'enum': ['find', 'syntax', 'journal']},
+                                                         'query': {'type': 'string'}, 'name': {'type': 'string'},
+                                                         'calls': {'type': 'array'}, 'part': {'type': 'string'},
+                                                         'out': {'type': 'string'}}, 'required': ['op']})
+        self.register('nx_rename', self.nx_rename, 'Rename a Siemens NX .prt file and update the assemblies / drawings in the same '
+                      'folder that use it (NX File Renamer with NX\'s ug_edit_part_names; Windows with NX installed).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'new_name': {'type': 'string'}},
+                       'required': ['file', 'new_name']})
         self.register('reverse_cad', self.reverse_cad, 'Mesh (STL scan / 3D-print / mesh export) -> STEP AP242 solid with ReverseCAD '
                       '(non-commercial licence): watertight B-Rep, volume, area, centre of mass, inertia, mass for a material, '
                       'recognised holes / ISO threads / fillets / chamfers / slots / cavities, and its own verification of the STEP '
@@ -1057,6 +1071,30 @@ class Tools:
                 raise ValueError('diff needs other=<second file>')
             return cadmpeg.diff(src, self._path(other))
         raise ValueError('op: convert | inspect | check | measure | diff')
+
+    def nx_open(self, op, query=None, name=None, calls=None, part=None, out=None):
+        from . import nxopen
+        if op == 'find':
+            hits = nxopen.find(query or name or '')
+            return {'functions': hits, 'plain_english': (f"{len(hits)} nxopentse functions match: " + '; '.join(
+                f"{h['call']} - {h['what']}" for h in hits[:6])) if hits else 'No nxopentse function matches; say so.'}
+        if op == 'syntax':
+            return nxopen.syntax(name or query)
+        if op == 'journal':
+            out = re.sub(r'[^A-Za-z0-9_.\-]', '_', out or 'shipbrain_journal.py')
+            path = nxopen.journal(calls or [], part=part, out=self._path(out))
+            r = nxopen.run(path, self._path(part) if part and os.path.exists(self._path(part)) else part)
+            text = open(path, encoding='utf-8').read()
+            body = text[text.index('def main'):] if 'def main' in text else text
+            return {'journal': out, 'ran': r['ran'], 'output': r.get('output'), 'code': body[:4000],
+                    'plain_english': f"Wrote the NX Open journal {out} ({len(calls or [])} step(s)). " + r['plain_english']}
+        raise ValueError('op: find | syntax | journal')
+
+    def nx_rename(self, file, new_name):
+        from . import nxopen
+        r = nxopen.rename(self._path(file), new_name)
+        r['file'] = os.path.relpath(r['file'], self.workdir)
+        return r
 
     def reverse_cad(self, file, material=None, heatmap=False):
         from . import reversecad

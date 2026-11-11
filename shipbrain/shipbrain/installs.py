@@ -136,6 +136,14 @@ SOFTWARE = {
                                             'Starter", pick the NX and Rhino folders, Start (NX needs its STEP AP242 licence)',
                                  'linux': 'Windows only', 'mac': 'Windows only'},
                        'check': lambda: False, 'match': r'RhinoInside'},
+    'nx': {'name': 'Siemens NX / Simcenter 3D (paid, your own licence)', 'why': 'to run the NX Open journals ShipBrain writes '
+                  '(reading NX files needs no NX: cadmpeg does that)', 'link': 'https://plm.sw.siemens.com/en-US/nx/',
+           'steps': {'windows': 'install NX with your licence; ShipBrain finds it through UGII_BASE_DIR (set by the NX installer)',
+                     'linux': 'install NX with your licence and set UGII_BASE_DIR', 'mac': 'NX does not run on macOS'},
+           'check': lambda: __import__('shipbrain.nxopen', fromlist=['x']).nx_dir() is not None,
+           'match': r'NX is not (installed|found)'},
+    'pywin32': _pip('pywin32', 'for the NX File Renamer (it asks Windows which NX files are assemblies)', mod='win32com',
+                    match=r'needs pywin32'),
     'rhino3dm': _pip('rhino3dm', 'to read Rhino .3dm files exactly (McNeel\'s free library): solids, surfaces, meshes, '
                      'curves, layers and blocks', match=r'need rhino3dm'),
     'cadmpeg': {'name': 'cadmpeg (free, Apache-2.0)', 'why': 'to open native CAD files (SolidWorks, CATIA, Inventor, Fusion 360, '

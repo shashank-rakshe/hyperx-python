@@ -1,0 +1,1 @@
+pyinstaller main.py --name NX_File_Renamer --onefile --noconsole --add-data "gui/assets;gui/assets" --hidden-import win32com
