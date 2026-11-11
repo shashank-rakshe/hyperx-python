@@ -1904,3 +1904,19 @@ def test_inch_bolts():
         assert abs(bolts.inch_joint(s, t)['At_in2'] - at) / at < 0.003
     j = bolts.inch_joint('1/2', 'UNC', '5')
     assert abs(j['preload_lbf'] - 0.75 * 0.1419 * 85000) < 5 and abs(j['torque_ft_lbf'] - 75.4) < 0.2
+
+
+def test_octave_runs_matlab_language(tmp_path, monkeypatch):
+    """MATLAB-language (.m) functions are listed and run as written in GNU Octave (free), several outputs included"""
+    from shipbrain import polyglot
+    if not polyglot.octave_exe():
+        pytest.skip('GNU Octave not installed')
+    d = tmp_path / 'demo' / 'repo'
+    d.mkdir(parents=True)
+    (d / 'nut.m').write_text('function [T, F] = nut(K, D_mm, F_N)\n  T = K * D_mm / 1000 * F_N;\n  F = F_N;\nend\n')
+    (d / 'grms.m').write_text('function g = grms(f, a)\n  g = sqrt(trapz(f, a));\nend\n')
+    monkeypatch.setattr(polyglot, 'VENDOR', str(tmp_path))
+    fs = {x['function']: x for x in polyglot.list_functions('demo')}
+    assert fs['nut']['callable'] and fs['nut']['language'] == 'octave'
+    assert polyglot.call('demo', 'nut.m', 'nut', [0.2, 12, 40000]) == pytest.approx([96.0, 40000])
+    assert polyglot.call('demo', 'grms.m', 'grms', [[20, 2000], [0.04, 0.04]]) == pytest.approx((0.04 * 1980) ** 0.5)

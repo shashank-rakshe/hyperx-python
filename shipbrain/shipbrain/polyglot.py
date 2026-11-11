@@ -20,8 +20,9 @@ import argparse, importlib.util, json, os, re, shutil, subprocess, sys
 VENDOR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor')
 RUNNER = os.path.join(VENDOR, '_runner')
 LANG = {'.py': 'python', '.ts': 'typescript', '.tsx': 'typescript', '.js': 'javascript', '.mjs': 'javascript',
-        '.cpp': 'c++', '.cc': 'c++', '.h': 'c/c++', '.hpp': 'c++', '.c': 'c', '.rs': 'rust', '.f90': 'fortran', '.f': 'fortran'}
-CALLABLE = {'python', 'typescript', 'javascript'}
+        '.cpp': 'c++', '.cc': 'c++', '.h': 'c/c++', '.hpp': 'c++', '.c': 'c', '.rs': 'rust', '.f90': 'fortran', '.f': 'fortran',
+        '.m': 'octave'}
+CALLABLE = {'python', 'typescript', 'javascript', 'octave'}       # .m (MATLAB language) runs in GNU Octave, free
 _RUN_MJS = r"""
 import { pathToFileURL } from 'node:url';
 let input = '';
@@ -168,6 +169,7 @@ _PAT = {
 }
 _PAT['javascript'] = _PAT['typescript']
 _PAT['c'] = _PAT['c/c++'] = _PAT['c++']
+_PAT['octave'] = re.compile(r'^\s*function\s+(?:\[?[\w,\s~]*\]?\s*=\s*)?([A-Za-z]\w*)\s*\(([^)]*)\)', re.M)
 
 
 def list_functions(name, query=None, limit=200):
@@ -270,8 +272,36 @@ def call(name, file, function, args=None, timeout=300):
             setup(name)
             return call(name, file, function, args, timeout)
         raise RuntimeError(err.strip()[:1500])
+    if lang == 'octave':
+        return _call_octave(path, function, args, timeout)
     raise ValueError(f'{lang or "this"} code is not called directly; C/C++/Rust run through their compiled .wasm '
                      '(see shipbrain/awatif.py) or are read as knowledge')
+
+
+def octave_exe():
+    import shutil
+    return shutil.which('octave-cli') or shutil.which('octave-cli.exe') or shutil.which('octave')
+
+
+def _call_octave(path, function, args, timeout=600):
+    """a MATLAB-language function (.m) run as written in GNU Octave (free, GPL): arguments go in as JSON, the outputs
+    come back as JSON (one output -> that value, several -> a list)"""
+    exe = octave_exe()
+    if not exe:
+        raise RuntimeError('GNU Octave is needed to run MATLAB-language (.m) code (free: octave.org)')
+    q = lambda t: "'" + t.replace("'", "''") + "'"
+    argl = args if isinstance(args, list) else ([] if args is None else [args])
+    ins = ', '.join(f'jsondecode({q(json.dumps(a))})' for a in argl)
+    fn = os.path.splitext(os.path.basename(path))[0] if function in ('', None, 'main') else function
+    code = (f"addpath({q(os.path.dirname(path))}); n = nargout({q(fn)}); if n < 0, n = 1; end; "
+            f"if n == 0, {fn}({ins}); out = {{}}; else, out = cell(1, n); [out{{:}}] = {fn}({ins}); end; "
+            "printf('@@RESULT@@%s\\n', jsonencode(out));")
+    r = subprocess.run([exe, '--no-gui', '--quiet', '--no-window-system', '--eval', code], capture_output=True, text=True,
+                       timeout=timeout, cwd=os.path.dirname(path))
+    if '@@RESULT@@' not in r.stdout:
+        raise RuntimeError('Octave: ' + (r.stderr or r.stdout).strip()[-1200:])
+    out = json.loads(r.stdout.split('@@RESULT@@', 1)[1].strip().splitlines()[0])
+    return out[0] if isinstance(out, list) and len(out) == 1 else out
 
 
 def run_script(name, script, args=(), cwd=None, timeout=3600):
@@ -287,6 +317,10 @@ def run_script(name, script, args=(), cwd=None, timeout=3600):
         if not node_ok():
             raise RuntimeError('Node.js is needed: install it from nodejs.org')
         cmd = ['node'] + (['--import', 'tsx'] if lang == 'typescript' else []) + [path]
+    elif lang == 'octave':
+        if not octave_exe():
+            raise RuntimeError('GNU Octave is needed to run MATLAB-language (.m) code (free: octave.org)')
+        cmd = [octave_exe(), '--no-gui', '--quiet', '--no-window-system', path]
     else:
         raise ValueError(f'{lang or "this"} script is not run directly')
     env = dict(os.environ, PYTHONIOENCODING='utf-8')

@@ -21,6 +21,7 @@ pyyaml          # ConstructDrawingAI configuration
 langchain<1     # cad3dify (drawing_to_step) with langchain-openai<1, langchain-experimental<1, svglib, rlPyCairo, loguru; MIT
 rapidocr-onnxruntime  # OCR for scanned drawings (Apache-2.0); optional
 opencv-python-headless  # scanned drawings (Apache-2.0); optional
+# GNU Octave (octave-cli) on PATH: optional, runs MATLAB-language (.m) code (free alternative to MATLAB)
 # CalculiX (ccx) on PATH: optional, solve_calculix / fatigue solve
 # ANSYS (PyMAPDL: ansys-mapdl-core) and Abaqus: optional, need their own licences; ShipBrain writes inputs + scripts
 # everything here is free open source (no AGPL / paid-licence libraries). no gmsh: meshing is done by shipbrain/platemesh.py (own conforming mesher)

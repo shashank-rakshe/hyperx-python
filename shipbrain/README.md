@@ -297,6 +297,15 @@ ShipBrain builds its own MCP server once (`python -c "from shipbrain import dwsi
   as written (e.g. a flat PSD 0.04 G2/Hz, 20-2,000 Hz -> 8.9 GRMS, exact); a desktop toolkit it imports for its
   windows is given an empty stand-in where none is installed. Trained knowledge pack.
 
+## MATLAB code without MATLAB: GNU Octave
+
+MATLAB is paid; **GNU Octave** (free, GPL, https://octave.org) runs the same language. ShipBrain's code runner now
+treats `.m` files like Python / TypeScript: `code_functions` lists their functions, `code_call` runs one as written in
+Octave (arguments in, every output back), `run_script` runs a whole `.m` script. Octave is a separate program
+(Windows installer, `sudo apt install octave`, `brew install octave`); the chat shows the link when it is missing.
+Checked: Octave 8.4 - a two-output function and a vector function give the same numbers as the Python versions.
+Windows made with MATLAB's GUIDE (.fig) do not run in Octave, but their calculation code does.
+
 ## LLM serving simulation (Simthesizer)
 
 [Simthesizer](https://github.com/casys-kaist/simthesizer) (MIT, Rust, HPCA 2027) is copied whole and run as written:
