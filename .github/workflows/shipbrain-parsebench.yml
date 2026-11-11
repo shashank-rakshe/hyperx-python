@@ -47,7 +47,7 @@ jobs:
           Page pictures rendered from the dataset's PDFs with their human-verified markdown; licence: see licence.txt.
           EOF
           cd /tmp/out && zip -qr /tmp/parsebench.zip .
-          gh release view data-latest >/dev/null 2>&1 || gh release create data-latest --prerelease --target "${GITHUB_SHA}" \
+          gh release view data-latest -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create data-latest -R "$GITHUB_REPOSITORY" --prerelease --target "${GITHUB_SHA}" \
             --title "ShipBrain training data (latest)" --notes "ShipBrain training data"
-          gh release upload data-latest /tmp/parsebench.zip --clobber
+          gh release upload data-latest /tmp/parsebench.zip --clobber -R "$GITHUB_REPOSITORY"
           echo "ParseBench: $(wc -l < /tmp/out/parsebench_train.jsonl) samples, licence $(cat /tmp/out/licence.txt)"
