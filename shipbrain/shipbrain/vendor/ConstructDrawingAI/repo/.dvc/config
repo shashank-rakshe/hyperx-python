@@ -1,0 +1,12 @@
+[core]
+    remote = s3-remote
+    autostage = true
+# Default remote for data + model artifacts. Replace the bucket/prefix with the
+# real one before `dvc push`/`dvc pull`. Credentials come from the environment
+# (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY) — never commit them.
+['remote "s3-remote"']
+    url = s3://constructdrawing-ai-REPLACE-ME/dvc
+# A separate remote for deployable, COMMERCIAL-LANE-ONLY model weights. Keep
+# research-lane weights out of this remote.
+['remote "models-commercial"']
+    url = s3://constructdrawing-ai-REPLACE-ME/models-commercial

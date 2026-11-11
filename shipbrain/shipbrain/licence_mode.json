@@ -1,0 +1,5 @@
+{
+  "noncommercial": true,
+  "declared": "2026-11-11",
+  "note": "The project owner declared ShipBrain and its trained models non-commercial. With this, material under non-commercial licences (PolyForm Noncommercial, CC BY-NC) may be copied, searched and trained on, each item marked NONCOMMERCIAL. If ShipBrain or a model trained with it is ever used commercially, set this to false, remove those items (vendor/*/NONCOMMERCIAL.md, packs marked noncommercial, their training data) and train again."
+}

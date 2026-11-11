@@ -1649,3 +1649,45 @@ def test_ocx_training_samples_remove_names(tmp_path):
     assert len(rows) >= 9 and {'ocx_read', 'ocx_query', 'ocx_validate', 'ocx_upgrade', 'ocx_revision'} <= {x['task'] for x in rows}
     blob = json.dumps(rows)
     assert not ocx_samples.leaks(blob, hidden) and 'SEASTAR' not in blob and 'ACMEYARD' not in blob
+
+
+def test_construct_drawings_noncommercial(tmp_path):
+    """ConstructDrawingAI (non-commercial licence, allowed because ShipBrain is declared non-commercial): its synthetic
+    drawing engine, takeoff and Q&A run as written through ShipBrain tools; the licence is recognised and marked"""
+    from shipbrain import construct, agent, repopack
+    lic = open(os.path.join(construct.ROOT, 'LICENSE')).read()
+    assert repopack.classify_licence(lic)[1] == 'noncommercial'
+    assert repopack.noncommercial_ok() and repopack.check_licence(lic)['allowed']
+    assert os.path.exists(os.path.join(os.path.dirname(construct.ROOT), 'NONCOMMERCIAL.md'))
+    try:
+        import pydantic, msgpack, yaml  # noqa: F401
+    except ImportError:
+        pytest.skip('pydantic / msgpack / pyyaml not installed')
+    if sys.version_info < (3, 11):
+        pytest.skip('ConstructDrawingAI needs Python 3.11+')
+    sets = construct.generate(str(tmp_path / 'gen'), n=1, seed=5)
+    cirf = os.path.join(sets[0], 'ground_truth.cir')
+    shutil.copy(cirf, tmp_path / 'set.cir')
+    T = agent.Tools(str(tmp_path))
+    t = T.call('drawing_takeoff', {'file': 'set.cir'})
+    assert t['total_count'] > 5 and any(ln.get('masterformat') for ln in t['lines'])
+    info = construct.info(cirf)
+    rec = sum(n for item, n in t['by_sheet']['E-101'].items() if 'Receptacle' in item)
+    q = T.call('drawing_qa', {'file': 'set.cir', 'question': 'How many receptacles are there?'})
+    assert q['value'] == rec
+    truth = {p['question']: p['answer'] for p in info['qa_pairs']}
+    assert any('receptacles' in k for k in truth)
+
+
+def test_ocx_to_step_with_ocxreader(tmp_path):
+    """OCXReader (built against the same OpenCascade) makes STEP of OCX 2.8 files; 3.x files fall back with a reason"""
+    from shipbrain import ocx
+    pytest.importorskip('xsdata')
+    if not ocx.reader_exe():
+        pytest.skip('OCXReader not built (python -c "from shipbrain import ocx; ocx.reader_build()")')
+    m = {'sections': {}, 'blocks': [{'id': 'B', 'panels': [{'id': 'D', 'name': 'D', 'function': 'DECK',
+                                                            'cs': {'origin': [0, 0, 0], 'uaxis': [1, 0, 0], 'waxis': [0, 0, 1]},
+                                                            'plates': [{'name': 'P', 'thk': 10, 'contour': [[0, 0], [2000, 0], [2000, 1000], [0, 1000]]}]}]}]}
+    ocx.write(m, str(tmp_path / 'a.3docx'))
+    r = ocx.to_step(str(tmp_path / 'a.3docx'), str(tmp_path / 'a.step'))
+    assert os.path.exists(r['step']) and '2.8' in r['note']

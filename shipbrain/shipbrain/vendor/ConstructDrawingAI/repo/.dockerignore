@@ -1,0 +1,31 @@
+.git/
+.venv/
+**/__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+htmlcov/
+.coverage
+# data + artifacts (DVC-managed, never baked into images)
+data/
+datasets/raw/
+datasets/processed/
+datasets/synthetic/
+models/
+checkpoints/
+artifacts/
+outputs/
+wandb/
+*.pdf
+*.dwg
+*.dxf
+*.ifc
+*.pt
+*.pth
+*.safetensors
+# local env / editor
+.env
+.env.*
+.idea/
+.vscode/

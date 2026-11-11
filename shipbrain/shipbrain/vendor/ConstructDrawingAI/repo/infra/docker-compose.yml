@@ -1,0 +1,16 @@
+# Local development compose: just the backend API for now.
+# Build from the repo root:  docker compose -f infra/docker-compose.yml up --build
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    image: constructdrawing-ai:latest
+    ports:
+      - "8000:8000"
+    environment:
+      # Point at the model-serving host (DGX Spark in dev, cloud GPU in prod).
+      - MODEL_SERVER_URL=${MODEL_SERVER_URL:-http://host.docker.internal:8001}
+      - WANDB_MODE=${WANDB_MODE:-disabled}
+    # Model servers (vLLM/SGLang) and the production webapp are added as those
+    # components land (Build Playbook step 4.2).

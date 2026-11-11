@@ -354,6 +354,17 @@ class Tools:
                                                          'name': {'type': 'string'}}, 'required': ['file']})
         self.register('ocx_to_step', self.ocx_to_step, 'OCX model -> STEP 3D CAD (OCXReader when built, else ShipBrain plates + stiffeners).',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
+        self.register('drawing_takeoff', self.drawing_takeoff, 'Construction drawings (electrical / architectural / P&ID) read into '
+                      'a CIR file (.cir / .json): quantity takeoff - counts per item with MasterFormat / IFC codes, items to '
+                      'review, connections (conductors, home runs, feeders), lengths / areas when a scale is known. '
+                      'ConstructDrawingAI engine (non-commercial licence).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'min_confidence': {'type': 'number'}},
+                       'required': ['file']})
+        self.register('drawing_qa', self.drawing_qa, 'Ask a question about a construction drawing set (CIR file): counts '
+                      '("how many receptacles on E-101"), lists ("list the panels"), sheets, disciplines - answered from the '
+                      'data with evidence. action "rfi" drafts RFIs for unclear / low-confidence items.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'question': {'type': 'string'},
+                                                         'action': {'type': 'string', 'enum': ['qa', 'rfi']}}, 'required': ['file']})
         self.register('structure_to_mesh', self.structure_to_mesh, 'Make a global 1D+2D FE mesh from a structure model (structure JSON or '
                       'ship XML through your plugin): plates with thickness and openings -> shells, stiffeners -> beams with their sections. '
                       'Also writes the plates/beams JSON and (if CadQuery is installed) a STEP.',
@@ -1004,6 +1015,20 @@ class Tools:
         return {'views': out, 'verdict': worst['verdict'] if all(r['verdict'] != 'FAIL' for r in out) else 'FAIL',
                 'overlay': worst['overlay'], 'plain_english': ' '.join(r['plain_english'] for r in out)}
 
+    def drawing_takeoff(self, file, min_confidence=0.0):
+        from . import construct
+        return construct.takeoff(self._path(file), min_confidence)
+
+    def drawing_qa(self, file, question=None, action='qa'):
+        from . import construct
+        if action == 'rfi':
+            return construct.rfi(self._path(file))
+        if not question:
+            i = construct.info(self._path(file))
+            return {'sheets': i['sheets'], 'plain_english': 'Sheets: ' + '; '.join(f"{x['number']} {x['title'] or ''} ({x['discipline']}, "
+                                                                                 f"{x['entities']} items)" for x in i['sheets']) + '.'}
+        return construct.qa(self._path(file), question)
+
     def ocx_syntax(self, name=None, version=None, changes_from=None):
         from . import ocx
         if changes_from:
@@ -1050,7 +1075,8 @@ class Tools:
     def ocx_to_step(self, file):
         from . import ocx
         r = ocx.to_step(self._path(file))
-        return {'step': os.path.basename(r['step']), 'by': r['by'], 'plain_english': f"STEP written: {os.path.basename(r['step'])} (made by {r['by']})."}
+        return {'step': os.path.basename(r['step']), 'by': r['by'],
+                'plain_english': f"STEP written: {os.path.basename(r['step'])} (made by {r['by']})." + (f" {r['note']}." if r.get('note') else '')}
 
     def compare_structures(self, a, b, tol=None, move_tol=300.0, method='coverage'):
         """coverage (default): stiffener length / plate area found in the other model - works when the two models split

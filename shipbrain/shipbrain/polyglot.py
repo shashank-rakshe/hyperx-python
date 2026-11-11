@@ -76,7 +76,9 @@ def add(url, name=None, skip_media=True, separate_program=False, exclude=()):
     lic = next((os.path.join(tmp, f) for f in os.listdir(tmp) if re.match(r'(?i)^(licen[cs]e|copying)', f)), None)
     spdx, kind = classify_licence(open(lic, errors='replace').read()) if lic else ('none', 'unknown')
     gpl_ok = separate_program and kind == 'copyleft' and not re.search(r'AGPL', spdx, re.I)
-    if kind not in ('permissive', 'conditional') and not gpl_ok:
+    from .repopack import noncommercial_ok
+    nc_ok = kind == 'noncommercial' and noncommercial_ok()
+    if kind not in ('permissive', 'conditional') and not gpl_ok and not nc_ok:
         shutil.rmtree(tmp, ignore_errors=True)
         raise ValueError(f'{name}: licence {spdx} ({kind}) - only permissive licences are copied into ShipBrain; '
                          'use repopack (search-only knowledge) for it')
@@ -102,6 +104,12 @@ def add(url, name=None, skip_media=True, separate_program=False, exclude=()):
             fh.write(f'# Do not modify {name}\n\nIts licence ({spdx}) allows use and sharing of the UNCHANGED code with its notice, but '
                      'adds conditions on modifications (see repo/LICENSE*). ShipBrain uses it as it is: never patch these files; '
                      'fixes go to the author as a pull request.\n')
+    if nc_ok:
+        with open(os.path.join(VENDOR, name, 'NONCOMMERCIAL.md'), 'w') as fh:
+            fh.write(f'# {name}: non-commercial use only\n\nLicence {spdx} (see repo/). Used because ShipBrain is declared '
+                     'non-commercial (shipbrain/licence_mode.json): run, searched and trained on for a non-commercial model. '
+                     'Before any commercial use of ShipBrain or of a model trained with it: remove this folder, its pack and '
+                     'its training data, and train again (or get a commercial licence from the author).\n')
     if gpl_ok:
         with open(os.path.join(VENDOR, name, 'NOT_FOR_TRAINING.md'), 'w') as fh:
             fh.write(f'# {name}: separate program only\n\nLicence {spdx} (see repo/). ShipBrain copies it unchanged, builds it and runs '

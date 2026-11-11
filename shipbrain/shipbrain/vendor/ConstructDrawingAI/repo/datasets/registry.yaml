@@ -1,0 +1,517 @@
+# ===========================================================================
+# Dataset registry — the single source of truth for every dataset we plan to use.
+#
+# POSTURE (set 2026-05-31): research-first / maximize-quality. We use all available
+# public data in the `research` lane to find the quality ceiling, and decide
+# research-publication vs. commercialization later. Licenses + lanes are still
+# tracked (cheaply) so that later decision is a lookup, not an archaeology project.
+# `python -m datasets.audit` still fails loudly if anything in the COMMERCIAL lane
+# traces to a non-permissive source.
+#
+# Fields (see datasets.registry.DatasetRecord):
+#   name, source_url, paper_url, size, modality, content_types,
+#   annotation_format, tasks, has_preparer, license_provenance, data_lane,
+#   verified, notes
+#   modality:           vector | raster | point_cloud | mixed | synthetic | text
+#   license_provenance: see cir.enums.LicenseProvenance (CC0, CC-BY, CC-BY-NC, ...)
+#   data_lane:          research | commercial
+# ===========================================================================
+datasets:
+  # ------------------------------------------------------------------ MEP / P&ID
+  - name: PIDQA
+    source_url: https://github.com/mgupta70/PIDQA
+    paper_url: https://www.mdpi.com/2504-4990/7/2/39
+    size: 64,000 QA pairs over 500 P&ID sheets
+    modality: text
+    content_types: [pid, qa, graph]
+    annotation_format: csv-qa
+    tasks: [qa, graph]
+    has_preparer: true
+    license_provenance: CC0
+    data_lane: research
+    verified: true
+    notes: >
+      CC0. Graph-grounded QA (counting / spatial counting / spatial connections /
+      value) with a Cypher query per question; 4 CSVs keyed by P&ID_number. Underlying
+      P&ID images come from Dataset-P&ID. PREPARER IMPLEMENTED (one CIR DrawingSet per
+      sheet, QA pairs in metadata).
+
+  - name: DELP-SkeySpot
+    source_url: https://github.com/HAIx-Lab/Skeyspot
+    paper_url: https://arxiv.org/abs/2508.10449
+    size: 45 plans, 2,450 instances, 34 service-key classes
+    modality: raster
+    content_types: [electrical, mep, symbols]
+    annotation_format: voc-xml
+    tasks: [detection]
+    has_preparer: true
+    license_provenance: CC-BY
+    data_lane: research
+    verified: true
+    notes: >
+      CC-BY-4.0. Electrical service-key detection (UK housing). The full annotated
+      45-image dataset is GATED ("available for academic research upon request to the
+      authors"); the public repo ships the YOLOv8 toolkit + weights, a sample image,
+      and per-plot detection-summary CSVs. PREPARER IMPLEMENTED: converts the public
+      detection summaries now, and Pascal-VOC (LabelImg) annotations once the full set
+      is obtained.
+
+  - name: Dataset-P&ID
+    source_url: https://drive.google.com/drive/folders/1gMm_YKBZtXB3qUKUpI-LF1HE_MgzwfeR
+    paper_url: https://arxiv.org/pdf/2109.03794
+    size: 500 synthetic sheets, 32 symbol templates
+    modality: synthetic
+    content_types: [pid, symbols, graph]
+    annotation_format: custom-json
+    tasks: [detection, graph]
+    has_preparer: false
+    license_provenance: research-only
+    data_lane: research
+    verified: false
+    notes: Synthetic P&ID benchmark (Google Drive). Provides the symbol boxes + graph that PIDQA queries.
+
+  - name: PID2Graph
+    source_url: https://zenodo.org/records/14803338
+    paper_url: https://arxiv.org/abs/2411.13929
+    size: 36,561 GraphML (real OPEN100 + Dataset-P&ID + synthetic); 2,391 CIR converted (A7)
+    modality: raster
+    content_types: [pid, symbols, connectivity, graph, real]
+    annotation_format: graphml
+    tasks: [detection, graph]
+    has_preparer: true
+    license_provenance: CC-BY-SA
+    data_lane: research
+    verified: true
+    notes: >
+      Real OPEN100 + synthetic P&IDs with full graph GT (typed nodes + undirected edges).
+      Converted to CIR by datasets.preparers.graphml_cir (directed=False per ADR-0012;
+      connector/crossing/arrow -> GRAPH_NODE + node_role; pixel bbox -> normalized by the
+      paired image). Slices recorded in each doc's metadata (complete/patched x
+      dataset-pid/open100/synthetic + a real flag); the OPEN100-real slice is the P&ID
+      connectivity eval (published SOTA 75.5 edge mAP / 88.9 synthetic, arXiv 2411.13929).
+  - name: CGHD
+    source_url: https://zenodo.org/records/15333233
+    size: handwritten circuit diagrams w/ symbols + junctions + wire-hops (graph GT)
+    modality: raster
+    content_types: [electrical, circuits, symbols, connectivity, graph, real]
+    annotation_format: voc-xml
+    tasks: [detection, graph]
+    has_preparer: false
+    license_provenance: CC-BY
+    data_lane: research
+    verified: true
+    notes: >
+      CC BY 4.0. DEFERRED: the Zenodo cghd-zenodo-15.zip download is TRUNCATED (2.49 of
+      4.87 GB) — fetch_datasets.py's url_zip path needs a resumable/streamed download for
+      multi-GB files. Re-fetch, then a CGHD->CIR converter (junctions -> GRAPH_NODE,
+      wires -> Connection directed=False) reuses the ADR-0012 graph model.
+
+  - name: SynthPID
+    source_url: https://github.com/
+    size: 665 topology-preserving synthetic P&IDs
+    modality: synthetic
+    content_types: [pid, symbols, graph]
+    annotation_format: custom-json
+    tasks: [detection, graph]
+    has_preparer: false
+    license_provenance: research-only
+    data_lane: research
+    verified: false
+    notes: Synthetic P&IDs; proof that synth-only training nears a real-data oracle (~8pt edge-mAP gap).
+
+  - name: DigitizePID
+    source_url: https://github.com/
+    size: real-world P&IDs
+    modality: raster
+    content_types: [pid, symbols, connectivity]
+    annotation_format: custom-json
+    tasks: [detection, graph]
+    has_preparer: false
+    license_provenance: unknown
+    data_lane: research
+    verified: false
+    notes: Real P&ID digitization pipeline + data; verify source/license.
+
+  # ------------------------------------------------------- Architectural floorplan
+  - name: ArchCAD-400K
+    source_url: https://github.com/
+    size: 413,062 chunks from 5,538 drawings; 27 categories
+    modality: vector
+    content_types: [architectural, floorplan, panoptic-symbols, commercial-buildings]
+    annotation_format: svg
+    tasks: [panoptic, detection, vectorization]
+    has_preparer: false
+    license_provenance: unknown
+    data_lane: research
+    verified: false
+    notes: Crown jewel for non-residential symbol spotting. VERIFY commercial terms before any commercial-lane use.
+
+  - name: CubiCasa5K
+    source_url: https://github.com/CubiCasa/CubiCasa5k
+    size: 5,000 floor plans
+    modality: vector
+    content_types: [architectural, floorplan, rooms, symbols]
+    annotation_format: svg
+    tasks: [segmentation, detection, vectorization]
+    has_preparer: false
+    license_provenance: CC-BY-NC
+    data_lane: research
+    verified: true
+    notes: CC-BY-NC -> research/benchmark only. Dense 80+ category polygons; residential bias.
+
+  - name: FloorPlanCAD
+    source_url: https://floorplancad.github.io/
+    size: 10K+ vector drawings
+    modality: vector
+    content_types: [architectural, floorplan, panoptic-symbols]
+    annotation_format: svg
+    tasks: [panoptic, detection]
+    has_preparer: false
+    license_provenance: CC-BY-NC
+    data_lane: research
+    verified: true
+    notes: CC-BY-NC annotations; underlying drawing copyright not owned by authors. Panoptic symbol spotting.
+
+  - name: LS-CAD
+    source_url: https://github.com/
+    size: large-area CAD (~1,000 m^2 avg)
+    modality: vector
+    content_types: [architectural, floorplan, panoptic-symbols]
+    annotation_format: svg
+    tasks: [panoptic]
+    has_preparer: false
+    license_provenance: CC-BY-NC
+    data_lane: research
+    verified: false
+    notes: Large-scale CAD panoptic spotting (CADSpotting-class). Verify exact source/license.
+
+  - name: Structured3D
+    source_url: https://structured3d-dataset.org/
+    size: 3,500 scenes
+    modality: mixed
+    content_types: [architectural, floorplan, rooms, reconstruction]
+    annotation_format: custom-json
+    tasks: [segmentation, vectorization]
+    has_preparer: false
+    license_provenance: research-only
+    data_lane: research
+    verified: true
+    notes: Wall/corner/room polygons; floor-plan reconstruction benchmark (RoomFormer/CAGE).
+
+  - name: SceneCAD
+    source_url: https://github.com/skanti/SceneCAD
+    size: ~1,200 scenes (ScanNet-based)
+    modality: point_cloud
+    content_types: [architectural, rooms, cad-alignment]
+    annotation_format: custom-json
+    tasks: [scan-to-bim]
+    has_preparer: false
+    license_provenance: research-only
+    data_lane: research
+    verified: false
+    notes: Layout + CAD alignment on ScanNet scenes. Research license.
+
+  - name: Floorplan-2M
+    source_url: https://github.com/
+    size: ~2,000,000 floor plans
+    modality: raster
+    content_types: [architectural, floorplan]
+    annotation_format: custom-json
+    tasks: [vectorization]
+    has_preparer: false
+    license_provenance: unknown
+    data_lane: research
+    verified: false
+    notes: Large-scale vectorization pretrain set (FloorplanVLM lineage). VERIFY release + license.
+
+  - name: Floorplan-HQ-300K
+    source_url: https://github.com/
+    size: ~300,000 high-fidelity vectorized plans
+    modality: vector
+    content_types: [architectural, floorplan, non-manhattan]
+    annotation_format: custom-json
+    tasks: [vectorization]
+    has_preparer: false
+    license_provenance: unknown
+    data_lane: research
+    verified: false
+    notes: High-fidelity vectorization (FloorplanVLM). VERIFY release + license.
+
+  - name: FPBench-2K
+    source_url: https://github.com/
+    size: 2,000 plans
+    modality: vector
+    content_types: [architectural, floorplan, benchmark]
+    annotation_format: custom-json
+    tasks: [vectorization]
+    has_preparer: false
+    license_provenance: unknown
+    data_lane: research
+    verified: false
+    notes: The vectorization benchmark to beat (FloorplanVLM 92.52% external-wall IoU). VERIFY release + license.
+
+  - name: MSD
+    source_url: https://github.com/
+    size: 5,372 plans / 18,900 apartments
+    modality: vector
+    content_types: [architectural, floorplan, multi-unit, graph]
+    annotation_format: custom-json
+    tasks: [segmentation, graph]
+    has_preparer: false
+    license_provenance: research-only
+    data_lane: research
+    verified: false
+    notes: Modified Swiss Dwellings; complex multi-unit layouts.
+
+  - name: DoorDet
+    source_url: https://github.com/
+    size: 35,000 door images (from CubiCasa5K)
+    modality: raster
+    content_types: [architectural, doors]
+    annotation_format: coco-json
+    tasks: [detection]
+    has_preparer: false
+    license_provenance: CC-BY-NC
+    data_lane: research
+    verified: false
+    notes: Fine-grained door detail (hinge side, opening direction). Derived from CubiCasa5K -> NC.
+
+  - name: ResPlan
+    source_url: https://github.com/
+    size: 17,000 vector-graph residential plans
+    modality: vector
+    content_types: [architectural, floorplan, residential, graph]
+    annotation_format: custom-json
+    tasks: [graph]
+    has_preparer: false
+    license_provenance: research-only
+    data_lane: research
+    verified: false
+    notes: Spatial-AI relational graphs; graph/relational pretraining.
+
+  - name: WAFFLE
+    source_url: https://github.com/
+    size: ~20,000 in-the-wild floorplan images
+    modality: raster
+    content_types: [architectural, floorplan, legends, in-the-wild]
+    annotation_format: custom-json
+    tasks: [detection, qa]
+    has_preparer: false
+    license_provenance: research-only
+    data_lane: research
+    verified: false
+    notes: In-the-wild robustness + legend grounding.
+
+  - name: RPLAN
+    source_url: http://staff.ustc.edu.cn/~fuxm/projects/DeepLayout/index.html
+    size: ~80,000 residential floor plans
+    modality: vector
+    content_types: [architectural, floorplan, residential]
+    annotation_format: custom-json
+    tasks: [segmentation, generation]
+    has_preparer: false
+    license_provenance: research-only
+    data_lane: research
+    verified: false
+    notes: Large vector residential plans (request access). Layout generation + parsing.
+
+  - name: CVC-FP
+    source_url: http://dag.cvc.uab.es/resources/floorplans/
+    size: 122 floor plans
+    modality: raster
+    content_types: [architectural, floorplan, segmentation]
+    annotation_format: custom-xml
+    tasks: [segmentation]
+    has_preparer: false
+    license_provenance: research-only
+    data_lane: research
+    verified: false
+    notes: Classic floor-plan structure segmentation benchmark (CVC, UAB).
+
+  - name: SESYD
+    source_url: http://mathieu.delalandre.free.fr/projects/sesyd/
+    size: 1,000+ synthetic documents (floorplans + diagrams)
+    modality: synthetic
+    content_types: [architectural, floorplan, symbols, electrical]
+    annotation_format: custom-xml
+    tasks: [detection]
+    has_preparer: false
+    license_provenance: research-only
+    data_lane: research
+    verified: false
+    notes: Classic GREC synthetic symbol-spotting set (incl. electrical symbols on floorplans).
+
+  - name: ROBIN
+    source_url: https://github.com/gesstalt/ROBIN
+    size: 510 floor plans, 3 categories
+    modality: raster
+    content_types: [architectural, floorplan, retrieval]
+    annotation_format: custom-json
+    tasks: [retrieval, segmentation]
+    has_preparer: false
+    license_provenance: research-only
+    data_lane: research
+    verified: false
+    notes: Repository Of BuildIng plaNs; small retrieval/parsing set.
+
+  - name: HouseExpo
+    source_url: https://github.com/TeaganLi/HouseExpo
+    size: ~35,000 2D floor plans
+    modality: raster
+    content_types: [architectural, floorplan]
+    annotation_format: custom-json
+    tasks: [segmentation]
+    has_preparer: false
+    license_provenance: permissive
+    data_lane: research
+    verified: false
+    notes: Large 2D floor-plan set (robotics origin). Verify license (reported MIT-style).
+
+  - name: ZInD
+    source_url: https://github.com/zillow/zind
+    size: ~1,500 homes / 71,000 panoramas + floor plans
+    modality: mixed
+    content_types: [architectural, floorplan, panorama]
+    annotation_format: custom-json
+    tasks: [reconstruction, vectorization]
+    has_preparer: false
+    license_provenance: research-only
+    data_lane: research
+    verified: false
+    notes: Zillow Indoor Dataset; real homes, floor-plan + pano. Research license (agreement).
+
+  - name: MLStructFP
+    source_url: https://github.com/MLSTRUCT/MLStructFP
+    size: multi-unit vectorized floor plans
+    modality: vector
+    content_types: [architectural, floorplan, multi-unit]
+    annotation_format: custom-json
+    tasks: [segmentation, vectorization]
+    has_preparer: false
+    license_provenance: unknown
+    data_lane: research
+    verified: false
+    notes: Multi-unit floor-plan dataset for architectural analysis. Verify license.
+
+  # ------------------------------------------------------- Structural / scan-to-BIM
+  - name: BIMStruct3D-DeKH
+    source_url: https://github.com/
+    size: point cloud + IFC ground truth
+    modality: point_cloud
+    content_types: [structural, scan-to-bim]
+    annotation_format: ifc
+    tasks: [scan-to-bim]
+    has_preparer: false
+    license_provenance: research-only
+    data_lane: research
+    verified: false
+    notes: Point cloud + IFC GT for the scan-to-BIM research track. Verify exact source.
+
+  - name: CV4AEC
+    source_url: https://cv4aec.github.io/
+    size: scan-to-BIM challenge data
+    modality: point_cloud
+    content_types: [scan-to-bim, structural]
+    annotation_format: ifc
+    tasks: [scan-to-bim]
+    has_preparer: false
+    license_provenance: research-only
+    data_lane: research
+    verified: false
+    notes: CVPR scan-to-BIM challenge (point cloud + IFC). Challenge/research terms.
+
+  - name: ResBIM
+    source_url: https://github.com/
+    size: 1,000+ paired 2D <-> RVT BIM
+    modality: mixed
+    content_types: [architectural, drawing-to-bim]
+    annotation_format: ifc
+    tasks: [drawing-to-bim]
+    has_preparer: false
+    license_provenance: research-only
+    data_lane: research
+    verified: false
+    notes: Paired drawing<->BIM supervision for the drawing-to-BIM track.
+
+  # ------------------------------------------------------------ Technical drawings
+  - name: DeepPatent2
+    source_url: https://github.com/GoFigure-LANL/DeepPatent2
+    size: 2.4M technical-drawing images + captions
+    modality: raster
+    content_types: [technical-drawings, captions]
+    annotation_format: coco-json
+    tasks: [detection, captioning]
+    has_preparer: false
+    license_provenance: public-domain
+    data_lane: research
+    verified: false
+    notes: USPTO-derived technical drawings (likely public-domain imagery). Generic technical-drawing pretraining; verify terms.
+
+  # --------------------------------------------------------------- Synthetic (ours)
+  - name: synthetic-engine-v0
+    source_url: null
+    size: generated on demand
+    modality: synthetic
+    content_types: [mep, electrical, architectural]
+    annotation_format: cir
+    tasks: [detection, graph, vectorization, qa]
+    has_preparer: false
+    license_provenance: synthetic-owned
+    data_lane: commercial
+    verified: true
+    notes: >
+      Output of our own synthetic-data engine (the moat). synthetic-owned ->
+      the one source that is unambiguously commercial-lane. Generated by
+      `python -m synthetic.generate`.
+
+  # ---------------------- Real electrical (Roboflow Universe) --------------------
+  # Downloaded via datasets.preparers.yolo_generic (ROBOFLOW_ELECTRICAL) + YOLO->CIR.
+  # Licenses are uploader-SELF-DECLARED CC-BY on drawings likely not owned by the uploader
+  # -> RESEARCH lane only (commercial only after provenance diligence). role=eval sets are
+  # held out (never trained on) and feed the REAL electrical scoreboard.
+  - name: roboflow-delp
+    source_url: https://universe.roboflow.com/iitgn-motpy/delp
+    paper_url: https://arxiv.org/abs/2508.10449
+    size: 403 annotated crops from 45 real UK electrical layout plans, 34 classes
+    modality: raster
+    content_types: [electrical, symbols, real]
+    annotation_format: yolo-txt
+    tasks: [detection]
+    has_preparer: true
+    license_provenance: CC-BY
+    data_lane: research
+    verified: true
+    notes: >
+      DELP/SkeySpot (IIT Gandhinagar) — THE real electrical benchmark, previously
+      request-only, now on Roboflow. role=EVAL: held out as the real-drawing scoreboard
+      (datasets/real/electrical/roboflow__delp/); never trained on. Class names differ from
+      our detector vocabulary — label mapping is a sim-to-real step.
+  - name: roboflow-mep-taxonomy
+    source_url: https://universe.roboflow.com/tradeplane/mep_blueprints_objects-alfmj
+    size: 32 real MEP sheets, 93 classes
+    modality: raster
+    content_types: [electrical, mep, symbols, real]
+    annotation_format: yolo-txt
+    tasks: [detection]
+    has_preparer: true
+    license_provenance: CC-BY
+    data_lane: research
+    verified: true
+    notes: role=EVAL (held out). 93-class MEP taxonomy reference; real full sheets.
+  - name: roboflow-electrical-train-cluster
+    source_url: https://universe.roboflow.com
+    size: ~10,800 annotated crops across 5 projects
+    modality: raster
+    content_types: [electrical, symbols, real]
+    annotation_format: yolo-txt
+    tasks: [detection]
+    has_preparer: true
+    license_provenance: CC-BY
+    data_lane: research
+    verified: true
+    notes: >
+      role=TRAIN (research lane, domain-adaptation). Verified real-plan projects: ICAT
+      blueprint-symbol-detection (2,962/25), TradePlane lsb-receptacle (1,912/12), Doxle
+      electrical-plan (86/6), bpai2 detect_bp_fixture (5,859/19, mixed synth), terhb
+      electrical-plan (1 — dud export). Slugs + versions pinned in
+      datasets/preparers/yolo_generic.ROBOFLOW_ELECTRICAL.

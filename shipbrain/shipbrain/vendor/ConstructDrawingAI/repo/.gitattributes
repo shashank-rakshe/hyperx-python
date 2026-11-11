@@ -1,0 +1,25 @@
+# Normalize all text files to LF in the repository (checked out as LF everywhere,
+# including Windows). This keeps shell/SLURM scripts runnable on the Linux compute
+# tiers (ARC / DGX / cloud) and avoids cross-platform line-ending churn.
+* text=auto eol=lf
+
+# Scripts that MUST remain LF.
+*.sh        text eol=lf
+*.slurm     text eol=lf
+Makefile    text eol=lf
+Dockerfile  text eol=lf
+
+# Binary files — never normalize.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.gz   binary
+*.msgpack binary
+*.cir  binary
+*.pt   binary
+*.pth  binary
+*.onnx binary
+*.safetensors binary

@@ -1261,41 +1261,83 @@ def reader_exe():
     return shutil.which('ocxreader') or shutil.which('ocxreader.exe')
 
 
+APT = ('cmake ninja-build g++ git libocct-data-exchange-dev libocct-modeling-algorithms-dev libocct-modeling-data-dev '
+       'libocct-foundation-dev libocct-ocaf-dev libocct-visualization-dev libocct-draw-dev libspdlog-dev libboost-system-dev '
+       'libboost-filesystem-dev libboost-program-options-dev libgtest-dev libfreetype-dev libtbb-dev libgl-dev libxi-dev libxmu-dev tk-dev tcl-dev')
+
+
 def reader_build(log=print):
-    """build OCXReader once with its own CMake + vcpkg set-up (it fetches OpenCascade; long: ~1 h the first time)"""
+    """build OCXReader once, unchanged, against OpenCascade (the same OpenCascade CadQuery uses; on Linux the system
+    package, about 1 minute), or with its own vcpkg set-up when VCPKG_ROOT is set (Windows / macOS, longer).
+    Its two small helpers (spdlog_setup, magic_enum 0.8.2; MIT) are fetched into the build folder, not into vendor/."""
     import shutil, subprocess
-    for tool in ('cmake', 'git'):
-        if not shutil.which(tool):
-            raise RuntimeError(f'CMake is needed to build OCXReader ({tool} not found)')
+    if not shutil.which('cmake') or not shutil.which('git'):
+        raise RuntimeError('CMake is needed to build OCXReader (and git)')
+    src, b, deps = os.path.join(CACHE, 'ocxreader-src'), os.path.join(CACHE, 'build'), os.path.join(CACHE, 'deps')
+    shutil.rmtree(src, ignore_errors=True)
+    shutil.copytree(READER_ROOT, src)
+    run = lambda cmd, **kw: subprocess.run(cmd, capture_output=True, text=True, **kw)
+    r = run(['git', 'clone', '-q', '--depth', '1', 'https://github.com/guangie88/spdlog_setup', os.path.join(src, 'deps', 'spdlog_setup')])
+    if r.returncode:
+        raise RuntimeError('could not fetch spdlog_setup: ' + r.stderr[-300:])
     vcpkg = os.environ.get('VCPKG_ROOT')
-    if not vcpkg or not os.path.exists(vcpkg):
-        raise RuntimeError('vcpkg is needed to build OCXReader (it brings OpenCascade): install vcpkg and set VCPKG_ROOT')
-    b = os.path.join(CACHE, 'build')
-    os.makedirs(b, exist_ok=True)
-    tc = os.path.join(vcpkg, 'scripts', 'buildsystems', 'vcpkg.cmake')
-    for cmd in (['cmake', '-S', READER_ROOT, '-B', b, f'-DCMAKE_TOOLCHAIN_FILE={tc}', '-DCMAKE_BUILD_TYPE=Release'],
-                ['cmake', '--build', b, '--config', 'Release', '-j', str(os.cpu_count() or 4)]):
-        r = subprocess.run(cmd, capture_output=True, text=True)
+    cmake = ['cmake', '-S', src, '-B', b, '-DCMAKE_BUILD_TYPE=Release']
+    if shutil.which('ninja'):
+        cmake += ['-G', 'Ninja']
+    if vcpkg and os.path.exists(vcpkg):
+        cmake.append('-DCMAKE_TOOLCHAIN_FILE=' + os.path.join(vcpkg, 'scripts', 'buildsystems', 'vcpkg.cmake'))
+    else:
+        if not os.path.exists(os.path.join(deps, 'include', 'magic_enum.hpp')):
+            me = os.path.join(CACHE, 'magic_enum')
+            shutil.rmtree(me, ignore_errors=True)
+            for cmd in (['git', 'clone', '-q', '--depth', '1', '--branch', 'v0.8.2', 'https://github.com/Neargye/magic_enum', me],
+                        ['cmake', '-S', me, '-B', me + '/b', '-DMAGIC_ENUM_OPT_BUILD_EXAMPLES=OFF', '-DMAGIC_ENUM_OPT_BUILD_TESTS=OFF',
+                         '-DCMAKE_INSTALL_PREFIX=' + deps], ['cmake', '--install', me + '/b']):
+                r = run(cmd)
+                if r.returncode:
+                    raise RuntimeError('could not set up magic_enum: ' + (r.stderr or r.stdout)[-300:])
+        shim = os.path.join(deps, 'lib', 'cmake', 'freetype')
+        os.makedirs(shim, exist_ok=True)
+        with open(os.path.join(shim, 'freetype-config.cmake'), 'w') as fh:   # system FreeType has no CMake package file
+            fh.write('find_package(Freetype MODULE REQUIRED)\nif(NOT TARGET freetype)\n  add_library(freetype INTERFACE IMPORTED)\n'
+                     '  target_link_libraries(freetype INTERFACE Freetype::Freetype)\nendif()\n')
+        cmake += ['-DCMAKE_PREFIX_PATH=' + deps, '-DCMAKE_CXX_FLAGS=-I' + os.path.join(deps, 'include')]
+    for cmd in (cmake, ['cmake', '--build', b, '--config', 'Release', '-j', str(os.cpu_count() or 4)]):
+        r = run(cmd)
         if r.returncode:
-            raise RuntimeError('OCXReader build failed: ' + (r.stderr or r.stdout)[-1500:])
+            out = (r.stderr or '') + (r.stdout or '')
+            if 'OpenCASCADE' in out and not vcpkg:
+                raise RuntimeError('OpenCascade C++ files are needed to build OCXReader (Linux: sudo apt install ' + APT + '; '
+                                   'Windows / macOS: vcpkg is needed, set VCPKG_ROOT)')
+            raise RuntimeError('OCXReader build failed: ' + out[-1500:])
     log and log('OCXReader built: ' + str(reader_exe()))
     return reader_exe()
 
 
 def to_step(path, out=None):
-    """OCX -> STEP: OCXReader (exact OpenCascade geometry, all its features) when built, else ShipBrain's own plates/beams solids"""
+    """OCX -> STEP: OCXReader (its exact OpenCascade geometry; schema 2.8.x files) when built, else - or for 3.x files -
+    ShipBrain's own solids (plates as thin solids, stiffeners as beams)"""
     import subprocess
     out = out or os.path.splitext(path)[0] + '.step'
     exe = reader_exe()
+    why = 'OCXReader is not built (python -c "from shipbrain import ocx; ocx.reader_build()")'
+    sv = detect_version(path)['schema_version'] or ''
+    if exe and not sv.startswith('2.'):
+        why, exe = f'OCXReader reads OCX 2.8.x files only; this file is OCX {sv}', None
     if exe:
-        r = subprocess.run([exe, '--input-file', path, '--export-format', 'STEP', '--output-file', os.path.splitext(out)[0]],
-                           capture_output=True, text=True, timeout=3600)
-        cand = [c for c in (out, os.path.splitext(out)[0] + '.stp', os.path.splitext(out)[0] + '.step') if os.path.exists(c)]
-        if cand:
-            return {'step': cand[0], 'by': 'OCXReader'}
-        raise RuntimeError('OCXReader made no STEP: ' + (r.stderr or r.stdout)[-800:])
+        d, n = os.path.dirname(os.path.abspath(out)), os.path.splitext(os.path.basename(out))[0]
+        r = subprocess.run([exe, '-i', path, '--export-format', 'STEP', '-s', d, '-o', n], capture_output=True, text=True,
+                           timeout=3600, cwd=d)
+        for c in (os.path.join(d, n + '.stp'), os.path.join(d, n + '.step')):
+            if os.path.exists(c):
+                if c != out:
+                    os.replace(c, out)
+                return {'step': out, 'by': 'OCXReader'}
+        msg = re.sub(r'\x1b\[[0-9;]*m', '', (r.stdout or '') + (r.stderr or ''))
+        m = re.search(r'Unsupported schemaVersion[^\n]*', msg)
+        why = 'OCXReader reads OCX 2.8.x only (' + m.group(0).strip() + ')' if m else 'OCXReader failed: ' + msg.strip()[-200:]
     from .members import to_plates
     from .drawings import plates_to_step
     sp = to_plates(read(path, keep_names=False)['model'])
     plates_to_step(sp['plates'], out, sp['beams'])
-    return {'step': out, 'by': 'ShipBrain (plates as thin solids, stiffeners as beams; build OCXReader for its exact geometry)'}
+    return {'step': out, 'by': 'ShipBrain (plates as thin solids, stiffeners as beams)', 'note': why}

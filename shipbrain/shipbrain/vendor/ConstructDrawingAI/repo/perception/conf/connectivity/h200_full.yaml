@@ -1,0 +1,37 @@
+# Model 2 — connectivity edge classifier — H200-FULL profile.
+# Full synthetic data, a larger MLP, more candidate neighbours. The edge classifier is
+# light, so the real lever is data scale + the upstream detector's node quality.
+# Synthetic edge-AP remains a smoke test; real connectivity is UNVALIDATED until real data.
+kind: connectivity
+profile: h200_full
+data_lane: research
+seed: 0
+
+data:
+  synthetic_root: datasets/synthetic/electrical
+  split_json: outputs/perception/detector/h200_full/yolo/split.json
+  val_fraction: 0.1
+  limit_samples: null
+  k_neighbors: 10
+
+model:
+  hidden: [128, 128, 64]
+
+train:
+  epochs: 200
+  lr: 0.0005
+  batch_size: 8192
+  project: outputs/perception/connectivity
+  name: h200_full
+
+wandb:
+  enabled: true
+  project: cdai-wedge-connectivity
+  mode: offline
+
+infer:
+  k_neighbors: 10
+  edge_conf: 0.5
+
+detector:
+  profile: h200_full

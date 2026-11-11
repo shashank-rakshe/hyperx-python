@@ -110,18 +110,23 @@ SOFTWARE = {
     'PIL': dict(_pip('pillow', 'to read and draw pictures', mod='PIL')),
     'psutil': _pip('psutil', 'to read CPU / memory of this PC'),
     'numpy': _pip('numpy', 'for all calculations'),
+    'msgpack': _pip('msgpack', 'for construction drawing sets (CIR files, ConstructDrawingAI)'),
+    'pydantic': _pip('pydantic', 'for construction drawing sets (CIR) and P&ID knowledge graphs'),
     'xsdata': _pip('xsdata', 'for OCX ship models: the official OCX classes of every schema version'),
     'xmlschema': _pip('xmlschema', 'to check OCX files against the official OCX schema (XSD)'),
     'vcpkg': {'name': 'CMake + vcpkg (free)', 'why': 'to build OCXReader once (OCX -> exact STEP; vcpkg brings OpenCascade)',
               'link': 'https://learn.microsoft.com/vcpkg/get_started/get-started',
               'steps': {'windows': 'install Visual Studio Build Tools and CMake (https://cmake.org/download/), then: git clone '
                                    'https://github.com/microsoft/vcpkg && vcpkg\\bootstrap-vcpkg.bat, set VCPKG_ROOT to that folder',
-                        'linux': 'sudo apt install cmake ninja-build build-essential git, then: git clone https://github.com/microsoft/vcpkg '
-                                 '&& ./vcpkg/bootstrap-vcpkg.sh && export VCPKG_ROOT=$PWD/vcpkg',
+                        'linux': 'no vcpkg needed: sudo apt install cmake ninja-build g++ git libocct-data-exchange-dev '
+                                 'libocct-modeling-algorithms-dev libocct-modeling-data-dev libocct-foundation-dev libocct-ocaf-dev '
+                                 'libocct-visualization-dev libocct-draw-dev libspdlog-dev libboost-system-dev libboost-filesystem-dev '
+                                 'libboost-program-options-dev libgtest-dev libfreetype-dev libtbb-dev libgl-dev libxi-dev libxmu-dev tk-dev tcl-dev',
                         'mac': 'brew install cmake ninja, then: git clone https://github.com/microsoft/vcpkg && ./vcpkg/bootstrap-vcpkg.sh '
                                '&& export VCPKG_ROOT=$PWD/vcpkg'},
-              'then': 'python -c "from shipbrain import ocx; ocx.reader_build()"   (about 1 hour the first time; without it ShipBrain makes STEP itself)',
-              'check': lambda: bool(os.environ.get('VCPKG_ROOT')), 'match': r'vcpkg|CMake is needed to build OCXReader'},
+              'then': 'python -c "from shipbrain import ocx; ocx.reader_build()"   (Linux: about 1 minute; with vcpkg longer)',
+              'check': lambda: bool(os.environ.get('VCPKG_ROOT')) or not WIN and bool(shutil.which('cmake')),
+              'match': r'vcpkg|CMake is needed to build OCXReader|OpenCascade C\+\+ files are needed'},
     'scipy': _pip('scipy', 'for solvers and fitting'),
     # free engines the router may name (guided set-up); no paid programs here
     'openfoam': {'name': 'OpenFOAM (free CFD)', 'why': 'for CFD runs (resistance, wind loads, sloshing)',

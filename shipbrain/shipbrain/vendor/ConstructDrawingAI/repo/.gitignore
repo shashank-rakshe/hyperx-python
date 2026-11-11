@@ -1,0 +1,96 @@
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.installed.cfg
+*.egg
+
+# ---------------------------------------------------------------------------
+# Virtual environments / package managers
+# ---------------------------------------------------------------------------
+.venv/
+.venv-linux/
+venv/
+env/
+.uv/
+# NOTE: uv.lock IS committed (reproducibility) — do not ignore it.
+
+# ---------------------------------------------------------------------------
+# Test / type / lint caches
+# ---------------------------------------------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.hypothesis/
+
+# ---------------------------------------------------------------------------
+# Secrets / environment
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---------------------------------------------------------------------------
+# DVC: track pointers (*.dvc, .dvc/config) in git, NEVER the cache or the data.
+# ---------------------------------------------------------------------------
+/.dvc/cache
+/.dvc/tmp
+/.dvc/config.local
+
+# ---------------------------------------------------------------------------
+# Data, datasets, model weights — versioned via DVC, NOT git.
+# The /datasets package holds the *registry and prep scripts*, never the data.
+# ---------------------------------------------------------------------------
+/data/
+datasets/raw/
+datasets/processed/
+datasets/synthetic/
+datasets/**/data/
+models/
+checkpoints/
+artifacts/
+outputs/
+*.pdf
+*.dwg
+*.dxf
+*.ifc
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+*.onnx
+# Keep small test/sample fixtures that are deliberately checked in:
+!tests/**/*.pdf
+!tests/**/fixtures/**
+
+# ---------------------------------------------------------------------------
+# Experiment tracking
+# ---------------------------------------------------------------------------
+wandb/
+mlruns/
+
+# ---------------------------------------------------------------------------
+# Editors / OS
+# ---------------------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+datasets/real/
+_internal/

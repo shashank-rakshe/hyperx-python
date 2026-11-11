@@ -216,8 +216,36 @@ with `--src <folder> --rules <your private name list>`.
 Checked: structure -> OCX 3.2.0 passes the official XSD and reads back member for member identical; four real OCX
 exports from two different CAD systems (2.8.5 / 2.8.6, up to 590,000 elements) read in 0.1-3.3 s with thickness,
 sections and frames right (two exporters write units and references differently - both handled); the XSD check finds
-the real schema deviations in those exports. Not done: OCXReader was not built here (its build fetches OpenCascade
-through vcpkg, about an hour); curved shell panels are flattened onto their best plane for comparing and meshing.
+the real schema deviations in those exports. Curved shell panels are flattened onto their best plane for comparing
+and meshing.
+
+**OCXReader uses the same OpenCascade ShipBrain already has** (CadQuery's OCP is OpenCascade). `ocx.reader_build()`
+builds it, unchanged, against the system OpenCascade 7.6 C++ files: on Linux `sudo apt install` the packages listed in
+`ocx.APT`, then about 1 minute - no vcpkg. Windows / macOS use its vcpkg set-up (`VCPKG_ROOT`). Checked here: the
+2.8.5 / 2.8.6 real models become STEP in 0.4-21 s (up to 430,000 STEP entities). OCXReader reads OCX 2.8.x only; for
+3.x files `ocx_to_step` uses ShipBrain's own solids and says why.
+
+## Construction drawings: ConstructDrawingAI (non-commercial licence)
+
+[ConstructDrawingAI](https://github.com/A-SHOJAEI/ConstructDrawingAI) (PolyForm Noncommercial 1.0.0) is copied whole
+and run as written, in its own Python process (3.11+). It reads construction drawings (electrical, architectural,
+P&ID) into one schema, the CIR, and answers from it:
+
+- `drawing_takeoff`: quantity takeoff - counts per item with **MasterFormat / IFC codes**, items to review,
+  connections (conductors, home runs, feeders), lengths / areas when a scale is known
+- `drawing_qa`: counts, lists, sheets, disciplines with evidence; `action: "rfi"` drafts RFIs for unclear items
+- **Training** (`training/construct_tasks.py`, in the Kaggle run): its synthetic engine draws electrical sets
+  (power & lighting plan, single-line diagram, panel schedule) in many styles with scan damage, each with an exact
+  answer key checked by its own validator. The vision model learns to count symbols, do a takeoff with MasterFormat
+  codes, and read panel voltage / circuits straight from the picture; 12 sets give 64 samples (60 with pictures).
+  Its code is also a knowledge pack (`packs/ConstructDrawingAI.sbpack`, 1,066 chunks) for search and code training.
+- Trained detectors (images -> CIR) need its weights and a GPU; not included.
+
+**Licence: ShipBrain is now declared non-commercial** (`shipbrain/licence_mode.json`, set on the owner's word). That
+is what allows non-commercial material (PolyForm Noncommercial, CC BY-NC) to be copied and trained on; every such item
+is marked (`vendor/*/NONCOMMERCIAL.md`, `noncommercial` in its pack, NOTICE.md). Before any commercial use of ShipBrain
+or of a model trained with it: set `noncommercial` to false, remove those items and train again - or get a commercial
+licence from their authors.
 
 ## Drawing compare like a CAD compare tool (DXF, DWG, PDF)
 
@@ -520,7 +548,8 @@ Do **not** commit ship drawings, XMLs, rule texts, `rules_index.json`, generated
 Everything ShipBrain needs is free and open source: numpy and scipy (BSD), CadQuery (Apache-2.0) with OpenCascade (LGPL),
 pyNastran (BSD), ezdxf (MIT), pdfplumber (MIT), pypdfium2 (Apache/BSD), Pillow (MIT-CMU), CalculiX (GPL, run as a
 separate program), llama.cpp (MIT) and llamafile (Apache-2.0), the OCX schema (Apache-2.0), xsdata and xmlschema (MIT),
-OCXReader (LGPL-2.1, unchanged, run as a separate program). Training uses Qwen3 (Apache-2.0), Unsloth (Apache-2.0),
+OCXReader (LGPL-2.1, unchanged, run as a separate program). Non-commercial only (allowed because ShipBrain is
+declared non-commercial, see above): ConstructDrawingAI (PolyForm Noncommercial 1.0.0). Training uses Qwen3 (Apache-2.0), Unsloth (Apache-2.0),
 Transformers and PEFT (Apache-2.0). PyMuPDF (AGPL or paid) was replaced. ANSYS and Abaqus are only targets of the file
 converters and are never needed.
 

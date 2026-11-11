@@ -1,0 +1,46 @@
+# Model 1 — electrical symbol detector — LOCAL-DEBUG profile.
+# A tiny subset on one GPU to prove the training loop fast on the local RTX 4090/3090.
+# A good number here means "the pipeline runs", NOT "the model reads real drawings".
+kind: detector
+profile: local_debug
+data_lane: research          # this run's lane (W&B tag + provenance on the run)
+seed: 0
+
+data:
+  synthetic_root: datasets/synthetic/electrical_pilot   # input: rendered sheets + CIR GT
+  export_root: outputs/perception/detector/local_debug/yolo  # materialized YOLO dataset
+  val_fraction: 0.2          # held-out synthetic samples for the smoke-test scoreboard
+  limit_samples: 60          # local-debug: only the first N samples (null = all)
+  tile_size: 1536            # MUST match infer.tile_size so train==inference distribution
+  overlap: 192
+  include_degraded: false    # local-debug: clean only (fast). h200_full adds degraded.
+  imgsz: 1280
+  min_box_area: 1.0e-6       # drop degenerate slivers clipped at a tile seam
+
+model:
+  arch: yolo11n.pt           # nano: fast to train, COCO-pretrained init (transfer learning)
+
+train:
+  epochs: 40
+  batch: 8
+  device: 0                  # single GPU
+  workers: 8
+  project: outputs/perception/detector   # runs land here (git-ignored)
+  name: local_debug
+  save_period: 10            # checkpoint every N epochs -> resumable (SLURM preemption)
+  resume: false              # set true to continue the same run from its last.pt
+  patience: 0                # 0 = no early stop (deterministic epoch count for debug)
+  seeds: [0]                 # multi-seed is an h200_full concern
+
+wandb:
+  enabled: true
+  project: cdai-wedge-detector
+  mode: offline              # offline-friendly; `wandb sync` later. No external call needed.
+
+# Used by the DetectorAdapter + the scoreboards (inference-time knobs).
+infer:
+  tile_size: 1536            # keep equal to data.tile_size
+  overlap: 192
+  conf: 0.25                 # detection confidence threshold
+  iou: 0.5                   # per-tile NMS IoU
+  aggregate_iou: 0.5         # cross-tile-seam dedup IoU (ingest.handoff.aggregate)

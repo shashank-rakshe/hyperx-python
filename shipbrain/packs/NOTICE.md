@@ -9,6 +9,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - https://github.com/manycore-research/CAD2Program contributors
 
+## ConstructDrawingAI
+
+- Source: https://github.com/A-SHOJAEI/ConstructDrawingAI.git (commit 0b2e6c0acedf)
+- Licence: PolyForm-Noncommercial-1.0.0
+- Use: NON-COMMERCIAL ONLY: knowledge + training of a non-commercial model; remove it before any commercial use
+- Copyright (c) 2026 Alireza Shojaei
+
 ## HuggingArch
 
 - Source: https://github.com/shenh10/HuggingArch (commit 50341a4cd171)

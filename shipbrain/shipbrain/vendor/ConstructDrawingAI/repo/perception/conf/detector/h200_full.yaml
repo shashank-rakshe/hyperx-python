@@ -1,0 +1,48 @@
+# Model 1 — electrical symbol detector — H200-FULL profile.
+# The real run: full synthetic data, multi-GPU (ultralytics DDP across the device list),
+# multi-seed for error bars. Submit via infra/slurm/train.slurm on VT ARC.
+# NOTE: even a strong number here is SYNTHETIC-validation only (a pipeline smoke test).
+# Real-drawing performance is reported separately and is UNVALIDATED until real annotated
+# plans exist (see perception/scoreboard.py).
+kind: detector
+profile: h200_full
+data_lane: research
+seed: 0
+
+data:
+  synthetic_root: datasets/synthetic/electrical   # generate a large set here first
+  export_root: outputs/perception/detector/h200_full/yolo
+  val_fraction: 0.1
+  limit_samples: null        # use everything
+  tile_size: 1536
+  overlap: 192
+  include_degraded: true     # train across the full clean..heavy degradation range
+  imgsz: 1536
+  min_box_area: 1.0e-6
+
+model:
+  arch: yolo11x.pt           # x-large for the SOTA-chasing run
+
+train:
+  epochs: 300
+  batch: -1                  # ultralytics auto-batch per GPU (AMP)
+  device: "0,1,2,3,4,5,6,7"  # 8x H200 — ultralytics launches DDP across these
+  workers: 16
+  project: outputs/perception/detector
+  name: h200_full
+  save_period: 5             # frequent checkpoints: resumable across SLURM preemption
+  resume: false
+  patience: 50
+  seeds: [0, 1, 2]           # multi-seed -> mean/std/95% CI in the harness
+
+wandb:
+  enabled: true
+  project: cdai-wedge-detector
+  mode: offline              # ARC compute nodes are typically air-gapped; sync on the login node
+
+infer:
+  tile_size: 1536
+  overlap: 192
+  conf: 0.25
+  iou: 0.5
+  aggregate_iou: 0.5
