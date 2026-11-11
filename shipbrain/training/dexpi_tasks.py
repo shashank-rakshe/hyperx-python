@@ -85,7 +85,7 @@ def main(argv=None):
         print(fname, 'ok', flush=True)
     with open(a.out, 'w', encoding='utf-8') as fh:
         for x in rows:
-            fh.write(json.dumps(x) + '\n')
+            fh.write(json.dumps(x).replace(work + os.sep, '').replace(work, '') + '\n')   # no temporary paths
     shutil.rmtree(work, ignore_errors=True)
     print(a.out, len(rows), 'samples', sum(1 for x in rows if x.get('images')), 'with pictures')
 
