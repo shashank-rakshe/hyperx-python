@@ -1078,7 +1078,13 @@ def t_bolt(r, tools):
         args.update(F_A=FA, Phi=phi)
         q = r.choice([f'Check an M{d} {cls} bolt (mu {mu}) under an axial load of {FA / 1000:g} kN, load factor {phi}',
                       f'Is an M{d} {cls} bolt OK for {FA:g} N working load? Phi = {phi}, friction {mu}'])
-    if r.random() < 0.3:
+    if r.random() < 0.3:                                       # inch bolts (US practice)
+        size = r.choice(['#10', '1/4', '5/16', '3/8', '1/2', '5/8', '3/4', '7/8', '1'])
+        th, gr = r.choice(['UNC', 'UNC', 'UNF']), r.choice(['5', '8', '2', 'A325'])
+        args = {'d': size, 'thread': th, 'cls': gr}
+        q = r.choice([f'Preload and torque for a {size}-{th} grade {gr} bolt?', f'{size} {th} SAE grade {gr}: how tight?',
+                      f'Torque spec for {size} inch {th} bolt, grade {gr}'])
+    elif r.random() < 0.3:
         args['method'] = r.choice(['impact', 'yield', 'hydraulic tensioner'])
         q += f", tightened by {args['method']}"
     out = tools.call('bolt', args)

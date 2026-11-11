@@ -81,3 +81,49 @@ def joint(d, cls='8.8', mu_G=0.12, mu_K=0.12, nu=0.9, pitch=None, d_w=None, d_h=
                  'friction values of your parts.)')
     out['plain_english'] = ' '.join(lines)
     return out
+
+
+# ====================================================================== inch bolts (UNC / UNF), US practice
+# tensile stress area A_t = 0.7854 (D - 0.9743 / n)^2 in2 (ASME B1.1); preload F_i = c A_t S_p with c = 0.75 for reused,
+# 0.90 for permanent joints; torque T = K D F_i with the nut factor K (0.20 plain, 0.15 lubricated) (Shigley)
+INCH = {   # size -> (major diameter in, UNC threads per inch, UNF threads per inch)
+    '#2': (0.086, 56, 64), '#4': (0.112, 40, 48), '#5': (0.125, 40, 44), '#6': (0.138, 32, 40), '#8': (0.164, 32, 36),
+    '#10': (0.190, 24, 32), '1/4': (0.25, 20, 28), '5/16': (0.3125, 18, 24), '3/8': (0.375, 16, 24), '7/16': (0.4375, 14, 20),
+    '1/2': (0.5, 13, 20), '9/16': (0.5625, 12, 18), '5/8': (0.625, 11, 18), '3/4': (0.75, 10, 16), '7/8': (0.875, 9, 14),
+    '1': (1.0, 8, 12), '1-1/8': (1.125, 7, 12), '1-1/4': (1.25, 7, 12), '1-3/8': (1.375, 6, 12), '1-1/2': (1.5, 6, 12),
+    '1-3/4': (1.75, 5, None), '2': (2.0, 4.5, None)}
+GRADES = {  # grade -> list of (largest diameter in, proof strength ksi) (SAE J429, ASTM F3125)
+    '2': [(0.75, 55), (1.5, 33)], '5': [(1.0, 85), (1.5, 74)], '8': [(1.5, 120)], 'A325': [(1.5, 85)], 'A490': [(1.5, 120)]}
+
+
+def inch_joint(size, thread='UNC', grade='5', c=0.75, K=0.20, F_ext_lbf=None):
+    s = str(size).strip().replace('"', '').replace(' in', '')
+    if s not in INCH:
+        raise ValueError(f'unknown inch size {size}; known: {", ".join(INCH)}')
+    D, unc, unf = INCH[s]
+    n = unc if str(thread).upper() == 'UNC' else unf
+    if not n:
+        raise ValueError(f'{s} has no {thread} thread in the table')
+    At = 0.7854 * (D - 0.9743 / n) ** 2
+    g = str(grade).upper().replace('GRADE', '').strip()
+    rows = GRADES.get(g)
+    if not rows:
+        raise ValueError(f'unknown grade {grade}; known: {", ".join(GRADES)}')
+    Sp = next((p for dmax, p in rows if D <= dmax + 1e-9), None)
+    if Sp is None:
+        raise ValueError(f'grade {g} is not listed for {s} in')
+    Fi = c * At * Sp * 1000
+    T = K * D * Fi
+    out = {'size': f'{s}-{n:g} {str(thread).upper()}', 'grade': g, 'D_in': D, 'At_in2': round(At, 4), 'proof_ksi': Sp, 'c': c, 'K': K,
+           'preload_lbf': round(Fi), 'preload_kN': round(Fi * 4.44822 / 1000, 2), 'torque_in_lbf': round(T), 'torque_ft_lbf': round(T / 12, 1),
+           'torque_Nm': round(T * 0.112985, 1)}
+    pe = (f"A {out['size']} bolt, grade {g} (proof strength {Sp} ksi), has a tensile stress area of {At:.4f} in2. Preloaded to "
+          f"{c * 100:.0f} % of its proof load it carries {Fi:,.0f} lbf ({out['preload_kN']} kN), which needs a torque of "
+          f"{T / 12:,.1f} ft-lbf ({out['torque_Nm']} N m) with a nut factor of {K:g}.")
+    if F_ext_lbf:
+        out['external_lbf'] = F_ext_lbf
+        out['separates'] = F_ext_lbf >= Fi
+        pe += f" An external load of {F_ext_lbf:,.0f} lbf {'is MORE than' if F_ext_lbf >= Fi else 'stays below'} the preload."
+    pe += ' (ASME B1.1 stress area, SAE J429 / ASTM F3125 proof strengths, Shigley preload and nut-factor torque.)'
+    out['plain_english'] = pe
+    return out

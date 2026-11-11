@@ -400,8 +400,10 @@ class Tools:
         self.register('bolt', self.bolt, 'Bolted joint (metric ISO thread, VDI 2230 / ISO 898-1): size d (mm), property class (4.6 5.6 8.8 '
                       '10.9 12.9 A2-70 A4-80), friction mu_G / mu_K -> stress area, assembly preload, tightening torque, preload '
                       'scatter of the tightening method; with an axial working load F_A (N) and load factor Phi: bolt stress, '
-                      'fatigue (alternating stress vs endurance limit) and the clamping force left.',
-                      {'type': 'object', 'properties': {'d': {'type': 'number'}, 'cls': {'type': 'string'}, 'mu_G': {'type': 'number'},
+                      'fatigue (alternating stress vs endurance limit) and the clamping force left. Inch bolts: d as "1/2", "#10" ..., '
+                      'thread UNC / UNF, cls = SAE grade 2 / 5 / 8 or A325 / A490 -> stress area, preload, nut-factor torque.',
+                      {'type': 'object', 'properties': {'d': {'type': ['number', 'string']}, 'thread': {'type': 'string'},
+                                                         'nut_factor': {'type': 'number'}, 'c': {'type': 'number'}, 'cls': {'type': 'string'}, 'mu_G': {'type': 'number'},
                                                          'mu_K': {'type': 'number'}, 'pitch': {'type': 'number'}, 'method': {'type': 'string'},
                                                          'F_A': {'type': 'number'}, 'Phi': {'type': 'number'}, 'F_Kerf': {'type': 'number'}},
                        'required': ['d']})
@@ -1124,8 +1126,12 @@ class Tools:
         from . import construct
         return construct.takeoff(self._path(file), min_confidence)
 
-    def bolt(self, d, cls='8.8', mu_G=0.12, mu_K=None, pitch=None, method='torque wrench', F_A=None, Phi=0.2, F_Kerf=None):
+    def bolt(self, d, cls='8.8', mu_G=0.12, mu_K=None, pitch=None, method='torque wrench', F_A=None, Phi=0.2, F_Kerf=None,
+             thread=None, nut_factor=None, c=None):
         from . import bolts
+        if isinstance(d, str) and (d.strip().replace('"', '') in bolts.INCH or thread):
+            return bolts.inch_joint(d, thread or 'UNC', cls if cls != '8.8' else '5', float(c or 0.75), float(nut_factor or 0.20),
+                                    F_ext_lbf=F_A)
         return bolts.joint(float(d), str(cls), float(mu_G), float(mu_K if mu_K is not None else mu_G), pitch=pitch, method=method,
                            F_A=F_A, Phi=float(Phi or 0.2), F_Kerf=F_Kerf)
 

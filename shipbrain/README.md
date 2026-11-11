@@ -284,7 +284,11 @@ ShipBrain builds its own MCP server once (`python -c "from shipbrain import dwsi
 - `bolt` tool (`shipbrain/bolts.py`): metric ISO coarse threads, ISO 898-1 / ISO 3506 property classes, VDI 2230
   Part 1 formulas - stress area (matches the ISO table exactly), assembly preload at 90 % yield utilisation,
   tightening torque, preload scatter of the tightening method, and with an axial working load: bolt stress, fatigue
-  (alternating stress vs endurance limit) and the clamping force left. Training samples in make_dataset (`t_bolt`).
+  (alternating stress vs endurance limit) and the clamping force left. **Inch bolts** too (US practice): UNC / UNF
+  sizes #2 - 2 in, SAE J429 grades 2 / 5 / 8 and ASTM A325 / A490, ASME B1.1 stress area (same values as the
+  Vibrationdata MATLAB bolt tool's table), preload c x A_t x S_p and nut-factor torque T = K D F (Shigley).
+  Training samples in make_dataset (`t_bolt`). The Vibrationdata MATLAB package copy on GitHub
+  (nkatsinas/vibrationdata_matlab) has no licence file, so its code is not copied; the formulas are standard.
   The Vibrationdata blog post on bolt calculations (Nov 2026) could not be read from the build session (its site is
   blocked) and its code is not on GitHub yet: send the code or the download and it is added as written.
 - **Vibrationdata for Python** (Tom Irvine, MIT; [nkatsinas/vibrationdata_python](https://github.com/nkatsinas/vibrationdata_python))

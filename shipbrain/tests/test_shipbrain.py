@@ -1895,3 +1895,12 @@ def test_bolts_and_vibrationdata(tmp_path):
     r = T.call('code_call', {'repo': 'vibrationdata', 'file': 'src/vibrationdata/vb_utilities.py',
                              'function': 'spectral_moments_constant_df', 'args': [f, [0.04] * len(f), 1.0]})
     assert abs(math.sqrt(r['result'][0]) - math.sqrt(0.04 * 1981)) < 1e-6
+
+
+def test_inch_bolts():
+    """ASME B1.1 tensile stress areas (same values as the Vibrationdata MATLAB bolt table) and Shigley preload / torque"""
+    from shipbrain import bolts
+    for s, t, at in (('1/2', 'UNC', 0.1419), ('1/4', 'UNC', 0.0318), ('3/4', 'UNF', 0.373), ('#10', 'UNC', 0.0175), ('1', 'UNC', 0.606)):
+        assert abs(bolts.inch_joint(s, t)['At_in2'] - at) / at < 0.003
+    j = bolts.inch_joint('1/2', 'UNC', '5')
+    assert abs(j['preload_lbf'] - 0.75 * 0.1419 * 85000) < 5 and abs(j['torque_ft_lbf'] - 75.4) < 0.2
