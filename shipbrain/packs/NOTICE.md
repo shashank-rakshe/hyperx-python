@@ -16,6 +16,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: NON-COMMERCIAL ONLY: knowledge + training of a non-commercial model; remove it before any commercial use
 - Copyright (c) 2026 Alireza Shojaei
 
+## DEXPI-Studio
+
+- Source: https://github.com/process-intelligence-research/DEXPI-Studio.git (commit 9af5d263b14b)
+- Licence: AGPL-3.0
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+
 ## HuggingArch
 
 - Source: https://github.com/shenh10/HuggingArch (commit 50341a4cd171)
@@ -134,6 +141,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2024 Bruce D. Lucas
 
+## dwsim10
+
+- Source: https://github.com/DanWBR/dwsim10.git (commit 84a83e0e8be0)
+- Licence: GPL
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+
 ## inkscape
 
 - Source: local copy of inkscape (upstream release) (commit working-tree)
@@ -174,6 +188,16 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: CC-BY-4.0
 - Use: ok: permissive licence, keep the attribution
 - https://github.com/ScottDuncanAI/public-chemical-manufacturing-datasets contributors
+
+## pyDEXPI
+
+- Source: https://github.com/process-intelligence-research/pyDEXPI.git (commit 309f1433a718)
+- Licence: AGPL-3.0
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+- (c) 2025 DEXPI (DEXPI e.V.), licensed under the Creative Commons Attribution 4.0 International
+- (c) 2026 DEXPI (DEXPI e.V.), licensed under the Creative Commons Attribution 4.0 International
+- Copyright (c) 2026 Shady Khella
 
 ## pyOptistruct
 

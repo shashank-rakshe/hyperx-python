@@ -240,6 +240,31 @@ All outside data is downloaded on Kaggle, which has internet:
    "rules" in its name, attach it to the training notebook too.
 4. Optional: `training/kaggle/detector_kernel.py` in a GPU notebook trains the drawing symbol detector.
 
+## Process simulation (DWSIM) and DEXPI P&IDs (pyDEXPI)
+
+**DWSIM** ([DanWBR/dwsim10](https://github.com/DanWBR/dwsim10), GPL-3.0): the open-source chemical process simulator.
+ShipBrain builds its own MCP server once (`python -c "from shipbrain import dwsim; dwsim.build()"`, needs the free
+.NET 10 SDK - the chat shows the link) and runs it unchanged as a separate program.
+- `process_sim`: `run` a DWSIM flowsheet (every stream: T, P, flow, phases, composition; every unit operation),
+  `flash` a mixture (feed in **mass** fractions, DWSIM's convention) with any of its 30 property packages
+  (Peng-Robinson, SRK, NRTL, UNIFAC, steam tables, GERG-2008, PC-SAFT ...), list `packages`.
+- All 58 of its own operations (build flowsheets, unit operations, columns, reactors, dynamics, PID tuning ...) via
+  `mcp_call(server="dwsim")`. `choose_engine` now routes process questions (flash, distillation, flowsheet ...) to it.
+- Checked: built here; all **22 of its sample plants** (gas processing, columns, reactors, LNG, biodiesel ...) load and
+  solve with no errors in 0.1-9.5 s; a 50/50 by mass water-methanol flash gives 64 % water by moles (exact).
+- Training: `training/data/dwsim_train.jsonl.gz` - 347 samples from the real simulator (22 plants, 65 stream questions,
+  260 flashes of 12 mixture families), kept in the repo so Kaggle need not build DWSIM.
+
+**pyDEXPI** ([process-intelligence-research/pyDEXPI](https://github.com/process-intelligence-research/pyDEXPI)) and
+**DEXPI Studio** (its desktop app), both AGPL-3.0, copied whole; pyDEXPI runs as its own program (`pip install
+"pydexpi[png,pdf]"`, Python 3.12+). DEXPI is the open P&ID exchange standard.
+- `dexpi`: `summary` (equipment with tags and classes, instruments, piping), `validate` (all of pyDEXPI's DEXPI rules),
+  `tables` (equipment / line / instrument / piping-component / valve lists, xlsx or csv), `drawing` (PNG + SVG), `diff`
+  of two revisions; its MCP server (43 operations: find by tag, connections, paths, exports ...) via `mcp_call(server="dexpi")`.
+- Training: its real example P&IDs (DEXPI reference P&ID, 36 DEXPI training test cases, a CO2 terminal, Tennessee
+  Eastman) -> summaries, validations, and the drawn P&IDs with their exact tag lists (`training/data/dexpi_*`).
+- Code packs of DWSIM, pyDEXPI and DEXPI Studio are trained on too (copyleft allowed: ShipBrain is open, non-commercial).
+
 ## Class society rules (ships and offshore)
 
 ShipBrain answers class rule questions **from the rules themselves**, with society, document, section and page, in

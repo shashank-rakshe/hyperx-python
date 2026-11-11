@@ -370,6 +370,21 @@ class Tools:
                       'with the drawing and correct the code (refinements rounds). For machine parts and simple brackets / plates.',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'refinements': {'type': 'integer'},
                                                          'out': {'type': 'string'}}, 'required': ['file']})
+        self.register('process_sim', self.process_sim, 'Chemical / process simulation with DWSIM (free, built in): action "run": load and '
+                      'solve a DWSIM flowsheet (.dwxml / .dwxmz) -> every stream (T, P, flow, phases, composition) and unit operation; '
+                      '"flash": compounds + mass fractions + T (C) + P (bar) [+ flow kg/h, property package] -> phases, densities, '
+                      'composition; "packages": the property packages. For building whole flowsheets use mcp_call server "dwsim".',
+                      {'type': 'object', 'properties': {'action': {'type': 'string', 'enum': ['run', 'flash', 'packages']},
+                                                         'file': {'type': 'string'}, 'compounds': {'type': 'array', 'items': {'type': 'string'}},
+                                                         'mass_fractions': {'type': 'array', 'items': {'type': 'number'}}, 'T_C': {'type': 'number'},
+                                                         'P_bar': {'type': 'number'}, 'flow_kg_h': {'type': 'number'}, 'package': {'type': 'string'}},
+                       'required': ['action']})
+        self.register('dexpi', self.dexpi, 'DEXPI P&ID files (DEXPI 2.0 XML/JSON, Proteus XML) with pyDEXPI: action "summary" (equipment '
+                      'with tags, instruments, piping), "validate" (every DEXPI rule), "tables" (equipment / line / instrument / valve '
+                      'lists, xlsx or csv), "drawing" (PNG + SVG), "diff" (file vs other: what changed).',
+                      {'type': 'object', 'properties': {'action': {'type': 'string', 'enum': ['summary', 'validate', 'tables', 'drawing', 'diff']},
+                                                         'file': {'type': 'string'}, 'other': {'type': 'string'}, 'format': {'type': 'string'}},
+                       'required': ['action', 'file']})
         self.register('drawing_takeoff', self.drawing_takeoff, 'Construction drawings (electrical / architectural / P&ID) read into '
                       'a CIR file (.cir / .json): quantity takeoff - counts per item with MasterFormat / IFC codes, items to '
                       'review, connections (conductors, home runs, feeders), lengths / areas when a scale is known. '
@@ -1088,6 +1103,44 @@ class Tools:
     def drawing_takeoff(self, file, min_confidence=0.0):
         from . import construct
         return construct.takeoff(self._path(file), min_confidence)
+
+    def process_sim(self, action, file=None, compounds=None, mass_fractions=None, T_C=None, P_bar=None, flow_kg_h=1000.0,
+                    package='Peng-Robinson (PR)'):
+        from . import dwsim
+        if action == 'run':
+            if not file:
+                return {'error': 'run needs a DWSIM flowsheet file'}
+            return dwsim.run(self._path(file))
+        if action == 'packages':
+            fid = dwsim._call('dwsim_flowsheet_create', {'name': 'list'})['flowsheet_id']
+            pp = dwsim._call('dwsim_thermo_list_property_packages', {'flowsheet_id': fid}).get('property_packages', [])
+            dwsim._call('dwsim_flowsheet_close', {'flowsheet_id': fid})
+            return {'packages': pp, 'plain_english': f"DWSIM has {len(pp)} property packages, e.g. {', '.join(pp[:12])}."}
+        if not (compounds and mass_fractions and T_C is not None and P_bar is not None):
+            return {'error': 'flash needs compounds, mass_fractions, T_C and P_bar'}
+        return dwsim.flash(compounds, mass_fractions, float(T_C), float(P_bar), float(flow_kg_h or 1000), package or 'Peng-Robinson (PR)')
+
+    def dexpi(self, action, file, other=None, format='xlsx'):
+        from . import dexpi as dx
+        src = self._path(file)
+        base = os.path.splitext(os.path.basename(file))[0]
+        if action == 'summary':
+            return dx.summary(src)
+        if action == 'validate':
+            return dx.validate(src)
+        if action == 'tables':
+            r = dx.tables(src, self._path(base + '_lists'), fmt=format if format in ('xlsx', 'csv', 'json') else 'xlsx')
+            r['files'] = [os.path.basename(f) for f in r['files']]
+            return r
+        if action == 'drawing':
+            png = dx.png(src, self._path(base + '.png'), scale=3.0)
+            return {'png': os.path.basename(png), 'svg': base + '.svg', 'overlay': os.path.basename(png),
+                    'plain_english': f'Drew the P&ID: {os.path.basename(png)} (and {base}.svg).'}
+        if action == 'diff':
+            if not other:
+                return {'error': 'diff needs other (the second revision)'}
+            return dx.diff(src, self._path(other))
+        return {'error': f'unknown action {action}'}
 
     def drawing_detect(self, file, discipline='electrical', min_confidence=0.25):
         from . import construct

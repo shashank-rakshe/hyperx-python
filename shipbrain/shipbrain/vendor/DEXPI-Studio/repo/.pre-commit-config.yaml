@@ -1,0 +1,11 @@
+repos:
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.9.1
+  hooks:
+  - id: ruff-format
+    description: Format code using Ruff, the Python formatter
+    files: ^(src|tests)/
+  - id: ruff
+    description: Lint code using Ruff, the Python linter
+    files: ^(src|tests)/
+    args: [--fix]

@@ -1,0 +1,345 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pyDEXPI"
+version = "2.1.0"
+description = "Engineering toolkit for loading, analysing, validating, visualising and exporting DEXPI models, with Python, CLI, and MCP interfaces."
+readme = "README.md"
+requires-python = ">=3.12"
+keywords = [
+    "DEXPI, P&ID, PFD",
+]
+authors = [
+    { name = "Artur M. Schweidtmann", email = "A.Schweidtmann@tudelft.nl" },
+    { name = "Dominik P. Goldstein", email = "D.P.Goldstein@tudelft.nl" },
+    { name = "Lukas Schulze Balhorn", email = "L.Schulzebalhorn@tudelft.nl" },
+    { name = "Achmad Anggawirya Alimin", email = "A.Alimin@tudelft.nl" },
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Operating System :: OS Independent",
+    # The PyPI-visible half of PEP 561. py.typed is what a type checker reads; this is what a
+    # person reads before installing. Both or neither -- a classifier without the marker
+    # advertises types no checker will use.
+    "Typing :: Typed",
+]
+dependencies = [
+    "networkx>=3.6.1",
+    "pydantic>=2.13.4",
+    "pandas>=3.0.3",
+    "openpyxl>=3.1.5",
+    "lxml>=6.1.1"
+]
+
+[project.scripts]
+pydexpi = "pydexpi.cli:app"
+pydexpi-mcp = "pydexpi.mcp_server.server:main"
+
+[project.optional-dependencies]
+png = [
+    "resvg>=0.2.0",
+]
+pdf = [
+    "svglib>=1.6.0",
+    "reportlab>=4.5.1",
+]
+export = [
+    "resvg>=0.2.0",
+    "svglib>=1.6.0",
+    "reportlab>=4.5.1",
+]
+cli = [
+    "typer>=0.26.7",
+]
+# The official Model Context Protocol SDK, for the server in pydexpi.mcp_server. 2.3 is the
+# first release whose MCPServer takes middleware=, which the server needs (server.py).
+mcp = [
+    "mcp>=2.3,<3",
+]
+lint = [
+    "pre-commit>=4.6.0",
+    # Exact, and identical to the `dev` pin and to `rev:` in .pre-commit-config.yaml. A floor
+    # here lets a lint-only environment run a newer ruff with different rules and formatting
+    # than CI verified.
+    "ruff==0.17.3",
+    "mypy>=2.3.0",
+    "types-networkx>=3.6.1",
+]
+test = [
+    "pytest>=9.0.3",
+]
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings[python]>=1.0.4",
+]
+# Union of lint + test + docs, in the same way `export` is the union of `png` and `pdf`.
+# Keeping the split lets the dependency-license report say *why* a package is present -- whether
+# it reaches users or is only used to build and test pyDEXPI.
+dev = [
+    "pre-commit>=4.6.0",
+    # Exact pin, and it must stay in lockstep with `rev:` in .pre-commit-config.yaml —
+    # otherwise ./scripts/check and the pre-commit hook format differently again.
+    "ruff==0.17.3",
+    "mypy>=2.3.0",
+    "types-networkx>=3.6.1",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    # Runs the suite in parallel (scripts/test passes -n); pytest-cov combines the workers'
+    # coverage into the one report the floor is checked against.
+    "pytest-xdist>=3.8.0",
+    # Drives the property-based round-trip tests in tests/test_roundtrip. Required, not
+    # optional: without it that module fails to import rather than skipping, so a run that
+    # is missing it reports the omission instead of silently covering less.
+    "hypothesis>=6.140.3",
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings[python]>=1.0.4",
+]
+
+[project.urls]
+Homepage = "https://www.pi-research.org/"
+Documentation = "https://www.pydexpi.org/"
+Source = "https://github.com/process-intelligence-research/pyDEXPI"
+
+[tool.coverage.run]
+source = ["pydexpi"]
+branch = true
+
+[tool.coverage.report]
+skip_covered = false
+show_missing = true
+# The floor, enforced by pytest-cov on every run -- locally and in CI. It is seeded at the first
+# measured value rounded down, deliberately rather than at an aspirational number, so that it
+# blocks regressions from day one without blocking work. Ratchet it upward as coverage improves;
+# lowering it is a decision that belongs in a commit message, not a silent edit.
+fail_under = 84
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@overload",
+]
+
+[tool.licensecheck]
+# Dependency license policy. See docs/mkdocs/dependency-licenses.md for the rationale and for
+# the procedure to add an exception.
+#
+# pyDEXPI is AGPL-3.0, but is also offered under a commercial license on request. A copyleft
+# dependency would remove the ability to grant that commercial license, so the policy is
+# permissive-only: copyleft is not allowed without a reviewed entry in license-exceptions.toml.
+#
+# NOTE ON SPELLING: licensecheck matches license strings by case-insensitive substring against a
+# fixed vocabulary, then compares the resulting coarse categories. Only the terms it actually
+# knows are meaningful here, and they are coarser than SPDX: "BSD" covers every BSD variant and
+# "APACHE" covers every Apache version. Writing a precise SPDX id gives a false sense of
+# precision and can silently mis-resolve -- "AGPL-3.0-or-later" resolves to plain GPL-3.0+
+# because that is a substring of it, which is why `license` below is the bare term "AGPL".
+license = "AGPL"
+extras = ["png", "pdf", "export", "cli", "mcp", "dev"]
+
+# Allowed: permissive licenses only. Anything not in this list fails, which deliberately includes
+# packages whose license metadata is missing (NO_LICENSE) or unrecognised (UNKNOWN) -- those must
+# be manually verified and recorded in license-exceptions.toml rather than assumed compliant.
+only_licenses = [
+    "MIT",       # MIT and variants such as MIT-CMU
+    "BSD",       # 0BSD, BSD-2-Clause, BSD-3-Clause, ...
+    "ISC",
+    "APACHE",    # Apache-2.0 and "Apache Software License"
+    "PYTHON",    # Python Software Foundation License / PSF-2.0
+    "CC0-1.0",   # public domain dedication
+    "UNLICENSE",
+    "BSL-1.0",   # Boost
+    "NCSA",
+    "UPL",
+]
+
+# Disallowed: copyleft and proprietary. Redundant against the allowlist above -- kept because an
+# explicit denylist documents intent and keeps the policy legible in review. Every spelling
+# variant is listed because the categories are distinct: "LGPL" alone does NOT match
+# "LGPL-3.0-or-later".
+fail_licenses = [
+    "AGPL", "GNU Affero General Public License v3",
+    "GPL", "GPL-2.0", "GPL-3.0", "GPLv2", "GPLv3", "GPLv2+", "GPLv3+",
+    "GPL-2.0-or-later", "GPL-3.0-or-later",
+    "LGPL", "GNU Library", "LGPLv2", "LGPLv3", "LGPLv2+", "LGPLv3+",
+    "LGPL-2.0-only", "LGPL-2.0-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later",
+    "MPL", "Eclipse", "EPL-1.0", "EPL-2.0", "EUPL",
+    "Proprietary",
+]
+
+# Deliberately NOT set: `ignore_licenses`. Terms it does not recognise collapse to the UNKNOWN
+# category, so ignoring one unrecognised license would mark *every* package with unreadable
+# metadata as compliant. Use license-exceptions.toml instead, which is per-package and reviewed.
+
+format = "json"
+zero = true
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# An explicit list, not `extend-select`: a ruff release that widens its defaults must not be able
+# to turn the repository red overnight. Adding a family here is a
+# deliberate act with a green CI to prove it.
+select = [
+    "Q", "RUF100", "UP", "I", "E", "F", "W",  # the original set
+    "B",    # bugbear -- real defects (mutable defaults, raise-without-from, zip without strict)
+    "SIM",  # simplification
+    "RUF",  # ruff-specific
+    "PERF", # performance anti-patterns
+    "TRY",  # exception-handling conventions
+    "PL",   # pylint-style
+    "PIE",  # misc idioms
+    "BLE",  # blind `except Exception` -- five documented exemptions, see their noqa comments
+    "ISC",  # implicit string concatenation
+    "C4",   # comprehensions
+    "C90",  # mccabe complexity
+]
+extend-ignore = [
+    "E501", # line too long -- the formatter owns line length
+
+    # -- Disabled by name, with reasons. Together these are 832 of the 1402 violations the
+    # -- families above report, and none of them has an autofix; enabling them would mean a gate
+    # -- nobody reads rather than a codebase anybody improved.
+
+    # Forbids a message in `raise ValueError("...")`. This project's diagnostics *are* its
+    # interface -- the Proteus ErrorRegistry, the validation messages, the loaders' error
+    # templates -- and AGENTS.md requires them to name what went wrong. 362 violations.
+    "TRY003",
+    # Flags every literal in a comparison. Node indices, coordinates, schema versions and
+    # DEXPI's own magic strings are magic by nature. 261 violations.
+    "PLR2004",
+    # Forbids function-level imports. `cli.py` uses them deliberately to keep startup fast, and
+    # the optional-extra pattern (`png`, `pdf`, `cli`) requires them. 174 violations.
+    "PLC0415",
+    # Ambiguous Unicode. Fires on the en-dashes, arrows and quotation marks the documentation
+    # and docstrings use throughout, which are intentional. 35 violations.
+    "RUF001", "RUF002", "RUF003",
+]
+isort = { combine-as-imports = true }
+
+[tool.ruff.lint.mccabe]
+# Ratchets, not targets. Each is set at the worst function in the tree today, so the rule
+# forbids getting *worse* without demanding a refactor inside a lint PR. The offenders are the
+# Proteus parser (43), piping_toolkit (19) and graph_loader (9); lowering these as those are
+# untangled is follow-up work, not this PR's.
+max-complexity = 34
+
+[tool.ruff.lint.pylint]
+max-args = 12
+max-positional-args = 12
+max-branches = 37
+max-returns = 15
+max-statements = 93
+
+[tool.ruff.lint.per-file-ignores]
+# The generated classes are not hand-edited (AGENTS.md), so anything the ruleset finds there is
+# a finding about the *generator*. PIE794 currently reports exactly one: `Role` declares `uri`
+# twice, as a ClassVar and again as a data attribute: the field shadows the
+# ClassVar and breaks URI-based class resolution on reload. Ignored here so the gate is green,
+# and recorded here so the ignore is a pointer rather than a burial.
+"pydexpi/pydexpi_classes/*.py" = ["F401", "PIE794", "SIM102", "RUF036"]
+"__init__.py" = ["F401"]
+"pydexpi/pydexpi_classes/pydexpi_classes.py" = []
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.pytest.ini_options]
+minversion = "9.0.3"
+testpaths = ["tests"]
+# No --import-mode=importlib. CI installs the package non-editable, and under importlib the
+# tests import that installed copy while [tool.coverage.run] source measures the source tree,
+# so every file reports 0% and the coverage floor fails a run whose tests all passed.
+addopts = "-ra --strict-markers --strict-config"
+filterwarnings = ["error"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["pydexpi"]
+# Pydantic builds __init__ signatures, validator types and field defaults at runtime. Without
+# this plugin every model construction reads as an error and the diagnostic count says nothing
+# about the annotations we actually wrote.
+plugins = ["pydantic.mypy"]
+
+# Strictness for the checked surface. Deliberately short of --strict: the ratchet below matters
+# more than the starting setting, and each of these earns its place by catching a class of error
+# that silently reaches a downstream user's type check once py.typed ships.
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+strict_equality = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unused_configs = true
+warn_unused_ignores = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+# The checked surface is an allow-list, not the whole package. Checking all 41k LOC at once
+# produces hundreds of diagnostics on code that was never checked before, and a gate that is red
+# on arrival gets ignored or switched off. So errors are silenced everywhere by default and
+# re-enabled module by module in the section below. A module that is not on the allow-list is
+# still parsed and its types are still used -- only its own diagnostics are suppressed.
+[[tool.mypy.overrides]]
+module = ["pydexpi.*"]
+ignore_errors = true
+
+# The checked surface: the entry points users actually touch. These are the annotations that
+# leak out of the package, so they are the ones that have to be right first.
+#
+# This list only ever grows. To add a module: drop it in, run ./scripts/typecheck, fix what it
+# reports. Removing a module to make CI green defeats the point -- fix the module instead.
+[[tool.mypy.overrides]]
+module = [
+    "pydexpi",
+    "pydexpi.diff.*",
+    "pydexpi.loaders.compat.*",
+    "pydexpi.loaders.pickle_stamp",
+    "pydexpi.loaders.public",
+    "pydexpi.loaders.serializer",
+    "pydexpi.query.*",
+    "pydexpi.toolkits.display_labels",
+    "pydexpi.toolkits.display_name",
+    "pydexpi.toolkits.finite_geometry",
+    "pydexpi.toolkits.flow_arrows",
+    "pydexpi.toolkits.list_order",
+    "pydexpi.toolkits.port_sides",
+    "pydexpi.toolkits.process_drawing",
+    "pydexpi.toolkits.process_hierarchy",
+    "pydexpi.toolkits.process_materials",
+    "pydexpi.toolkits.process_toolkit",
+    "pydexpi.toolkits.qualified_values",
+    "pydexpi.validation",
+    "pydexpi.validation.default_validator",
+    "pydexpi.validation.engine",
+    "pydexpi.validation.rules.composition_fractions",
+    "pydexpi.validation.rules.instrument_in_at_most_one_loop",
+    "pydexpi.validation.rules.mandatory_attribute_has_value",
+    "pydexpi.validation.rules.process_connection_ports_agree",
+    "pydexpi.validation.rules.process_fraction_vector_length",
+    "pydexpi.validation.rules.process_port_connection_type",
+    "pydexpi.validation.rules.process_port_delegation_consistent",
+    "pydexpi.validation.rules.process_port_role_names",
+    "pydexpi.validation.rules.process_shared_state_component_order",
+    "pydexpi.validation.rules.process_step_drawn_inside_parent",
+    "pydexpi.validation.rules.process_stream_direction",
+    "pydexpi.validation.rules.qualified_value_binding",
+    "pydexpi.versioning.*",
+]
+ignore_errors = false
+
+# Dependencies that ship no type information. Listed individually rather than behind a blanket
+# ignore_missing_imports so that adding an untyped dependency stays a visible decision.
+[[tool.mypy.overrides]]
+module = [
+    "lxml.*",
+]
+ignore_missing_imports = true

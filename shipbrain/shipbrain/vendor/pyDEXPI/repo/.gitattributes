@@ -1,0 +1,17 @@
+# The vendored DEXPI TrainingTestCases are pinned byte-for-byte against upstream
+# (see data/dexpi_training_test_cases/README.md), so they must not be subjected to
+# end-of-line conversion on checkout or commit.
+data/dexpi_training_test_cases/*.xml -text
+
+# The DEXPI 2.0.1 release's reference P&ID is vendored byte-for-byte as well
+# (see data/dexpi_2_0_1/README.md).
+data/dexpi_2_0_1/reference_pid.xml -text
+
+# Golden projection files are compared as LF text.
+tests/test_versioning/golden/*.txt text eol=lf
+
+# Pickles written on the DEXPI 2.0 classes, kept as written (see tests/test_loaders/pre_2_0_1/README.md).
+tests/test_loaders/pre_2_0_1/*.pkl binary
+
+# Saved fixture documents the tests load (see tests/fixtures/built/README.md), kept byte-stable.
+tests/fixtures/built/*.json text eol=lf

@@ -79,6 +79,16 @@ def servers(workdir=None):
     from . import openphysics
     if openphysics.available():
         out['openphysics'] = {'command': None, 'cwd': openphysics.ROOT, 'builtin': True}
+    from . import dwsim
+    if dwsim.exe():                                    # DWSIM process simulator (GPL), built with dwsim.build()
+        out['dwsim'] = {'command': [dwsim.exe(), '--stdio']}
+    try:
+        import importlib.util
+        if importlib.util.find_spec('pydexpi'):        # pyDEXPI (AGPL): DEXPI P&ID models
+            import sys as _s
+            out['dexpi'] = {'command': [_s.executable, '-c', 'from pydexpi.mcp_server.server import main; main()']}
+    except Exception:
+        pass
     p = os.path.join(workdir or '.', 'mcp_servers.json')
     if os.path.exists(p):
         out.update(json.load(open(p, encoding='utf-8')))

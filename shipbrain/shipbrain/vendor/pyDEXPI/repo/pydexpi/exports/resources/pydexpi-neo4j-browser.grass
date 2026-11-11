@@ -1,0 +1,439 @@
+node {
+  caption: '{displayName}';
+  diameter: 40px;
+  color: #E1E5E9;
+  border-color: #9AA4AE;
+  border-width: 2px;
+  text-color-internal: #17324D;
+  font-size: 10px;
+}
+
+node.DexpiElement {
+  caption: '{displayName}';
+  diameter: 40px;
+  color: #E1E5E9;
+  border-color: #9AA4AE;
+  border-width: 2px;
+  text-color-internal: #17324D;
+}
+
+node.DexpiNode {
+  caption: '{displayName}';
+  diameter: 40px;
+  color: #E1E5E9;
+  border-color: #9AA4AE;
+  border-width: 2px;
+  text-color-internal: #17324D;
+}
+
+node._DexpiNode {
+  caption: '{displayName}';
+  diameter: 40px;
+  color: #E1E5E9;
+  border-color: #9AA4AE;
+  border-width: 2px;
+  text-color-internal: #17324D;
+}
+
+node.ConceptualObject {
+  caption: '{displayName}';
+  diameter: 40px;
+  color: #E1E5E9;
+  border-color: #9AA4AE;
+  border-width: 2px;
+  text-color-internal: #17324D;
+}
+
+node.TechnicalItem {
+  caption: '{displayName}';
+  diameter: 44px;
+  color: #E1E5E9;
+  border-color: #9AA4AE;
+  border-width: 2px;
+  text-color-internal: #17324D;
+}
+
+node.GraphicalElement {
+  caption: '{displayName}';
+  diameter: 24px;
+  color: #E1E5E9;
+  border-color: #9AA4AE;
+  border-width: 2px;
+  text-color-internal: #4A5560;
+}
+
+node.GraphicalPrimitive {
+  caption: '{displayName}';
+  diameter: 24px;
+  color: #E1E5E9;
+  border-color: #9AA4AE;
+  border-width: 2px;
+  text-color-internal: #4A5560;
+}
+
+node.GraphicsGroup {
+  caption: '{displayName}';
+  diameter: 24px;
+  color: #E1E5E9;
+  border-color: #9AA4AE;
+  border-width: 2px;
+  text-color-internal: #4A5560;
+}
+
+node.Label {
+  caption: '{displayName}';
+  diameter: 24px;
+  color: #E1E5E9;
+  border-color: #9AA4AE;
+  border-width: 2px;
+  text-color-internal: #4A5560;
+}
+
+node.Shape {
+  caption: '{displayName}';
+  diameter: 24px;
+  color: #E1E5E9;
+  border-color: #9AA4AE;
+  border-width: 2px;
+  text-color-internal: #4A5560;
+}
+
+node.ShapeCatalogue {
+  caption: '{displayName}';
+  diameter: 24px;
+  color: #E1E5E9;
+  border-color: #9AA4AE;
+  border-width: 2px;
+  text-color-internal: #4A5560;
+}
+
+node.TextTemplate {
+  caption: '{displayName}';
+  diameter: 24px;
+  color: #E1E5E9;
+  border-color: #9AA4AE;
+  border-width: 2px;
+  text-color-internal: #4A5560;
+}
+
+node.PipingNetworkSystem {
+  caption: '{displayName}';
+  diameter: 60px;
+  color: #BFE0D5;
+  border-color: #1F6B5B;
+  border-width: 3px;
+  text-color-internal: #17324D;
+}
+
+node.PipingNetworkSegment {
+  caption: '{displayName}';
+  diameter: 50px;
+  color: #CDE9DF;
+  border-color: #2E8770;
+  border-width: 3px;
+  text-color-internal: #17324D;
+}
+
+node.PipingConnection {
+  caption: '{displayName}';
+  diameter: 26px;
+  color: #CDE9DF;
+  border-color: #1F6B5B;
+  border-width: 3px;
+  text-color-internal: #17324D;
+}
+
+node.PipingNode {
+  caption: '{displayName}';
+  diameter: 12px;
+  color: #A9D7E2;
+  border-color: #19788D;
+  border-width: 2px;
+  text-color-internal: #123844;
+}
+
+node.Nozzle {
+  caption: '{displayName}';
+  diameter: 20px;
+  color: #F1DFC5;
+  border-color: #A66E24;
+  border-width: 3px;
+  text-color-internal: #4B3519;
+}
+
+node.PipingComponent {
+  caption: '{displayName}';
+  diameter: 46px;
+  color: #BFE7F0;
+  border-color: #0F7F9B;
+  border-width: 3px;
+  text-color-internal: #123844;
+}
+
+node.PipeFitting {
+  caption: '{displayName}';
+  diameter: 40px;
+  color: #CDECF2;
+  border-color: #258FA6;
+  border-width: 3px;
+  text-color-internal: #123844;
+}
+
+node.PipeOffPageConnector {
+  caption: '{displayName}';
+  diameter: 32px;
+  color: #CDECF2;
+  border-color: #258FA6;
+  border-width: 3px;
+  text-color-internal: #123844;
+}
+
+node.OperatedValve {
+  caption: '{displayName}';
+  diameter: 48px;
+  color: #A8DFEC;
+  border-color: #0A6379;
+  border-width: 3px;
+  text-color-internal: #123844;
+}
+
+node.SafetyValveOrFitting {
+  caption: '{displayName}';
+  diameter: 48px;
+  color: #FAD9C8;
+  border-color: #D9532B;
+  border-width: 3px;
+  text-color-internal: #6B2A14;
+}
+
+node.Chamber {
+  caption: '{displayName}';
+  diameter: 22px;
+  color: #D6E6F7;
+  border-color: #2870C2;
+  border-width: 3px;
+  text-color-internal: #17324D;
+}
+
+node.ProcessEquipment {
+  caption: '{displayName}';
+  diameter: 68px;
+  color: #C9DFF5;
+  border-color: #1769AA;
+  border-width: 3px;
+  text-color-internal: #17324D;
+}
+
+node.SignalConveyingFunction {
+  caption: '{displayName}';
+  diameter: 34px;
+  color: #FFE3AD;
+  border-color: #C77700;
+  border-width: 3px;
+  text-color-internal: #4A3608;
+}
+
+node.MeasuringSystem {
+  caption: '{displayName}';
+  diameter: 42px;
+  color: #FFE3AD;
+  border-color: #C77700;
+  border-width: 3px;
+  text-color-internal: #4A3608;
+}
+
+node.ProcessSignalGeneratingFunction {
+  caption: '{displayName}';
+  diameter: 44px;
+  color: #FFDB99;
+  border-color: #C77700;
+  border-width: 3px;
+  text-color-internal: #4A3608;
+}
+
+node.ProcessInstrumentationFunction {
+  caption: '{displayName}';
+  diameter: 50px;
+  color: #FFDB99;
+  border-color: #B36B00;
+  border-width: 3px;
+  text-color-internal: #4A3608;
+}
+
+node.InstrumentationLoopFunction {
+  caption: '{displayName}';
+  diameter: 52px;
+  color: #FFD68A;
+  border-color: #A66200;
+  border-width: 3px;
+  text-color-internal: #4A3608;
+}
+
+node.OperatedValveReference {
+  caption: '{displayName}';
+  diameter: 34px;
+  color: #DFC7E5;
+  border-color: #7D4A89;
+  border-width: 3px;
+  text-color-internal: #3E2547;
+}
+
+node.ControlledActuator {
+  caption: '{displayName}';
+  diameter: 42px;
+  color: #D3B5DB;
+  border-color: #6F4179;
+  border-width: 3px;
+  text-color-internal: #3E2547;
+}
+
+node.ActuatingFunction {
+  caption: '{displayName}';
+  diameter: 44px;
+  color: #DFC7E5;
+  border-color: #7D4A89;
+  border-width: 3px;
+  text-color-internal: #3E2547;
+}
+
+node.ActuatingElectricalSystem {
+  caption: '{displayName}';
+  diameter: 50px;
+  color: #D3B5DB;
+  border-color: #6F4179;
+  border-width: 3px;
+  text-color-internal: #3E2547;
+}
+
+node.ActuatingSystem {
+  caption: '{displayName}';
+  diameter: 50px;
+  color: #D3B5DB;
+  border-color: #7D4A89;
+  border-width: 3px;
+  text-color-internal: #3E2547;
+}
+
+relationship {
+  caption: '<type>';
+  color: #B7C3CE;
+  shaft-width: 1px;
+  font-size: 8px;
+  padding: 3px;
+  text-color-external: #6D7884;
+  text-color-internal: #FFFFFF;
+}
+
+relationship.composition {
+  caption: '{attr_name}';
+  color: #D2D7DD;
+  shaft-width: 1px;
+  text-color-external: #89919B;
+}
+
+relationship.reference {
+  caption: '{attr_name}';
+  color: #B7C3CE;
+  shaft-width: 1px;
+  text-color-external: #6D7884;
+}
+
+relationship.SignalConveyingFunction {
+  caption: '{displayName}';
+  color: #D4A017;
+  shaft-width: 1px;
+  text-color-external: #755A0C;
+}
+
+relationship.MeasuringLineFunction {
+  caption: '{displayName}';
+  color: #E78227;
+  shaft-width: 1px;
+  text-color-external: #9A520E;
+}
+
+relationship.OperatedValveReference {
+  caption: '{displayName}';
+  color: #8D5A9B;
+  shaft-width: 2px;
+  text-color-external: #67416F;
+}
+
+relationship.DirectPipingConnection {
+  caption: '{displayName}';
+  color: #287D6B;
+  shaft-width: 2px;
+  padding: 1px;
+  text-color-external: #245A50;
+}
+
+relationship.Pipe {
+  caption: '{displayName}';
+  color: #287D6B;
+  shaft-width: 3px;
+  padding: 1px;
+  text-color-external: #245A50;
+}
+
+pyDEXPI Neo4j Browser stylesheet (GRASS). Visualisation only - it never changes
+graph data. Import it with the :style command in Neo4j Browser. Full
+documentation: docs/mkdocs/neo4j_export.md in the pyDEXPI repository.
+
+DO NOT ADD COMMENTS ABOVE OR BETWEEN THE RULES, AND NO QUOTES OR BRACES BELOW.
+The Neo4j Browser GRASS parser has no comment syntax; any text before a rule is
+merged into that rule selector and silently disables it. This trailing block is
+safe only because it follows the final closing brace and contains no quote or
+brace characters, which would otherwise resume parsing and create a junk rule.
+For the same reason, values must be quoted with single quotes, never double
+quotes, and must never contain a colon.
+
+Visual grammar. Blue is physical equipment, cyan is piping components, teal and
+green is piping connectivity, orange and yellow is measurement and
+instrumentation, purple is actuation and control, grey is structural and helper
+objects, and a red-orange border marks safety-relevant items. Fills are light
+with darker borders and dark text, so the result reads closer to an engineering
+drawing than to a set of saturated circles. These colours are a navigation aid
+only. They are not a normative DEXPI or ISA colour standard.
+
+Styling targets semantic categories rather than individual DEXPI classes.
+Inheritance labels such as DexpiElement, DexpiNode and ConceptualObject are
+styled neutral grey on purpose: they exist so every node keeps a caption and a
+defined colour, and they must never outrank a semantic category.
+
+Rules are ordered generic to specific on purpose. Nodes carry their whole DEXPI
+inheritance chain as labels, every matching rule is applied in file order, and
+the last match wins per property - so reordering these rules changes which
+style you see. The neutral fallback rules therefore come first and the semantic
+category rules last.
+
+Every node rule repeats the caption deliberately. Neo4j Browser generates its
+own caption rule for any node not covered by a label-scoped rule that sets one,
+and its guess picks the first property whose name ends in name - which can be
+deviceTypeName, tagName or pipingComponentName rather than displayName.
+
+Every caption is a single token - either the type token or one property
+placeholder. The rebuilt Neo4j Browser, default on localhost since 2025.05 and
+on Aura from 2025.08, resolves a caption as one property name and renders
+nothing at all for a template holding two placeholders or literal text. The
+Browser style editor itself can only ever build single-token captions, so this
+is a property of the format and not a bug in one engine.
+
+Only these properties are supported. Nodes take caption, diameter, color,
+border-color, border-width, text-color-internal and font-size. Relationships
+take caption, color, shaft-width, font-size, padding, text-color-external and
+text-color-internal. There is no verified dashed, dotted, line-style or
+stroke-dasharray support for relationships through GRASS, so measurement and
+actuation edges are separated by colour and width instead.
+
+Collapsed relationships are captioned by their display name, which pyDEXPI fills
+with an engineer-facing term - Measurement, Signal, Actuation, Direct connection,
+and for a pipe the class name with its line number. The nominal diameter, fluid
+code and piping class are all one click away in the relationship details panel.
+To caption pipes by one of those instead, set the caption in relationship.Pipe
+and relationship.DirectPipingConnection to the nominalDiameterRepresentation
+property, or to the lineNumber property for the bare number.
+
+Relationship captions are also dropped when they do not fit the free space
+between two nodes, computed as the centre distance minus both node radii minus
+the arrow head. Larger node diameters and thicker shafts both shrink that space,
+which is why the pipe rules stay moderately thick and use minimal padding.

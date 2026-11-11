@@ -1,0 +1,83 @@
+#!/bin/sh
+#
+# Check the licenses of pyDEXPI's direct and transitive dependencies against the policy in
+# [tool.licensecheck] (pyproject.toml), with reviewed exemptions from license-exceptions.toml.
+#
+# Requires: licensecheck and uv.
+
+set -u
+
+REPORT="${LICENSE_REPORT:-license-report.json}"
+SUMMARY="${LICENSE_SUMMARY:-license-report.md}"
+
+if ! command -v licensecheck >/dev/null 2>&1; then
+	echo "error: licensecheck not found. Install it with: pip install licensecheck" >&2
+	exit 2
+fi
+
+# DO NOT REMOVE THIS CHECK, and do not make uv optional.
+#
+# licensecheck resolves a pyproject.toml dependency tree by shelling out to uv. Its pip backend
+# refuses .toml inputs outright, so when uv is missing it silently falls back to a resolver that
+# only inspects packages already installed in the current environment, one level deep.
+#
+# Measured on this project: with uv it reports 71 packages; without uv it reports 20 -- and still
+# exits 0. That is the one failure mode a license check must never have, because an incomplete
+# inventory that passes is worse than no check at all: it manufactures confidence. Refuse to run
+# instead.
+if ! command -v uv >/dev/null 2>&1; then
+	echo "error: uv not found, and licensecheck needs it to resolve transitive dependencies" >&2
+	echo "       from pyproject.toml. Without uv it silently scans only ~20 of 71 packages" >&2
+	echo "       and still exits 0, so this script refuses to run rather than report a" >&2
+	echo "       partial dependency tree as a pass." >&2
+	echo "       Install it with: pip install uv" >&2
+	exit 2
+fi
+
+# Exemptions live only in license-exceptions.toml; they are handed to licensecheck at call time
+# so there is no second copy in pyproject.toml to drift out of sync.
+#
+# Names are validated against PEP 508 before they reach the command line. The expansion below is
+# word-split on purpose and a shell does not re-parse metacharacters out of an expansion, so a
+# stray ";" in the file could never have run anything -- but this file is editable by a pull
+# request, and a name is a name. Anything else is a hard error rather than an argument.
+EXCEPTIONS=$(python -c '
+import pathlib, re, sys, tomllib
+path = pathlib.Path("license-exceptions.toml")
+if not path.exists():
+    sys.exit(0)
+data = tomllib.loads(path.read_text(encoding="utf-8"))
+valid = re.compile(r"\A[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?\Z")
+names = [e["package"] for e in data.get("exception", []) if e.get("package")]
+bad = [n for n in names if not valid.match(str(n))]
+if bad:
+    sys.exit("error: license-exceptions.toml: not valid package names: " + ", ".join(map(str, bad)))
+print(" ".join(names))
+') || exit 2
+
+# Globbing off: the list is word-split deliberately, but a name is never a path pattern.
+set -f
+# shellcheck disable=SC2086 # EXCEPTIONS is an intentionally word-split list of package names
+if [ -n "$EXCEPTIONS" ]; then
+	licensecheck --file "$REPORT" --ignore-packages $EXCEPTIONS
+else
+	licensecheck --file "$REPORT"
+fi
+set +f
+POLICY_STATUS=$?
+
+if [ ! -f "$REPORT" ]; then
+	echo "error: licensecheck did not produce $REPORT" >&2
+	exit 2
+fi
+
+if [ "$POLICY_STATUS" -eq 0 ]; then
+	python scripts/license_report.py "$REPORT" --out "$SUMMARY"
+else
+	python scripts/license_report.py "$REPORT" --out "$SUMMARY" --policy-failed
+fi
+REPORT_STATUS=$?
+
+if [ "$POLICY_STATUS" -ne 0 ] || [ "$REPORT_STATUS" -ne 0 ]; then
+	exit 1
+fi

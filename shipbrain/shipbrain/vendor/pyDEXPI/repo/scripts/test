@@ -1,0 +1,34 @@
+#!/bin/sh -e
+# Run the test suite under coverage measurement.
+#
+# Coverage settings, including the floor, live in [tool.coverage.*] in
+# pyproject.toml, so a local run reports exactly what CI reports.
+#
+# The JSON report feeds scripts/coverage_report.py; the HTML report is for
+# reading locally, and CI uploads both as an artifact. Override their locations
+# with COVERAGE_JSON and COVERAGE_HTML.
+#
+# Set COVERAGE=0 when running a subset -- a partial run measures partial
+# coverage and would trip the floor:
+#   COVERAGE=0 ./scripts/test -k loaders
+#
+# The suite runs in parallel with pytest-xdist, one worker per CPU, and
+# pytest-cov combines the workers' coverage into one report. PYTEST_WORKERS sets
+# the count; PYTEST_WORKERS=0 runs everything in this one process:
+#   PYTEST_WORKERS=0 COVERAGE=0 ./scripts/test -k some_test
+#
+# Any extra arguments are passed through to pytest.
+
+WORKERS="${PYTEST_WORKERS:-auto}"
+
+if [ "${COVERAGE:-1}" = "0" ]; then
+	exec pytest ./tests -n "$WORKERS" "$@"
+fi
+
+exec pytest ./tests \
+	-n "$WORKERS" \
+	--cov \
+	--cov-report=term \
+	--cov-report="json:${COVERAGE_JSON:-coverage.json}" \
+	--cov-report="html:${COVERAGE_HTML:-htmlcov}" \
+	"$@"

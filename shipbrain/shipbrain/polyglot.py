@@ -75,7 +75,8 @@ def add(url, name=None, skip_media=True, separate_program=False, exclude=()):
     subprocess.run(['git', 'clone', '-q', '--depth', '1', url, tmp], check=True)
     lic = next((os.path.join(tmp, f) for f in os.listdir(tmp) if re.match(r'(?i)^(licen[cs]e|copying)', f)), None)
     spdx, kind = classify_licence(open(lic, errors='replace').read()) if lic else ('none', 'unknown')
-    gpl_ok = separate_program and kind == 'copyleft' and not re.search(r'AGPL', spdx, re.I)
+    from .repopack import copyleft_training_ok
+    gpl_ok = separate_program and kind == 'copyleft' and (not re.search(r'AGPL', spdx, re.I) or copyleft_training_ok())
     from .repopack import noncommercial_ok
     nc_ok = kind == 'noncommercial' and noncommercial_ok()
     if kind not in ('permissive', 'conditional') and not gpl_ok and not nc_ok:

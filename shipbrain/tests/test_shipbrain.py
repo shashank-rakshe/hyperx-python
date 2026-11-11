@@ -1803,3 +1803,29 @@ def test_class_rules_calculator_and_private_rule_packs(tmp_path):
     T = agent.Tools(str(tmp_path), repo_kb=rk)
     out = T.call('class_rule', {'action': 'search', 'query': 'section modulus of stiffeners', 'society': 'XS'})
     assert 'Z = 1000' in out['plain_english'] and 'XS' in out['plain_english']
+
+
+def test_dexpi_and_dwsim(tmp_path):
+    """pyDEXPI reads the DEXPI reference P&ID (exact tags); DWSIM (if built) solves its own sample plant and a flash"""
+    from shipbrain import agent, dexpi, dwsim, engines
+    assert engines.classify('flash of natural gas at 50 bar') == ['process']
+    ex = dexpi.examples()
+    assert len(ex) >= 40
+    T = agent.Tools(str(tmp_path))
+    try:
+        import pydexpi  # noqa: F401
+        ref = next(e for e in ex if e.endswith(os.path.join('data', 'reference_pid.xml')))
+        shutil.copy(ref, tmp_path / 'ref.xml')
+        s = T.call('dexpi', {'action': 'summary', 'file': 'ref.xml'})
+        assert [e['tag'] for e in s['equipment']] == ['H1007', 'H1008', 'P4711', 'P4712', 'T4750']
+        assert s['counts']['instruments'] == 4 and 'PICSA-4712.02' in s['plain_english']
+        assert T.call('dexpi', {'action': 'validate', 'file': 'ref.xml'})['issues'] == 0
+    except ImportError:
+        pass
+    if dwsim.exe() and dwsim.samples():
+        f = next(x for x in dwsim.samples() if 'ThreePhaseSeparator' in x)
+        shutil.copy(f, tmp_path / 'sep.dwxml')
+        r = T.call('process_sim', {'action': 'run', 'file': 'sep.dwxml'})
+        assert r['ok'] and len(r['streams']) == 4 and not r['errors']
+        fl = T.call('process_sim', {'action': 'flash', 'compounds': ['Water', 'Methanol'], 'mass_fractions': [0.5, 0.5], 'T_C': 70, 'P_bar': 1})
+        assert abs(fl['composition_mol']['Water'] - 0.64) < 0.01      # 50/50 by mass = 64 % water by moles

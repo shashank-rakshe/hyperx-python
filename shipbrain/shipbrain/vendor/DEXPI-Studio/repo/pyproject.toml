@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dexpi-studio"
+version = "0.1.1"
+description = "A PySide6 desktop GUI companion for pyDEXPI — view, inspect, validate, and export DEXPI P&ID files locally."
+readme = "README.md"
+requires-python = ">=3.12"
+keywords = [
+    "DEXPI", "P&ID", "PFD", "GUI", "desktop",
+]
+authors = [
+    { name = "Artur M. Schweidtmann", email = "A.Schweidtmann@tudelft.nl" },
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "pyDEXPI[png,pdf]>=2.1.0,<3",
+    "PySide6>=6.6.0",
+    "keyring>=25.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit>=4.0.0",
+    "ruff>=0.9.0",
+    "pytest>=8.0.0",
+    "pytest-qt>=4.0.0",
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+    "pip-licenses>=4.4.0",
+    "pyinstaller>=6.11.0",
+]
+
+[project.urls]
+Homepage = "https://www.pi-research.org/"
+Source = "https://github.com/process-intelligence-research/DEXPI-Studio"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dexpi_studio"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+extend-select = ["Q", "RUF100", "UP", "I", "E", "F"]
+extend-ignore = [
+    "E501",
+]
+isort = { combine-as-imports = true }
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

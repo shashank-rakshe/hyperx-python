@@ -22,6 +22,8 @@ ANALYSES = {   # analysis type -> words that point to it
     'heat': r'thermal|temperature|heat|fire|insulation',
     'cad': r'3d model|\bcad\b|step file|solid model|drawing to|make a model|cadquery|mid.?surface|outer surface|piping|pipes?\b',
     'mesh': r'\bmesh|elements?\b|bdf|\.inp|nastran deck|shell model',
+    'process': r'process simulat|flowsheet|\bflash\b|distillation|column|vapou?r fraction|heat and mass balance|property package|'
+               r'thermodynamic|dew point|bubble point|absorber|stripper|reactor|dwsim|phase envelope',
 }
 
 ENGINES = [
@@ -69,6 +71,9 @@ ENGINES = [
      'runs', 'physics_lab(action="list" / "run") ; mcp_tools / mcp_call(server="openphysics")', ['@openphysics'], None,
      'C solvers checked against closed forms / measurements: flow up to shocks, heat, fire, water / sloshing, sound, '
      'radar, magnetics, fracture, impact, gears, 3D printing, topology optimisation (Apache-2.0, copied whole)'),
+    ('DWSIM process simulator (built in)', {'process'}, 'runs', 'process_sim(action="run" / "flash") ; mcp_call(server="dwsim")', ['@dwsim'], None,
+     'free (GPL) chemical process simulator: property packages, flashes, unit operations, columns, reactors, dynamics; '
+     'its own MCP server (58 operations); all 22 of its sample plants solved through ShipBrain'),
     ('ShipBrain mesher', {'mesh'}, 'runs', 'build_structure / plates_mesh / panel_mesh / cad_mesh / structure_to_mesh', [], None,
      'own conforming 1D + 2D mesher; no free nodes'),
 ]
@@ -84,6 +89,9 @@ def installed(names):
     if names == ['@mystran']:                          # found on PATH, in a usual folder, remembered, or built by ShipBrain
         from . import solvers
         return any(x['solver'] == 'mystran' for x in solvers.find())
+    if names == ['@dwsim']:
+        from . import dwsim
+        return dwsim.exe() is not None
     if names == ['@openphysics']:                       # built in: compiled once from shipbrain/vendor (Linux / macOS / WSL)
         from . import openphysics
         return openphysics.available() and (openphysics.built() or os.name != 'nt')
@@ -94,6 +102,8 @@ def installed(names):
 def classify(question):
     q = question.lower()
     hits = [a for a, rx in ANALYSES.items() if re.search(rx, q)]
+    if 'modal' in hits and not re.search(ANALYSES['modal'], re.sub(r'natural gas', '', q)):
+        hits.remove('modal')                                  # "natural gas" is not a natural frequency
     special = {'impact', 'ultimate', 'modal', 'buckling', 'cfd', 'fatigue', 'fracture', 'contact'}
     if 'static' in hits and set(hits) & special:          # a specific analysis wins over the generic 'stress / deformation'
         hits.remove('static')

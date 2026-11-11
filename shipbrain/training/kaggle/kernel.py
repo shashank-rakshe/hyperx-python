@@ -163,6 +163,12 @@ if os.path.exists('data/construct_real_train.jsonl') and os.path.getsize('data/c
 elif not sh('python training/construct_real.py --out data/construct_real_train.jsonl --img-dir data/construct_real_images'
           + (f' --data-root "{DATA}"' if DATA else ''), required=False):
     open('data/construct_real_train.jsonl', 'w').close()
+# DEXPI P&IDs (pyDEXPI's real example P&IDs: summary, validation, pictures with exact tags) - made with pyDEXPI
+# (Python 3.12+) and kept in the repo: training/data/dexpi_train.jsonl.gz + training/data/dexpi_images/
+sh('zcat training/data/dexpi_train.jsonl.gz > data/dexpi_train.jsonl && cp -r training/data/dexpi_images data/ '
+   '|| touch data/dexpi_train.jsonl', required=False)
+# DWSIM process simulations: made with the real simulator and kept in the repo (training/data/dwsim_train.jsonl.gz)
+sh('zcat training/data/dwsim_train.jsonl.gz > data/dwsim_train.jsonl || touch data/dwsim_train.jsonl', required=False)
 # cad3dify's own drawing -> CadQuery -> render -> correct loop, in its own prompt format, on the verified CAD examples
 if not sh('python training/cad3dify_tasks.py --out data/cad3dify_train.jsonl --img-dir data/cad3dify_images', required=False):
     open('data/cad3dify_train.jsonl', 'w').close()
@@ -193,7 +199,7 @@ report('scoring the base model')
 sh(f'python training/cad_eval.py --local {BASE} --limit 30 --out /kaggle/working/cad_eval_before.json', required=False)
 sh(f'python training/evaluate.py --local {BASE} --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_before.json', required=False)
 report('training the main model')
-sh(f'MAX_LEN=6144 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/synth_pid_train.jsonl data/physics_train.jsonl data/ocx_train.jsonl data/construct_train.jsonl data/construct_real_train.jsonl data/cad3dify_train.jsonl data/class_rule_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
+sh(f'MAX_LEN=6144 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/synth_pid_train.jsonl data/physics_train.jsonl data/ocx_train.jsonl data/construct_train.jsonl data/construct_real_train.jsonl data/cad3dify_train.jsonl data/class_rule_train.jsonl data/dexpi_train.jsonl data/dwsim_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
 report('scoring the trained model')
 sh('python training/cad_eval.py --local /kaggle/working/shipbrain_model/lora --limit 30 --out /kaggle/working/cad_eval_after.json', required=False)
 sh(f'python training/evaluate.py --local /kaggle/working/shipbrain_model/lora --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_after.json', required=False)
