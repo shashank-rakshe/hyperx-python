@@ -1,0 +1,15 @@
+import { State } from "vanjs-core";
+import { TemplateResult } from "lit-html";
+import { Mesh } from "../data-model";
+
+export type MeshTemplate<Params extends Record<string, unknown>> = {
+  name: string;
+  geometryKind: "line";
+  defaultParams: Params;
+
+  getParamsTemplate: ({ params }: { params: State<Params> }) => TemplateResult;
+  getMesh: ({ params }: { params: Params }) => {
+    nodes: Mesh["nodes"]["val"];
+    elements: Mesh["elements"]["val"];
+  };
+};

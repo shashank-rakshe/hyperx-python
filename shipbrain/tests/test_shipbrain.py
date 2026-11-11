@@ -1258,3 +1258,24 @@ def test_awatif_frame_solver(tmp_path):
     sls = out['combinations']['SLS']['sum_reactions']
     assert abs(sls[0] + 8000) < 1e-3 and abs(sls[2] - 15 * 6000) < 1e-3                        # equilibrium
     assert 'PASS' in out['plain_english'] and os.path.exists(tmp_path / out['files'][0])
+
+
+def test_polyglot_runs_copied_code_in_its_own_language(tmp_path):
+    from shipbrain import polyglot
+    assert {'awatif', 'diff3d'} <= set(polyglot.repos())
+    fs = polyglot.list_functions('awatif', 'getPositionsAndForces')
+    assert any(f['language'] == 'typescript' and f['callable'] for f in fs)
+    assert any(f['language'] == 'c++' for f in polyglot.list_functions('awatif', 'lSolver'))
+    assert any(f['function'] == 'align3d' for f in polyglot.list_functions('diff3d'))
+    with pytest.raises(ValueError):
+        polyglot.call('awatif', '../../agent.py', 'x')                      # only files inside the copied repo
+    if not polyglot.node_ok() or not os.path.isdir(os.path.join(polyglot.repo_dir('awatif'), 'node_modules')):
+        pytest.skip('Node.js / npm packages not installed')
+    E, I = 206000.0, 1e7
+    props = {'__map__': [[i, {'elasticity': E, 'area': 5000, 'momentInertiaZ': I / 2, 'momentInertiaY': I, 'shearModulus': 79230,
+                               'torsionalConstant': 1e6}] for i in range(2)]}
+    r = agent.Tools(tmp_path).call('code_call', {'repo': 'awatif', 'file': 'components/analysis/l-solver/getPositionsAndForces.ts',
+                                                'function': 'getPositionsAndForces',
+                                                'args': [[[0, 0, 0], [1000, 0, 0], [2000, 0, 0]], [[0, 1], [1, 2]],
+                                                         {'__map__': [[2, [0, 0, -1000, 0, 0, 0]]]}, {'__map__': [[0, [True] * 6]]}, props]})
+    assert abs(r['result']['positions'][8] + 1000 * 2000 ** 3 / (3 * E * I)) < 1e-3          # Awatif's own TypeScript solver

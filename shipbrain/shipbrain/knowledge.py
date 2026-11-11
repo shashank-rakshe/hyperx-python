@@ -7,6 +7,7 @@ model's prompt together with their source, so answers cite where they came from.
 Fine-tuning teaches the model *how* to work (formats, tool use, method). The knowledge base gives it *facts* that change.
 """
 import json, math, os, re
+from array import array
 
 TEXT_EXT = ('.md', '.txt', '.rst', '.py', '.csv', '.inp', '.bdf', '.dat', '.log')
 _tok = re.compile(r'[A-Za-z][A-Za-z0-9_\-\.]*|\d+(?:\.\d+)?')
@@ -59,7 +60,7 @@ def _read(path):
 class Knowledge:
     def __init__(self):
         self.docs = []                               # {'id', 'source', 'title', 'text'}
-        self._df, self._tf, self._len = {}, [], []
+        self._post, self._len, self._tot = {}, array('i'), 0   # word -> (doc ids, term counts): an inverted index
 
     # ---------------------------------------------------------- loading
     def add(self, source, text, title='', id=None):
@@ -67,11 +68,17 @@ class Knowledge:
         tf = {}
         for w in tokens(title + ' ' + text + ' ' + (id or '')):
             tf[w] = tf.get(w, 0) + 1
-        for w in tf:
-            self._df[w] = self._df.get(w, 0) + 1
+        i = len(self.docs)
+        for w, c in tf.items():
+            p = self._post.get(w)
+            if p is None:
+                p = self._post[w] = (array('i'), array('H'))
+            p[0].append(i)
+            p[1].append(min(c, 65535))
         self.docs.append(d)
-        self._tf.append(tf)
-        self._len.append(sum(tf.values()))
+        n = sum(tf.values())
+        self._len.append(n)
+        self._tot += n
 
     def add_rule_index(self, path):
         """rules_index.json style: [{'id','text','file','section'}, ...] -> one chunk per rule (rule id kept)"""
@@ -176,25 +183,36 @@ class Knowledge:
         q = tokens(query)
         if not q or not self.docs:
             return []
-        N, avg = len(self.docs), sum(self._len) / len(self._len)
-        idq = [(w, math.log(1 + (N - self._df.get(w, 0) + .5) / (self._df.get(w, 0) + .5))) for w in set(q)]
+        N, avg = len(self.docs), self._tot / max(len(self._len), 1)
+        score = {}
+        for w in set(q):                                       # only the documents that contain a query word
+            p = self._post.get(w)
+            if not p:
+                continue
+            idf = math.log(1 + (N - len(p[0]) + .5) / (len(p[0]) + .5))
+            for i, f in zip(p[0], p[1]):
+                score[i] = score.get(i, 0.0) + idf * f * (k1 + 1) / (f + k1 * (1 - b + b * self._len[i] / avg))
         ql = query.lower()
         scored = []
-        for i, tf in enumerate(self._tf):
-            s = 0.0
-            for w, idf in idq:
-                f = tf.get(w)
-                if f:
-                    s += idf * f * (k1 + 1) / (f + k1 * (1 - b + b * self._len[i] / avg))
+        for i, s in score.items():
             if scope and scope.lower() not in self.docs[i]['source'].lower():
                 continue
-            did = self.docs[i]['id']
-            if did and not did.endswith(tuple('#' + str(j) for j in range(10))) and did.lower() in ql:
-                s += 10                                            # exact rule id asked for
-            if s > 0:
-                scored.append((s, i))
-        scored.sort(reverse=True)
+            scored.append((s, i))
+        for i in self._exact_ids(ql):                          # exact rule id asked for
+            if not scope or scope.lower() in self.docs[i]['source'].lower():
+                scored.append((score.get(i, 0.0) + 10, i))
+                score.pop(i, None)
+        seen = set()
+        scored = [(s, i) for s, i in sorted(scored, reverse=True) if not (i in seen or seen.add(i))]
         return [{**self.docs[i], 'score': round(s, 2)} for s, i in scored[:k]]
+
+    def _exact_ids(self, ql):
+        """documents whose own id (a rule id, not a chunk number) appears in the question"""
+        if getattr(self, '_ids_n', -1) != len(self.docs):
+            self._ids = [(d['id'].lower(), i) for i, d in enumerate(self.docs)
+                         if d['id'] and not re.search(r'#\d+$', d['id'])]
+            self._ids_n = len(self.docs)
+        return [i for did, i in self._ids if did in ql]
 
     def __len__(self):
         return len(self.docs)

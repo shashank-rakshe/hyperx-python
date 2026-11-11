@@ -131,6 +131,25 @@ user lives on that user's PC and is read at run time, so nobody needs their own 
 | CPU / GPU | `--gpu auto` | uses the card when it works, else the CPU |
 | company data for training | private Kaggle dataset | gives that company its own private model; the public model never sees it |
 
+## Other people's code, used whole and in its own language
+
+Nothing is rewritten when it can be used as it is, so no core function can go missing:
+
+- **Complete copies** of open-source repos (permissive licences) live in `shipbrain/vendor/<name>/repo`, unchanged, with
+  their licence and the commit they came from: `awatif` (TypeScript + C++), `diff3d` (Python). Add more with
+  `python -m shipbrain.polyglot add https://github.com/owner/repo` (MIT / BSD / Apache / ISC / CC0 only).
+- **Any function, in its own language** (`code_functions` to find it, `code_call` to run it): Python is imported directly,
+  TypeScript / JavaScript run in Node.js through tsx (`python -m shipbrain.polyglot setup awatif` installs their npm
+  packages once), C / C++ / Rust run as their compiled WebAssembly (Awatif's C++ solver in `frame_solve`). Checked:
+  Awatif's TypeScript solver, its C++ solver and the hand formula give the same cantilever deflection.
+- **Knowledge packs hold every file** (`repopack build --full`): all code and docs of every repo, no size budget,
+  20 packs, ~460,000 searchable pieces. Languages read: Python, C, C++, C#, Rust, TypeScript, JavaScript, Fortran, Julia,
+  MATLAB, CUDA, Java, Kotlin, Go, Lua, Tcl, R, shell, GLSL, SQL, CMake, Qt UI. The search index is cached
+  (`~/.cache/shipbrain`): first start ~40 s, then ~3 s; a search takes 0.01-0.2 s.
+- Licences decide how a repo is used: permissive = copied whole, searched and trained on; GPL / AGPL / LGPL = searched
+  only (with their licence), never trained on or copied into the code; brand material (SolidCraft's UI kit, look,
+  theme, logo under its brand licence) left out.
+
 ## Frames, beams and pipe supports: Awatif's solver inside
 
 `frame_solve` checks 3D frames, beams, columns, portals and pipe supports with the linear solver of

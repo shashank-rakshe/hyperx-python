@@ -90,6 +90,7 @@ shutil.rmtree('/kaggle/working/src', ignore_errors=True)        # a re-run in th
 sh(f'git clone -b {BRANCH} --depth 1 {REPO} src')
 os.chdir('/kaggle/working/src/shipbrain')
 sh('pip -q install unsloth scipy pyNastran ezdxf pdfplumber pypdfium2 pillow wasmtime')
+sh('python -m shipbrain.polyglot setup awatif', required=False)        # Node packages for the copied TypeScript code
 sh('pip -q install cadquery || echo "cadquery not installed: CAD tasks skipped"')
 sh('(apt-get -qq install -y calculix-ccx >/dev/null 2>&1 || sudo apt-get -qq install -y calculix-ccx >/dev/null 2>&1) || echo "CalculiX not installed: surrogate tasks skipped"', required=False)
 report('installing done, making training data')

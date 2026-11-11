@@ -207,6 +207,14 @@ class Tools:
                                                          'supports': {'type': ['object', 'array']}, 'loads': {'type': 'object'},
                                                          'combinations': {'type': 'object'}, 'file': {'type': 'string'},
                                                          'name': {'type': 'string'}, 'divisions': {'type': 'integer'}}})
+        self.register('code_functions', self.code_functions, 'Functions in the open-source repos copied whole into ShipBrain (Python, '
+                      'TypeScript, JavaScript, C++, Rust...): repo (e.g. awatif, diff3d; empty = list the repos), query = words of '
+                      'the file or function name. Shows file, language, signature and whether it can be called.',
+                      {'type': 'object', 'properties': {'repo': {'type': 'string'}, 'query': {'type': 'string'}}})
+        self.register('code_call', self.code_call, 'Run a function of a copied repo IN ITS OWN LANGUAGE (Python directly, TypeScript / '
+                      'JavaScript through Node.js): repo, file, function, args (JSON list; JS Map = {"__map__": [[key, value], ...]}).',
+                      {'type': 'object', 'properties': {'repo': {'type': 'string'}, 'file': {'type': 'string'}, 'function': {'type': 'string'},
+                                                         'args': {'type': ['array', 'object']}}, 'required': ['repo', 'file', 'function']})
         self.register('fatigue_mesh', self.fatigue_mesh, 'Fatigue hot-spot local model: cut a box around the hot spot from a plate assembly, '
                       'mesh it t x t, give the read-out points at 0.5t / 1.5t; with solve=true also run CalculiX and return the '
                       'extrapolated hot-spot stress (1.5 s(0.5t) - 0.5 s(1.5t)).',
@@ -609,6 +617,24 @@ class Tools:
                      'members': dict(list(v['members'].items())[:8])} for k, v in out['combinations'].items()}
         return {'governing': out['governing'], 'combinations': short, 'combination_factors': out['combination_factors'],
                 'solver': out.get('solver'), 'files': [rep], 'plain_english': out['plain_english'] + f' Report: {rep}.'}
+
+    def code_functions(self, repo=None, query=None):
+        from . import polyglot
+        if not repo:
+            rs = polyglot.repos()
+            return {'repos': rs, 'plain_english': 'Copied repos (whole, unchanged): ' + ', '.join(rs) + '.'}
+        fs = polyglot.list_functions(repo, query, limit=60)
+        langs = sorted({f['language'] for f in fs})
+        return {'functions': fs[:40], 'count': len(fs),
+                'plain_english': f"{len(fs)} function(s) in {repo}" + (f" matching '{query}'" if query else '') + f" ({', '.join(langs)})."}
+
+    def code_call(self, repo, file, function, args=None):
+        from . import polyglot
+        t0 = time.time()
+        res = polyglot.call(repo, file, function, args if args is not None else [])
+        txt = json.dumps(res, default=str)
+        return {'result': res if len(txt) < 20000 else txt[:20000] + ' ...(cut)', 'seconds': round(time.time() - t0, 2),
+                'plain_english': f'Ran {function} from {repo}/{file} in its own language ({time.time() - t0:.1f} s).'}
 
     def geometry_clean(self, plates=None, file=None, merge_tol=2.0):
         from . import geoclean

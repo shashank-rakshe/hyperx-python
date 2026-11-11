@@ -30,7 +30,11 @@ MAX_JSON = 30_000
 DEFAULT_BUDGET_KB = 1500             # raw text kept per repo
 
 DOC_EXT = ('.md', '.markdown', '.rst', '.txt', '.html', '.htm')
-CODE_EXT = ('.py', '.rs', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cs', '.cpp', '.cc', '.cxx', '.hpp', '.hh', '.h', '.c')
+CODE_EXT = ('.py', '.rs', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cs', '.cpp', '.cc', '.cxx', '.hpp', '.hh', '.h', '.c',
+            '.f', '.for', '.f77', '.f90', '.f95', '.f03', '.f08', '.jl', '.m', '.cu', '.cuh', '.java', '.kt', '.go', '.lua',
+            '.tcl', '.r', '.sh', '.ps1', '.bat', '.cmd', '.glsl', '.vert', '.frag', '.comp', '.scala', '.swift', '.pyx', '.pxd',
+            '.ipynb', '.cmake', '.ui', '.qml', '.sql')
+FULL_MAX_FILE = 2_000_000            # --full: bigger files kept too (whole solver sources)
 DECK_EXT = ('.rad', '.inp', '.bdf', '.k', '.key', '.fem')    # solver input decks: keyword blocks are good format examples
 SKIP_DIRS = {'.git', 'node_modules', 'vendor', 'vendored', 'third_party', 'third-party', 'thirdparty', 'external', 'extern',
              'deps', 'dist', 'build', 'target', 'out', '__pycache__', '.venv', 'venv', 'env', 'site-packages', '.tox',
@@ -367,8 +371,8 @@ def _holder(c):
     return re.sub(r'\s+', ' ', s).strip(' .,').lower()
 
 
-def _drop_reason(path, data, kind):
-    if NOISE_PATH.search(path):
+def _drop_reason(path, data, kind, full=False):
+    if NOISE_PATH.search(path) and not (full and re.search(r'(CMakeLists\.txt|\.cmake)$', path, re.I)):
         return 'test output / build script'
     if b'\0' in data[:8000]:
         return 'binary'
@@ -661,7 +665,8 @@ def dedupe(chunks, threshold=0.85):
 
 
 # ====================================================================== build
-def build_pack(src, out_dir, cache_dir=None, private_only=False, max_kb=DEFAULT_BUDGET_KB, name=None, log=print, own=False):
+def build_pack(src, out_dir, cache_dir=None, private_only=False, max_kb=DEFAULT_BUDGET_KB, name=None, log=print, own=False,
+               full=False):
     """one repo -> out_dir/<name>.sbpack. Returns a summary dict (with 'refused' and 'reason' when the licence says no)."""
     name = name or repo_name(src)
     tree, url, commit = open_repo(src, cache_dir, log)
@@ -711,12 +716,12 @@ def build_pack(src, out_dir, cache_dir=None, private_only=False, max_kb=DEFAULT_
             if SKIP_NAME.match(parts[-1]) or LOCK_NAME.search(p):
                 drop('licence/lock')
                 continue
-            if size is not None and size > MAX_FILE:
+            if size is not None and size > (FULL_MAX_FILE if full else MAX_FILE):
                 drop('huge')
                 continue
             cands.append((_priority(p, kind), p, kind))
         cands.sort()
-        budget, used, chunks, raw_src = max_kb * 1024, 0, [], 0
+        budget, used, chunks, raw_src = (float('inf') if full else max_kb * 1024), 0, [], 0
         for _, p, kind in cands:
             if used >= budget:
                 drop('over budget')
@@ -726,10 +731,10 @@ def build_pack(src, out_dir, cache_dir=None, private_only=False, max_kb=DEFAULT_
             except Exception:
                 drop('unreadable')
                 continue
-            if len(data) > MAX_FILE:
+            if len(data) > (FULL_MAX_FILE if full else MAX_FILE):
                 drop('huge')
                 continue
-            why = _drop_reason(p, data, kind)
+            why = _drop_reason(p, data, kind, full)
             if why:
                 drop(why)
                 continue
@@ -818,11 +823,39 @@ def load_pack(path, kb, training_only=False):
     return len(p['chunks'])
 
 
-def load_packs(folder, kb, training_only=False):
+def load_packs(folder, kb, training_only=False, cache=True):
+    """load every pack into kb. The finished search index is cached (~/.cache/shipbrain/index_*.pkl), so the next start
+    reads it back in seconds instead of unpacking and indexing all packs again"""
+    import pickle, hashlib
+    files = sorted(fn for fn in os.listdir(folder) if fn.endswith('.sbpack')) if os.path.isdir(folder) else []
+    sig = [(fn, os.path.getsize(os.path.join(folder, fn)), int(os.path.getmtime(os.path.join(folder, fn)))) for fn in files]
+    path = None
+    if cache and files and not kb.docs:
+        key = hashlib.sha1(json.dumps([os.path.abspath(folder), training_only, sig]).encode()).hexdigest()[:16]
+        path = os.path.join(os.path.expanduser('~'), '.cache', 'shipbrain', f'index_{key}.pkl')
+        if os.path.exists(path):
+            try:
+                with open(path, 'rb') as fh:
+                    state = pickle.load(fh)
+                kb.__dict__.update(state['kb'])
+                for a, v in state.get('extra', {}).items():
+                    setattr(kb, a, v)
+                return state['n']
+            except Exception:
+                pass
     n = 0
-    for fn in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
-        if fn.endswith('.sbpack'):
-            n += load_pack(os.path.join(folder, fn), kb, training_only)
+    for fn in files:
+        n += load_pack(os.path.join(folder, fn), kb, training_only)
+    if path:
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            keep = {k: v for k, v in kb.__dict__.items() if k in ('docs', '_post', '_len', '_tot')}
+            extra = {a: getattr(kb, a) for a in ('packs',) if hasattr(kb, a)}
+            with open(path + '.tmp', 'wb') as fh:
+                pickle.dump({'kb': keep, 'extra': extra, 'n': n}, fh, protocol=pickle.HIGHEST_PROTOCOL)
+            os.replace(path + '.tmp', path)
+        except Exception:
+            pass
     return n
 
 
@@ -841,6 +874,7 @@ def main(argv=None):
         s.add_argument('--max-kb', type=int, default=DEFAULT_BUDGET_KB, help='text kept per repo, KB (docs first)')
         s.add_argument('--private-only', action='store_true',
                        help='build refused repos anyway, marked "do not use for training / do not redistribute"')
+        s.add_argument('--full', action='store_true', help='EVERY source and doc file, no size budget (nothing left out)')
         s.add_argument('--own-public', action='store_true',
                        help='YOUR OWN code with names already removed (training/scrub.py): a normal pack, shared and trained on')
         s.add_argument('--own', action='store_true',
@@ -867,7 +901,7 @@ def main(argv=None):
     for r in repos:
         try:
             results.append(build_pack(r, a.out, a.cache, a.private_only or a.own or a.own_public, a.max_kb,
-                                          own='public' if a.own_public else a.own))
+                                          own='public' if a.own_public else a.own, full=a.full))
         except Exception as e:
             print(f'FAILED {r}: {type(e).__name__}: {e}')
             rc = 1

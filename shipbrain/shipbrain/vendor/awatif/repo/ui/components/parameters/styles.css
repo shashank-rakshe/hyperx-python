@@ -1,0 +1,69 @@
+#parameters {
+  width: 210px;
+
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-left: none;
+  border-radius: 0 4px 4px 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  overflow: hidden;
+}
+
+#parameters.hidden {
+  display: none;
+}
+
+#parameters > div {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  gap: 6px;
+
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s ease;
+}
+
+#parameters > div:last-child {
+  border-bottom: none;
+}
+
+#parameters > div:hover {
+  background: var(--bg-tertiary);
+}
+
+#parameters label {
+  margin-right: auto;
+
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+#parameters input[type="number"],
+#parameters input[type="text"] {
+  max-width: 80px;
+  padding: 3px 6px;
+
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 0.8rem;
+  transition: border-color 0.2s ease;
+}
+
+#parameters input[type="number"]:focus,
+#parameters input[type="text"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+#parameters input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}

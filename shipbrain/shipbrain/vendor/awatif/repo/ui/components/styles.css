@@ -1,0 +1,8 @@
+#components {
+  width: fit-content; /* Fix blocking the viewer pointer events */
+}
+
+#components .components-column {
+  display: flex;
+  align-items: flex-end;
+}

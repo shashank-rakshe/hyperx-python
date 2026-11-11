@@ -65,7 +65,7 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 
 ## cadcraft
 
-- Source: https://github.com/storytold/cadcraft (commit a3d9348f63c2)
+- Source: https://github.com/storytold/cadcraft (commit 6f0f1fefa81d)
 - Licence: Apache-2.0 + MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2026 ArtCraft Team and the CADCraft contributors
@@ -80,7 +80,7 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 
 ## diff3d
 
-- Source: local copy of diff3d (upstream release) (commit working-tree)
+- Source: https://github.com/bdlucas1/diff3d (commit working-tree)
 - Licence: MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2024 Bruce D. Lucas
@@ -93,7 +93,7 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 
 ## lapin
 
-- Source: https://github.com/Ciuntuc-BIM-Studio/lapin.git (commit 2b82c50e77a9)
+- Source: https://github.com/Ciuntuc-BIM-Studio/lapin.git (commit 3fcb884f81d5)
 - Licence: MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2026 Ciuntuc BIM Studio S.R.L
@@ -127,7 +127,7 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 
 ## solidcraft
 
-- Source: https://github.com/tangency-labs/solidcraft (commit b57026e1fd77)
+- Source: https://github.com/tangency-labs/solidcraft (code only: brand material - ui-kit, look, theme, branding - left out per LICENSE-BRAND) (commit working-tree)
 - Licence: Apache-2.0 + MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2026 SolidCraft contributors
@@ -135,7 +135,7 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 
 ## text-to-cad
 
-- Source: https://github.com/earthtojake/text-to-cad (commit 6426f0fb03d2)
+- Source: https://github.com/earthtojake/text-to-cad (commit ed3713e159c3)
 - Licence: MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2026 Thompson Labs LLC

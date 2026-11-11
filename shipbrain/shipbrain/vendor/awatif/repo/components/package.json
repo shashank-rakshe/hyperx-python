@@ -1,0 +1,30 @@
+{
+  "name": "@awatif/components",
+  "description": "Awatif Components",
+  "version": "3.4.0",
+  "author": "Mohamed Adil",
+  "license": "MIT",
+  "type": "module",
+  "module": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "test": "vitest",
+    "build": "node -e \"console.log('No package build for @awatif/components')\"",
+    "build:wasm": "node -e \"console.log('build:wasm is owned by the awatif workspace')\"",
+    "deploy": "node -e \"console.log('No deploy for @awatif/components')\""
+  },
+  "dependencies": {
+    "vanjs-core": "^1.6.0",
+    "lit-html": "^3.3.2",
+    "mathjs": "^15.2.0",
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "vite": "^8.0.8",
+    "vitest": "^4.1.4",
+    "@types/three": "^0.183.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

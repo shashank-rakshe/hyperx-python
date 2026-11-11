@@ -1,0 +1,56 @@
+import { multiply, transpose } from "mathjs";
+import type { Mesh } from "../../../data-model";
+import { getTransformationMatrix } from "./getTransformationMatrix";
+import { getLocalStiffnessMatrix } from "./getLocalStiffnessMatrix";
+
+export function getGlobalStiffnessMatrix(
+  nodes: Mesh["nodes"]["val"],
+  elements: Mesh["elements"]["val"],
+  elementsProps: Mesh["elementsProps"]["val"] | undefined,
+  dof: number,
+  releases?: Mesh["releases"]["val"],
+): number[][] {
+  let stiffnessMatrix = Array(dof)
+    .fill(0)
+    .map(() => Array(dof).fill(0));
+
+  if (!nodes || !elements || !elementsProps) return stiffnessMatrix;
+
+  elements.forEach((e, i) => {
+    const elmNodes = e.map((e) => nodes[e]);
+    const kLocal = getLocalStiffnessMatrix(
+      elmNodes,
+      elementsProps,
+      i,
+      releases,
+    );
+    const T = getTransformationMatrix(elmNodes);
+
+    const kGlobal = multiply(transpose(T), multiply(kLocal, T));
+    stiffnessMatrix = assemble(stiffnessMatrix, kGlobal, e);
+  });
+
+  return stiffnessMatrix;
+}
+
+// Helpers
+function assemble(
+  stiffnessMatrix: number[][],
+  kGlobal: number[][],
+  element: number[],
+): number[][] {
+  const offset0 = 6 * element[0];
+  const offset1 = 6 * element[1];
+
+  for (let i = 0; i < 6; i++) {
+    for (let j = 0; j < 6; j++) {
+      stiffnessMatrix[offset0 + i][offset0 + j] += kGlobal[i][j];
+      stiffnessMatrix[offset1 + i][offset0 + j] += kGlobal[i + 6][j];
+
+      stiffnessMatrix[offset0 + i][offset1 + j] += kGlobal[i][j + 6];
+      stiffnessMatrix[offset1 + i][offset1 + j] += kGlobal[i + 6][j + 6];
+    }
+  }
+
+  return stiffnessMatrix;
+}

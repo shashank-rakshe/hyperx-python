@@ -743,6 +743,41 @@ def t_frame(r, tools):
             result_msg('frame_solve', out), {'role': 'assistant', 'content': out['plain_english']}]
 
 
+def t_code(r, tools):
+    """find and run a function of a copied repo in its own language (code_functions / code_call)"""
+    from shipbrain import polyglot
+    if r.random() < 0.5:
+        repo, q, query = r.choice([('awatif', 'Which functions does Awatif have for the frame solver?', 'solver|Stiffness|Transformation'),
+                                   ('awatif', 'What load functions are in awatif?', 'load'),
+                                   ('diff3d', 'What can diff3d do? List its functions', None),
+                                   ('awatif', 'Show me the C++ functions of the Awatif solver', 'lSolver')])
+        args = {'repo': repo, **({'query': query} if query else {})}
+        out = tools.call('code_functions', args)
+        if 'error' in out:
+            return None
+        names = ', '.join(sorted({f['function'] for f in out['functions']})[:12])
+        ans = out['plain_english'] + f' They are: {names}. I can run the Python / TypeScript ones directly with code_call.'
+        return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('code_functions', args)},
+                result_msg('code_functions', out), {'role': 'assistant', 'content': ans}]
+    if not polyglot.node_ok():
+        return None
+    x2, y2, z2 = float(r.choice([3, 4, 6, 0])), float(r.choice([4, 0, 2])), float(r.choice([0, 0, 5]))
+    if x2 == y2 == 0:
+        x2 = 1.0
+    q = r.choice([f"Use Awatif's own transformation matrix function for a member from (0,0,0) to ({x2:g},{y2:g},{z2:g})",
+                  f"Run awatif getTransformationMatrix for nodes [0,0,0] and [{x2:g},{y2:g},{z2:g}]: what are the local axes?"])
+    args = {'repo': 'awatif', 'file': 'components/analysis/l-solver/helpers/getTransformationMatrix.ts', 'function': 'getTransformationMatrix',
+            'args': [[[0, 0, 0], [x2, y2, z2]]]}
+    out = tools.call('code_call', args)
+    if 'error' in out:
+        return None
+    m = out['result']
+    ans = (out['plain_english'] + ' Local axes (rows of the 3 x 3 block): x = ' + str([round(v, 4) for v in m[0][:3]]) + ', y = '
+           + str([round(v, 4) for v in m[1][:3]]) + ', z = ' + str([round(v, 4) for v in m[2][:3]]) + '.')
+    return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('code_call', args)},
+            result_msg('code_call', out), {'role': 'assistant', 'content': ans}]
+
+
 _SUR = {}                                     # built surrogates: name -> (args, result), built once per dataset run
 _SUR_SETS = [('deck_plate', {'L': [1500, 3000], 'B': [600, 900], 't': [8, 16], 'p': [0.02, 0.08]}),
              ('tank_wall', {'L': [800, 2000], 'B': [500, 800], 't': [10, 20], 'p': [0.05, 0.15]}),
@@ -894,7 +929,7 @@ TASKS = [('mesh', 30, lambda r, T: t_mesh(r, T)), ('mesh_fix', 6, lambda r, T: t
          ('mesh_assume', 6, lambda r, T: t_mesh(r, T, 'assume')), ('plate', 12, t_plate), ('stiff', 12, t_stiff),
          ('buckle', 5, t_buckle), ('section', 8, t_section), ('calc', 4, t_calc), ('chat', 3, t_chat), ('plates', 4, t_plates), ('program', 12, t_program), ('cad_bank', 14, t_cad_bank),
          ('fileinfo', 4, t_fileinfo), ('convert', 4, t_convert), ('edit', 5, t_edit), ('clean', 3, t_clean), ('fe_repair', 3, t_fe_repair),
-         ('sur_build', 1, t_sur_build), ('units', 5, t_units), ('profile', 2, t_profile), ('add_skill', 2, t_add_skill), ('frame', 5, t_frame), ('sur_predict', 4, t_sur_predict), ('insight', 3, t_insight)]
+         ('sur_build', 1, t_sur_build), ('units', 5, t_units), ('profile', 2, t_profile), ('add_skill', 2, t_add_skill), ('frame', 5, t_frame), ('code', 2, t_code), ('sur_predict', 4, t_sur_predict), ('insight', 3, t_insight)]
 
 
 def main(argv=None):
