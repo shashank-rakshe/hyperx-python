@@ -279,6 +279,20 @@ ShipBrain builds its own MCP server once (`python -c "from shipbrain import dwsi
 - The rest of run-llama (LlamaIndex) is mostly demos of paid cloud services; their code packs were not added.
   LiteParse and ParseBench code are trained knowledge packs.
 
+## Bolted joints and vibration
+
+- `bolt` tool (`shipbrain/bolts.py`): metric ISO coarse threads, ISO 898-1 / ISO 3506 property classes, VDI 2230
+  Part 1 formulas - stress area (matches the ISO table exactly), assembly preload at 90 % yield utilisation,
+  tightening torque, preload scatter of the tightening method, and with an axial working load: bolt stress, fatigue
+  (alternating stress vs endurance limit) and the clamping force left. Training samples in make_dataset (`t_bolt`).
+  The Vibrationdata blog post on bolt calculations (Nov 2026) could not be read from the build session (its site is
+  blocked) and its code is not on GitHub yet: send the code or the download and it is added as written.
+- **Vibrationdata for Python** (Tom Irvine, MIT; [nkatsinas/vibrationdata_python](https://github.com/nkatsinas/vibrationdata_python))
+  copied whole: 116 modules - shock response spectrum, PSD and spectral moments, rainflow, SDOF / modal response,
+  plates and honeycomb panels, sine sweeps ... Its calculation functions run through `code_functions` / `code_call`
+  as written (e.g. a flat PSD 0.04 G2/Hz, 20-2,000 Hz -> 8.9 GRMS, exact); a desktop toolkit it imports for its
+  windows is given an empty stand-in where none is installed. Trained knowledge pack.
+
 ## LLM serving simulation (Simthesizer)
 
 [Simthesizer](https://github.com/casys-kaist/simthesizer) (MIT, Rust, HPCA 2027) is copied whole and run as written:

@@ -14,7 +14,8 @@ ANALYSES = {   # analysis type -> words that point to it
     'modal': r'frequenc|natural|vibrat|resonan|eigen|\bmodes?\b|propeller excitation|hz\b',
     'buckling': r'buckl|stability|critical (load|stress)|elastic buckling',
     'ultimate': r'plastic|ultimate|nonlinear|non-linear|collapse|large deformation|residual strength',
-    'contact': r'contact|friction|bolt preload|gap|clearance',
+    'contact': r'contact|friction|gap|clearance',
+    'bolt': r'\bbolts?\b|preload|tightening torque|fastener|screw joint|bolted joint|vdi 2230',
     'impact': r'impact|crash|collision|grounding|dropped object|drop test|explicit|slamming|blast',
     'fatigue': r'fatigue|hot.?spot|s-n|weld toe|cycles to failure|damage ratio',
     'fracture': r'crack|fracture|j-integral|stress intensity',
@@ -28,6 +29,8 @@ ANALYSES = {   # analysis type -> words that point to it
 
 ENGINES = [
     # name, analyses, support, how ShipBrain uses it, detect (executables), knowledge pack, note
+    ('ShipBrain bolt check (VDI 2230)', {'bolt'}, 'runs', 'bolt(d, cls, mu_G, F_A, Phi)', [], None,
+     'stress area, preload, tightening torque, scatter, bolt stress, fatigue and clamp force (VDI 2230 / ISO 898-1)'),
     ('ShipBrain hand checks', {'static', 'buckling'}, 'runs', 'plate_check / stiffener_check / plate_buckling / section_props',
      [], None, 'Roark / beam theory / Johnson-Ostenfeld: instant first answers and a cross-check for FE'),
     ('CalculiX', {'static': 'runs', 'modal': 'runs', 'buckling': 'runs', 'heat': 'knowledge', 'ultimate': 'knowledge', 'contact': 'knowledge'}, 'runs', 'mesh tool -> analysis_run(file, analysis)',

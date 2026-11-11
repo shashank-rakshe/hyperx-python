@@ -1875,3 +1875,23 @@ def test_liteparse_reading_and_parsebench_samples(tmp_path):
     pb.main(['--data', str(tmp_path / 'pb'), '--out', str(tmp_path / 'o' / 'x.jsonl'), '--img-dir', str(tmp_path / 'o' / 'img')])
     rows = [json.loads(l) for l in open(tmp_path / 'o' / 'x.jsonl')]
     assert len(rows) == 1 and rows[0]['messages'][1]['content'].startswith('| a | b |') and rows[0]['images']
+
+
+def test_bolts_and_vibrationdata(tmp_path):
+    """ISO 898-1 stress areas exact; VDI 2230 preload / torque grow with size and class; Vibrationdata's own spectral
+    moments give the hand value grms = sqrt(PSD * bandwidth)"""
+    import math
+    from shipbrain import bolts, agent, engines
+    for d, As in ((8, 36.6), (10, 58.0), (12, 84.3), (16, 157), (20, 245), (24, 353)):
+        assert abs(bolts.thread(d)['As'] - As) / As < 0.003
+    a, b = bolts.joint(12, '8.8'), bolts.joint(12, '10.9')
+    assert b['F_M_zul_kN'] > a['F_M_zul_kN'] and b['M_A_Nm'] > a['M_A_Nm']
+    assert bolts.joint(12, '8.8', mu_G=0.16)['M_A_Nm'] > a['M_A_Nm'] > bolts.joint(12, '8.8', mu_G=0.08)['M_A_Nm']
+    j = agent.Tools(str(tmp_path)).call('bolt', {'d': 12, 'cls': '8.8', 'F_A': 10000, 'Phi': 0.15, 'F_Kerf': 5000})
+    assert j['static_ok'] and j['fatigue_ok'] and j['clamp_ok'] and 'VDI 2230' in j['plain_english']
+    assert 'bolt' in engines.classify('tightening torque for an M16 bolt')
+    T = agent.Tools(str(tmp_path))
+    f = [20.0 + i for i in range(1981)]
+    r = T.call('code_call', {'repo': 'vibrationdata', 'file': 'src/vibrationdata/vb_utilities.py',
+                             'function': 'spectral_moments_constant_df', 'args': [f, [0.04] * len(f), 1.0]})
+    assert abs(math.sqrt(r['result'][0]) - math.sqrt(0.04 * 1981)) < 1e-6

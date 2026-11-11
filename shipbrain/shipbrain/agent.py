@@ -397,6 +397,14 @@ class Tools:
                       'reads those too (Tesseract). Saves <name>.md for knowledge_search / the chat.',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'ocr': {'type': 'boolean'},
                                                          'pages': {'type': 'string'}}, 'required': ['file']})
+        self.register('bolt', self.bolt, 'Bolted joint (metric ISO thread, VDI 2230 / ISO 898-1): size d (mm), property class (4.6 5.6 8.8 '
+                      '10.9 12.9 A2-70 A4-80), friction mu_G / mu_K -> stress area, assembly preload, tightening torque, preload '
+                      'scatter of the tightening method; with an axial working load F_A (N) and load factor Phi: bolt stress, '
+                      'fatigue (alternating stress vs endurance limit) and the clamping force left.',
+                      {'type': 'object', 'properties': {'d': {'type': 'number'}, 'cls': {'type': 'string'}, 'mu_G': {'type': 'number'},
+                                                         'mu_K': {'type': 'number'}, 'pitch': {'type': 'number'}, 'method': {'type': 'string'},
+                                                         'F_A': {'type': 'number'}, 'Phi': {'type': 'number'}, 'F_Kerf': {'type': 'number'}},
+                       'required': ['d']})
         self.register('drawing_takeoff', self.drawing_takeoff, 'Construction drawings (electrical / architectural / P&ID) read into '
                       'a CIR file (.cir / .json): quantity takeoff - counts per item with MasterFormat / IFC codes, items to '
                       'review, connections (conductors, home runs, feeders), lengths / areas when a scale is known. '
@@ -1115,6 +1123,11 @@ class Tools:
     def drawing_takeoff(self, file, min_confidence=0.0):
         from . import construct
         return construct.takeoff(self._path(file), min_confidence)
+
+    def bolt(self, d, cls='8.8', mu_G=0.12, mu_K=None, pitch=None, method='torque wrench', F_A=None, Phi=0.2, F_Kerf=None):
+        from . import bolts
+        return bolts.joint(float(d), str(cls), float(mu_G), float(mu_K if mu_K is not None else mu_G), pitch=pitch, method=method,
+                           F_A=F_A, Phi=float(Phi or 0.2), F_Kerf=F_Kerf)
 
     def parse_document(self, file, ocr=False, pages=None):
         try:

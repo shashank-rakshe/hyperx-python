@@ -1064,6 +1064,35 @@ def t_ocx_rw(r, tools):
             result_msg(tool, out), {'role': 'assistant', 'content': out['plain_english']}]
 
 
+def t_bolt(r, tools):
+    """bolted joint questions -> bolt tool (VDI 2230 / ISO 898-1) -> natural-language answer"""
+    d = r.choice([6, 8, 10, 12, 16, 20, 24, 30])
+    cls = r.choice(['8.8', '8.8', '10.9', '12.9', 'A2-70', '5.6'])
+    mu = r.choice([0.08, 0.10, 0.12, 0.12, 0.14, 0.16])
+    args = {'d': d, 'cls': cls, 'mu_G': mu}
+    q = r.choice([f'Tightening torque for an M{d} {cls} bolt, friction {mu}?', f'What preload does an M{d} class {cls} bolt give (mu {mu})?',
+                  f'M{d} {cls}: stress area, preload and torque?'])
+    if r.random() < 0.5:
+        FA = round(r.uniform(0.05, 0.4) * 640 * bolts_as(d)) // 100 * 100
+        phi = r.choice([0.1, 0.15, 0.2, 0.25])
+        args.update(F_A=FA, Phi=phi)
+        q = r.choice([f'Check an M{d} {cls} bolt (mu {mu}) under an axial load of {FA / 1000:g} kN, load factor {phi}',
+                      f'Is an M{d} {cls} bolt OK for {FA:g} N working load? Phi = {phi}, friction {mu}'])
+    if r.random() < 0.3:
+        args['method'] = r.choice(['impact', 'yield', 'hydraulic tensioner'])
+        q += f", tightened by {args['method']}"
+    out = tools.call('bolt', args)
+    if 'error' in out:
+        return None
+    return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('bolt', args)}, result_msg('bolt', out),
+            {'role': 'assistant', 'content': out['plain_english']}]
+
+
+def bolts_as(d):
+    from shipbrain import bolts
+    return bolts.thread(d)['As']
+
+
 _INSTALL_CASES = [   # (user question, tool, args, the real error text that tool gives when the program is missing, key)
     ('Compare {a}.dwg with {b}.dwg and list the changes', 'compare_drawings', {'a': '{a}.dwg', 'b': '{b}.dwg'},
      'RuntimeError: DWG needs the free ODA File Converter (free download: https://www.opendesign.com/guestfiles/oda_file_converter ).', 'oda'),
@@ -1126,7 +1155,7 @@ TASKS = [('mesh', 30, lambda r, T: t_mesh(r, T)), ('mesh_fix', 6, lambda r, T: t
          ('fileinfo', 4, t_fileinfo), ('convert', 4, t_convert), ('edit', 5, t_edit), ('clean', 3, t_clean), ('fe_repair', 3, t_fe_repair),
          ('sur_build', 1, t_sur_build), ('units', 5, t_units), ('profile', 2, t_profile), ('add_skill', 2, t_add_skill), ('frame', 5, t_frame), ('code', 2, t_code), ('pid', 3, t_pid), ('sur_predict', 4, t_sur_predict), ('insight', 3, t_insight),
          ('install', 4, t_install), ('setup', 1, t_setup),
-         ('ocx_syntax', 6, t_ocx_syntax), ('ocx_find', 3, t_ocx_find), ('ocx_rw', 3, t_ocx_rw)]
+         ('ocx_syntax', 6, t_ocx_syntax), ('bolt', 4, t_bolt), ('ocx_find', 3, t_ocx_find), ('ocx_rw', 3, t_ocx_rw)]
 
 
 def main(argv=None):

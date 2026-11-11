@@ -127,6 +127,37 @@ def add(url, name=None, skip_media=True, separate_program=False, exclude=()):
     return {'name': name, 'files': len([f for f in files if f]) - skipped, 'media_left_out': skipped, 'licence': spdx, 'commit': commit}
 
 
+def _gui_stand_ins():
+    """copied engineering code often imports a desktop toolkit (tkinter) at the top of a file whose calculation
+    functions never open a window: give empty stand-ins when the toolkit is missing (servers, Kaggle), and draw plots
+    off-screen"""
+    import types
+    try:
+        import tkinter  # noqa: F401
+    except ImportError:
+        class _Any:
+            def __init__(self, *a, **k):
+                pass
+
+            def __call__(self, *a, **k):
+                return _Any()
+
+            def __getattr__(self, n):
+                return _Any()
+        for name in ('tkinter', 'tkinter.filedialog', 'tkinter.messagebox', 'tkinter.ttk', 'tkinter.font', 'Tkinter',
+                     'tkFileDialog', 'tkMessageBox', 'ttk'):
+            if name not in sys.modules:
+                m = types.ModuleType(name)
+                m.__getattr__ = lambda n, _A=_Any: _A()
+                sys.modules[name] = m
+    try:
+        import matplotlib
+        if not os.environ.get('DISPLAY') and os.name != 'nt':
+            matplotlib.use('Agg')
+    except Exception:
+        pass
+
+
 # ------------------------------------------------------------------ what is in there
 _PAT = {
     'python': re.compile(r'^\s*(?:async\s+)?def\s+([A-Za-z_]\w*)\s*\(([^)]*)\)', re.M),
@@ -212,6 +243,7 @@ def call(name, file, function, args=None, timeout=300):
     lang = LANG.get(os.path.splitext(path)[1].lower())
     args = [] if args is None else args
     if lang == 'python':
+        _gui_stand_ins()
         sys.path.insert(0, os.path.dirname(path))
         sys.path.insert(0, root)
         spec = importlib.util.spec_from_file_location(f'vendor_{name}_' + re.sub(r'\W', '_', file), path)
