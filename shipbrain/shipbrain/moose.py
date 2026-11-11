@@ -22,7 +22,7 @@ IMAGE = 'idaholab/moose:latest'
 
 # ====================================================================== the program
 def exe():
-    for c in (os.environ.get('MOOSE_EXE'), shutil.which('moose-opt'), shutil.which('moose-opt.exe')):
+    for c in (os.environ.get('MOOSE_EXE'), shutil.which('moose-opt'), shutil.which('moose-opt.exe'), '/opt/moose/bin/moose-opt'):
         if c and os.path.isfile(c):
             return [c]
     d = shutil.which('docker')

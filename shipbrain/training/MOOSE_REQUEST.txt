@@ -1,1 +1,1 @@
-MOOSE plate checks requested 2026-11-11
+MOOSE plate checks requested 2026-11-11 (2: MOOSE environment loaded)

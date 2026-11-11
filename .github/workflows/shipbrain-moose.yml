@@ -21,8 +21,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Solve the plate cases with MOOSE
         working-directory: shipbrain
+        shell: bash
         run: |
-          which moose-opt && moose-opt --version | head -3 || true
+          set -o pipefail
+          # the image's environment (compilers, MPI, PETSc, the installed MOOSE) - see MOOSE's docker.md
+          if [ -f /environment ]; then . /environment; fi
+          export PATH=/opt/moose/bin:$PATH
+          echo "moose-opt: $(command -v moose-opt || ls /opt/moose/bin 2>/dev/null | head)"
           python3 --version
           python3 training/moose_tasks.py --run --n 40 --results /tmp/results.json 2>&1 | tee /tmp/moose_log.txt
       - uses: actions/upload-artifact@v4
@@ -34,7 +39,6 @@ jobs:
             /tmp/moose_log.txt
   publish:
     needs: solve
-    if: always()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

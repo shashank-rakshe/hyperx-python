@@ -68,6 +68,8 @@ def do_run(n, seed, out):
     json.dump(res, open(out, 'w'), indent=1)
     ok = [x for x in res if 'difference_percent' in x]
     print(f'{len(ok)}/{len(res)} solved; differences (%):', [x['difference_percent'] for x in ok])
+    if not ok:
+        sys.exit('no case solved - see the errors above')
 
 
 ASK = ['Deflection of a {t:g} mm plate, stiffeners at {b:g} mm, frames at {a:g} mm, under {q:g} MPa ({edge})?',
