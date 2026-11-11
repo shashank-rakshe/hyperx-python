@@ -1,0 +1,208 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Jae Hoon Seo, SMI Lab, Inha University
+name: static Windows executables
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Optional existing release tag to receive the validated assets
+        required: false
+        type: string
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  windows-static:
+    timeout-minutes: 360
+    runs-on: windows-2022
+    steps:
+      - name: Check out CableDyn
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.release_tag || github.ref }}
+          persist-credentials: false
+
+      - name: Check out the pinned public OpenFAST base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: OpenFAST/openfast
+          ref: 2895884d2be01862173c88d70f86b358d2f1a50a
+          path: openfast
+          # the history and tags: openfast.exe names its base by `git describe --tags`
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check out the pinned OpenFAST regression model
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: OpenFAST/r-test
+          ref: dd5feaaaa500ba7283140107806300d551cff0a7
+          path: external-r-test
+          persist-credentials: false
+
+      - name: Install Intel Fortran Essentials
+        shell: powershell
+        env:
+          URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/33676fcf-14a3-4e96-a9b9-72976b1145d9/intel-fortran-essentials-2025.3.1.25_offline.exe
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'intel-fortran-essentials-2025.3.1.25.exe'
+          curl.exe --fail --location --output $installer --url $env:URL --retry 5 --retry-delay 5
+          if ($LASTEXITCODE -ne 0) { throw "Intel Fortran download failed with exit $LASTEXITCODE" }
+          if ((Get-Item -LiteralPath $installer).Length -ne 880951016) {
+            throw 'Intel Fortran installer length differs from the pinned release payload'
+          }
+          $signature = Get-AuthenticodeSignature -LiteralPath $installer
+          if ($signature.Status -ne 'Valid' -or
+              $signature.SignerCertificate.Subject -notmatch '(^|, )O=Intel Corporation(,|$)') {
+            throw "Intel Fortran installer signature is not a valid Intel Corporation signature: $($signature.Status)"
+          }
+          $arguments = @(
+            '-s', '-a', '--silent', '--eula', 'accept',
+            '-p=NEED_VS2017_INTEGRATION=0',
+            '-p=NEED_VS2019_INTEGRATION=0',
+            '-p=NEED_VS2022_INTEGRATION=1',
+            '--log-dir=.'
+          )
+          $process = Start-Process -FilePath $installer -ArgumentList $arguments -Wait -PassThru
+          if ($process.ExitCode -notin @(0, 3010)) {
+            throw "Intel Fortran installer failed with exit $($process.ExitCode)"
+          }
+
+      - name: Patch, build, audit, and smoke-test the single-file executables
+        shell: powershell
+        run: |
+          .\release\build_static_windows.ps1 `
+            -OpenFASTRoot "$PWD\openfast" `
+            -RTestRoot "$PWD\external-r-test" `
+            -OutputDir "$PWD\dist" `
+            -Jobs 4
+
+      - name: Upload validated binaries as a workflow artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: CableDyn-windows-x64-static
+          path: |
+            dist/CableDyn_driver.exe
+            dist/openfast.exe
+          if-no-files-found: error
+
+  python-package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out CableDyn
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.release_tag || github.ref }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Install packaging and test dependencies
+        run: python -m pip install --upgrade pip build twine "./python[dev]"
+
+      - name: Check release metadata
+        run: python release/check_release_metadata.py
+
+      - name: Test the platform-independent Python package
+        # The in-process API tests require the separately built shared library;
+        # the Fortran workflow runs them through CTest on Linux and Windows.
+        run: python -m pytest python/tests -q --ignore=python/tests/test_cabledyn.py
+
+      - name: Build and inspect the distributions
+        run: |
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          python -m build python --outdir dist
+          python -m twine check dist/*
+
+      - name: Upload Python distributions as a workflow artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: CableDyn-python-distributions
+          path: dist/*
+          if-no-files-found: error
+
+  release-assets:
+    needs: [windows-static, python-package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download validated binaries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: CableDyn-windows-x64-static
+          path: dist
+
+      - name: Download validated Python distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: CableDyn-python-distributions
+          path: dist
+
+      - name: Build the unified checksum manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find dist -maxdepth 1 -type f | wc -l)" -eq 4
+          cd dist
+          sha256sum CableDyn_driver.exe openfast.exe cabledyn-*.whl cabledyn-*.tar.gz > SHA256SUMS.txt
+          sha256sum --check SHA256SUMS.txt
+
+      - name: Upload the complete release bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: CableDyn-release-assets
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Publish or verify the GitHub release assets
+        if: github.event_name == 'release' || inputs.release_tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          mapfile -t local_files < <(
+            find dist -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort
+          )
+          test "${#local_files[@]}" -eq 5
+          mapfile -t remote_files < <(
+            gh release view "$RELEASE_TAG" --repo "$GH_REPO" \
+              --json assets --jq '.assets[].name' | LC_ALL=C sort
+          )
+          if [[ "${#remote_files[@]}" -eq 0 ]]; then
+            gh release upload "$RELEASE_TAG" \
+              "${local_files[@]/#/dist/}" --repo "$GH_REPO"
+            exit 0
+          fi
+          diff -u \
+            <(printf '%s\n' "${local_files[@]}") \
+            <(printf '%s\n' "${remote_files[@]}")
+          remote_dir="$(mktemp -d)"
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --dir "$remote_dir"
+          (
+            cd "$remote_dir"
+            mapfile -t retained_payloads < <(
+              find . -maxdepth 1 -type f ! -name SHA256SUMS.txt \
+                -printf '%f\n' | LC_ALL=C sort
+            )
+            mapfile -t manifest_payloads < <(
+              sed -nE 's/^[[:xdigit:]]{64}  (.+)$/\1/p' SHA256SUMS.txt | LC_ALL=C sort
+            )
+            test "${#retained_payloads[@]}" -eq 4
+            test "${#manifest_payloads[@]}" -eq 4
+            diff -u \
+              <(printf '%s\n' "${retained_payloads[@]}") \
+              <(printf '%s\n' "${manifest_payloads[@]}")
+            sha256sum --strict --check SHA256SUMS.txt
+          )
+          echo "Existing preflight assets and their checksum manifest are intact; nothing replaced."

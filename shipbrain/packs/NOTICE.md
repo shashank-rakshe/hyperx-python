@@ -9,6 +9,19 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - https://github.com/manycore-research/CAD2Program contributors
 
+## CableDyn
+
+- Source: https://github.com/SMI-Lab-Inha/CableDyn (commit 789cb6db5bf3)
+- Licence: Apache-2.0
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2026 Jae Hoon Seo, SMI Lab, Inha University
+- Copyright (C) 2012-2024 National Renewable Energy Laboratory
+- Copyright (C) 2017 Bonnie Jonkman, independent contributor
+- Copyright (C) 2024 Envision Energy USA, National Renewable Energy Laboratory
+- Copyright (c) 1992-2023 The University of Tennessee and The University
+- Copyright (c) 2000-2023 The University of California Berkeley. All
+- Copyright (c) 2006-2023 The University of Colorado Denver.  All rights
+
 ## ConstructDrawingAI
 
 - Source: https://github.com/A-SHOJAEI/ConstructDrawingAI.git (commit 0b2e6c0acedf)

@@ -1,0 +1,49 @@
+--------------------- CableDyn Input File ------------------------------------
+V-S1m three IEA-15MW VolturnUS-S chains from three turbines to one shared anchor
+-- Turbines at the vertices of an equilateral triangle of side 837.6*sqrt(3) m; the shared
+-- anchor sits at the centroid (837.6 m from every turbine), 200 m water; each line is the
+-- single-turbine VolturnUS line of examples/iea15mw_volturnus_mooring.dat.
+---------------------- LINE TYPES ------------------------------------
+TypeName  Diam  MassDenInAir  EA  BA/-zeta  EI  Cd_n  Cd_t  Ca_n  Ca_t
+(-)  (m)  (kg/m)  (N)  (N-s/-)  (N-m^2)  (-)  (-)  (-)  (-)
+chain  0.333  685  3.27000000e+09  -1  0  1.37  0.64  1  0
+--------------------- TURBINES ------------------------------------------
+J  X0  Y0  Z0  PtfmSurge  PtfmSway  PtfmHeave  PtfmRoll  PtfmPitch  PtfmYaw
+(-)  (m)  (m)  (m)  (m)  (m)  (m)  (deg)  (deg)  (deg)
+1  0.000000  0.000000  0.0  10 0 0 0 0 0
+2  1450.765756  0.000000  0.0  0 0 0 0 0 0
+3  725.382878  1256.400000  0.0  0 0 0 0 0 0
+---------------------- POINTS ----------------------------------------
+ID  Attachment  X  Y  Z  Mass  Volume  CdA  Ca
+(#)  (-)  (m)  (m)  (m)  (kg)  (m^3)  (m^2)  (-)
+1  Turbine1  50.229473  29  -14  0  0  0  0
+2  Turbine2  -50.229473  29  -14  0  0  0  0
+3  Turbine3  0  -58  -14  0  0  0  0
+4  Fixed  725.382878  418.8  -200  0  0  0  0
+---------------------- LINES -----------------------------------------
+ID  LineType  AttachA  AttachB  UnstrLen  NumSegs  LineOutputs
+(#)  (name)  (#)  (#)  (m)  (-)  (-)
+1  chain  1  4  850  200  -
+2  chain  2  4  850  200  -
+3  chain  3  4  850  200  -
+--------------------- OPTIONS ------------------------------------------
+9.80665  g
+1025  rhoW
+200  WtrDpth
+3.00000000e+06  kBot
+10000  cBot
+none  current
+none  waves
+none  frictionMu
+--------------------- OUTPUTS ------------------------------------------
+"FairTen1"
+"FairTen2"
+"FairTen3"
+"AnchTen1"
+"AnchTen2"
+"AnchTen3"
+"Point4Fx"
+"Point4Fy"
+"Point4Fz"
+"Point4FH"
+--------------------- need this line -----------------------------------

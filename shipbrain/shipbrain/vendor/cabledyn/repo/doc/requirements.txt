@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Jae Hoon Seo, SMI Lab, Inha University
+# Documentation build dependencies (Sphinx + the official Read the Docs theme).
+# Build locally:  pip install -r doc/requirements.txt && make -C doc html
+# Exact pins: a documentation build is reproducible only with a fixed toolchain.
+# myst-parser 5.1 and sphinx-rtd-theme 3.1 both accept Sphinx < 10 and docutils < 0.23.
+sphinx==9.0.4
+docutils==0.22.4
+myst-parser==5.1.0
+sphinx-rtd-theme==3.1.0
+sphinx-copybutton==0.5.2
+# Autodoc imports the public package, whose output/deck APIs use NumPy.
+numpy==2.4.3

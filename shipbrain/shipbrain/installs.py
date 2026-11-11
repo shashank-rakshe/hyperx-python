@@ -144,6 +144,15 @@ SOFTWARE = {
            'match': r'NX is not (installed|found)'},
     'pywin32': _pip('pywin32', 'for the NX File Renamer (it asks Windows which NX files are assemblies)', mod='win32com',
                     match=r'needs pywin32'),
+    'cabledyn': {'name': 'CableDyn (free mooring-line and power-cable solver, Apache-2.0)',
+                 'why': 'to solve mooring lines and dynamic cables (catenary, tensions, touchdown, waves, current)',
+                 'link': 'https://github.com/SMI-Lab-Inha/CableDyn/releases/latest',
+                 'steps': {'all': 'pip install "cabledyn[post]"   (the wheel carries the solver; Windows: or download '
+                                  'CableDyn_driver.exe from the link)'},
+                 'then': 'or build it from ShipBrain\'s copy: python -c "from shipbrain import cabledyn; cabledyn.build()" '
+                         '(needs gfortran, LAPACK, CMake)',
+                 'check': lambda: __import__('shipbrain.cabledyn', fromlist=['x']).driver() is not None,
+                 'match': r'CableDyn is not installed'},
     'rhino3dm': _pip('rhino3dm', 'to read Rhino .3dm files exactly (McNeel\'s free library): solids, surfaces, meshes, '
                      'curves, layers and blocks', match=r'need rhino3dm'),
     'cadmpeg': {'name': 'cadmpeg (free, Apache-2.0)', 'why': 'to open native CAD files (SolidWorks, CATIA, Inventor, Fusion 360, '

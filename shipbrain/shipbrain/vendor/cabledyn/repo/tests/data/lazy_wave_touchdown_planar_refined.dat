@@ -1,0 +1,41 @@
+--------------------- CableDyn Input File ------------------------------------
+Lazy-wave power cable free in torsion, mesh resolving the bending length
+-- lazy_wave_touchdown_planar_coarse.dat with every element at most 2.5 m, half the bending
+-- length of the bare cable: the planar state is stable out of its plane and no note is printed.
+--------------------- LINE TYPES ---------------------------------------------
+Name Diam Mass EA BA EI GAs GJ Irt Irn Cdn Cdt Can Cat
+(-) (m) (kg/m) (N) (-) (Nm2) (N) (Nm2) (kgm) (kgm) (-) (-) (-) (-)
+bare 0.16 36.70 4.69e8 0.0 1.99e4 1.0e8 1.5e4 1.0 1.0 1.2 0.1 1.0 0.0
+buoy 0.29 59.53 4.69e8 0.0 1.99e4 1.0e8 1.5e4 1.0 1.0 1.2 0.1 1.0 0.0
+--------------------- POINTS -------------------------------------------------
+ID Type X Y Z
+(-) (-) (m) (m) (m)
+7 Coupled 30.0 0.0 -20.0
+8 Fixed 500.0 0.0 -200.0
+--------------------- LINES --------------------------------------------------
+ID NodeA NodeB Outputs
+(-) (-) (-) (-)
+4 7 8 -
+--------------------- SECTIONS -----------------------------------------------
+LineID LineType Length NumSegs
+(-) (-) (m) (-)
+4 bare 80.0 40
+4 buoy 100.0 50
+4 bare 420.0 168
+--------------------- END CONNECTIONS ----------------------------------------
+LineID End Stiffness EzX EzY EzZ TorsStiffness NxX NxY NxZ Pretwist
+(-) (-) (N-m/rad) (-) (-) (-) (N-m/rad) (-) (-) (-) (deg)
+4 A Rigid 0.1058 0 -0.9944 Free 0 1 0 0
+4 B Rigid 1 0 0 Free 0 1 0 0
+--------------------- OPTIONS ------------------------------------------------
+9.80665 g
+1025.0 rhoW
+3.0e6 kBot
+3.0e5 cBot
+0.35 frictionMu
+200.0 WtrDpth
+0.025 dtM
+0.0 TMax
+--------------------- OUTPUTS ------------------------------------------------
+FairTen4
+--------------------- END ----------------------------------------------------

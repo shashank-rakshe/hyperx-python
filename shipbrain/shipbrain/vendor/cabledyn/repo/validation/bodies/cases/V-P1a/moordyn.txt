@@ -1,0 +1,27 @@
+--------------------- MoorDyn Input File ------------------------------
+V-P1 dry rigid rod pendulum pinned at End A, released from 10.0 deg
+-- No fluid loads act: the rod stays above the water (CableDyn deck) or rho = 0 (MoorDyn-C).
+-- MoorDyn-C twin: pin at the origin so End B lies on the ray through End A (initial-orientation convention), with WtrDnsty 0 instead of a dry pin at z = +20 m.
+---------------------- ROD TYPES -------------------------------------
+TypeName  Diam  Mass/m  Cd  Ca  CdEnd  CaEnd
+(name)  (m)  (kg/m)  (-)  (-)  (-)  (-)
+pend  0.2  50  0  0  0  0
+---------------------- RODS ------------------------------------------
+ID  RodType  Attachment  Xa  Ya  Za  Xb  Yb  Zb  NumSegs  RodOutputs
+(#)  (name)  (#/key)  (m)  (m)  (m)  (m)  (m)  (m)  (-)  (-)
+1  pend  Pinned  0  0  0  1.736481777  0  -9.84807753  10  -
+---------------------- OPTIONS -----------------------------------------
+0.001  dtM
+9.80665  g
+0  WtrDnsty
+100  WtrDpth
+100000  kbot
+10000  cbot
+1  dtIC
+0  TmaxIC
+4  CdScaleIC
+1.00000000e-05  threshIC
+0  writeLog
+1  disableOutput
+1  disableOutTime
+------------------------- need this line --------------------------------

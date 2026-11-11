@@ -1,0 +1,13 @@
+case,site,solver,build,elements,time_step_s,total_wall_median_s,total_wall_min_s,total_wall_max_s,static_wall_median_s,dynamic_wall_median_s,total_cpu_median_s,peak_working_set_MiB,host_busy_median,newton_per_step,subdivided_intervals
+L5-DPC,80m,CableDyn,gnu-release-0.4.2,240,0.05,1.9096,1.9078,1.9188,0.125,1.763,1.9062,18.6,0.05,3.038,0
+L5-DPC,80m,CableDyn,ifx-release-0.4.2,240,0.05,1.3375,1.3328,1.3515,0.113,1.211,1.3281,17.7,0.055,3.038,0
+L5-DPC,80m,OrcaFlex,orcaflex,179,0.05,2.694,2.679,2.714,0.3212,2.3727,2.7031,99.8,0.059,,
+L5-DPC,80m,MoorDyn-F,moordyn-f,208,0.000125,326.6135,323.8323,343.3232,,,325.8281,203.3,0.109,,
+L5-DPC,200m,CableDyn,gnu-release-0.4.2,480,0.05,3.1789,3.1743,3.2091,0.224,2.966,3.1719,27.1,0.047,2.692,0
+L5-DPC,200m,CableDyn,ifx-release-0.4.2,480,0.05,2.3696,2.354,2.3723,0.187,2.174,2.3594,26.1,0.049,2.752,0
+L5-DPC,200m,OrcaFlex,orcaflex,350,0.05,5.3104,5.178,5.641,0.2996,5.0223,5.2969,110.4,0.069,,
+L5-DPC,200m,MoorDyn-F,moordyn-f,224,0.000125,191.8809,191.7363,193.5473,,,191.6406,203.1,0.069,,
+L5-DPC,800m,CableDyn,gnu-release-0.4.2,960,0.05,6.8685,6.8215,6.8915,0.339,6.467,6.8594,44.0,0.049,3.267,0
+L5-DPC,800m,CableDyn,ifx-release-0.4.2,960,0.05,4.9758,4.9189,5.0871,0.321,4.625,4.9375,43.0,0.057,3.269,0
+L5-DPC,800m,OrcaFlex,orcaflex,1227,0.05,27.8132,27.4384,28.1457,2.6539,25.1593,27.8125,166.8,0.065,,
+L5-DPC,800m,MoorDyn-F,moordyn-f,232,0.0005,320.684,319.2952,326.9064,,,320.1719,203.2,0.09,,

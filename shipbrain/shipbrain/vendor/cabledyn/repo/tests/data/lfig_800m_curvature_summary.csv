@@ -1,0 +1,16 @@
+# File: tests/data/lfig_800m_curvature_summary.csv
+# SPDX-License-Identifier: Apache-2.0
+# L-fig 800 m Lozon lazy-wave span: along-arc curvature summary (1/m, arc from the hang-off),
+# 3 m / 12 s hang-off heave, still water, matched hydro; interior 3-97 % of the 920.43 m span.
+# Written by validation/scripts/curvature_profile_overlay.py (summarise()).
+# CableDyn: test_l3_lazywave_dynamic profile (3.84 m mesh, dt 0.05 s, window t in [24, 60] s).
+# OrcaFlex 11.6d: validation/scripts/orcaflex_lazywave_dynamic_reference.py build("800m"),
+#   target segment 0.75 m, implicit constant dt 0.05 s, 12 s build-up + 48 s,
+#   Range Graph curvature Max over stage-1 t in [12, 48] s; static = statics Range Graph.
+# MoorDyn-F v2.3.8: settled native 18.6 m mesh and 4x refinement
+#   (validation/scripts/moordyn_lazywave_dynamic_reference.py).
+series,n_nodes,k_static_peak,arc_static_peak_m,k_dyn_peak,arc_dyn_peak_m,k_dyn_q50,k_dyn_q90
+"CableDyn (3.84 m mesh, implicit)",241,0.0266563,360.503,0.0388542,368.174,0.00189271,0.0171255
+"OrcaFlex (0.75 m mesh, implicit)",1229,0.0263887,362.332,0.0388094,364.58,0.00185333,0.0158854
+MoorDyn-F (native 18.6 m mesh),60,0.0241419,353.827,0.0276227,353.827,0.00181308,0.0129389
+"MoorDyn-F (4x refined, 4.7 m mesh)",234,0.0261942,363.138,0.037932,363.138,0.0018936,0.0162573

@@ -1,0 +1,50 @@
+--------------------- CableDyn Input File ------------------------------------
+Held-end dynamic start of the Lozon gomex80 lazy-wave cable: a step at rest must converge
+-- The static equilibrium seeds a short march with both ends held and still water; the
+-- Newton residual starts at the round-off floor of the stiff, finely meshed cable.
+--------------------- LINE TYPES ---------------------------------------------
+TypeName  Diam   MassDenInAir  EA       BA   EI       Cd_n  Cd_t  Ca_n  Ca_t
+(-)       (m)    (kg/m)        (N)      (-)  (N-m2)   (-)   (-)   (-)   (-)
+bare      0.160  36.70         4.69e8   0.0  1.99e4   1.2   0.1   1.0   0.0
+buoy      0.290  59.53         4.69e8   0.0  1.99e4   1.2   0.1   1.0   0.0
+--------------------- POINTS ------------------------------------------------
+ID  Type     X       Y    Z
+(-) (-)      (m)     (m)  (m)
+1   Coupled  5.0     0.0  -14.0
+2   Fixed    125.0   0.0  -80.0
+--------------------- LINES -------------------------------------------------
+ID  NodeA  NodeB  Outputs
+(-) (-)    (-)    (-)
+1   1      2      -
+--------------------- SECTIONS ----------------------------------------------
+LineID  LineType  Length   NumSegs
+(-)     (-)       (m)      (-)
+1       bare      68.114   448
+1       buoy      50.000   320
+1       bare      52.101   256
+--------------------- OPTIONS -----------------------------------------------
+9.80665  g               - Gravitational acceleration (m/s^2) [default: 9.80665]
+1025.0   rhoW            - Water density (kg/m^3) [default: 1025]
+80.0     WtrDpth         - Water depth for the flat seabed (m) [default: absent standalone; host-owned OpenFAST]
+1.0e5    kBot            - Seabed penalty stiffness base (Pa/m) [default: 1.0e5]
+1.0e4    cBot            - Seabed normal damping base (Pa-s/m) [default: 1.0e4]
+0.4      rhoInf          - Generalized-alpha spectral radius {0<=rhoInf<=1} [default: 0.4]
+False    modified_newton - Tangent-reuse mode {False=full Newton; True=guarded reuse} [default: False]
+0.05     dtM             - CableDyn internal time step (s) [default: omitted standalone; the glue DT in OpenFAST]
+0.2      TMax            - Standalone simulation duration (s); 0 selects static initialization only
+False     adaptive_mesh    - Automatic finite-EI refinement {False; True} [default: False]
+True      tensile_safety   - Refine and reject local axial compression in this tensile cable
+dynamic_solver 1.0e-8 1.0e-14 30 12 - Relative/absolute tolerance, max iterations, backtracks [defaults]
+none      frictionMu       - Seabed friction coefficient {none; value>=0} [default: none]
+none      current           - Current model and velocity (m/s) {none; uniform; profile} [default: none]
+none      waves             - Wave model, height, period, direction (m, s, deg) {none; airy; jonswap}
+0         WaterKin          - Water-kinematics source {0/none; file; SEASTATE coupled only} [default: no policy]
+-- Complete option/default reference: cabledyn_options_reference.dat and doc/options.rst.
+--------------------- OUTPUTS -----------------------------------------------
+"FairTen1"
+"AnchTen1"
+"FairIncl1"
+"AnchIncl1"
+"Curv1N383"
+"BendMom1N383"
+--------------------- need this line ----------------------------------------

@@ -1,0 +1,5 @@
+target_segment_length_m,segments,static_peak_curvature_per_m,dynamic_peak_curvature_per_m,static_hop_tension_kN,dynamic_hop_tension_mean_kN,dynamic_hop_tension_min_kN,dynamic_hop_tension_max_kN
+3.0,306,0.02626,0.03797,57.7622,57.7857,33.2341,82.9654
+1.5,614,0.02637,0.03861,57.7631,57.7872,33.2397,82.9635
+0.75,1227,0.02639,0.03881,57.7633,57.7876,33.2413,82.9632
+0.375,2455,0.02640,0.03886,57.7633,57.7877,33.2417,82.9631

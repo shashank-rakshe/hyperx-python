@@ -1,0 +1,35 @@
+--------------------- CableDyn Input File ------------------------------------
+msg_tensile_safety_truncated
+--------------------- LINE TYPES ---------------------------------------
+TypeName Diam MassDenInAir EA BA EI Cd_n Cd_t Ca_n Ca_t
+(-) (m) (kg/m) (N) (N-s/-) (N-m^2) (-) (-) (-) (-)
+bare 0.16 36.7 469000000.0 0.0 19900.0 1.2 0.1 1.0 0.0
+buoy 0.29 59.53 469000000.0 0.0 19900.0 1.2 0.1 1.0 0.0
+--------------------- POINTS ---------------------------------------
+ID Type X Y Z Mass Vol CdA Ca
+(-) (-) (m) (m) (m) (kg) (m^3) (m^2) (-)
+1 Coupled 5.0 0.0 -14.0 0 0 0 0
+2 Fixed 125.0 0.0 -80.0 0 0 0 0
+--------------------- LINES ---------------------------------------
+ID NodeA NodeB Outputs
+(-) (-) (-) (-)
+1 1 2 -
+--------------------- SECTIONS ---------------------------------------
+LineID LineType Length NumSegs
+(-) (-) (m) (-)
+1 bare 68.114 28
+1 buoy 50.0 20
+1 bare 52.101 16
+--------------------- OPTIONS ---------------------------------------
+0.025 dtM
+8.6 TMax
+80.0 WtrDpth
+msg_tensile_safety_motion.txt motionFile
+dynamic_solver 1.0e-4 1.0e-14 100 12
+True tensile_safety
+--------------------- OUTPUTS ---------------------------------------
+"FairTen1"
+"AnchTen1"
+"TDP1s"
+"Curv1N25"
+--------------------- need this line -----------------------------------

@@ -1,0 +1,51 @@
+--------------------- CableDyn Input File ------------------------------------
+Lazy-wave power cable with discrete buoyancy modules, restrained in torsion
+-- The cable of lazy_wave_touchdown_planar_coarse_att.dat (25 discrete buoyancy modules at a 4 m pitch
+-- from 80 m to 176 m), clamped at both ends and restrained in torsion (Rigid) with one turn of
+-- pretwist at End B, and the polar inertia Irn = 1 kg m of its LINE TYPES row, so its dynamics carry
+-- a twist angle at every node. The torsion stage runs on the discrete equilibrium, after the
+-- attachment polish, with the modules' net weights (and, in a deck current, their drag) as nodal
+-- loads. A still run from it keeps its torque, twist and fairlead tension.
+--------------------- LINE TYPES ---------------------------------------------
+Name Diam Mass EA BA EI GAs GJ Irt Irn Cdn Cdt Can Cat
+(-) (m) (kg/m) (N) (-) (Nm2) (N) (Nm2) (kgm) (kgm) (-) (-) (-) (-)
+bare 0.16 36.70 4.69e8 0.0 1.99e4 1.0e8 1.5e4 1.0 1.0 1.2 0.1 1.0 0.0
+--------------------- POINTS -------------------------------------------------
+ID Type X Y Z
+(-) (-) (m) (m) (m)
+7 Coupled 30.0 0.0 -20.0
+8 Fixed 500.0 0.0 -200.0
+--------------------- LINES --------------------------------------------------
+ID NodeA NodeB Outputs
+(-) (-) (-) (-)
+4 7 8 -
+--------------------- SECTIONS -----------------------------------------------
+LineID LineType Length NumSegs
+(-) (-) (m) (-)
+4 bare 80.0 20
+4 bare 100.0 25
+4 bare 420.0 42
+--------------------- ATTACHMENTS -------------------------------------------
+LineID ArcLength Mass Volume CdA Ca CdAx
+(-) (m) (kg) (m^3) (m^2) (-) (m^2)
+4 80.0:4.0:176.0 91.32 0.18378 1.392 1.0 0.0
+--------------------- END CONNECTIONS ----------------------------------------
+LineID End Stiffness EzX EzY EzZ TorsStiffness NxX NxY NxZ Pretwist
+(-) (-) (N-m/rad) (-) (-) (-) (N-m/rad) (-) (-) (-) (deg)
+4 A Rigid 0.1058 0 -0.9944 Rigid 0 1 0 0
+4 B Rigid 1 0 0 Rigid 0 1 0 360
+--------------------- OPTIONS ------------------------------------------------
+9.80665 g
+1025.0 rhoW
+3.0e6 kBot
+3.0e5 cBot
+0.35 frictionMu
+200.0 WtrDpth
+0.025 dtM
+10.0 TMax
+--------------------- OUTPUTS ------------------------------------------------
+FairTen4
+Torq4N1
+Torq4N88
+Twist4
+--------------------- END ----------------------------------------------------

@@ -1,0 +1,39 @@
+--------------------- MoorDyn Input File ------------------------------------
+Lozon (2025) Gulf of Mexico 80 m catenary chain mooring, single line (static pretension)
+FALSE    Echo
+----------------------- LINE TYPES ------------------------------------------
+Name  Diam  MassDen  EA       BA/-zeta  EI    Cd    Ca    CdAx   CaAx
+(-)   (m)   (kg/m)   (N)      (N-s/-)   (-)   (-)   (-)   (-)    (-)
+chain160     0.288    512.00    2.191E+09   -1.0   0.0   2.40   1.00   1.150   1.000
+---------------------- ROD TYPES ---------------------------------------------------------------
+TypeName Diam Mass/m Cd Ca CdEnd CaEnd
+(name) (m) (kg/m) (-) (-) (-) (-)
+---------------------- BODIES ---------------------------------------
+ID   Attachment  X0     Y0    Z0     r0      p0     y0     Mass  CG*   I*      Volume   CdA*   Ca*
+(#)   (word)     (m)    (m)   (m)   (deg)   (deg)  (deg)   (kg)  (m)  (kg-m^2)  (m^3)   (m^2)  (-)
+---------------------- POINTS --------------------------------
+ID   Type      X         Y       Z       M    V    CdA   CA
+(-)  (-)      (m)       (m)     (m)    (kg) (m^3) (m^2) (-)
+1     Fixed       58.000     0.000    -14.000      0     0      0     0
+2     Fixed      400.000     0.000    -80.000      0     0      0     0
+---------------------- RODS --------------------------------------------------------------------
+ID RodType Attachment Xa Ya Za Xb Yb Zb NumSegs RodOutputs
+(#) (name) (#/key) (m) (m) (m) (m) (m) (m) (-) (-)
+---------------------- LINES --------------------------------------
+ID  LineType  AttachA   AttachB  UnstrLen  NumSegs  Outputs
+(-)   (-)       (-)       (-)      (m)       (-)      (-)
+1    chain160   2         1          364.500  60      t
+---------------------- SOLVER OPTIONS ---------------------------------------
+0.0005     dtM
+RK4        tScheme
+3.0e6      kBot
+3.0e5      cBot
+1.0        dtIC
+300.0      TmaxIC
+4.0        CdScaleIC
+0.001      threshIC
+------------------------ OUTPUTS --------------------------------------------
+FAIRTEN1
+ANCHTEN1
+END
+------------------------- need this line --------------------------------------

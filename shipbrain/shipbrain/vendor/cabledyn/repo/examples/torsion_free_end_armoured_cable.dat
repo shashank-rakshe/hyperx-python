@@ -1,0 +1,67 @@
+--------------------- CableDyn Input File ------------------------------------
+Lazy-wave armoured power cable restrained in torsion at the hang-off and free to twist at the anchor, heaving 36 s
+-- The 80 m Gulf of Mexico cable of lozon_gomex80_power_cable_motion.dat (64 elements, the 3 m,
+-- 12 s hang-off heave of data/lozon/gomex80_heave_3m_12s_dt005.txt), with ILLUSTRATIVE torsion
+-- properties of a single-armoured cable: GJ = 50 kN.m^2, a torque-tension coupling K = 3.0 MN.m
+-- (T = EA eps + K tau, M = GJ tau + K eps, K^2 < EA GJ) and a torsional damping of 5 % of each
+-- element's critical value (the GJ column GJ|K|Bt, Bt = -0.05). The hang-off is clamped (Rigid)
+-- and restrained in torsion (TorsStiffness Rigid); the anchor end has no END CONNECTIONS row, so
+-- it is pinned and free to twist, as on a swivel. The free end carries no torque: in statics the
+-- line has none, and the stretch alone twists it, Twist1 = -sum (K/GJ)(l - L) over the elements:
+-- -5.6 deg here, the stretch being that of the reduced axial stiffness EA - K^2/GJ of a line free
+-- to twist. Under the heave the tension, and with it the stretch, oscillates (Twist1 between
+-- -7.6 and -3.7 deg): the twist follows through torsional waves carried by the polar inertia
+-- Irn (m r^2/2 of each section) that reflect at the free end, and the restrained hang-off takes
+-- their torque, Torq1N1. Twist1 is the turn of the free anchor end against the hang-off frame
+-- carried along the line.
+--------------------- LINE TYPES ---------------------------------------------
+TypeName  Diam   MassDenInAir  EA       BA   EI       GAs      GJ|K|Bt              Irt     Irn     Cd_n Cd_t Ca_n Ca_t
+(-)       (m)    (kg/m)        (N)      (-)  (N-m2)   (N)      (N-m2|N-m|N-m2-s)    (kg-m)  (kg-m)  (-)  (-)  (-)  (-)
+bare      0.160  36.70         4.69e8   0.0  1.99e4   9.02e7   5.0e4|3.0e6|-0.05    0.0587  0.1174  1.2  0.1  1.0  0.0
+buoy      0.290  59.53         4.69e8   0.0  1.99e4   9.02e7   5.0e4|3.0e6|-0.05    0.3129  0.6258  1.2  0.1  1.0  0.0
+--------------------- POINTS ------------------------------------------------
+ID  Type     X       Y    Z
+(-) (-)      (m)     (m)  (m)
+1   Coupled  5.0     0.0  -14.0
+2   Fixed    125.0   0.0  -80.0
+--------------------- LINES -------------------------------------------------
+ID  NodeA  NodeB  Outputs
+(-) (-)    (-)    (-)
+1   1      2      -
+--------------------- SECTIONS ----------------------------------------------
+LineID  LineType  Length   NumSegs
+(-)     (-)       (m)      (-)
+1       bare      68.114   28
+1       buoy      50.000   20
+1       bare      52.101   16
+--------------------- END CONNECTIONS ---------------------------------------
+-- End A only: clamped along the static hang-off tangent and restrained in torsion, Nx the
+-- zero-twist reference normal. End B, with no row, is pinned and free in torsion.
+LineID  End  Stiffness  EzX      EzY  EzZ       TorsStiffness  NxX  NxY  NxZ  Pretwist
+(-)     (-)  (N-m/rad)  (-)      (-)  (-)       (N-m/rad)      (-)  (-)  (-)  (deg)
+1       A    Rigid      0.14641  0.0  -0.98922  Rigid          0.0  1.0  0.0  0.0
+--------------------- OPTIONS -----------------------------------------------
+9.80665  g                - Gravitational acceleration (m/s^2) [default: 9.80665]
+1025.0   rhoW             - Water density (kg/m^3) [default: 1025]
+80.0     WtrDpth          - Water depth for the flat seabed (m) [default: absent standalone; host-owned OpenFAST]
+1.0e5    kBot             - Seabed penalty stiffness base (Pa/m) [default: 1.0e5]
+1.0e4    cBot             - Seabed normal damping base (Pa-s/m) [default: 1.0e4]
+0.4      rhoInf           - Generalised-alpha spectral radius {0<=rhoInf<=1} [default: 0.4]
+False    modified_newton  - Tangent-reuse mode {False=full Newton; True=guarded reuse} [default: False]
+0.05     dtM              - CableDyn internal time step (s) [default: omitted standalone; the glue DT in OpenFAST]
+36.0     TMax             - Standalone simulation duration (s), including the 12 s smooth start
+data/lozon/gomex80_heave_3m_12s_dt005.txt motionFile - Prescribed hang-off heave
+False    adaptive_mesh    - Automatic finite-EI refinement {False; True} [default: False]
+dynamic_solver 1.0e-8 1.0e-14 30 12 - Relative tolerance, absolute tolerance, max iterations, backtracks [defaults shown]
+none     frictionMu       - Seabed friction coefficient {none; value>=0} [default: none]
+none     current          - Current model and velocity (m/s) {none; uniform; profile} [default: none]
+none     waves            - Wave model, height, period, and direction (m, s, deg) {none; airy; jonswap} [default: none]
+0        WaterKin         - Water-kinematics source {0/none; file; SEASTATE coupled only} [default: no policy]
+-- Complete option/default reference: cabledyn_options_reference.dat and doc/options.rst.
+--------------------- OUTPUTS -----------------------------------------------
+"FairTen1"
+"AnchTen1"
+"Torq1N1"
+"Twist1"
+"BendMom1N1"
+--------------------- need this line ----------------------------------------

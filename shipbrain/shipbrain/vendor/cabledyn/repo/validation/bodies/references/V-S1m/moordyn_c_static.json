@@ -1,0 +1,22 @@
+{
+  "case": "V-S1m",
+  "code": "moordyn_c_static",
+  "series": "moordyn_c_static.csv",
+  "date": "2026-09-26",
+  "host": "13th Gen Intel(R) Core(TM) i9-13900K, Windows",
+  "version": {
+    "commit": "319ff99771cffb835fea4423306a0849692afd53",
+    "describe": "v2.7.1",
+    "library_sha256": "9f611eeb80fd3836cb385ffaad583feab799badd7b040ee579a2f0afe40377b4",
+    "build": "Release -O3, Strawberry g++ 13.2 (out-of-tree CMake/Ninja)"
+  },
+  "runner": "validation/scripts/bodies_mdc_runner.cpp",
+  "settings": {
+    "init": "MoorDyn_Init dynamic relaxation",
+    "deck": "cases/V-S1m/moordyn_static.txt",
+    "motion": "held_mdc.txt",
+    "note": "row t = 0 is the static equilibrium"
+  },
+  "dt": null,
+  "init_s": 79.190309
+}

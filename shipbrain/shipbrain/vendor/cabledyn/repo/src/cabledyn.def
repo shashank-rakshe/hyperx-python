@@ -1,0 +1,41 @@
+; SPDX-License-Identifier: Apache-2.0
+; Public C ABI of the CableDyn shared library (see src/CableDyn_CAPI.h).
+EXPORTS
+    CableDyn_CalcOutput
+    CableDyn_CalcOutputDerivatives
+    CableDyn_Close
+    CableDyn_Create
+    CableDyn_EvalChannel
+    CableDyn_GetAbiMinor
+    CableDyn_GetBodyState
+    CableDyn_GetCoupledLayout
+    CableDyn_GetCoupledMoments
+    CableDyn_GetCoupledMotion
+    CableDyn_GetLastError
+    CableDyn_GetInitNotes
+    CableDyn_GetLineValues
+    CableDyn_GetObjectInfo
+    CableDyn_GetPointState
+    CableDyn_GetRodState
+    CableDyn_GetVersion
+    CableDyn_GetVersionString
+    CableDyn_InitDeck
+    CableDyn_InitDeckAt
+    CableDyn_InitDeckRotating
+    CableDyn_InitLine
+    CableDyn_InitLines
+    CableDyn_IsInitialized
+    CableDyn_NCoupledDOF
+    CableDyn_NLines
+    CableDyn_NObjects
+    CableDyn_NPoints
+    CableDyn_RestoreState
+    CableDyn_SaveState
+    CableDyn_Step
+    CableDyn_SetHostFluid
+    CableDyn_NFluidNodes
+    CableDyn_GetFluidNodePositions
+    CableDyn_UpdateFluidFields
+    CableDyn_UpdatePointFluidFields
+    CableDyn_UpdateRotations
+    CableDyn_UpdateStates

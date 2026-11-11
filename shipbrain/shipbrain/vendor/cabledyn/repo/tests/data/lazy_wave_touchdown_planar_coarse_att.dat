@@ -1,0 +1,48 @@
+--------------------- CableDyn Input File ------------------------------------
+Lazy-wave power cable with discrete buoyancy modules, deck mesh too coarse at touchdown
+-- The cable of lazy_wave_touchdown_planar_coarse.dat with its 100 m buoyant stretch built from the
+-- bare cable plus 25 discrete buoyancy modules at a 4 m pitch, one on each node from 80 m to 176 m
+-- (each carries the extra mass and displaced volume of 4 m of the buoy section). Its static solve
+-- runs in the vertical plane of the line and ends with the attachment polish. On the coarse deck
+-- mesh (10 m elements along the grounded run) the discrete planar state is unstable out of its
+-- plane: the driver names it in a note, once, after the polish, and solves the deck unchanged.
+--------------------- LINE TYPES ---------------------------------------------
+Name Diam Mass EA BA EI GAs GJ Irt Irn Cdn Cdt Can Cat
+(-) (m) (kg/m) (N) (-) (Nm2) (N) (Nm2) (kgm) (kgm) (-) (-) (-) (-)
+bare 0.16 36.70 4.69e8 0.0 1.99e4 1.0e8 1.5e4 1.0 1.0 1.2 0.1 1.0 0.0
+--------------------- POINTS -------------------------------------------------
+ID Type X Y Z
+(-) (-) (m) (m) (m)
+7 Coupled 30.0 0.0 -20.0
+8 Fixed 500.0 0.0 -200.0
+--------------------- LINES --------------------------------------------------
+ID NodeA NodeB Outputs
+(-) (-) (-) (-)
+4 7 8 -
+--------------------- SECTIONS -----------------------------------------------
+LineID LineType Length NumSegs
+(-) (-) (m) (-)
+4 bare 80.0 20
+4 bare 100.0 25
+4 bare 420.0 42
+--------------------- ATTACHMENTS -------------------------------------------
+LineID ArcLength Mass Volume CdA Ca CdAx
+(-) (m) (kg) (m^3) (m^2) (-) (m^2)
+4 80.0:4.0:176.0 91.32 0.18378 1.392 1.0 0.0
+--------------------- END CONNECTIONS ----------------------------------------
+LineID End Stiffness EzX EzY EzZ TorsStiffness NxX NxY NxZ Pretwist
+(-) (-) (N-m/rad) (-) (-) (-) (N-m/rad) (-) (-) (-) (deg)
+4 A Rigid 0.1058 0 -0.9944 Free 0 1 0 0
+4 B Rigid 1 0 0 Free 0 1 0 0
+--------------------- OPTIONS ------------------------------------------------
+9.80665 g
+1025.0 rhoW
+3.0e6 kBot
+3.0e5 cBot
+0.35 frictionMu
+200.0 WtrDpth
+0.025 dtM
+0.0 TMax
+--------------------- OUTPUTS ------------------------------------------------
+FairTen4
+--------------------- END ----------------------------------------------------

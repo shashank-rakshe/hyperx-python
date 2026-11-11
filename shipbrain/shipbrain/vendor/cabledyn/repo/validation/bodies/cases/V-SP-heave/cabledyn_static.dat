@@ -1,0 +1,32 @@
+--------------------- CableDyn Input File ------------------------------------
+V-SP/V-D3 ballasted surface-piercing spar, heave release from +1 m
+-- Free body at the waterline carrying a rigidly attached surface-piercing rod; no lines.
+-- Body Volume = 0: all buoyancy comes from the rod; CG/I of the body are the ballast.
+---------------------- ROD TYPES -------------------------------------
+TypeName  Diam  Mass/m  Cd  Ca  CdEnd  CaEnd
+(name)  (m)  (kg/m)  (-)  (-)  (-)  (-)
+spar  8  5000  0.8  1  0.6  0.6
+---------------------- BODIES ----------------------------------------
+ID  Attachment  X0  Y0  Z0  r0  p0  y0  Mass  CG*  I*  Volume  CdA*  Ca*
+(#)  (-)  (m)  (m)  (m)  (deg)  (deg)  (deg)  (kg)  (m)  (kg-m^2)  (m^3)  (m^2)  (-)
+1  Free  0  0  1  0  0  0  3.67000000e+06  0|0|-70.0  1.37e8|1.37e8|2.94e7  0  0  0
+---------------------- RODS ------------------------------------------
+ID  RodType  Attachment  Xa  Ya  Za  Xb  Yb  Zb  NumSegs  RodOutputs
+(#)  (name)  (#/key)  (m)  (m)  (m)  (m)  (m)  (m)  (-)  (-)
+1  spar  Body1  0  0  -80  0  0  10  45  -
+--------------------- OPTIONS ------------------------------------------
+9.80665  g
+1025  rhoW
+200  WtrDpth
+100000  kBot
+10000  cBot
+static  bodyIC
+0.1  dtM
+0.1  TMax
+--------------------- OUTPUTS ------------------------------------------
+"Body1Px"
+"Body1Pz"
+"Body1Ry"
+"Rod1Px"
+"Rod1Pz"
+--------------------- need this line -----------------------------------

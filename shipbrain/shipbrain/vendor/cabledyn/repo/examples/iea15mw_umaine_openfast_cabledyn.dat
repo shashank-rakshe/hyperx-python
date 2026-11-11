@@ -1,0 +1,65 @@
+--------------------- CableDyn Input File ------------------------------------
+CableDyn input file: IEA-15MW on the UMaine VolturnUS-S semi-submersible (OpenFAST-only, CompMooring = 5)
+This caller-driven deck is a MooringFile for the CableDyn-enabled openfast.exe; do not pass it to CableDyn_driver.exe.
+CableDyn is its own module. Each line is one sectioned line object: a LINE
+runs End A (fairlead side) -> End B (anchor side) through ordered SECTIONS, each with its
+own line type, unstretched length, and mesh. The initial condition is a Newton static
+equilibrium (no dynamic relaxation and no relaxation tuning), and dynamics are implicit
+generalised-alpha. In coupled use the host owns the environment (gravity, water density,
+water depth) and the marching clock; the OPTIONS section below carries only CableDyn's own
+solver settings and the seabed contact parameters. Output channels use the FairTen/AnchTen
+vocabulary; requested channels are printed at static equilibrium and written to .out/.outb.
+--------------------------- LINE TYPES ----------------------------------------
+Name  Diam   Mass    EA       BA    EI    Cdn   Cdt   Can   Cat
+(-)   (m)    (kg/m)  (N)      (-)   (Nm2) (-)   (-)   (-)   (-)
+main  0.333  685.00  3.27e9   -1.0  0.0   2.0   0.4   0.82  0.27
+--------------------------- POINTS --------------------------------------------
+ID   Type      X         Y        Z
+(-)  (-)      (m)       (m)      (m)
+1    Coupled  -58.000     0.000  -14.000
+2    Fixed   -837.600     0.000 -200.000
+3    Coupled   29.000    50.229  -14.000
+4    Fixed    418.800   725.383 -200.000
+5    Coupled   29.000   -50.229  -14.000
+6    Fixed    418.800  -725.383 -200.000
+--------------------------- LINES ---------------------------------------------
+ID  NodeA  NodeB  Outputs
+(-)  (-)    (-)    (-)
+1    1      2      -
+2    3      4      -
+3    5      6      -
+--------------------------- SECTIONS ------------------------------------------
+LineID  LineType  Length  NumSegs
+(-)     (-)       (m)     (-)
+1       main      850.0   50
+2       main      850.0   50
+3       main      850.0   50
+--------------------------- OPTIONS -------------------------------------------
+9.80665  g                - Gravitational acceleration (m/s^2); overridden by OpenFAST [default: 9.80665]
+1025.0   rhoW             - Water density (kg/m^3); overridden by OpenFAST [default: 1025]
+0.4      rhoInf           - Generalised-alpha spectral radius {0<=rhoInf<=1} [default: 0.4]
+False    modified_newton  - Tangent-reuse mode {False=full Newton; True=modified Newton with guarded refresh} [default: False]
+3.0e6    kBot             - Seabed penalty stiffness base (Pa/m) [default: 1.0e5]
+3.0e5    cBot             - Seabed normal damping base (Pa-s/m) [default: 1.0e4]
+False     adaptive_mesh    - Automatic finite-EI refinement {False; True} [default: False]
+dynamic_solver 1.0e-8 1.0e-14 30 12 - Relative tolerance, absolute tolerance, max iterations, backtracks [defaults shown]
+none      frictionMu       - Seabed friction coefficient {none; value>=0} [default: none]
+none      current           - Current model and velocity (m/s) {none; uniform; profile} [default: none]
+none      waves             - Wave model, height, period, and direction (m, s, deg) {none; airy; jonswap} [default: none]
+0         WaterKin          - Water-kinematics source {0/none; file; SEASTATE coupled only} [default: no policy]
+-- Complete option/default reference: cabledyn_options_reference.dat and doc/options.rst.
+--------------------------- OUTPUTS -------------------------------------------
+"FairTen1"
+"AnchTen1"
+"FairIncl1"
+"AnchIncl1"
+"FairTen2"
+"AnchTen2"
+"FairIncl2"
+"AnchIncl2"
+"FairTen3"
+"AnchTen3"
+"FairIncl3"
+"AnchIncl3"
+END
+--------------------------- need this line ------------------------------------

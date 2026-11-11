@@ -1,0 +1,71 @@
+--------------------- CableDyn Input File ------------------------------------
+CableDyn driver deck -- two chain-polyester-chain legs, viscoelastic and Syrope polyester, on a floater in a JONSWAP sea, 60 s
+-- Two parallel legs 50 m apart from one floater, each a 100 m studless chain at the fairlead,
+-- a 400 m polyester section and a 250 m chain at the anchor in 200 m of water, with the anchor
+-- radius of composite_chain_syrope_chain.dat. The polyester of line 1 follows the viscoelastic
+-- (series-Kelvin) law, MoorDyn ElasticMod 2: EA = Es|Ed, the static and dynamic stiffness,
+-- BA = Bs|Bd. That of line 2 follows the Syrope working-curve model with the
+-- settings and OWC table of syrope_polyester_mooring.dat: the static start puts every polyester
+-- element on its rest curve, and the dynamic stiffness alpha + beta * mean load governs the wave
+-- response. The floater moves in a long-crested JONSWAP sea (Hs 6 m, Tp 11 s, gamma 3.3, along
+-- +X, ramped in over 15 s) by the illustrative RAO table data/vessel/sample_rao.txt (vesselRAO),
+-- which carries both fairleads, 14 m below the surface; the same waves load the lines. Both
+-- legs see the same motion and wave kinematics, so their tensions compare the two rope models:
+-- the static stiffness sets the different pretensions (Es against the OWC), the dynamic
+-- stiffness the wave-frequency tension range.
+--   chain 155 mm R4 studless: volume-equivalent diam 0.2791 m, dry mass 480.93 kg/m, EA 2.058e9 N.
+--   polyester 181.8 mm: diam 0.1438 m, dry mass 22.42 kg/m.
+--------------------- LINE TYPES ---------------------------------------
+TypeName    Diam     MassDenInAir   EA                                       BA            EI       Cd_n  Cd_t  Ca_n  Ca_t
+(-)         (m)      (kg/m)         (-)                                      (N-s|N-s)     (N-m^2)  (-)   (-)   (-)   (-)
+chain       0.2791   480.93         2.058e9                                  -1.0          0.0      1.37  0.64  1.0   0.0
+poly_ve     0.1438   22.42          1.424e8|2.50e8                           4.0e9|1.1e7   0.0      1.2   0.2   1.0   0.0
+poly_syr    0.1438   22.42          "SYROPE:data/syrope/syrope_settings.dat|1.53e8|23.12"  5.0e10|1.0e5  0.0      1.2   0.2   1.0   0.0
+--------------------- POINTS -------------------------------------------
+ID    Type      X        Y      Z         Mass    Vol     CdA    Ca
+(-)   (-)       (m)      (m)    (m)       (kg)    (m^3)   (m^2)  (-)
+1     Fixed     780.0    -25.0  -200.0    0       0       0      0
+2     Coupled   58.0     -25.0  -14.0     0       0       0      0
+3     Fixed     780.0    25.0   -200.0    0       0       0      0
+4     Coupled   58.0     25.0   -14.0     0       0       0      0
+--------------------- LINES --------------------------------------------
+ID    NodeA   NodeB   Outputs
+(-)   (-)     (-)     (-)
+1     2       1       -
+2     4       3       -
+--------------------- SECTIONS -----------------------------------------
+LineID   LineType    Length   NumSegs
+(-)      (-)         (m)      (-)
+1        chain       100.0    12
+1        poly_ve     400.0    40
+1        chain       250.0    25
+2        chain       100.0    12
+2        poly_syr    400.0    40
+2        chain       250.0    25
+--------------------- OPTIONS ------------------------------------------
+9.80665      g         - Gravitational acceleration (m/s^2) [default: 9.80665]
+1025.0       rhoW      - Water density (kg/m^3) [default: 1025]
+200.0        WtrDpth   - Water depth (m) [default: absent standalone; host-owned OpenFAST]
+3.0e6        kBot      - Seabed penalty stiffness base (Pa/m) [default: 1.0e5]
+1.0e4        cBot      - Seabed normal damping base (Pa-s/m) [default: 1.0e4]
+0.05         dtM       - CableDyn internal time step (s) [default: omitted standalone; the glue DT in OpenFAST]
+60.0         TMax      - Standalone simulation duration (s) [default: omitted standalone; host-owned OpenFAST]
+jonswap 6.0 11.0 3.3 0.0 waves - Wave model, JONSWAP Hs, Tp, gamma, and direction (m, s, deg) {none; airy; jonswap} [default: none]
+1         WaveSeed         - Seed of the random sea {integer 1..2147483646; same seed = same sea} [default: 1]
+15.0      rampTime         - Half-cosine start-up ramp of the wave amplitudes (s) [default: 0]
+data/vessel/sample_rao.txt vesselRAO - Displacement RAO table: vessel motion from the deck waves
+0.0|0.0|0.0 vesselRef   - Vessel reference point, rotation centre and RAO origin (m) [default: 0|0|0]
+0.4       rhoInf           - Generalised-alpha spectral radius {0<=rhoInf<=1} [default: 0.4]
+False     modified_newton  - Tangent-reuse mode {False=full Newton; True=guarded reuse} [default: False]
+False     adaptive_mesh    - Automatic finite-EI refinement {False; True} [default: False]
+dynamic_solver 1.0e-8 1.0e-14 30 12 - Relative tolerance, absolute tolerance, max iterations, backtracks [defaults shown]
+none      frictionMu       - Seabed friction coefficient {none; value>=0} [default: none]
+none      current          - Current model and velocity (m/s) {none; uniform; profile} [default: none]
+0         WaterKin         - Water-kinematics source {0/none; file; SEASTATE coupled only} [default: no policy]
+-- Complete option/default reference: cabledyn_options_reference.dat and doc/options.rst.
+--------------------- OUTPUTS ------------------------------------------
+"FairTen1"
+"AnchTen1"
+"FairTen2"
+"AnchTen2"
+--------------------- need this line -----------------------------------

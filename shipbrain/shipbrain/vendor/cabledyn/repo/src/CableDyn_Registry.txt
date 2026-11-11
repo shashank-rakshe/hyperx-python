@@ -1,0 +1,59 @@
+# File: src/CableDyn_Registry.txt
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Jae Hoon Seo, SMI Lab, Inha University
+#
+# Registry for the CableDyn OpenFAST-facing types.
+#
+# This file corresponds to doc/coupling_boundary.md. It captures the
+# current coupled-exchange, parameter, and state records implemented in
+# src/CableDyn_OpenFAST_Types.f90. The remaining module-object internals stay in
+# CableDyn_System / CableDyn_OpenFAST until the full OpenFAST module integration
+# is generated.
+#
+# Keyword ModuleName/ModName Derived type Field type Variable Dimension Initial Mix Description Units
+
+include Registry_NWTC_Library.txt
+
+## ============================== Init input type =========================
+typedef CableDyn/CD InitInputType IntKi n_coupled_dof - 0 - "requested coupled dof count" "[-]"
+typedef ^ ^ DbKi dt - 0.0 - "coupling time step" "[s]"
+typedef ^ ^ DbKi gravity - 9.80665 - "gravity constant" "[m/s^2]"
+typedef ^ ^ DbKi rho_water - 1025.0 - "water density" "[kg/m^3]"
+
+## ============================== Init output type ========================
+typedef ^ InitOutputType IntKi n_lines - 0 - "initialized line count" "[-]"
+typedef ^ ^ IntKi n_coupled_dof - 0 - "initialized coupled dof count" "[-]"
+
+## ============================== Input type ==============================
+typedef CableDyn/CD InputType DbKi q_coupled {:} - - "coupled positions/rotations" "[m,rad]"
+typedef ^ ^ DbKi v_coupled {:} - - "coupled rates" "[m/s,rad/s]"
+typedef ^ ^ DbKi a_coupled {:} - - "coupled accelerations" "[m/s^2,rad/s^2]"
+
+## ============================== Output type =============================
+typedef ^ OutputType DbKi coupled_loads {:} - - "coupled reaction loads" "[N,N-m]"
+typedef ^ ^ DbKi added_mass {:}{:} - - "coupled added-mass block" "[kg,kg-m^2]"
+typedef ^ ^ DbKi dload_dq {:}{:} - - "load derivative wrt position" "[N/m,N-m/rad]"
+typedef ^ ^ DbKi dload_dv {:}{:} - - "load derivative wrt velocity" "[N/(m/s)]"
+typedef ^ ^ DbKi dload_da {:}{:} - - "load derivative wrt acceleration" "[N/(m/s^2)]"
+
+## ============================== Parameters ==============================
+typedef ^ ParameterType IntKi n_lines - 0 - "initialized line count" "[-]"
+typedef ^ ^ IntKi n_coupled_dof - 0 - "coupled dof count" "[-]"
+typedef ^ ^ DbKi dt - 0.0 - "coupling time step" "[s]"
+typedef ^ ^ DbKi gravity - 9.80665 - "gravity constant" "[m/s^2]"
+typedef ^ ^ DbKi rho_water - 1025.0 - "water density" "[kg/m^3]"
+
+## ============================== Continuous states =======================
+typedef ^ ContinuousStateType DbKi x {:} - - "continuous state vector" "[-]"
+typedef ^ ^ DbKi xd {:} - - "state derivative vector" "[-]"
+
+## ============================== Discrete states =========================
+typedef ^ DiscreteStateType IntKi reserved - 0 - "reserved discrete state" "[-]"
+
+## ============================== Constraint states =======================
+typedef ^ ConstraintStateType DbKi z {:} - - "constraint state vector" "[-]"
+
+## ============================== Other states ============================
+typedef ^ OtherStateType IntKi last_num_iter - 0 - "last iteration count" "[-]"
+typedef ^ ^ LOGICAL last_converged - .TRUE. - "last convergence flag" "[-]"
+typedef ^ ^ LOGICAL last_stalled - .FALSE. - "last stalled flag" "[-]"

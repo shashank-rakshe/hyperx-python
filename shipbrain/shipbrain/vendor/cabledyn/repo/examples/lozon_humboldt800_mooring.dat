@@ -1,0 +1,46 @@
+--------------------- CableDyn Input File ------------------------------------
+Lozon et al. (2025) Humboldt 800 m single-line chain-polyester-chain taut mooring
+-- Paper Tables 18 and 19 define geometry and static EA. The polyester series-Kelvin dynamic branch
+-- adopts the CableDyn/MoorDyn viscoelastic validation ratio Ed/Es=1.11376 and validated
+-- dashpots; these dynamic constants are an explicit modelling assumption, not paper data.
+--------------------- LINE TYPES ---------------------------------------------
+TypeName  Diam   MassDenInAir  EA                 BA               EI   Cd_n Cd_t Ca_n Ca_t
+(-)       (m)    (kg/m)        (N|N)              (N-s|N-s)        (N-m2) (-) (-) (-) (-)
+chain120  0.216  288.0         1.232e9            -1.0             0.0  1.0  0.0  1.0  0.0
+poly184   0.145  23.0          1.450e8|1.6150e8   4.0e9|1.1e7     0.0  1.2  0.2  1.0  0.0
+--------------------- POINTS ------------------------------------------------
+ID  Type     X       Y    Z
+(-) (-)      (m)     (m)  (m)
+1   Coupled  58.0    0.0  -14.0
+2   Fixed    1400.0  0.0  -800.0
+--------------------- LINES -------------------------------------------------
+ID  NodeA  NodeB  Outputs
+(-) (-)    (-)    (-)
+1   1      2      -
+--------------------- SECTIONS ----------------------------------------------
+LineID  LineType  Length   NumSegs
+(-)     (-)       (m)      (-)
+1       chain120  80.0     10
+1       poly184   1378.9   80
+1       chain120  80.0     10
+--------------------- OPTIONS -----------------------------------------------
+9.80665  g        - Gravitational acceleration (m/s^2) [default: 9.80665]
+1025.0   rhoW     - Water density (kg/m^3) [default: 1025]
+800.0    WtrDpth  - Water depth (m) [default: absent standalone; host-owned OpenFAST]
+3.0e6    kBot     - Seabed penalty stiffness base (Pa/m) [default: 1.0e5]
+1.0e4    cBot              - Seabed normal damping base (Pa-s/m) [default: 1.0e4]
+0.4       rhoInf           - Generalised-alpha spectral radius {0<=rhoInf<=1} [default: 0.4]
+False     modified_newton  - Tangent-reuse mode {False=full Newton; True=guarded reuse} [default: False]
+False     adaptive_mesh    - Automatic finite-EI refinement {False; True} [default: False]
+dynamic_solver 1.0e-8 1.0e-14 30 12 - Relative tolerance, absolute tolerance, max iterations, backtracks [defaults shown]
+none      frictionMu       - Seabed friction coefficient {none; value>=0} [default: none]
+none      current           - Current model and velocity (m/s) {none; uniform; profile} [default: none]
+none      waves             - Wave model, height, period, and direction (m, s, deg) {none; airy; jonswap} [default: none]
+0         WaterKin          - Water-kinematics source {0/none; file; SEASTATE coupled only} [default: no policy]
+-- Complete option/default reference: cabledyn_options_reference.dat and doc/options.rst.
+--------------------- OUTPUTS -----------------------------------------------
+"FairTen1"
+"AnchTen1"
+"FairIncl1"
+"AnchIncl1"
+--------------------- need this line ----------------------------------------

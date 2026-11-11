@@ -1,0 +1,37 @@
+--------------------- CableDyn Input File ---
+msg_weightless_finite_ei
+--------------------- LINE TYPES ---
+TypeName Diam MassDenInAir EA BA EI Cd_n Cd_t Ca_n Ca_t
+(-) (m) (kg/m) (N) (-) (Nm2) (-) (-) (-) (-)
+neut 0.2 32.2013247 100000000 -1 10000 1.2 0.1 1 0
+--------------------- POINTS ---
+ID Type X Y Z Mass Vol CdA Ca
+(-) (-) (m) (m) (m) (kg) (m3) (m2) (-)
+1 Coupled 0 0 -20 0 0 0 0
+2 Fixed 80 0 -100 0 0 0 0
+--------------------- LINES ---
+ID NodeA NodeB Outputs
+(-) (-) (-) (-)
+1 1 2 pt
+--------------------- SECTIONS ---
+LineID LineType Length NumSegs
+(-) (-) (m) (-)
+1 neut 120 120
+--------------------- OPTIONS ---
+9.80665 g
+1025.0 rhoW
+200.0 WtrDpth
+100000.0 kBot
+1.0e4 cBot
+0.05 dtM
+0.0 TMax
+--------------------- OUTPUTS ---
+"FairTen1"
+"AnchTen1"
+"Point1Fx"
+"Point1Fy"
+"Point1Fz"
+"Point2Fx"
+"Point2Fy"
+"Point2Fz"
+--------------------- need this line ---

@@ -1,0 +1,48 @@
+diff --git a/glue-codes/fast-farm/src/FAST_Farm_Registry.txt b/glue-codes/fast-farm/src/FAST_Farm_Registry.txt
+index 110734ec5..986a9a4d2 100644
+--- a/glue-codes/fast-farm/src/FAST_Farm_Registry.txt
++++ b/glue-codes/fast-farm/src/FAST_Farm_Registry.txt
+@@ -14,6 +14,7 @@ include Registry_NWTC_Library.txt
++usefrom CableDyn_Registry.txt
+ usefrom FASTWrapper_Registry.txt
+ usefrom WakeDynamics_Registry.txt
+ usefrom AWAE_Registry.txt
+ 
+ param FAST_Farm/Farm    -  INTEGER  NumFFModules      - 5 -  "The number of modules available in FAST.Farm" -
+ param        ^          -  INTEGER  ModuleFF_None     - 0 -  "No module selected" -
+@@ -98,6 +98,8 @@ typedef    ^    ^                 IntKi         n_Out            - - - "Time ind
+ 
+ typedef    ^    ^                 MeshMapType   FWrap_2_MD   {:}   - -  "Map platform kinematics from each FAST instance to MD"
+ typedef    ^    ^                 MeshMapType   MD_2_FWrap   {:}   - -  "Map MD loads at the array level to each FAST instance"
++typedef    ^    ^                 MeshMapType   FWrap_2_CD   {:}   - -  "Map platform kinematics from each FAST instance to farm-level CableDyn"
++typedef    ^    ^                 MeshMapType   CD_2_FWrap   {:}   - -  "Map farm-level CableDyn loads to each FAST instance"
+ 
+ 
+ # ..... FASTWrapper data .......................................................................................................
+@@ -147,6 +149,18 @@ typedef    ^    ^                 logical                   IsInitialized -   .F
+ typedef    ^    ^                 IntKi                     VTK_count     -   0         -   "Counter for VTK output of shared moorings"
+ typedef    ^    ^                 IntKi                     VTK_TWidth    -   -         -   "width for VTK_count field in output name"
+ typedef    ^    ^                 character(1024)           VTK_OutFileRoot   -   -         -   "Rootfilename for VTK output"
++# ..... CableDyn (CompMooring=5 / MooringMod=5) farm data ..........................................................................
++typedef    ^    CDFarm_Data       CD_ContinuousStateType    x             -   -         -   "Continuous states"
++typedef    ^    ^                 CD_DiscreteStateType      xd            -   -         -   "Discrete states"
++typedef    ^    ^                 CD_ConstraintStateType    z             -   -         -   "Constraint states"
++typedef    ^    ^                 CD_OtherStateType         OtherSt       -   -         -   "Other states"
++typedef    ^    ^                 CD_ParameterType          p             -   -         -   "Parameters"
++typedef    ^    ^                 CD_InputType              u             -   -         -   "Extrapolated system inputs"
++typedef    ^    ^                 CD_InputType              Input        {:}  -         -   "System inputs"
++typedef    ^    ^                 DbKi                      InputTimes   {:}  -         -   "Current time" s
++typedef    ^    ^                 CD_OutputType             y             -   -         -   "System outputs"
++typedef    ^    ^                 CD_MiscVarType            m             -   -         -   "Misc/optimization variables"
++typedef    ^    ^                 logical                   IsInitialized -   .FALSE.   -   "Has CD_Init been called"
+ # ..... WAT InflowWind data ............................................................................................
+ typedef    ^    WAT_IfW_data      InflowWind_ContinuousStateType  x             -   -         -   "Continuous states"
+ typedef    ^    ^                 InflowWind_DiscreteStateType    xd            -   -         -   "Discrete states"
+@@ -164,6 +178,7 @@ typedef    ^   All_FastFarm_Data  FASTWrapper_Data          FWrap     {:}  -   -
+ typedef    ^   All_FastFarm_Data  WakeDynamics_Data         WD        {:}  -   -   "WakeDynamics (WD) data" -
+ typedef    ^   All_FastFarm_Data  AWAE_Data                 AWAE       -   -   -   "Ambient Wind & Array Effects (AWAE) data" -
+ typedef    ^   All_FastFarm_Data  MD_Data                   MD         -   -   -   "Farm-level MoorDyn model data" -
++typedef    ^   All_FastFarm_Data  CDFarm_Data               CD         -   -   -   "Farm-level CableDyn model data (MooringMod=5)" -
+ typedef    ^   All_FastFarm_Data  WAT_IfW_Data              WAT_IfW    -   -   -   "IfW data for WAT (temporary location until pointers are enabled)" -
+ # ..... FAST.Farm data ................................................................................................................
+ #

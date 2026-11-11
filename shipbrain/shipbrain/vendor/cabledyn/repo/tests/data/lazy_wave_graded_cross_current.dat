@@ -1,0 +1,57 @@
+--------------------- CableDyn Input File ------------------------------------
+Lazy-wave cable on a graded mesh in a cross current: a mesh-scale compression is no grounded-run limit
+-- The lazy wave of lazy_wave_touchdown_planar_coarse_att.dat (25 discrete buoyancy modules on a
+-- frictional seabed) with its buoyant stretch refined fourfold, so 0.9 m elements meet 4 m ones at
+-- the sag bend and 10 m ones along the grounded run, in a 0.2 m/s current across the line's plane.
+-- The catenary-continuation route stops on an element-mean axial compression read on those long
+-- elements, where the axial force of a stiff line oscillates: a mesh artefact, not the friction
+-- holding the grounded run. The static solve names it as such and goes on to the mesh-sequenced
+-- route, which solves the deck.
+--------------------- LINE TYPES ---------------------------------------------
+Name Diam Mass EA BA EI GAs GJ Irt Irn Cdn Cdt Can Cat
+(-) (m) (kg/m) (N) (-) (Nm2) (N) (Nm2) (kgm) (kgm) (-) (-) (-) (-)
+bare 0.16 36.70 4.69e8 0.0 1.99e4 1.0e8 1.5e4 1.0 1.0 1.2 0.1 1.0 0.0
+--------------------- POINTS -------------------------------------------------
+ID Type X Y Z
+(-) (-) (m) (m) (m)
+7 Coupled 30.0 0.0 -20.0
+8 Fixed 500.0 0.0 -200.0
+--------------------- LINES --------------------------------------------------
+ID NodeA NodeB Outputs
+(-) (-) (-) (-)
+4 7 8 -
+--------------------- SECTIONS -----------------------------------------------
+LineID LineType Length NumSegs
+(-) (-) (m) (-)
+4 bare 80.0 20
+4 bare 96.0 108
+4 bare 424.0 42
+--------------------- ATTACHMENTS -------------------------------------------
+LineID ArcLength Mass Volume CdA Ca CdAx
+(-) (m) (kg) (m^3) (m^2) (-) (m^2)
+4 80.0:10.66666667:176.0 228.3 0.45945 3.48 1.0 0.0
+--------------------- END CONNECTIONS ----------------------------------------
+LineID End Stiffness EzX EzY EzZ TorsStiffness NxX NxY NxZ Pretwist
+(-) (-) (N-m/rad) (-) (-) (-) (N-m/rad) (-) (-) (-) (deg)
+4 A Rigid 0.1058 0 -0.9944 Free 0 1 0 0
+4 B Rigid 1 0 0 Free 0 1 0 0
+--------------------- OPTIONS ------------------------------------------------
+9.80665 g
+1025.0 rhoW
+3.0e6 kBot
+3.0e5 cBot
+0.35 frictionMu
+200.0 WtrDpth
+0.025 dtM
+0.0 TMax
+uniform 0 0.2 0.0 current
+--------------------- OUTPUTS ------------------------------------------------
+FairTen4
+AnchTen4
+Point7Fx
+Point7Fy
+Point7Fz
+Point8Fx
+Point8Fy
+Point8Fz
+--------------------- END ----------------------------------------------------

@@ -1,0 +1,44 @@
+--------------------- MoorDyn Input File ------------------------------------
+Humboldt 800 m taut chain-polyester-chain mooring ONLY (static pretension)
+FALSE    Echo       - echo the input file data (flag)
+----------------------- LINE TYPES ------------------------------------------
+Name  Diam  MassDen  EA       BA/-zeta  EI    Cd    Ca    CdAx   CaAx
+(-)   (m)   (kg/m)   (N)      (N-s/-)   (-)   (-)   (-)   (-)    (-)
+chain120     0.216    288.00    1.232E+09   -1.0   0.0   2.40   1.00   1.150   1.000
+poly184      0.145     23.00    1.45E+08    -1.0   0.0   1.60   1.00   0.100   0.100
+---------------------- ROD TYPES ---------------------------------------------------------------
+TypeName Diam Mass/m Cd Ca CdEnd CaEnd
+(name) (m) (kg/m) (-) (-) (-) (-)
+---------------------- BODIES ---------------------------------------
+ID   Attachment  X0     Y0    Z0     r0      p0     y0     Mass  CG*   I*      Volume   CdA*   Ca*
+(#)   (word)     (m)    (m)   (m)   (deg)   (deg)  (deg)   (kg)  (m)  (kg-m^2)  (m^3)   (m^2)  (-)
+---------------------- POINTS --------------------------------
+ID   Type      X         Y       Z       M    V    CdA   CA
+(-)  (-)      (m)       (m)     (m)    (kg) (m^3) (m^2) (-)
+1     Fixed       58.000     0.000    -14.000      0     0      0     0
+2     Free       123.818     0.000    -60.860      0     0      0     0
+3     Free      1328.059     0.000   -764.747      0     0      0     0
+4     Fixed     1400.000     0.000   -799.892      0     0      0     0
+---------------------- RODS --------------------------------------------------------------------
+ID RodType Attachment Xa Ya Za Xb Yb Zb NumSegs RodOutputs
+(#) (name) (#/key) (m) (m) (m) (m) (m) (m) (-) (-)
+---------------------- LINES --------------------------------------
+ID  LineType  AttachA   AttachB  UnstrLen  NumSegs  Outputs
+(-)   (-)       (-)       (-)      (m)       (-)      (-)
+1    chain120   2         1           80.000  10      t
+2    poly184    3         2         1378.900  40      t
+3    chain120   4         3           80.000  10      t
+---------------------- SOLVER OPTIONS ---------------------------------------
+0.0005     dtM        - Desired MoorDyn maximum internal time step.
+RK4        tScheme    - time integration scheme.
+3.0e6      kBot       - Seabed contact stiffness in Pa/m.
+3.0e5      cBot       - Seabed contact damping in Pa-s/m.
+1.0        dtIC       - Convergence window used during IC generation.
+300.0      TmaxIC     - Maximum time searching for IC equilibrium.
+4.0        CdScaleIC  - Drag scaling factor during IC generation.
+0.001      threshIC   - Relative line-tension error threshold for IC convergence.
+------------------------ OUTPUTS --------------------------------------------
+FAIRTEN1
+ANCHTEN3
+END
+------------------------- need this line --------------------------------------

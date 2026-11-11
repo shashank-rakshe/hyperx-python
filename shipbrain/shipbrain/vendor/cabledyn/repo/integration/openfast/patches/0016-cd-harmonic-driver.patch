@@ -1,0 +1,23 @@
+diff --git a/modules/cabledyn/tests/cd_harmonic/cabledyn_driver.inp b/modules/cabledyn/tests/cd_harmonic/cabledyn_driver.inp
+new file mode 100644
+index 000000000..f74367d6c
+--- /dev/null
++++ b/modules/cabledyn/tests/cd_harmonic/cabledyn_driver.inp
+@@ -0,0 +1,16 @@
++--- CableDyn OpenFAST module driver: VolturnUS-S mooring under harmonic platform motion ---
++--- Prescribed surge 2 m / 10 s + heave 1 m / 10 s (90 deg lead), half-cosine ramped
++--- over the first period in the motion table; rigid-transformed to the coupled
++--- fairleads. Exercises the supercycled UpdateStates + ZOH CalcOutput cadence under
++--- real motion; the driver fails loud on any module error or non-finite observable.
++--- ENVIRONMENT ---
++9.80665      Gravity     (m/s^2)
++1025.0       rhoW        (kg/m^3)
++200.0        WtrDpth     (m)
++--- CABLEDYN ---
++"iea15mw_volturnus_mooring.dat"   CDInputFile
++"cd_harmonic"                     OutRootName
++60.0         TMax        (s)
++0.025        dtC         (s)
++1            InputsMode  {0: held at rest; 1: prescribed motion}
++"motion.dat" InputsFile
+

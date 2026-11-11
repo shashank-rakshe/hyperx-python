@@ -280,6 +280,17 @@ class Tools:
                       'folder that use it (NX File Renamer with NX\'s ug_edit_part_names; Windows with NX installed).',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'new_name': {'type': 'string'}},
                        'required': ['file', 'new_name']})
+        self.register('mooring', self.mooring, 'Mooring line / chain catenary with CableDyn (free FE solver for mooring lines and '
+                      'power cables, validated against OrcaFlex): depth (m), length (m), anchor radius (horizontal distance '
+                      'fairlead-anchor, m), chain d_mm + grade (R3, R3S, R4, R4S, R5) + kind (studless | studlink), '
+                      'fairlead_z (m, 0 = at the surface, negative below), current (m/s). Gives fairlead / anchor tension, '
+                      'angle, touchdown, grounded length, MBL and the API RP 2SK check (condition intact | damaged | transient).',
+                      {'type': 'object', 'properties': {'depth': num, 'length': num, 'radius': num, 'd_mm': num, 'grade': {'type': 'string'},
+                                                         'kind': {'type': 'string'}, 'fairlead_z': num, 'current': num,
+                                                         'condition': {'type': 'string'}}, 'required': ['depth', 'length', 'radius']})
+        self.register('cable_run', self.cable_run, 'Run any CableDyn or MoorDyn v2 deck (mooring lines, dynamic power cables, lazy '
+                      'waves, bend stiffeners, waves / current / vessel motion): tensions, angles, maxima over time, static profile.',
+                      {'type': 'object', 'properties': {'deck': {'type': 'string'}}, 'required': ['deck']})
         self.register('reverse_cad', self.reverse_cad, 'Mesh (STL scan / 3D-print / mesh export) -> STEP AP242 solid with ReverseCAD '
                       '(non-commercial licence): watertight B-Rep, volume, area, centre of mass, inertia, mass for a material, '
                       'recognised holes / ISO threads / fillets / chamfers / slots / cavities, and its own verification of the STEP '
@@ -1095,6 +1106,27 @@ class Tools:
         r = nxopen.rename(self._path(file), new_name)
         r['file'] = os.path.relpath(r['file'], self.workdir)
         return r
+
+    def mooring(self, depth, length, radius, d_mm=84, grade='R3', kind='studless', fairlead_z=0.0, current=None,
+                condition='intact'):
+        from . import cabledyn
+        name = f'mooring_{int(depth)}m_{int(length)}m'
+        r = cabledyn.mooring(depth, length, radius, d_mm=d_mm, grade=grade, kind=kind, fairlead_z=fairlead_z, current=current,
+                             condition=condition, workdir=self.workdir, name=name)
+        w = os.path.abspath(self.workdir)
+        return json.loads(json.dumps(r).replace(w + os.sep, '').replace(w, '.'))
+
+    def cable_run(self, deck):
+        from . import cabledyn
+        r = cabledyn.run(self._path(deck))
+        r.pop('static_profile', None)
+        last, mx = r.get('last', {}), r.get('max', {})
+        ten = {k: v for k, v in (mx or last).items() if 'Ten' in k}
+        r['plain_english'] = (f"CableDyn ran {os.path.basename(deck)} ({r['steps']} output step(s)). "
+                              + ('; '.join(f"{'max ' if mx else ''}{k} = {v / 1e3:,.1f} kN" for k, v in ten.items())
+                                 or 'Channels: ' + ', '.join(r['channels'][1:12])) + '.')
+        w = os.path.abspath(self.workdir)
+        return json.loads(json.dumps(r).replace(w + os.sep, '').replace(w, '.'))
 
     def reverse_cad(self, file, material=None, heatmap=False):
         from . import reversecad

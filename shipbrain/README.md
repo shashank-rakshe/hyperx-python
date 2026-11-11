@@ -269,6 +269,25 @@ ShipBrain runs its own program, pinned to commit `6c775550` (version 0.6.11):
   instead. Its docs and code are the knowledge pack `packs/cadmpeg.sbpack` (7,202 chunks); 240 training conversations
   come from real runs on its public CC0 / NIST sample files (`training/cadmpeg_tasks.py`).
 
+## Mooring lines and dynamic cables: CableDyn (Apache-2.0)
+
+[CableDyn](https://github.com/SMI-Lab-Inha/CableDyn) (J. H. Seo et al., Ocean Engineering 368, 128332, 2026) is copied
+as written in `vendor/cabledyn`: a geometrically exact finite-element solver for mooring lines and dynamic power cables -
+statics from the geometry alone, implicit dynamics with waves / current / vessel motion, bending stiffness, bend
+stiffeners, torsion, seabed contact and friction, modes, VIV, fibre ropes; it reads MoorDyn v2 decks and couples with
+OpenFAST. Its own validation: within 0.06-0.6 % of OrcaFlex 11.6d on lazy-wave curvature and tension, and model tests.
+
+- Tool `mooring(depth, length, radius, d_mm, grade, kind, fairlead_z, current, condition)`: one chain line from plain
+  numbers -> fairlead / anchor tension and angle, touchdown point, grounded length, breaking load and the API RP 2SK
+  check (CableDyn's own factors of safety). Chain properties: studless mass 19.9 d² t/m, EA 0.854·10⁸ d² kN (d in m),
+  hydrodynamic diameter 1.8 d (exactly what CableDyn's own example decks use); MBL = c d² (44 - 0.08 d) kN with
+  c = 0.0223 R3 ... 0.0320 R5 (DNV-OS-E302). A line shorter than the fairlead-anchor distance is refused with the reason.
+- Tool `cable_run(deck)`: any CableDyn / MoorDyn v2 deck -> tensions and their maxima over time.
+- Install: `pip install "cabledyn[post]"` (the wheel carries the solver) or the Windows `CableDyn_driver.exe`; or
+  `python -c "from shipbrain import cabledyn; cabledyn.build()"` compiles ShipBrain's copy (gfortran + LAPACK + CMake).
+- Skill `mooring`, knowledge pack `packs/CableDyn.sbpack`, 160 training conversations from real runs
+  (`training/cabledyn_tasks.py`), tests incl. a hand catenary check.
+
 ## Siemens NX automation: NX Open journals (nxopentse) and renaming with links
 
 For users who have NX / Simcenter 3D (reading NX files needs no NX - see above):

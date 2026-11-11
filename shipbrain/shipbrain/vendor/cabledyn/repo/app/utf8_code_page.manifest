@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright (c) 2026 Jae Hoon Seo, SMI Lab, Inha University -->
+<!--
+  Windows application manifest merged into CableDyn_driver.exe and the CableDyn-enabled
+  openfast.exe. It makes UTF-8 the process's active code page (Windows 10 version 1903 and
+  later), so the Fortran runtime's narrow file calls, the current directory, and the
+  narrow command line all carry every Unicode character exactly. Without it a folder name
+  outside the system ANSI code page (for example "u-umlaut" on a Korean-locale system) cannot
+  be opened. The linker's own manifest (the asInvoker execution level) is kept.
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
+    </windowsSettings>
+  </application>
+</assembly>

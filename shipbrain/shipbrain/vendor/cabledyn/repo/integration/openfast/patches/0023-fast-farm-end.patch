@@ -1,0 +1,17 @@
+diff --git a/glue-codes/fast-farm/src/FAST_Farm.f90 b/glue-codes/fast-farm/src/FAST_Farm.f90
+index c3d63ed75..c7ecdcedc 100644
+--- a/glue-codes/fast-farm/src/FAST_Farm.f90
++++ b/glue-codes/fast-farm/src/FAST_Farm.f90
+@@ -160,6 +160,12 @@ type(All_FastFarm_Data)               :: farm
+    ! End:
+    !...............................................................................................................................         
+    
++   ! the run is complete: a turbine's CableDyn instance writes its whole-run outputs (an abort, in
++   ! CheckError, ends the turbines without this)
++   do i_turb = 1, farm%p%NumTurbines
++      farm%FWrap(i_turb)%m%Turbine%CD%m%HostComplete = .true.
++   end do
++
+    call FARM_End(farm, ErrStat, ErrMsg)
+ 
+    ! Finalize AMReX library

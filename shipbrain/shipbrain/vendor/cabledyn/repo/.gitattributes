@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: Apache-2.0
+# Enforce LF line endings for all text files on every platform so that
+# ruff format --check (configured for "lf") does not falsely flag files
+# checked out on Windows runners with core.autocrlf=true.
+#
+# Encoding policy: all tracked text (source, config, and Markdown docs) is
+# UTF-8. The docs use UTF-8 typographic and engineering glyphs (em dash,
+# multiplication sign, <=, Greek letters). They render correctly in any
+# UTF-8 terminal; on a legacy Windows console set the code page first with
+# `chcp 65001` (or `$OutputEncoding = [Text.Encoding]::UTF8` in PowerShell).
+# git stores/serves these bytes verbatim -- no working-tree-encoding rewrite.
+
+* text=auto eol=lf
+
+# Explicit text-with-LF for source / config types
+*.py        text eol=lf
+*.pyi       text eol=lf
+*.toml      text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+*.md        text eol=lf
+*.cff       text eol=lf
+*.txt       text eol=lf
+*.cfg       text eol=lf
+*.ini       text eol=lf
+*.f         text eol=lf
+*.f90       text eol=lf
+*.F90       text eol=lf
+LICENSE     text eol=lf
+
+# Binary and data formats. Marking Office files explicitly also prevent a
+# machine-wide Git text-conversion driver from treating them as source.
+*.pdf       binary
+*.npy       binary
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.docx      binary
+*.xlsx      binary
+*.xls       binary
+*.zip       binary
+
+# The OpenFAST integration patches are byte-exact upstream diffs. Preserve and
+# validate them as patch payloads rather than applying source whitespace rules.
+integration/openfast/patches/*.patch -whitespace

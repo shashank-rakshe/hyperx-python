@@ -1,0 +1,21 @@
+diff --git a/modules/cabledyn/tests/cd_settle/cabledyn_driver.inp b/modules/cabledyn/tests/cd_settle/cabledyn_driver.inp
+new file mode 100644
+index 000000000..97e8f98b7
+--- /dev/null
++++ b/modules/cabledyn/tests/cd_settle/cabledyn_driver.inp
+@@ -0,0 +1,14 @@
++--- CableDyn OpenFAST module driver: VolturnUS-S mooring, held at rest (settle) ---
++--- The module solves the true Newton static IC, then holds the platform for 60 s at
++--- its own dtM (deck default 0.1 s) inside the 0.025 s glue cadence; every output
++--- channel and coupled load must stay finite (the driver fails loud otherwise).
++--- ENVIRONMENT ---
++9.80665      Gravity     (m/s^2)
++1025.0       rhoW        (kg/m^3)
++200.0        WtrDpth     (m)
++--- CABLEDYN ---
++"iea15mw_volturnus_mooring.dat"   CDInputFile
++"cd_settle"                       OutRootName
++60.0         TMax        (s)
++0.025        dtC         (s)
++0            InputsMode  {0: held at rest; 1: prescribed motion}
+

@@ -1,0 +1,34 @@
+--------------------- CableDyn Input File ------------------------------------
+A chain laid from its anchor away from the fairlead (layAzimuth 0, the fairlead lies along 180 deg) and held there by as-laid seabed friction: the deck lays the run past the anchor, so no fold note
+--------------------- LINE TYPES ---------------------------------------------
+TypeName Diam MassDenInAir EA BA EI Cd_n Cd_t Ca_n Ca_t
+(-) (m) (kg/m) (N) (-) (Nm2) (-) (-) (-) (-)
+chain 0.216 286.56 1.22976e9 -1 0 1.37 0.64 1 0
+--------------------- POINTS -------------------------------------------------
+ID Type X Y Z
+(-) (-) (m) (m) (m)
+1 Coupled 0.0 0.0 -10.0
+2 Fixed 450.0 0.0 -100.0
+--------------------- LINES --------------------------------------------------
+ID NodeA NodeB Outputs
+(-) (-) (-) (-)
+1 1 2 -
+--------------------- SECTIONS -----------------------------------------------
+LineID LineType Length NumSegs
+(-) (-) (m) (-)
+1 chain 520.0 52
+--------------------- OPTIONS ------------------------------------------------
+9.80665 g
+1025.0 rhoW
+100.0 WtrDpth
+1.0e5 kBot
+1.0e4 cBot
+0.5 frictionMu
+asLaid staticsFriction
+0.0 layAzimuth
+0.05 dtM
+0.0 TMax
+--------------------- OUTPUTS ------------------------------------------------
+FairTen1
+AnchTen1
+--------------------- END ----------------------------------------------------

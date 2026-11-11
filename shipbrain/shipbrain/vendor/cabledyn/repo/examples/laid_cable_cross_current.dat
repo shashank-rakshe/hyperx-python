@@ -1,0 +1,56 @@
+--------------------- CableDyn Input File ------------------------------------
+Laid power cable in a 1.2 m/s cross current held by anisotropic seabed friction
+-- A 230 m, 0.20 m, 80 kg/m cable hangs from a held hang-off 14 m below the surface (End A) and
+-- lies on a flat 80 m seabed for about half its length to a seabed anchor 200 m away in +X (End B).
+-- A 1.2 m/s uniform current in +Y crosses the laid run. Seabed friction is anisotropic in the
+-- OrcaFlex axial/normal sense: 0.3 along the local cable axis, 1.0 across it. The current loads the
+-- laid run across its axis, so the lateral coefficient decides how far it slides before friction
+-- holds it; the static solve finds the slid equilibrium and the 10 s dynamic run keeps it at rest.
+-- Change the two frictionMu* rows (for example to one 0.3 frictionMu row) to compare.
+-- The cable is tension-only (EI = 0), as for a laid-cable route survey.
+--------------------- LINE TYPES ---------------------------------------------
+TypeName  Diam   MassDenInAir  EA       BA   EI       Cd_n  Cd_t  Ca_n  Ca_t
+(-)       (m)    (kg/m)        (N)      (-)  (N-m2)   (-)   (-)   (-)   (-)
+cable     0.200  80.0          8.0e8    0.0  0.0      1.2   0.1   1.0   0.0
+--------------------- POINTS ------------------------------------------------
+ID  Type     X       Y    Z
+(-) (-)      (m)     (m)  (m)
+1   Coupled  5.0     0.0  -14.0
+2   Fixed    205.0   0.0  -80.0
+--------------------- LINES -------------------------------------------------
+ID  NodeA  NodeB  Outputs
+(-) (-)    (-)    (-)
+1   1      2      -
+--------------------- SECTIONS ----------------------------------------------
+LineID  LineType  Length   NumSegs
+(-)     (-)       (m)      (-)
+1       cable     230.0    115
+--------------------- OPTIONS -----------------------------------------------
+9.80665  g               - Gravitational acceleration (m/s^2) [default: 9.80665]
+1025.0   rhoW            - Water density (kg/m^3) [default: 1025]
+80.0     WtrDpth         - Water depth for the flat seabed (m) [default: absent standalone; host-owned OpenFAST]
+1.0e5    kBot            - Seabed penalty stiffness base (Pa/m) [default: 1.0e5]
+1.0e4    cBot            - Seabed normal damping base (Pa-s/m) [default: 1.0e4]
+0.4      rhoInf          - Generalised-alpha spectral radius {0<=rhoInf<=1} [default: 0.4]
+False    modified_newton - Tangent-reuse mode {False=full Newton; True=guarded reuse} [default: False]
+0.05     dtM             - CableDyn internal time step (s) [default: omitted standalone; the glue DT in OpenFAST]
+10.0     TMax            - Standalone simulation duration (s) [default: omitted standalone; host-owned OpenFAST]
+False     adaptive_mesh    - Automatic finite-EI refinement {False; True} [default: False]
+dynamic_solver 1.0e-8 1.0e-14 30 12 - Relative tolerance, absolute tolerance, max iterations, backtracks [defaults shown]
+none      frictionMu        - Seabed friction coefficient {none; value>=0} [default: none]
+0.3       frictionMuAxial   - Seabed friction coefficient along the local line axis {value>=0} [default: frictionMu]
+1.0       frictionMuLateral - Seabed friction coefficient across the local line axis {value>=0} [default: frictionMu]
+uniform 0.0 1.2 0.0  current  - Current model and X/Y/Z velocity (m/s) {none; uniform; profile} [default: none]
+none      waves             - Wave model, height, period, and direction (m, s, deg) {none; airy; jonswap} [default: none]
+0         WaterKin          - Water-kinematics source {0/none; file; SEASTATE coupled only} [default: no policy]
+-- Complete option/default reference: cabledyn_options_reference.dat and doc/options.rst.
+--------------------- OUTPUTS -----------------------------------------------
+"FairTen1"
+"AnchTen1"
+"TDP1s"
+"TDP1y"
+"L1N64py"
+"L1N81py"
+"L1N99py"
+"L1N110py"
+--------------------- need this line ----------------------------------------

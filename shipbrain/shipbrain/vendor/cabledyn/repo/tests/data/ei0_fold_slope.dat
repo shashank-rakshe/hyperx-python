@@ -1,0 +1,29 @@
+--------------------- CableDyn Input File ------------------------------------
+Chain on a 5 deg frictionless slope falling past its anchor: the grounded run slides 24 m past the anchor and folds back (noted)
+--------------------- LINE TYPES ---------------------------------------------
+TypeName Diam MassDenInAir EA BA EI Cd_n Cd_t Ca_n Ca_t
+(-) (m) (kg/m) (N) (-) (Nm2) (-) (-) (-) (-)
+chain 0.216 286.56 1.22976e9 -1 0 1.37 0.64 1 0
+--------------------- POINTS -------------------------------------------------
+ID Type X Y Z
+(-) (-) (m) (m) (m)
+1 Coupled 0.0 0.0 -10.0
+2 Fixed 450.0 0.0 -300.0
+--------------------- LINES --------------------------------------------------
+ID NodeA NodeB Outputs
+(-) (-) (-) (-)
+1 1 2 -
+--------------------- SECTIONS -----------------------------------------------
+LineID LineType Length NumSegs
+(-) (-) (m) (-)
+1 chain 700.0 70
+--------------------- OPTIONS ------------------------------------------------
+9.80665 g
+1025.0 rhoW
+ei0_fold_slope_bathy.txt bathymetryFile
+1.0e5 kBot
+1.0e4 cBot
+--------------------- OUTPUTS ------------------------------------------------
+FairTen1
+AnchTen1
+--------------------- END ----------------------------------------------------

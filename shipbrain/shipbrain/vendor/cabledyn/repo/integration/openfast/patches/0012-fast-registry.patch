@@ -1,0 +1,67 @@
+diff --git a/modules/openfast-library/src/FAST_Registry.txt b/modules/openfast-library/src/FAST_Registry.txt
+index 5aa331a16..d56dea793 100644
+--- a/modules/openfast-library/src/FAST_Registry.txt
++++ b/modules/openfast-library/src/FAST_Registry.txt
+@@ -30,6 +30,7 @@ usefrom	Registry_IceDyn.txt
+ usefrom	FEAM_Registry.txt
+ usefrom	MAP_Registry.txt
+ usefrom	MoorDyn_Registry.txt
++usefrom	CableDyn_Registry.txt
+ usefrom	OrcaFlexInterface.txt
+ usefrom	ExtPtfm_MCKF_Registry.txt
+ 
+@@ -65,7 +66,8 @@ param	^	-	INTEGER	Module_IceD	-	19	-	"IceDyn"	-
+ param	^	-	INTEGER	Module_ADsk	-	20	-	"AeroDisk"	-
+ param	^	-	INTEGER	Module_SED 	-	21	-	"Simplified-ElastoDyn" -
+ param	^	-	INTEGER	Module_SlD	-	22	-	"SoilDyn"	-
+-param	^	-	INTEGER	NumModules	-	22	-	"The number of modules available in FAST"	-
++param	^	-	INTEGER	Module_CD	-	23	-	"CableDyn (mooring)"	-
++param	^	-	INTEGER	NumModules	-	23	-	"The number of modules available in FAST"	-
+ # Other Constants
+ param	^	-	INTEGER	MaxBladesBD	-	3	-	"Maximum number of blades allowed on a turbine"	-
+ param	^	-	INTEGER	IceD_MaxLegs	-	4	-	"because I don't know how many legs there are before calling IceD_Init and I don't want to copy the data because of sibling mesh issues, I'm going to allocate IceD based on this number"	-
+@@ -143,7 +145,7 @@ typedef	^	FAST_ParameterType	IntKi	CompServo	-	-	-	"Compute control and electric
+ typedef	^	FAST_ParameterType	IntKi	CompSeaSt   -	-	-	"Compute sea states; wave kinematics (switch) {Module_None; Module_SeaSt}"	-
+ typedef	^	FAST_ParameterType	IntKi	CompHydro	-	-	-	"Compute hydrodynamic loads (switch) {Module_None; Module_HD}"	-
+ typedef	^	FAST_ParameterType	IntKi	CompSub	-	-	-	"Compute sub-structural dynamics (switch) {Module_None; Module_SD, Module_ExtPtfm, Module_SlD}"	-
+-typedef	^	FAST_ParameterType	IntKi	CompMooring	-	-	-	"Compute mooring system (switch) {Module_None; Module_MAP; Module_FEAM; Module_MD; Module_Orca}"	-
++typedef	^	FAST_ParameterType	IntKi	CompMooring	-	-	-	"Compute mooring system (switch) {Module_None; Module_MAP; Module_FEAM; Module_MD; Module_Orca; Module_CD}"	-
+ typedef	^	FAST_ParameterType	IntKi	CompIce	-	-	-	"Compute ice loading (switch) {Module_None; Module_IceF, Module_IceD}"	-
+ typedef	^	FAST_ParameterType	IntKi	CompSoil	-	-	-	"Compute soil-structural dynamics (switch) {Module_None; Module_SlD}"	-
+ typedef	^	FAST_ParameterType	IntKi	MHK	        -	-	-	"MHK turbine type (switch) {0=Not an MHK turbine; 1=Fixed MHK turbine; 2=Floating MHK turbine}"	-
+@@ -498,6 +500,17 @@ typedef	^	^	MD_MiscVarType	m	-	-	-	"Misc/optimization variables"
+ typedef	^	^	MD_InputType	Input	{:}	-	-	"Array of inputs associated with InputTimes"
+ typedef	^	^	DbKi	InputTimes	{:}	-	-	"Array of times associated with Input Array"
+ 
++# ..... CableDyn data .......................................................................................................
++typedef	FAST	CableDyn_Data	CD_ContinuousStateType	x	{:}	-	-	"Continuous states"
++typedef	^	^	CD_DiscreteStateType	xd	{:}	-	-	"Discrete states"
++typedef	^	^	CD_ConstraintStateType	z	{:}	-	-	"Constraint states"
++typedef	^	^	CD_OtherStateType	OtherSt	{:}	-	-	"Other states"
++typedef	^	^	CD_ParameterType	p	-	-	-	"Parameters"
++typedef	^	^	CD_OutputType	y	-	-	-	"System outputs"
++typedef	^	^	CD_MiscVarType	m	-	-	-	"Misc/optimization variables"
++typedef	^	^	CD_InputType	Input	{:}	-	-	"Array of inputs associated with InputTimes"
++typedef	^	^	DbKi	InputTimes	{:}	-	-	"Array of times associated with Input Array"
++
+ # ..... OrcaFlex data .......................................................................................................
+ typedef	FAST	OrcaFlex_Data	Orca_ContinuousStateType	x	{:}	-	-	"Continuous states"
+ typedef	^	^	Orca_DiscreteStateType	xd	{:}	-	-	"Discrete states"
+@@ -566,6 +579,8 @@ typedef   ^   FAST_InitData    FEAM_InitInputType           InData_FEAM     -  -
+ typedef   ^   FAST_InitData    FEAM_InitOutputType         OutData_FEAM     -  -  -  "FEAM Initialization output data"
+ typedef   ^   FAST_InitData    MD_InitInputType             InData_MD       -  -  -  "MD Initialization input data"
+ typedef   ^   FAST_InitData    MD_InitOutputType           OutData_MD       -  -  -  "MD Initialization output data"
++typedef   ^   FAST_InitData    CD_InitInputType             InData_CD       -  -  -  "CableDyn Initialization input data"
++typedef   ^   FAST_InitData    CD_InitOutputType           OutData_CD       -  -  -  "CableDyn Initialization output data"
+ typedef   ^   FAST_InitData    Orca_InitInputType           InData_Orca     -  -  -  "Orca Initialization input data"
+ typedef   ^   FAST_InitData    Orca_InitOutputType         OutData_Orca     -  -  -  "Orca Initialization output data"
+ typedef   ^   FAST_InitData    IceFloe_InitInputType        InData_IceF     -  -  -  "IceF Initialization input data"
+@@ -619,6 +634,7 @@ typedef	^	FAST_TurbineType	SoilDyn_Data	SlD	-	-	-	"Data for the SoilDyn module"
+ typedef	^	FAST_TurbineType	MAP_Data	MAP	-	-	-	"Data for the MAP (Mooring Analysis Program) module"	-
+ typedef	^	FAST_TurbineType	FEAMooring_Data	FEAM	-	-	-	"Data for the FEAMooring module"	-
+ typedef	^	FAST_TurbineType	MoorDyn_Data	MD	-	-	-	"Data for the MoorDyn module"	-
++typedef	^	FAST_TurbineType	CableDyn_Data	CD	-	-	-	"Data for the CableDyn mooring module"	-
+ typedef	^	FAST_TurbineType	OrcaFlex_Data	Orca	-	-	-	"Data for the OrcaFlex interface module"	-
+ typedef	^	FAST_TurbineType	IceFloe_Data	IceF	-	-	-	"Data for the IceFloe module"	-
+ typedef	^	FAST_TurbineType	IceDyn_Data	IceD	-	-	-	"Data for the IceDyn module"	-
+

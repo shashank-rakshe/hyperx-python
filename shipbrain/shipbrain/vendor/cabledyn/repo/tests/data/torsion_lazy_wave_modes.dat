@@ -1,0 +1,46 @@
+--------------------- CableDyn Input File ------------------------------------
+Modal analysis (nModes) of the Gulf of Mexico 80 m lazy-wave cable twisted two turns
+-- Driver regression: the cable, clamped and restrained in torsion at both ends, of
+-- examples/torsion_lazy_wave_hangoff_twist.dat (illustrative GJ = 50 kN.m^2), with the two turns
+-- imposed as the End B pretwist instead of the hang-off roll. The static solve twists the cable
+-- by +720 deg; the modes about that twisted equilibrium carry the twist angle of every node
+-- (the polar inertia Irn of LINE TYPES), so the table adds PolarShare and dTwist. One 0.1 s step.
+--------------------- LINE TYPES ---------------------------------------------
+TypeName  Diam   MassDenInAir  EA       BA   EI       GAs      GJ      Irt     Irn     Cd_n Cd_t Ca_n Ca_t
+(-)       (m)    (kg/m)        (N)      (-)  (N-m2)   (N)      (N-m2)  (kg-m)  (kg-m)  (-)  (-)  (-)  (-)
+bare      0.160  36.70         4.69e8   0.0  1.99e4   9.02e7   5.0e4   0.0587  0.1174  1.2  0.1  1.0  0.0
+buoy      0.290  59.53         4.69e8   0.0  1.99e4   9.02e7   5.0e4   0.3129  0.6258  1.2  0.1  1.0  0.0
+--------------------- POINTS ------------------------------------------------
+ID  Type     X       Y    Z
+(-) (-)      (m)     (m)  (m)
+1   Coupled  5.0     0.0  -14.0
+2   Fixed    125.0   0.0  -80.0
+--------------------- LINES -------------------------------------------------
+ID  NodeA  NodeB  Outputs
+(-) (-)    (-)    (-)
+1   1      2      -
+--------------------- SECTIONS ----------------------------------------------
+LineID  LineType  Length   NumSegs
+(-)     (-)       (m)      (-)
+1       bare      68.114   56
+1       buoy      50.000   40
+1       bare      52.101   32
+--------------------- END CONNECTIONS ---------------------------------------
+LineID  End  Stiffness  EzX      EzY  EzZ       TorsStiffness  NxX  NxY  NxZ  Pretwist
+(-)     (-)  (N-m/rad)  (-)      (-)  (-)       (N-m/rad)      (-)  (-)  (-)  (deg)
+1       A    Rigid      0.14641  0.0  -0.98922  Rigid          0.0  1.0  0.0  0.0
+1       B    Rigid      0.99999  0.0   0.00503  Rigid          0.0  1.0  0.0  720.0
+--------------------- OPTIONS -----------------------------------------------
+9.80665  g                - Gravitational acceleration (m/s^2)
+1025.0   rhoW             - Water density (kg/m^3)
+80.0     WtrDpth          - Water depth for the flat seabed (m)
+1.0e5    kBot             - Seabed penalty stiffness base (Pa/m)
+1.0e4    cBot             - Seabed normal damping base (Pa-s/m)
+0.1      dtM              - CableDyn internal time step (s)
+0.1      TMax             - Standalone simulation duration (s)
+12       nModes           - Modal analysis: number of lowest natural modes per line
+--------------------- OUTPUTS -----------------------------------------------
+"FairTen1"
+"Torq1N1"
+"Twist1"
+--------------------- need this line ----------------------------------------

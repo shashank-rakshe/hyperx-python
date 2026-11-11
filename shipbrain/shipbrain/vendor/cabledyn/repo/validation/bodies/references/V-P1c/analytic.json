@@ -1,0 +1,18 @@
+{
+  "case": "V-P1c",
+  "code": "analytic",
+  "series": "analytic.csv",
+  "date": "2026-09-26",
+  "host": "13th Gen Intel(R) Core(TM) i9-13900K, Windows",
+  "version": "closed form (Jacobi elliptic)",
+  "settings": {
+    "theta0_deg": 120.0,
+    "I_A": 16667.916666666668,
+    "omega0": 1.212801378405071,
+    "T": 7.112510542610465,
+    "T_small_amplitude": 5.180720783350748,
+    "energy": 12258.312499999995,
+    "formula": "T = 4 sqrt(I_A/(m g L/2)) K(sin(theta0/2)), I_A = m (L^2/3 + d^2/16)"
+  },
+  "dt": null
+}

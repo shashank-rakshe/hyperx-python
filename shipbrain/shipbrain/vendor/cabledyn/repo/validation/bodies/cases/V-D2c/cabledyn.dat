@@ -1,0 +1,55 @@
+--------------------- CableDyn Input File ------------------------------------
+V-D2 submerged free spar rod on four taut legs, release dx = 2.0 m, dz = 0.0 m
+-- Rod of examples/rod_moored_spar.dat (d 1 m, L 10 m, 300 kg/m), 50 m water, still water.
+-- End A top (z = -20), End B bottom (z = -30); anchors shifted by -dx instead of moving the rod.
+-- Release protocol R: rod held while the lines settle, released at t = 0.
+---------------------- LINE TYPES ------------------------------------
+TypeName  Diam  MassDenInAir  EA  BA/-zeta  EI  Cd_n  Cd_t  Ca_n  Ca_t
+(-)  (m)  (kg/m)  (N)  (N-s/-)  (N-m^2)  (-)  (-)  (-)  (-)
+poly  0.1  10  2.00000000e+07  -1  0  1.2  0.2  1  0
+---------------------- ROD TYPES -------------------------------------
+TypeName  Diam  Mass/m  Cd  Ca  CdEnd  CaEnd
+(name)  (m)  (kg/m)  (-)  (-)  (-)  (-)
+spar  1  300  0.8  1  0  0
+---------------------- RODS ------------------------------------------
+ID  RodType  Attachment  Xa  Ya  Za  Xb  Yb  Zb  NumSegs  RodOutputs
+(#)  (name)  (#/key)  (m)  (m)  (m)  (m)  (m)  (m)  (-)  (-)
+1  spar  Free  0  0  -20  0  0  -30  20  -
+---------------------- POINTS ----------------------------------------
+ID  Attachment  X  Y  Z  Mass  Volume  CdA  Ca
+(#)  (-)  (m)  (m)  (m)  (kg)  (m^3)  (m^2)  (-)
+1  Fixed  23  0  -50  0  0  0  0
+2  Fixed  -27  0  -50  0  0  0  0
+3  Fixed  -2  30  -50  0  0  0  0
+4  Fixed  -2  -30  -50  0  0  0  0
+---------------------- LINES -----------------------------------------
+ID  LineType  AttachA  AttachB  UnstrLen  NumSegs  LineOutputs
+(#)  (name)  (#)  (#)  (m)  (-)  (-)
+1  poly  R1B  1  31.95  128  -
+2  poly  R1B  2  31.95  128  -
+3  poly  R1A  3  42.4  160  -
+4  poly  R1A  4  42.4  160  -
+--------------------- OPTIONS ------------------------------------------
+9.80665  g
+1025  rhoW
+50  WtrDpth
+100000  kBot
+10000  cBot
+deck  bodyIC
+moordyn  rodHydro
+0.002  dtM
+10  TMax
+none  current
+none  waves
+--------------------- OUTPUTS ------------------------------------------
+"Rod1Px"
+"Rod1Py"
+"Rod1Pz"
+"Rod1N20Px"
+"Rod1N20Py"
+"Rod1N20Pz"
+"FairTen1"
+"FairTen2"
+"FairTen3"
+"FairTen4"
+--------------------- need this line -----------------------------------

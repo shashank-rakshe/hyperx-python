@@ -1,0 +1,143 @@
+# File: .github/workflows/fortran.yml
+# SPDX-License-Identifier: Apache-2.0
+# CI for the Fortran 2018 core: fprettify formatting gate + CMake build +
+# CTest, on both Linux and Windows using the SAME conda-forge toolchain the project
+# ships in environment.yml (gfortran / CMake / OpenBLAS / LAPACK). Running on
+# windows-latest with the conda OpenBLAS fallback exercises the project's primary
+# local target, not just a Linux apt stack.
+name: fortran
+
+# No paths filter: CTest also registers Python, documentation, example-deck, benchmark,
+# validation-record, and integration checks, so any change in the tree can affect it.
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+concurrency:
+  group: fortran-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: fortran core (conda gfortran, ${{ matrix.os }}, ${{ matrix.build_type }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        # Debug (-O0) is a hardening tier, not just a build variant: gfortran does
+        # not short-circuit .AND./.OR. at -O0, so code that relies on short-circuit
+        # to skip an absent-OPTIONAL access (non-conforming, F2018 15.5.2.12) faults
+        # here while Release optimizes it away. Running the suite at -O0 catches that
+        # class on every PR.
+        build_type: [Release, Debug]
+    defaults:
+      run:
+        shell: bash -el {0}        # login shell so the conda env is active
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up the conda toolchain (gfortran, CMake, OpenBLAS, LAPACK)
+        uses: mamba-org/setup-micromamba@f457c30a868e4760d3a6fcea5f25dc655b8edf39 # v3.2.1
+        with:
+          environment-file: environment.yml
+          cache-environment: true
+
+      - name: Install fprettify (matches the pre-commit pin)
+        run: python -m pip install "fprettify==0.3.7"
+
+      - name: Formatting gate (fprettify, same args as pre-commit)
+        run: |
+          # src/openfast/ is excluded to match the pre-commit hook: those sources are
+          # registry-generated (byte-exact vs regeneration) and follow OpenFAST
+          # convention, so they must not be re-formatted to the project style.
+          # fprettify matches --exclude against bare directory and file NAMES, so
+          # "openfast" prunes only the src/openfast directory; a wildcard such as
+          # "*openfast*" would also skip src/CableDyn_OpenFAST*.f90 and
+          # tests/test_openfast_*.f90 (case-insensitively on Windows).
+          fprettify --indent 2 --line-length 120 --recursive --exclude openfast src app tests
+          git diff --exit-code
+
+      - name: Show toolchain
+        run: gfortran --version && cmake --version
+
+      - name: Configure
+        run: |
+          # On win-64 the conda-forge c-compiler package activates MSVC (CC=cl). Pin the
+          # MinGW gcc that matches gfortran, so the C sources build with the GNU toolchain
+          # the GNU-only CMake paths (runtime BLAS loading, the MinGW locale guard) expect.
+          c_compiler=()
+          if [ "$RUNNER_OS" = "Windows" ]; then c_compiler=(-DCMAKE_C_COMPILER=gcc); fi
+          cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} "${c_compiler[@]}"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test (CTest)
+        # The tests are parallel-safe; resource-heavy ones reserve processors. Four tests run
+        # at once, so each runs single-threaded: OpenMP and OpenBLAS would otherwise start a
+        # thread per core in every test and oversubscribe the runner. Tests that check
+        # threading set their own thread counts.
+        env:
+          OMP_NUM_THREADS: "1"
+          OPENBLAS_NUM_THREADS: "1"
+        run: ctest --test-dir build --output-on-failure --parallel 4
+
+  # Round-off fragility: a result that depends on the BLAS kernel fails here although every
+  # job above, on the runner's own kernel, passes. Prescott, an SSE3 kernel of the conda-forge
+  # OpenBLAS, sums in another order than the AVX2 and AVX-512 kernels the runners select.
+  # This job is advisory: branch protection names the jobs above, not this one.
+  roundoff:
+    name: round-off kernel (conda gfortran, ubuntu-latest, Prescott)
+    runs-on: ubuntu-latest
+    env:
+      OPENBLAS_CORETYPE: Prescott
+    defaults:
+      run:
+        shell: bash -el {0}        # login shell so the conda env is active
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up the conda toolchain (gfortran, CMake, OpenBLAS, LAPACK)
+        uses: mamba-org/setup-micromamba@f457c30a868e4760d3a6fcea5f25dc655b8edf39 # v3.2.1
+        with:
+          environment-file: environment.yml
+          cache-environment: true
+
+      - name: Show toolchain
+        run: gfortran --version && cmake --version
+
+      - name: Configure
+        run: cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Confirm the OpenBLAS kernel
+        # OPENBLAS_CORETYPE works only on a dynamic-architecture OpenBLAS and is otherwise
+        # ignored without a word: stop here rather than pass on the runner's own kernel.
+        run: >-
+          python tests/check_example_fallbacks.py --driver build/cabledyn --examples examples
+          --out build/kernel_check --coretype "$OPENBLAS_CORETYPE" --kernel-only
+
+      - name: Test (CTest)
+        # As in the job above: four tests at once, each single-threaded. The few tests that
+        # pin a kernel of their own set OPENBLAS_CORETYPE themselves.
+        env:
+          OMP_NUM_THREADS: "1"
+          OPENBLAS_NUM_THREADS: "1"
+        run: ctest --test-dir build --output-on-failure --parallel 4
+
+      - name: Example decks without a fallback note
+        run: >-
+          python tests/check_example_fallbacks.py --driver build/cabledyn --examples examples
+          --out build/example_scan --coretype "$OPENBLAS_CORETYPE" --jobs 4

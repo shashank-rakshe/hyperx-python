@@ -1,0 +1,67 @@
+--------------------- CableDyn Input File ------------------------------------
+Lozon Gulf of Mexico 80 m lazy-wave power cable twisted two turns at the hang-off
+-- Geometry and properties match lozon_gomex80_power_cable.dat, with an ILLUSTRATIVE torsional
+-- stiffness GJ = 50 kN.m^2 (the paper gives none). Both ends are clamped along the untwisted
+-- static end directions (FairDecl1 = 171.58 deg and AnchDecl1 = 89.71 deg of the same deck with
+-- pinned ends) and restrained in torsion with the reference normal +y, so the untwisted cable
+-- carries no torque. The motionFile holds the hang-off in place and rolls its frame about the line from 0
+-- to -720 deg over 60 s (roll column, smooth start), which imposes two turns of twist
+-- (Phi = Pretwist B - Pretwist A - roll = +720 deg); the cable then holds the twist for 30 s.
+-- The dynamics carry a twist angle at every node with the polar inertia Irn; the roll is slow
+-- against the torsional modes, so Torq1N1 follows the imposed twist, less the part the cable
+-- absorbs by writhing out of its plane (Twist1 = Phi - Theta).
+--------------------- LINE TYPES ---------------------------------------------
+TypeName  Diam   MassDenInAir  EA       BA   EI       GAs      GJ      Irt     Irn     Cd_n Cd_t Ca_n Ca_t
+(-)       (m)    (kg/m)        (N)      (-)  (N-m2)   (N)      (N-m2)  (kg-m)  (kg-m)  (-)  (-)  (-)  (-)
+bare      0.160  36.70         4.69e8   0.0  1.99e4   9.02e7   5.0e4   0.0587  0.1174  1.2  0.1  1.0  0.0
+buoy      0.290  59.53         4.69e8   0.0  1.99e4   9.02e7   5.0e4   0.3129  0.6258  1.2  0.1  1.0  0.0
+--------------------- POINTS ------------------------------------------------
+ID  Type     X       Y    Z
+(-) (-)      (m)     (m)  (m)
+1   Coupled  5.0     0.0  -14.0
+2   Fixed    125.0   0.0  -80.0
+--------------------- LINES -------------------------------------------------
+ID  NodeA  NodeB  Outputs
+(-) (-)    (-)    (-)
+1   1      2      r
+--------------------- SECTIONS ----------------------------------------------
+LineID  LineType  Length   NumSegs
+(-)     (-)       (m)      (-)
+1       bare      68.114   56
+1       buoy      50.000   40
+1       bare      52.101   32
+--------------------- END CONNECTIONS ---------------------------------------
+-- Ez points from End A (hang-off) to End B (anchor); Nx is the zero-twist reference normal.
+LineID  End  Stiffness  EzX      EzY  EzZ       TorsStiffness  NxX  NxY  NxZ  Pretwist
+(-)     (-)  (N-m/rad)  (-)      (-)  (-)       (N-m/rad)      (-)  (-)  (-)  (deg)
+1       A    Rigid      0.14641  0.0  -0.98922  Rigid          0.0  1.0  0.0  0.0
+1       B    Rigid      0.99999  0.0   0.00503  Rigid          0.0  1.0  0.0  0.0
+--------------------- OPTIONS -----------------------------------------------
+9.80665  g                - Gravitational acceleration (m/s^2) [default: 9.80665]
+1025.0   rhoW             - Water density (kg/m^3) [default: 1025]
+80.0     WtrDpth          - Water depth for the flat seabed (m) [default: absent standalone; host-owned OpenFAST]
+1.0e5    kBot             - Seabed penalty stiffness base (Pa/m) [default: 1.0e5]
+1.0e4    cBot             - Seabed normal damping base (Pa-s/m) [default: 1.0e4]
+0.4      rhoInf           - Generalised-alpha spectral radius {0<=rhoInf<=1} [default: 0.4]
+False    modified_newton  - Tangent-reuse mode {False=full Newton; True=guarded reuse} [default: False]
+0.1      dtM              - CableDyn internal time step (s) [default: omitted standalone; the glue DT in OpenFAST]
+90.0     TMax             - Standalone simulation duration (s): 60 s twist ramp, 30 s hold
+data/torsion/hangoff_roll_2turns_60s_dt01.txt motionFile - Held hang-off with the roll history (12th column, deg)
+False    adaptive_mesh    - Automatic finite-EI refinement {False; True} [default: False]
+True     tensile_safety   - Refine and reject local axial compression in this tensile cable
+dynamic_solver 1.0e-8 1.0e-14 30 12 - Relative tolerance, absolute tolerance, max iterations, backtracks [defaults shown]
+none     frictionMu       - Seabed friction coefficient {none; value>=0} [default: none]
+none     current          - Current model and velocity (m/s) {none; uniform; profile} [default: none]
+none     waves            - Wave model, height, period, and direction (m, s, deg) {none; airy; jonswap} [default: none]
+0        WaterKin         - Water-kinematics source {0/none; file; SEASTATE coupled only} [default: no policy]
+-- Complete option/default reference: cabledyn_options_reference.dat and doc/options.rst.
+--------------------- OUTPUTS -----------------------------------------------
+"FairTen1"
+"AnchTen1"
+"Torq1N1"
+"Twist1"
+"Twist1N129"
+"BendMom1N1"
+"L1N58py"
+"Curv1N89"
+--------------------- need this line ----------------------------------------

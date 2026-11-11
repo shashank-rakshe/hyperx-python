@@ -1,0 +1,13 @@
+representation,end_condition,nominal_element_length_m,number_of_elements,maximum_marker_shift_from_h0p005_mm,maximum_shift_marker
+discrete,rigid,0.02,212,0.12470672575698881,1
+discrete,rigid,0.01,400,0.010842278929573162,1
+discrete,rigid,0.005,771,0.0,1
+discrete,pinned,0.02,212,0.007089975444420502,5
+discrete,pinned,0.01,400,0.00024441534537445603,4
+discrete,pinned,0.005,771,0.0,1
+distributed,rigid,0.02,190,0.127598683440402,1
+distributed,rigid,0.01,376,0.011268897182555684,1
+distributed,rigid,0.005,741,0.0,1
+distributed,pinned,0.02,190,0.005212402993108714,5
+distributed,pinned,0.01,376,3.1887939368221184e-05,2
+distributed,pinned,0.005,741,0.0,1

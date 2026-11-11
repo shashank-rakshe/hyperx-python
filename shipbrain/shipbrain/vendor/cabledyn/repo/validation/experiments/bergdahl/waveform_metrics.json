@@ -1,0 +1,30 @@
+[
+  {
+    "period_s": 1.25,
+    "radius_m": 0.2,
+    "experimental_cycles": 12,
+    "numerical_cycles": 5,
+    "phase_shift_s": 0.30125,
+    "measured_phase_mean_maximum_N": 71.0195328778505,
+    "predicted_phase_mean_maximum_N": 67.7577418,
+    "maximum_error_percent": -4.592808408724093,
+    "mean_bias_N": 2.0711949262398095,
+    "rmse_N": 4.1822462892277565,
+    "rmse_percent_of_measured_range": 5.92669150240426,
+    "correlation": 0.9896597629131386
+  },
+  {
+    "period_s": 3.5,
+    "radius_m": 0.2,
+    "experimental_cycles": 4,
+    "numerical_cycles": 5,
+    "phase_shift_s": -0.3045,
+    "measured_phase_mean_maximum_N": 51.41051203059488,
+    "predicted_phase_mean_maximum_N": 52.33540667999999,
+    "maximum_error_percent": 1.79903800385162,
+    "mean_bias_N": 1.0195671548855796,
+    "rmse_N": 1.283745187531795,
+    "rmse_percent_of_measured_range": 2.5580720233502228,
+    "correlation": 0.9992261927440546
+  }
+]

@@ -1,0 +1,72 @@
+--------------------- CableDyn Input File ------------------------------------
+Lazy-wave power cable through a bend stiffener at a clamped hang-off on a vessel in a JONSWAP sea
+-- The cable, vessel motion and sea of lazy_wave_vessel_rao.dat, with a 4 m polyurethane bend
+-- stiffener at the hang-off: a 0.4 m cylindrical root of 0.45 m outer diameter and a 3.6 m cone
+-- to 0.18 m, bored to 0.17 m (E = 50 MPa, 1150 kg/m^3). At the root the sleeve is about five
+-- times as stiff in bending as the cable (EI 9.9e4 against 1.99e4 N m^2). The root is clamped
+-- (Rigid) along the static hang-off tangent; BendMom1N1 is the root moment, the curvature
+-- channels sample the stiffener (nodes 14 and 27, 2 m and 4 m from the root) and the bare cable
+-- just past its tip (node 34). The 0.152 m elements give 27 elements over the stiffener.
+--------------------- LINE TYPES ---------------------------------------------
+TypeName  Diam   MassDenInAir  EA       BA   EI       Cd_n Cd_t Ca_n Ca_t
+(-)       (m)    (kg/m)        (N)      (-)  (N-m2)   (-)  (-)  (-)  (-)
+bare      0.160  36.70         4.69e8   0.0  1.99e4   1.2  0.1  1.0  0.0
+buoy      0.290  59.53         4.69e8   0.0  1.99e4   1.2  0.1  1.0  0.0
+--------------------- POINTS ------------------------------------------------
+ID  Type     X       Y    Z
+(-) (-)      (m)     (m)  (m)
+1   Coupled  5.0     0.0  -14.0
+2   Fixed    125.0   0.0  -80.0
+--------------------- LINES -------------------------------------------------
+ID  NodeA  NodeB  Outputs
+(-) (-)    (-)    (-)
+1   1      2      r
+--------------------- SECTIONS ----------------------------------------------
+LineID  LineType  Length   NumSegs
+(-)     (-)       (m)      (-)
+1       bare      68.114   448
+1       buoy      50.000   320
+1       bare      52.101   256
+--------------------- STIFFENERS --------------------------------------------
+-- Rows run outward from the root at End A: the cylindrical root, then the cone.
+LineID  End  Length  RootOD  TipOD  InnerD  E       Density
+(-)     (-)  (m)     (m)     (m)    (m)     (Pa)    (kg/m^3)
+1       A    0.4     0.45    0.45   0.17    5.0e7   1150
+1       A    3.6     0.45    0.18   0.17    5.0e7   1150
+--------------------- END CONNECTIONS ---------------------------------------
+-- End A is clamped along the static hang-off tangent (81.6 deg below horizontal, toward End B).
+LineID  End  Stiffness  EzX     EzY  EzZ
+(-)     (-)  (N-m/rad)  (-)     (-)  (-)
+1       A    Rigid      0.1461  0.0  -0.9893
+--------------------- OPTIONS -----------------------------------------------
+9.80665  g                                   - Gravitational acceleration (m/s^2) [default: 9.80665]
+1025.0   rhoW                                - Water density (kg/m^3) [default: 1025]
+80.0     WtrDpth                             - Water depth for the flat seabed (m) [default: absent standalone; host-owned OpenFAST]
+1.0e5    kBot                                - Seabed penalty stiffness base (Pa/m) [default: 1.0e5]
+1.0e4    cBot                                - Seabed normal damping base (Pa-s/m) [default: 1.0e4]
+0.4      rhoInf                              - Generalised-alpha spectral radius {0<=rhoInf<=1} [default: 0.4]
+False    modified_newton                     - Tangent-reuse mode {False=full Newton; True=guarded reuse} [default: False]
+0.05     dtM                                 - CableDyn internal time step (s) [default: omitted standalone; the glue DT in OpenFAST]
+40.0     TMax                                - Standalone simulation duration (s), including the 10 s wave ramp
+data/vessel/sample_rao.txt vesselRAO - Displacement RAO table: vessel motion from the deck waves
+0.0|0.0|0.0 vesselRef - Vessel reference point, rotation centre and RAO origin (m) [default: 0|0|0]
+10.0     RangeStart                          - First output time in the range graphs (s) [default: 0]
+False     adaptive_mesh    - Automatic finite-EI refinement {False; True} [default: False]
+True      tensile_safety   - Refine and reject local axial compression in this tensile cable
+dynamic_solver 1.0e-4 1.0e-14 100 12 - Relative tolerance, absolute tolerance, max iterations, backtracks
+none      frictionMu       - Seabed friction coefficient {none; value>=0} [default: none]
+none      current           - Current model and velocity (m/s) {none; uniform; profile} [default: none]
+jonswap 4.0 10.0 3.3 0.0 waves - Wave model, JONSWAP Hs, Tp, gamma, and direction (m, s, deg) {none; airy; jonswap}
+1         WaveSeed          - Seed of the random sea [default: 1]
+10.0      rampTime          - Half-cosine start-up ramp of the wave amplitudes (s) [default: 0]
+0         WaterKin          - Water-kinematics source {0/none; file; SEASTATE coupled only} [default: no policy]
+-- Complete option/default reference: cabledyn_options_reference.dat and doc/options.rst.
+--------------------- OUTPUTS -----------------------------------------------
+"FairTen1"
+"AnchTen1"
+"BendMom1N1"
+"Curv1N14"
+"Curv1N27"
+"Curv1N34"
+"TDP1s"
+--------------------- need this line ----------------------------------------

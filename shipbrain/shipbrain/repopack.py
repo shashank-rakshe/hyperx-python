@@ -151,6 +151,8 @@ def copyright_lines(text):
     out = []
     for line in (text or '').splitlines()[:400]:
         s = line.strip().lstrip('#/*- ').strip().rstrip('.')
+        if re.search(r'Free Software Foundation', s):      # the GPL / AGPL / LGPL licence text itself, not the authors
+            continue
         if re.match(r'(copyright\s*(\(c\)|©)?|\(c\)|©)\s*\d{4}', s, re.I) and len(s) < 200 and s not in out:
             out.append(s)
     return out

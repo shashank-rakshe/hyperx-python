@@ -1,0 +1,37 @@
+{
+  "conditions": 2,
+  "spatial_reference_nominal_element_length_m": 0.1,
+  "temporal_reference_time_step_s": 0.00015625,
+  "primary_nominal_element_length_m": 0.2,
+  "primary_time_step_s": 0.0003125,
+  "maximum_primary_spatial_difference_percent": 0.2923050211789211,
+  "maximum_primary_temporal_difference_percent": 0.2699356319214836,
+  "rows": [
+    {
+      "period_s": 1.25,
+      "radius_m": 0.2,
+      "force_h0p400_dt0p0003125_N": 68.29057320000001,
+      "force_h0p200_dt0p0003125_N": 68.06661,
+      "force_h0p100_dt0p0003125_N": 68.2661554,
+      "force_h0p200_dt0p00015625_N": 67.8833686,
+      "force_h0p200_dt0p000625_N": 68.695316,
+      "spatial_difference_h0p400_dt0p0003125_percent": 0.03576852959850298,
+      "spatial_difference_h0p200_dt0p0003125_percent": -0.2923050211789211,
+      "temporal_difference_h0p200_dt0p0003125_percent": 0.2699356319214836,
+      "temporal_difference_h0p200_dt0p000625_percent": 1.196091792062317
+    },
+    {
+      "period_s": 3.5,
+      "radius_m": 0.2,
+      "force_h0p400_dt0p0003125_N": 52.37618620000001,
+      "force_h0p200_dt0p0003125_N": 52.3576014,
+      "force_h0p100_dt0p0003125_N": 52.346908,
+      "force_h0p200_dt0p00015625_N": 52.348888,
+      "force_h0p200_dt0p000625_N": 53.453302799999996,
+      "spatial_difference_h0p400_dt0p0003125_percent": 0.05593109721018739,
+      "spatial_difference_h0p200_dt0p0003125_percent": 0.02042794963171648,
+      "temporal_difference_h0p200_dt0p0003125_percent": 0.016644861682635476,
+      "temporal_difference_h0p200_dt0p000625_percent": 2.1097196945233936
+    }
+  ]
+}

@@ -1,0 +1,195 @@
+diff --git a/modules/openfast-library/src/FAST_Funcs.f90 b/modules/openfast-library/src/FAST_Funcs.f90
+index ff46ce942..46e7a09e1 100644
+--- a/modules/openfast-library/src/FAST_Funcs.f90
++++ b/modules/openfast-library/src/FAST_Funcs.f90
+@@ -104,6 +104,13 @@ use MoorDyn, only:      MD_JacobianPInput, &
+                         MD_CalcOutput, &
+                         MD_End
+ 
++use CableDyn, only:     CD_JacobianPInput, &
++                        CD_JacobianPContState, &
++                        CD_CalcContStateDeriv, &
++                        CD_UpdateStates, &
++                        CD_CalcOutput, &
++                        CD_End
++
+ use OrcaFlexInterface, only:  Orca_CalcOutput, &
+                               Orca_UpdateStates, &
+                               Orca_End
+@@ -279,6 +286,13 @@ subroutine FAST_ExtrapInterp(ModData, t_global_next, T, ErrStat, ErrMsg)
+       end do
+       call ShiftInputTimes(T%MD%InputTimes)
+ 
++   case (Module_CD)
++      call CD_Input_ExtrapInterp(T%CD%Input(1:), T%CD%InputTimes, T%CD%Input(INPUT_TEMP), t_global_next, ErrStat2, ErrMsg2); if (Failed()) return
++      do j = T%p_FAST%InterpOrder, 0, -1
++         call CD_CopyInput(T%CD%Input(j), T%CD%Input(j + 1), MESH_UPDATECOPY, ErrStat2, ErrMsg2); if (Failed()) return
++      end do
++      call ShiftInputTimes(T%CD%InputTimes)
++
+    case (Module_Orca)
+       call Orca_Input_ExtrapInterp(T%Orca%Input(1:), T%Orca%InputTimes, T%Orca%Input(INPUT_TEMP), t_global_next, ErrStat2, ErrMsg2); if (Failed()) return
+       do j = T%p_FAST%InterpOrder, 0, -1
+@@ -404,6 +418,8 @@ subroutine FAST_InitInputStateArrays(ModAry, ThisTime, DT, T, ErrStat, ErrMsg)
+             T%MAP%InputTimes = InputTimes
+          case (Module_MD)
+             T%MD%InputTimes = InputTimes
++         case (Module_CD)
++            T%CD%InputTimes = InputTimes
+          case (Module_ExtInfw)
+             ! T%ExtInfw%InputTimes = InputTimes
+          case (Module_ExtLd)
+@@ -637,6 +653,20 @@ subroutine FAST_UpdateStates(ModData, t_initial, n_t_global, T, ErrStat, ErrMsg)
+          if (Failed()) return
+       end do
+ 
++   case (Module_CD)
++      call FAST_CopyStates(ModData, T, STATE_CURR, STATE_PRED, MESH_UPDATECOPY, ErrStat2, ErrMsg2)
++      if (Failed()) return
++
++      do j_ss = 1, ModData%SubSteps
++         n_t_module = n_t_global*ModData%SubSteps + j_ss - 1
++         t_module = n_t_module*ModData%DT + t_initial
++         call CD_UpdateStates(t_module, n_t_module, T%CD%Input(1:), T%CD%InputTimes, T%CD%p, &
++                              T%CD%x(STATE_PRED), T%CD%xd(STATE_PRED), &
++                              T%CD%z(STATE_PRED), T%CD%OtherSt(STATE_PRED), &
++                              T%CD%m, ErrStat2, ErrMsg2)
++         if (Failed()) return
++      end do
++
+    case (Module_Orca)
+       call FAST_CopyStates(ModData, T, STATE_CURR, STATE_PRED, MESH_UPDATECOPY, ErrStat2, ErrMsg2)
+       if (Failed()) return
+@@ -827,6 +857,11 @@ subroutine FAST_CalcOutput(ModData, Mappings, ThisTime, iInput, iState, T, ErrSt
+                          T%MD%x(iState), T%MD%xd(iState), T%MD%z(iState), T%MD%OtherSt(iState), &
+                          T%MD%y, T%MD%m, ErrStat2, ErrMsg2)
+ 
++   case (Module_CD)
++      call CD_CalcOutput(ThisTime, T%CD%Input(iInput), T%CD%p, &
++                         T%CD%x(iState), T%CD%xd(iState), T%CD%z(iState), T%CD%OtherSt(iState), &
++                         T%CD%y, T%CD%m, ErrStat2, ErrMsg2)
++
+    case (Module_Orca)
+       call Orca_CalcOutput(ThisTime, T%Orca%Input(iInput), T%Orca%p, &
+                            T%Orca%x(iState), T%Orca%xd(iState), T%Orca%z(iState), T%Orca%OtherSt(iState), &
+@@ -937,6 +972,8 @@ subroutine FAST_GetOP(ModData, ThisTime, iInput, iState, T, ErrStat, ErrMsg, &
+          call MAP_VarsPackInput(ModData%Vars, T%MAP%Input(iInput), u_op)
+       case (Module_MD)
+          call MD_VarsPackInput(ModData%Vars, T%MD%Input(iInput), u_op)
++      case (Module_CD)
++         call CD_VarsPackInput(ModData%Vars, T%CD%Input(iInput), u_op)
+       case (Module_ExtInfw)
+          ! call ExtInfw_VarsPackInput(ModData%Vars, T%ExtInfw%Input(iIndex), u_op)
+       case (Module_Orca)
+@@ -994,6 +1031,8 @@ subroutine FAST_GetOP(ModData, ThisTime, iInput, iState, T, ErrStat, ErrMsg, &
+          call MAP_VarsPackOutput(ModData%Vars, T%MAP%y, y_op)
+       case (Module_MD)
+          call MD_VarsPackOutput(ModData%Vars, T%MD%y, y_op)
++      case (Module_CD)
++         call CD_VarsPackOutput(ModData%Vars, T%CD%y, y_op)
+       case (Module_ExtInfw)
+          call ExtInfw_VarsPackOutput(ModData%Vars, T%ExtInfw%y, y_op)
+       case (Module_Orca)
+@@ -1050,6 +1089,8 @@ subroutine FAST_GetOP(ModData, ThisTime, iInput, iState, T, ErrStat, ErrMsg, &
+          call MAP_VarsPackContState(ModData%Vars, T%MAP%x(iState), x_op)
+       case (Module_MD)
+          call MD_VarsPackContState(ModData%Vars, T%MD%x(iState), x_op)
++      case (Module_CD)
++         call CD_VarsPackContState(ModData%Vars, T%CD%x(iState), x_op)
+       case (Module_ExtInfw)
+          ! call ExtInfw_VarsPackContState(ModData%Vars, T%ExtInfw%x(StateIndex), x_op)
+       case (Module_Orca)
+@@ -1181,6 +1222,13 @@ subroutine FAST_GetOP(ModData, ThisTime, iInput, iState, T, ErrStat, ErrMsg, &
+          if (Failed()) return
+          call MD_VarsPackContStateDeriv(ModData%Vars, T%MD%m%dxdt_lin, dx_op)
+ 
++      case (Module_CD)
++         call CD_CalcContStateDeriv(ThisTime, T%CD%Input(iInput), T%CD%p, T%CD%x(iState), &
++                                    T%CD%xd(iState), T%CD%z(iState), T%CD%OtherSt(iState), &
++                                    T%CD%m, T%CD%m%dxdt_lin, ErrStat2, ErrMsg2)
++         if (Failed()) return
++         call CD_VarsPackContStateDeriv(ModData%Vars, T%CD%m%dxdt_lin, dx_op)
++
+ !     case (Module_ExtInfw)
+ !        call ExtInfw_VarsPackContStateDeriv(ModData%Vars, T%ExtInfw%x(StateIndex), dx_op)
+ 
+@@ -1274,6 +1322,8 @@ subroutine FAST_SetOP(ModData, iInput, iState, T, ErrStat, ErrMsg, &
+          call MAP_VarsUnpackInput(ModData%Vars, u_op, T%MAP%Input(iInput))
+       case (Module_MD)
+          call MD_VarsUnpackInput(ModData%Vars, u_op, T%MD%Input(iInput))
++      case (Module_CD)
++         call CD_VarsUnpackInput(ModData%Vars, u_op, T%CD%Input(iInput))
+       case (Module_ExtInfw)
+          ! call ExtInfw_VarsUnpackInput(ModData%Vu_op, ars, T%ExtInfw%Input(InputIndex))
+       case (Module_Orca)
+@@ -1325,6 +1375,8 @@ subroutine FAST_SetOP(ModData, iInput, iState, T, ErrStat, ErrMsg, &
+          call MAP_VarsUnpackContState(ModData%Vars, x_op, T%MAP%x(iState))
+       case (Module_MD)
+          call MD_VarsUnpackContState(ModData%Vars, x_op, T%MD%x(iState))
++      case (Module_CD)
++         call CD_VarsUnpackContState(ModData%Vars, x_op, T%CD%x(iState))
+       case (Module_ExtInfw)
+          ! call ExtInfw_VarsUnpackContState(ModData%Vars, x_op, T%ExtInfw%x(StateIndex))
+       case (Module_Orca)
+@@ -1426,6 +1478,11 @@ subroutine FAST_JacobianPInput(ModData, ThisTime, iInput, iState, T, ErrStat, Er
+                              T%MD%z(iState), T%MD%OtherSt(iState), T%MD%y, T%MD%m, ErrStat2, ErrMsg2, &
+                              dYdu=dYdu, dXdu=dXdu)
+ 
++   case (Module_CD)
++      call CD_JacobianPInput(ModData%Vars, ThisTime, T%CD%Input(iInput), T%CD%p, T%CD%x(iState), T%CD%xd(iState), &
++                             T%CD%z(iState), T%CD%OtherSt(iState), T%CD%y, T%CD%m, ErrStat2, ErrMsg2, &
++                             dYdu=dYdu, dXdu=dXdu)
++
+    case (Module_SD)
+       call SD_JacobianPInput(ModData%Vars, ThisTime, T%SD%Input(iInput), T%SD%p, T%SD%x(iState), T%SD%xd(iState), &
+                              T%SD%z(iState), T%SD%OtherSt(iState), T%SD%y, T%SD%m, ErrStat2, ErrMsg2, &
+@@ -1545,6 +1602,13 @@ subroutine FAST_JacobianPContState(ModData, ThisTime, iInput, iState, T, ErrStat
+                                  T%MD%y, T%MD%m, ErrStat2, ErrMsg2, &
+                                  dYdx=dYdx, dXdx=dXdx)
+ 
++   case (Module_CD)
++      call CD_JacobianPContState(ModData%Vars, ThisTime, T%CD%Input(iInput), T%CD%p, &
++                                 T%CD%x(iState), T%CD%xd(iState), &
++                                 T%CD%z(iState), T%CD%OtherSt(iState), &
++                                 T%CD%y, T%CD%m, ErrStat2, ErrMsg2, &
++                                 dYdx=dYdx, dXdx=dXdx)
++
+    case (Module_SD)
+       call SD_JacobianPContState(ModData%Vars, ThisTime, T%SD%Input(iInput), T%SD%p, &
+                                  T%SD%x(iState), T%SD%xd(iState), &
+@@ -1715,6 +1779,13 @@ subroutine FAST_CopyStates(ModData, T, iSrc, iDst, CtrlCode, ErrStat, ErrMsg)
+       call MD_CopyConstrState(T%MD%z(iSrc), T%MD%z(iDst), CtrlCode, ErrStat2, ErrMsg2); if (Failed()) return
+       call MD_CopyOtherState(T%MD%OtherSt(iSrc), T%MD%OtherSt(iDst), CtrlCode, ErrStat2, ErrMsg2); if (Failed()) return
+ 
++   case (Module_CD)
++
++      call CD_CopyContState(T%CD%x(iSrc), T%CD%x(iDst), CtrlCode, ErrStat2, ErrMsg2); if (Failed()) return
++      call CD_CopyDiscState(T%CD%xd(iSrc), T%CD%xd(iDst), CtrlCode, ErrStat2, ErrMsg2); if (Failed()) return
++      call CD_CopyConstrState(T%CD%z(iSrc), T%CD%z(iDst), CtrlCode, ErrStat2, ErrMsg2); if (Failed()) return
++      call CD_CopyOtherState(T%CD%OtherSt(iSrc), T%CD%OtherSt(iDst), CtrlCode, ErrStat2, ErrMsg2); if (Failed()) return
++
+    case (Module_Orca)
+ 
+       call Orca_CopyContState(T%Orca%x(iSrc), T%Orca%x(iDst), CtrlCode, ErrStat2, ErrMsg2); if (Failed()) return
+@@ -1842,6 +1913,9 @@ subroutine FAST_CopyInput(ModData, T, iSrc, iDst, CtrlCode, ErrStat, ErrMsg)
+    case (Module_MD)
+       call MD_CopyInput(T%MD%Input(iSrc), T%MD%Input(iDst), CtrlCode, ErrStat2, ErrMsg2)
+ 
++   case (Module_CD)
++      call CD_CopyInput(T%CD%Input(iSrc), T%CD%Input(iDst), CtrlCode, ErrStat2, ErrMsg2)
++
+ !  case (Module_ExtInfw)
+ 
+    case (Module_Orca)
+@@ -2004,6 +2078,10 @@ subroutine FAST_ModEnd(Mods, T, ErrStat, ErrMsg)
+             call MD_End(T%MD%Input(1), T%MD%p, T%MD%x(STATE_CURR), T%MD%xd(STATE_CURR), T%MD%z(STATE_CURR), &
+                         T%MD%OtherSt(STATE_CURR), T%MD%y, T%MD%m, ErrStat2, ErrMsg2)
+ 
++         case (Module_CD)
++            call CD_End(T%CD%Input(1), T%CD%p, T%CD%x(STATE_CURR), T%CD%xd(STATE_CURR), T%CD%z(STATE_CURR), &
++                        T%CD%OtherSt(STATE_CURR), T%CD%y, T%CD%m, ErrStat2, ErrMsg2)
++
+          case (Module_Orca)
+             call Orca_End(T%Orca%Input(1), T%Orca%p, T%Orca%x(STATE_CURR), T%Orca%xd(STATE_CURR), &
+                           T%Orca%z(STATE_CURR), T%Orca%OtherSt(STATE_CURR), T%Orca%y, T%Orca%m, ErrStat2, ErrMsg2)
+

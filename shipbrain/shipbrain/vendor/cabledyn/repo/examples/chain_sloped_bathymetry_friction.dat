@@ -1,0 +1,58 @@
+--------------------- CableDyn Input File ------------------------------------
+CableDyn driver deck -- chain on a sloping seabed (bathymetryFile) held by as-laid friction, surging fairlead, 60 s
+-- The 410 m studless chain of chain_range_tdp.dat on a structured seabed instead of a flat one:
+-- data/bathymetry/sloped_seabed.txt is a grid of `x y depth` rows, here a plane 60 m deep under
+-- the fairlead that rises 2.1 deg toward the anchor (45 m deep at x = 400 m) and falls 2.9 deg
+-- across the line, toward +Y. The seabed is bilinear between the grid points; bathymetryFile
+-- replaces WtrDpth, which the deck must then leave out. Seabed friction (frictionMu 0.5) exceeds
+-- the cross slope (tan 2.9 deg = 0.05), so the grounded chain holds; staticsFriction asLaid
+-- solves the static start against the as-laid layout, the chain laid from the anchor along its
+-- chord and its top end then moved to the fairlead, so the grounded length rests where it was
+-- laid instead of sliding down the cross slope. The fairlead then surges 5 m at 30 s
+-- (data/range_tdp/chain_surge_5m_30s_dt005.txt, after a 15 s smooth start). TDP1s and TDP1x
+-- follow the touchdown point; L1N30py is the sideways position of a grounded node 290 m from
+-- the fairlead, which friction keeps from creeping downslope.
+--------------------- LINE TYPES ---------------------------------------
+TypeName   Diam    MassDenInAir   EA        BA/-zeta   EI       Cd_n  Cd_t  Ca_n  Ca_t
+(-)        (m)     (kg/m)         (N)       (N-s/-)    (N-m^2)  (-)   (-)   (-)   (-)
+chain      0.252   390.0          1.674e9   -1.0       0.0      1.37  0.64  1.0   0.0
+--------------------- POINTS -------------------------------------------
+ID    Type      X        Y      Z         Mass    Vol     CdA    Ca
+(-)   (-)       (m)      (m)    (m)       (kg)    (m^3)   (m^2)  (-)
+1     Fixed     400.0    0.0    -45.0     0       0       0      0
+2     Coupled   0.0      0.0    0.0       0       0       0      0
+--------------------- LINES --------------------------------------------
+ID    NodeA   NodeB   Outputs
+(-)   (-)     (-)     (-)
+1     2       1       -
+--------------------- SECTIONS -----------------------------------------
+LineID   LineType   Length   NumSegs
+(-)      (-)        (m)      (-)
+1        chain      410.0    41
+--------------------- OPTIONS ------------------------------------------
+9.80665              g          - Gravitational acceleration (m/s^2) [default: 9.80665]
+1025.0               rhoW       - Water density (kg/m^3) [default: 1025]
+data/bathymetry/sloped_seabed.txt bathymetryFile - Structured seabed: x y depth grid (m) [default: absent]
+1.0e5                kBot       - Seabed penalty stiffness base (Pa/m) [default: 1.0e5]
+1.0e4                cBot       - Seabed normal damping base (Pa-s/m) [default: 1.0e4]
+0.5       frictionMu       - Seabed friction coefficient {none; value>=0} [default: none]
+asLaid    staticsFriction  - Static seabed friction policy {none; asLaid} [default: none]
+0.05                 dtM        - CableDyn internal time step (s) [default: omitted standalone; the glue DT in OpenFAST]
+60.0                 TMax       - Standalone simulation duration (s) [default: omitted standalone; host-owned OpenFAST]
+data/range_tdp/chain_surge_5m_30s_dt005.txt motionFile - Prescribed fairlead motion history
+0.4       rhoInf           - Generalised-alpha spectral radius {0<=rhoInf<=1} [default: 0.4]
+False     modified_newton  - Tangent-reuse mode {False=full Newton; True=guarded reuse} [default: False]
+False     adaptive_mesh    - Automatic finite-EI refinement {False; True} [default: False]
+dynamic_solver 1.0e-8 1.0e-14 30 12 - Relative tolerance, absolute tolerance, max iterations, backtracks [defaults shown]
+none      current          - Current model and velocity (m/s) {none; uniform; profile} [default: none]
+none      waves            - Wave model, height, period, and direction (m, s, deg) {none; airy; jonswap} [default: none]
+0         WaterKin         - Water-kinematics source {0/none; file; SEASTATE coupled only} [default: no policy]
+-- Complete option/default reference: cabledyn_options_reference.dat and doc/options.rst.
+--------------------- OUTPUTS ------------------------------------------
+"FairTen1"
+"AnchTen1"
+"TDP1s"
+"TDP1x"
+"L1N30py"
+"L1N30pz"
+--------------------- need this line -----------------------------------

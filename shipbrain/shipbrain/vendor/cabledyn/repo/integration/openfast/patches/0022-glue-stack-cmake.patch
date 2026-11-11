@@ -1,0 +1,40 @@
+diff --git a/glue-codes/fast-farm/CMakeLists.txt b/glue-codes/fast-farm/CMakeLists.txt
+index 96672632b..2c58cef73 100644
+--- a/glue-codes/fast-farm/CMakeLists.txt
++++ b/glue-codes/fast-farm/CMakeLists.txt
+@@ -49,6 +49,15 @@ if (${_build_type} STREQUAL "RELEASE" AND NOT WIN32)
+   set_source_files_properties(src/FAST_Farm_Types.f90 PROPERTIES COMPILE_FLAGS "-O2")
+ endif()
+ 
++# CableDyn integration: MinGW-w64 gives an executable a 2 MiB stack reserve, which the GNU
++# build of FAST.Farm overflows while it initialises its turbines (STATUS_STACK_OVERFLOW,
++# 0xC00000FD). Reserve 256 MiB for openfast and FAST.Farm, as for the CableDyn driver (the
++# Visual Studio projects set a reserve of their own). A reserve is address space, not
++# committed memory.
++if (WIN32 AND ${_compiler_id} STREQUAL "GNU")
++  target_link_options(FAST.Farm PRIVATE "LINKER:--stack,268435456")
++endif()
++
+ install(TARGETS FAST.Farm
+   RUNTIME DESTINATION bin
+ )
+diff --git a/glue-codes/openfast/CMakeLists.txt b/glue-codes/openfast/CMakeLists.txt
+index 08fde158b..3a87962be 100644
+--- a/glue-codes/openfast/CMakeLists.txt
++++ b/glue-codes/openfast/CMakeLists.txt
+@@ -30,6 +30,15 @@ if (${_compiler_id} STREQUAL "GNU" AND NOT ${VARIABLE_TRACKING})
+   set_source_files_properties(src/FAST_Prog.f90 PROPERTIES COMPILE_FLAGS "-fno-var-tracking -fno-var-tracking-assignments")
+ endif()
+ 
++# CableDyn integration: MinGW-w64 gives an executable a 2 MiB stack reserve, which the GNU
++# build of FAST.Farm overflows while it initialises its turbines (STATUS_STACK_OVERFLOW,
++# 0xC00000FD). Reserve 256 MiB for openfast and FAST.Farm, as for the CableDyn driver (the
++# Visual Studio projects set a reserve of their own). A reserve is address space, not
++# committed memory.
++if (WIN32 AND ${_compiler_id} STREQUAL "GNU")
++  target_link_options(openfast PRIVATE "LINKER:--stack,268435456")
++endif()
++
+ install(TARGETS openfast
+   RUNTIME DESTINATION bin)
+ 

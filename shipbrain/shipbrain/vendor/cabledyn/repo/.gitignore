@@ -1,0 +1,105 @@
+# SPDX-License-Identifier: Apache-2.0
+# Research manuscripts and copyrighted literature are maintained separately.
+# These directories must never be committed to the software repository.
+papers/
+publication/
+
+# OpenFAST summary files are regenerable run output.
+*.sum
+
+# Local-only third-party source trees (OpenFAST, MoorDyn, and reference data)
+# kept for cross-reference during implementation. Never pushed.
+external/
+
+# Office documents
+*.docx
+
+# Python
+__pycache__/
+*.pyc
+*.pyd
+.pytest_cache/
+.pytest-tmp/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+validation/**/work/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+fortran-coverage.xml
+fortran-coverage.html
+fortran-coverage/
+
+# Fortran build artefacts
+*.mod
+*.o
+*.a
+*.so
+*.dll
+*.dylib
+
+# Build / dist trees (any build*/ tree: build/, build-coverage/, build_relcheck/, ...)
+build*/
+.build*/
+stage*/
+dist/
+_skbuild/
+
+# Sphinx documentation build output
+doc/_build/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Benchmark binaries / native executables (large, regenerable)
+*.npy
+*.exe
+
+# Environment files
+.env
+.envrc
+
+# Fortran driver test scratch (written to cwd when test_cable_driver or the
+# cabledyn_driver executable run outside the build dir)
+driver_*.inp
+driver_*.csv
+
+# Deck-driver / C-API / aggregate / sweep test scratch (written to cwd when the test
+# executables or the cabledyn deck driver run outside the build dir). None of
+# these collide with the tracked examples/ decks (wd0050_chain, composite_*,
+# iea15mw_volturnus_mooring).
+deck_*.dat
+deck_*.out
+deck_*.xyz
+deck_*.txt
+deck_sub/
+# Long-path regression directory written by test_deck_driver.
+deck_motion_overflow_subdirectory_0123456789/
+capi_*.dat
+fmf_*.dat
+hfmf_*.dat
+agg_*.dat
+agg_*.out
+agg_*.xyz
+scratch_*.out
+lozon80_*.out
+owc_test.dat
+syrope.dat
+wk_*.dat
+*.Line.*.out
+*.Rod.*.out
+*.FarmCD.out
+*_guard_sweep.out
+
+# Local portable test-drive package (binaries + mingw OpenBLAS; regenerable)
+test_drive/
+
+# Regenerable release staging directories (published assets live on GitHub).
+dist*/

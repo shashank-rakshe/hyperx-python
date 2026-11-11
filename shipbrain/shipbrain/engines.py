@@ -23,6 +23,7 @@ ANALYSES = {   # analysis type -> words that point to it
     'heat': r'thermal|temperature|heat|fire|insulation',
     'cad': r'sldprt|solidworks|catpart|catia|inventor|\.ipt\b|\.f3d\b|fusion 360|rhino|\.3dm\b|fcstd|freecad|\.sat\b|iges|\.igs\b|3d model|\bcad\b|step file|solid model|drawing to|make a model|cadquery|mid.?surface|outer surface|piping|pipes?\b',
     'mesh': r'\bmesh|elements?\b|bdf|\.inp|nastran deck|shell model',
+    'mooring': r'mooring|anchor (line|chain)|catenary|fairlead|chain grade|\bR3S?\b|\bR4S?\b|power cable|umbilical|riser|lazy.?wave|touchdown',
     'reverse': r'\bstl\b|scan(ned)? (part|mesh)|reverse.?engineer|mesh to (step|cad|solid)|3d.?print(ed)? (part|file)',
     'process': r'process simulat|flowsheet|\bflash\b|distillation|column|vapou?r fraction|heat and mass balance|property package|'
                r'thermodynamic|dew point|bubble point|absorber|stripper|reactor|dwsim|phase envelope',
@@ -54,6 +55,9 @@ ENGINES = [
      'paid programs; RhinoInside.NX (no open licence, early beta) links them - ShipBrain gives its download link only'),
     ('cadmpeg (native CAD reader)', {'cad'}, 'runs', 'native_cad(file, op="convert"|"inspect"|"measure"|"diff")', ['@cadmpeg'], 'cadmpeg',
      'opens SolidWorks / CATIA / Inventor / Fusion / Rhino / FreeCAD / ACIS / IGES files and writes STEP (Apache-2.0)'),
+    ('CableDyn (mooring lines and cables)', {'mooring'}, 'runs', 'mooring(depth, length, radius, d_mm, grade) / cable_run(deck)',
+     ['@cabledyn'], 'CableDyn', 'free FE solver (Apache-2.0): statics and dynamics of mooring lines and power cables, '
+                                 'validated against OrcaFlex (0.06-0.6 %) and model tests'),
     ('ReverseCAD (STL -> STEP)', {'reverse'}, 'runs', 'reverse_cad(file, material)', ['@reversecad'], 'reverse-cad',
      'mesh to STEP solid + holes, threads, fillets, mass, verification (PolyForm Noncommercial: non-commercial use only)'),
     ('HyperMesh / OptiStruct (Altair)', {'static': 'writes', 'modal': 'writes', 'buckling': 'writes', 'ultimate': 'knowledge'}, 'writes',
@@ -112,6 +116,9 @@ def installed(names):
     if names == ['@solidcraft']:
         from .mcp_client import solidcraft_cli
         return solidcraft_cli() is not None
+    if names == ['@cabledyn']:
+        from . import cabledyn
+        return cabledyn.driver() is not None
     if names == ['@cadmpeg']:
         from . import cadmpeg
         return cadmpeg.exe() is not None

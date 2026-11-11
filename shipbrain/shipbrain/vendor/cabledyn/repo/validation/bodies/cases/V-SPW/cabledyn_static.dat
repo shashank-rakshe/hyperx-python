@@ -1,0 +1,32 @@
+--------------------- CableDyn Input File ------------------------------------
+V-SPW waterplane-term check: squat spar (d 10 m, draft 20 m, GM 0.41 m), pitch release 2 deg
+-- Free body at the waterline carrying a rigidly attached surface-piercing rod; no lines.
+-- Body Volume = 0: all buoyancy comes from the rod; CG/I of the body are the ballast.
+---------------------- ROD TYPES -------------------------------------
+TypeName  Diam  Mass/m  Cd  Ca  CdEnd  CaEnd
+(name)  (m)  (kg/m)  (-)  (-)  (-)  (-)
+spar  10  1000  0  1  0  0
+---------------------- BODIES ----------------------------------------
+ID  Attachment  X0  Y0  Z0  r0  p0  y0  Mass  CG*  I*  Volume  CdA*  Ca*
+(#)  (-)  (m)  (m)  (m)  (deg)  (deg)  (deg)  (kg)  (m)  (kg-m^2)  (m^3)  (m^2)  (-)
+1  Free  0  0  0  0  2  0  1.58506623e+06  0|0|-10.141008  1.426560e+07|1.426560e+07|3.170132e+06  0  0  0
+---------------------- RODS ------------------------------------------
+ID  RodType  Attachment  Xa  Ya  Za  Xb  Yb  Zb  NumSegs  RodOutputs
+(#)  (name)  (#/key)  (m)  (m)  (m)  (m)  (m)  (m)  (-)  (-)
+1  spar  Body1  0  0  -20  0  0  5  25  -
+--------------------- OPTIONS ------------------------------------------
+9.80665  g
+1025  rhoW
+200  WtrDpth
+100000  kBot
+10000  cBot
+static  bodyIC
+0.1  dtM
+0.1  TMax
+--------------------- OUTPUTS ------------------------------------------
+"Body1Px"
+"Body1Pz"
+"Body1Ry"
+"Rod1Px"
+"Rod1Pz"
+--------------------- need this line -----------------------------------

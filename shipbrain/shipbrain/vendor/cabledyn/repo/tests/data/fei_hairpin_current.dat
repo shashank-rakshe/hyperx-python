@@ -1,0 +1,37 @@
+--------------------- CableDyn Input File ---------------------------
+Finite-EI lazy wave carried 2 m past its anchor by a 1.9 m/s current on a frictionless seabed (the cable statics matrix case CUR_1013; noted)
+--------------------- LINE TYPES ------------------------------------
+TypeName Diam MassDenInAir EA BA EI Cd_n Cd_t Ca_n Ca_t
+(-) (m) (kg/m) (N) (-) (N-m2) (-) (-) (-) (-)
+bare 0.1784650716 82.63060908 255233842 0 25945.91551 1.2 0.1 1 0
+buoy 0.4710966462 88.94142595 255233842 0 40205.41756 1.2 0.1 1 0
+--------------------- POINTS ----------------------------------------
+ID Type X Y Z
+(-) (-) (m) (m) (m)
+1 Coupled 0 0 -13.08348484
+2 Fixed 41.77649681 0 -42.543
+--------------------- LINES -----------------------------------------
+ID NodeA NodeB Outputs
+(-) (-) (-) (-)
+1 1 2 -
+--------------------- SECTIONS --------------------------------------
+LineID LineType Length NumSegs
+(-) (-) (m) (-)
+1 bare 20.5504 2
+1 buoy 7.3589 1
+1 bare 35.1167 4
+--------------------- OPTIONS ---------------------------------------
+9.80665 g
+1025.0 rhoW
+42.543 WtrDpth
+3e+06 kBot
+1.0e4 cBot
+0.05 dtM
+0.0 TMax
+False adaptive_mesh
+True tensile_safety
+uniform 1.906 0.0 0.0 current
+--------------------- OUTPUTS ---------------------------------------
+"FairTen1"
+"AnchTen1"
+--------------------- need this line --------------------------------

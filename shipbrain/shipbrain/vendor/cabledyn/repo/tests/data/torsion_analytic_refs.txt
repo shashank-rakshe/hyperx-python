@@ -1,0 +1,25 @@
+# Condensed-torsion analytic references (EI = L = 1; T = T L^2/EI, M_cr = M_cr L/EI).
+# clamped: clamped-clamped critical torque of a straight twisted rod under dead tension T,
+#   van der Heijden, Neukirch, Goss & Thompson (2003), Int. J. Mech. Sci. 45:161-196, eq. (33);
+#   T = 0 is tan(M L / 2 EI) = M L / 2 EI.
+# pinned: bending-pinned ends with the torque transmitted semi-tangentially (a constant-velocity
+#   joint, a bending-pinned end restrained in torsion): tan(M L / 2 EI) = -M L / (6 EI) at
+#   T = 0; derived and checked against a 4x4 boundary determinant (not Greenhill's 2 pi).
+# tag  T  M_cr
+clamped  -20.0   5.771135703321342
+clamped    0.0   8.986818915818128
+clamped   10.0  10.428856439276947
+clamped   50.0  15.589323932753878
+clamped  200.0  28.98273784835377
+pinned     0.0   4.91128772575888
+pinned    10.0   7.269274206916713
+# localised: the same clamped-clamped eq. (33) at large tension, where the onset approaches the
+#   infinite-rod value 2 sqrt(EI T) (Coyne 1990, as reported by van der Heijden et al. 2003).
+localised  400.0  40.496233340246
+localised 1600.0  80.24651244000465
+# helix: Kirchhoff helix of radius a and pitch angle alpha (tangent to the plane normal to the axis)
+#   under a uniform torque M_t, isotropic EI = B: kappa = cos^2(alpha)/a, tau = sin(alpha) cos(alpha)/a,
+#   axial force F = kappa (M_t - B tau)/cos(alpha), axial couple K = B kappa cos(alpha) + M_t sin(alpha)
+#   (from eqs. (1)-(5) of van der Heijden et al. 2003, checked by integrating the Kirchhoff equations).
+# tag  a  alpha_deg  B  M_t  F  K
+helix  1.0  30.0  1.0  0.5  0.05801270189221935  0.8995190528383291

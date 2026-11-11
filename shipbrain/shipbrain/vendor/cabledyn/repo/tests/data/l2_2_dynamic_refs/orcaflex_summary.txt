@@ -1,0 +1,16 @@
+! File: tests/data/l2_2_dynamic_refs/orcaflex_summary.txt
+! SPDX-License-Identifier: Apache-2.0
+! L2-2 OrcaFlex fairlead-tension summary values (kN) for tests/test_l2_2_dynamic_parity.f90.
+! Source: the OrcaFlex quasi-static-chain reference series distributed with MoorDyn-C
+! (tests/Mooring/QuasiStatic/WD*_Chain_ZZP1_A*.txt, BSD-3-Clause; identical in v2.7.1),
+! 201 samples at t = 0:0.1:20 s under the prescribed heave z = A sin(2 pi t / 10).
+! Reduced by validation/scripts/l2_2_orcaflex_summary.py: mean, std (population), max and
+! min over the 201 samples; harmonic k of the 0.1 Hz drive as a_k cos(2 pi k t / 10 + ph_k)
+! from the 200 samples of the two whole periods (ph_k in degrees).
+! cell       mean      std       max       min       a1        ph1       a2        ph2       a3        ph3
+WD0050_A1    990.088    58.930  1093.194   899.198    80.168     0.096     8.855   -42.855    18.061   -18.035
+WD0050_A2    955.476   376.786  1563.742   368.389   519.190    -5.282    39.522   -94.704    98.862   -40.577
+WD0200_A1   2062.800   177.933  2304.960  1828.374   250.343    41.184     3.485   126.170    21.831   -54.547
+WD0200_A2   2043.818   717.176  3070.450  1027.836  1003.366    16.075    34.278    35.289   119.619   -72.252
+WD0600_A1   5231.106   527.484  5970.503  4466.209   744.777    33.456    14.921   -28.877    14.388  -173.475
+WD0600_A2   5205.493  1703.926  7565.459  2820.764  2403.837     1.639    29.283  -128.985    33.042   120.037
