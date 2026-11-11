@@ -229,6 +229,20 @@ class Tools:
                       '(PDF page, 1 = first), question. Use it for drawings, scans, sketches, screenshots.',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'question': {'type': 'string'}, 'page': {'type': 'integer'}},
                        'required': ['file']})
+        self.register('physics_lab', self.physics_lab, 'OpenPhysicsAI\'s physics lab, used as written (C solvers, each checked against a '
+                      'closed form or a measurement): flow / CFD (incl. shocks, wings, cylinders), heat, fire, water and sloshing, '
+                      'sound, radar, magnetics and motors, fracture, impact, gears and mechanisms, metal / plastic 3D printing. '
+                      'action: list {query} | get {scenario} | run {scenario = example name or a full scenario dict, changes = '
+                      'values to override}. Every number in a scenario carries its unit in its key (length_m, pressure_pa).',
+                      {'type': 'object', 'properties': {'action': {'type': 'string'}, 'scenario': {'type': ['string', 'object']},
+                                                         'changes': {'type': 'object'}, 'query': {'type': 'string'}}, 'required': ['action']})
+        self.register('mcp_tools', self.mcp_tools, 'Operations of an MCP server ShipBrain can use as written: server "openphysics" (88: '
+                      'geometry, meshing, materials, structural / thermal analysis, topology optimisation, mechanisms, 3D printing, lab) '
+                      'or one listed in mcp_servers.json; query filters by name.',
+                      {'type': 'object', 'properties': {'server': {'type': 'string'}, 'query': {'type': 'string'}}})
+        self.register('mcp_call', self.mcp_call, 'Call one operation of an MCP server (see mcp_tools): server, tool, arguments.',
+                      {'type': 'object', 'properties': {'server': {'type': 'string'}, 'tool': {'type': 'string'}, 'arguments': {'type': 'object'}},
+                       'required': ['tool']})
         self.register('fatigue_mesh', self.fatigue_mesh, 'Fatigue hot-spot local model: cut a box around the hot spot from a plate assembly, '
                       'mesh it t x t, give the read-out points at 0.5t / 1.5t; with solve=true also run CalculiX and return the '
                       'extrapolated hot-spot stress (1.5 s(0.5t) - 0.5 s(1.5t)).',
@@ -806,6 +820,48 @@ class Tools:
     def look(self, file, question='Describe this drawing: what it shows, the main items and their labels.', page=None):
         ans = _strip_think(self.ask_vision([self._path(file)], question, page=page)).strip()
         return {'answer': ans, 'plain_english': ans}
+
+    def physics_lab(self, action, scenario=None, changes=None, query=None):
+        from . import openphysics
+        if action == 'list':
+            sc = openphysics.scenarios(query)
+            return {'scenarios': sc[:60], 'count': len(sc),
+                    'plain_english': f"{len(sc)} example scenario(s)" + (f" for '{query}'" if query else '') + ': ' +
+                                     '; '.join(f"{x['name']} ({x['domain']})" for x in sc[:25])}
+        if action == 'get':
+            d = openphysics.scenario(scenario)
+            return {'scenario': d, 'plain_english': f"{scenario}: {d.get('title', '')} (domain {d.get('domain')})."}
+        if action != 'run':
+            raise ValueError('action: list | get | run')
+        if not scenario:
+            raise ValueError('run needs a scenario (example name or a scenario dict)')
+        t0 = time.time()
+        rec = openphysics.run(scenario, changes, out_dir=os.path.join(self.workdir, 'physics'))
+        diag = rec.get('diagnostics', {})
+        last = {k: (v[-1] if isinstance(v, list) and v and not isinstance(v[-1], (list, dict)) else v) for k, v in diag.items()
+                if not isinstance(v, (dict,)) and not (isinstance(v, list) and v and isinstance(v[-1], (list, dict)))}
+        shown = ', '.join(f'{k} = {v}' for k, v in list(last.items())[:10])
+        files = [os.path.relpath(p, self.workdir) for p in (rec.get('result'), rec.get('scenario_file')) if p and os.path.exists(p)]
+        return {'domain': rec.get('domain'), 'diagnostics': diag, 'report': rec.get('report', '')[-1500:], 'files': files,
+                'wall_s': rec.get('wall_s'),
+                'plain_english': f"Ran {scenario if isinstance(scenario, str) else 'the scenario'} ({rec.get('domain')}) with "
+                                 f"OpenPhysicsAI in {time.time() - t0:.1f} s. Results (last step): {shown}."}
+
+    def mcp_tools(self, server='openphysics', query=None):
+        from . import mcp_client
+        ts = mcp_client.client(server, self.workdir).tools()
+        if query:
+            ts = [t for t in ts if any(w in (t['name'] + ' ' + t.get('description', '')).lower() for w in query.lower().split())]
+        return {'server': server, 'tools': [{'name': t['name'], 'description': t.get('description', '')[:200],
+                                             'arguments': list((t.get('inputSchema') or {}).get('properties', {}))} for t in ts[:40]],
+                'count': len(ts), 'plain_english': f"{len(ts)} operation(s) on {server}: " + ', '.join(t['name'] for t in ts[:40])}
+
+    def mcp_call(self, tool, arguments=None, server='openphysics'):
+        from . import mcp_client
+        r = mcp_client.client(server, self.workdir).call(tool, arguments or {})
+        if r['is_error']:
+            raise RuntimeError(f'{server}.{tool}: ' + json.dumps(r['result'], default=str)[:1500])
+        return {'result': r['result'], 'plain_english': f'{server}.{tool} done.'}     # the agent shortens it for the model
 
     def geometry_clean(self, plates=None, file=None, merge_tol=2.0):
         from . import geoclean

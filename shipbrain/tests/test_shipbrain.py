@@ -1408,3 +1408,23 @@ def test_exact_token_counts_from_the_model_server(tmp_path):
         srv.shutdown()
         chatstate.COUNTER, chatstate.RATIO = old
         chatstate._CACHE.clear()
+
+
+def test_openphysics_lab_and_mcp_client(tmp_path):
+    from shipbrain import openphysics, engines
+    from shipbrain.skills import Skills
+    assert any(x['name'] == 'lisle_tooth_root' for x in openphysics.scenarios('gear'))
+    assert [x['name'] for x in Skills().match('How does water slosh in this tank?')] == ['physics-lab']
+    plan = engines.choose('sloshing in a ballast tank')
+    assert plan['plan'][0]['analysis'] == 'cfd' and any('OpenPhysicsAI' in e['engine'] for e in plan['plan'][0]['engines'])
+    if not openphysics.built():
+        pytest.skip('OpenPhysicsAI not compiled here (needs a C compiler + make)')
+    T = agent.Tools(tmp_path)
+    r = T.call('physics_lab', {'action': 'run', 'scenario': 'lisle_tooth_root'})
+    assert abs(r['diagnostics']['gauge_A_agma_mpa'][-1] - 117.21) < 0.05                   # the strain-gauge case (115.7 MPa)
+    r2 = T.call('physics_lab', {'action': 'run', 'scenario': 'lisle_tooth_root', 'changes': {'load': {'normal_force_n': [30000]}}})
+    assert abs(r2['diagnostics']['gauge_A_agma_mpa'][-1] - 2 * 117.21) < 0.1              # linear: twice the load
+    ts = T.call('mcp_tools', {'server': 'openphysics'})
+    assert ts['count'] >= 80 and 'lab_run' in T.call('mcp_tools', {'server': 'openphysics', 'query': 'lab'})['plain_english']
+    cap = T.call('mcp_call', {'tool': 'capabilities_get'})
+    assert cap['result']['ok'] is True

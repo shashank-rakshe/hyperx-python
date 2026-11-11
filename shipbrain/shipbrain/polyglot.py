@@ -57,8 +57,14 @@ def repos():
 
 
 # ------------------------------------------------------------------ copy a repo in full
-def add(url, name=None):
-    """clone a repo and copy every tracked file into vendor/<name>/repo (MIT / BSD / Apache / ISC / CC0 only)"""
+MEDIA = re.compile(r'\.(gif|mp4|mov|webm|avi|mkv|png|jpe?g|webp|heic|tiff?|bmp|ico|icns|usdz|zip|tar|gz|7z|dmg|pkg|exe|dll|dylib|'
+                   r'so|a|o|wasm-unused)$|(^|/)[^/]+\.app/', re.I)
+
+
+def add(url, name=None, skip_media=True):
+    """clone a repo and copy every tracked file into vendor/<name>/repo (MIT / BSD / Apache / ISC / CC0 only).
+    skip_media: pictures, videos, archives and app bundles stay out (they teach the model nothing and only add weight);
+    all code, docs text, examples and data files are kept"""
     from .repopack import classify_licence
     name = name or re.sub(r'\.git$', '', url.rstrip('/').split('/')[-1])
     tmp = os.path.join(VENDOR, '_clone_' + name)
@@ -74,13 +80,18 @@ def add(url, name=None):
     commit = subprocess.run(['git', '-C', tmp, 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
     dst = os.path.join(VENDOR, name, 'repo')
     shutil.rmtree(dst, ignore_errors=True)
+    skipped = 0
     for f in filter(None, files):
+        if skip_media and MEDIA.search(f):
+            skipped += 1
+            continue
         os.makedirs(os.path.dirname(os.path.join(dst, f)), exist_ok=True)
         shutil.copy2(os.path.join(tmp, f), os.path.join(dst, f))
     shutil.rmtree(tmp, ignore_errors=True)
     with open(os.path.join(VENDOR, name, 'SOURCE.md'), 'w') as fh:
-        fh.write(f'# {name} (copied unchanged)\n\nFrom {url}, commit {commit}. Licence: {spdx} (see repo/).\n')
-    return {'name': name, 'files': len([f for f in files if f]), 'licence': spdx, 'commit': commit}
+        fh.write(f'# {name} (copied unchanged)\n\nFrom {url}, commit {commit}. Licence: {spdx} (see repo/).\n'
+                 + (f'{skipped} media / binary files (pictures, videos, archives, app bundles) left out.\n' if skipped else ''))
+    return {'name': name, 'files': len([f for f in files if f]) - skipped, 'media_left_out': skipped, 'licence': spdx, 'commit': commit}
 
 
 # ------------------------------------------------------------------ what is in there

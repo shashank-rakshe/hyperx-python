@@ -18,7 +18,7 @@ ANALYSES = {   # analysis type -> words that point to it
     'impact': r'impact|crash|collision|grounding|dropped object|drop test|explicit|slamming|blast',
     'fatigue': r'fatigue|hot.?spot|s-n|weld toe|cycles to failure|damage ratio',
     'fracture': r'crack|fracture|j-integral|stress intensity',
-    'cfd': r'\bcfd\b|flow|resistance|drag|wind load|current|wave load|sloshing|hydrodynamic|propulsion|wake',
+    'cfd': r'\bcfd\b|flow|resistance|drag|wind load|current|wave load|sloshing|hydrodynamic|propulsion|wake|airfoil|wing|shock',
     'heat': r'thermal|temperature|heat|fire|insulation',
     'cad': r'3d model|\bcad\b|step file|solid model|drawing to|make a model|cadquery|mid.?surface|outer surface|piping|pipes?\b',
     'mesh': r'\bmesh|elements?\b|bdf|\.inp|nastran deck|shell model',
@@ -62,6 +62,10 @@ ENGINES = [
                                 'falls back to the real solve when unsure; hotspots / refinement / report from any result'),
     ('Awatif frame solver (built in)', {'static'}, 'runs', 'frame_solve(nodes, members, supports, loads)', [], None,
      'linear static 3D frames, beams and pipe supports; load cases + ULS combinations; Awatif C++ solver (MIT) via wasmtime'),
+    ('OpenPhysicsAI (built in)', {'cfd': 'runs', 'heat': 'runs', 'fracture': 'runs', 'impact': 'runs', 'modal': 'runs', 'static': 'runs'},
+     'runs', 'physics_lab(action="list" / "run") ; mcp_tools / mcp_call(server="openphysics")', ['@openphysics'], None,
+     'C solvers checked against closed forms / measurements: flow up to shocks, heat, fire, water / sloshing, sound, '
+     'radar, magnetics, fracture, impact, gears, 3D printing, topology optimisation (Apache-2.0, copied whole)'),
     ('ShipBrain mesher', {'mesh'}, 'runs', 'build_structure / plates_mesh / panel_mesh / cad_mesh / structure_to_mesh', [], None,
      'own conforming 1D + 2D mesher; no free nodes'),
 ]
@@ -74,6 +78,9 @@ def _caps(caps, default):
 def installed(names):
     if not names:
         return True
+    if names == ['@openphysics']:                       # built in: compiled once from shipbrain/vendor (Linux / macOS / WSL)
+        from . import openphysics
+        return openphysics.available() and (openphysics.built() or os.name != 'nt')
     env = {'ccx': os.environ.get('CCX')}
     return any(shutil.which(n) or env.get(n) for n in names)
 

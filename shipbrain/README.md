@@ -166,6 +166,25 @@ Nothing is rewritten when it can be used as it is, so no core function can go mi
   only (with their licence), never trained on or copied into the code; brand material (SolidCraft's UI kit, look,
   theme, logo under its brand licence) left out.
 
+## Physics lab: OpenPhysicsAI, used as written
+
+[OpenPhysicsAI](https://github.com/molanocortes/OpenPhysicsAI) (Apache-2.0) is copied whole into `shipbrain/vendor/`
+(code, docs, examples, validation data; pictures and videos left out) and built once on Linux / macOS (on Windows inside
+WSL): `python -c "from shipbrain import openphysics; openphysics.build()"` (~30 s; clang or gcc + make).
+
+- `physics_lab`: its more than twenty C solvers, each checked against a closed form or a measurement - flow up to
+  shocks, heat, fire, water and sloshing, sound, radar, magnetics and motors, fracture, impact, gears and mechanisms,
+  metal / plastic 3D printing. `list` / `get` the 77 example scenarios, `run` one as written or with `changes`. Checked
+  here: the Lisle 2017 gear tooth gives 117.21 MPa at 15 kN (strain gauge 115.7 MPa) in 1.5 s, and twice the load
+  gives exactly twice the stress.
+- `mcp_tools` / `mcp_call`: ShipBrain is now also an **MCP client**. It talks to OpenPhysicsAI's own MCP server (88
+  operations: geometry, meshing, materials, structural / thermal analysis, topology optimisation, mechanisms, 3D
+  printing, the lab) and to any server you list in `<workdir>/mcp_servers.json`.
+- The engine router now RUNS flow / CFD, heat, fracture and impact questions with it (before: guidance only).
+- Training: `training/physics_tasks.py` builds it on Kaggle, runs the examples that finish within 40 s (as written and
+  with a changed load) and learns from the real records. Big 3D flow cases can take many minutes on a CPU; the
+  physics-lab skill tells the model to say so before running them.
+
 ## P&ID drawings -> process knowledge graph (pid-to-kg, used as written)
 
 `pid_kg` runs the scripts of [PID-to-Knowledge-Graph](https://github.com/ScottDuncanAI/PID-to-Knowledge-Graph) (MIT),

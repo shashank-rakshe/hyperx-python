@@ -36,6 +36,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: PRIVATE ONLY: do not use for training, do not redistribute
 - Copyright (C) 2007 Free Software Foundation, Inc
 
+## OpenPhysicsAI
+
+- Source: https://github.com/molanocortes/OpenPhysicsAI (commit 35605808faf0)
+- Licence: Apache-2.0 + CC-BY-4.0
+- Use: ok: permissive licence, keep the attribution
+- https://github.com/molanocortes/OpenPhysicsAI contributors
+
 ## PID-to-Knowledge-Graph
 
 - Source: https://github.com/ScottDuncanAI/PID-to-Knowledge-Graph (commit 7ee3a82e655c)
