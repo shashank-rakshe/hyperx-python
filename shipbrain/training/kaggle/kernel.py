@@ -155,7 +155,12 @@ if not sh('python training/public_pids.py --out data/public_pid_train.jsonl --ma
 if not sh('python training/construct_tasks.py --n 160 --out data/construct_train.jsonl --img-dir data/construct_images', required=False):
     open('data/construct_train.jsonl', 'w').close()
 # real drawings with full answer keys: PID2Graph P&IDs (CC BY-SA) + CubiCasa5K floor plans (CC BY-NC); downloaded here
-if not sh('python training/construct_real.py --out data/construct_real_train.jsonl --img-dir data/construct_real_images'
+# made on GitHub by .github/workflows/shipbrain-data.yml (release data-latest): fetched here, nothing to attach by hand
+sh(f'curl -sfL -o /tmp/real_drawings.zip https://github.com/{GH_REPO}/releases/download/data-latest/shipbrain-real-drawings.zip '
+   '&& unzip -qo /tmp/real_drawings.zip -d data && wc -l data/construct_real_train.jsonl', required=False)
+if os.path.exists('data/construct_real_train.jsonl') and os.path.getsize('data/construct_real_train.jsonl') > 0:
+    print('real drawing samples: from the GitHub release data-latest', flush=True)
+elif not sh('python training/construct_real.py --out data/construct_real_train.jsonl --img-dir data/construct_real_images'
           + (f' --data-root "{DATA}"' if DATA else ''), required=False):
     open('data/construct_real_train.jsonl', 'w').close()
 # cad3dify's own drawing -> CadQuery -> render -> correct loop, in its own prompt format, on the verified CAD examples

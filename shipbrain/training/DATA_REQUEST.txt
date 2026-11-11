@@ -1,0 +1,3 @@
+Changing this file starts .github/workflows/shipbrain-data.yml: GitHub downloads the public drawing datasets, makes the
+training samples and publishes them as release data-latest (fetched by the Kaggle training run).
+request 1: first build
