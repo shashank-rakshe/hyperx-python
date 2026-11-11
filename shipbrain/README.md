@@ -265,6 +265,20 @@ ShipBrain builds its own MCP server once (`python -c "from shipbrain import dwsi
   Eastman) -> summaries, validations, and the drawn P&IDs with their exact tag lists (`training/data/dexpi_*`).
 - Code packs of DWSIM, pyDEXPI and DEXPI Studio are trained on too (copyleft allowed: ShipBrain is open, non-commercial).
 
+## Document reading: LiteParse + ParseBench (run-llama, Apache-2.0)
+
+- **LiteParse** (`pip install liteparse`; Rust core with PDFium, runs on the PC): now ShipBrain's PDF reader for the
+  knowledge base and the class-rule books - lines, reading order and table grids kept (pypdfium2 stays as fallback).
+  Tool `parse_document`: PDF / Word / Excel / PowerPoint / picture -> markdown with headings and tables, saved as
+  `<name>.md`; it says which pages are scanned or mostly pictures, and `ocr: true` reads those (Tesseract; its language
+  data is fetched once from the internet). A 14-page PDF reads in 0.1 s. Word / Excel / PowerPoint need LibreOffice.
+- **ParseBench** (~2,000 human-verified pages of real insurance, finance and government documents; tables, charts,
+  formatting, layout): the GitHub data job downloads it with its own command and turns each page into "page picture ->
+  its verified markdown" training samples - only if the dataset's Hugging Face licence allows training (checked first
+  and written to the release notes; no-derivatives licences are refused). Hugging Face is blocked in the build session.
+- The rest of run-llama (LlamaIndex) is mostly demos of paid cloud services; their code packs were not added.
+  LiteParse and ParseBench code are trained knowledge packs.
+
 ## LLM serving simulation (Simthesizer)
 
 [Simthesizer](https://github.com/casys-kaist/simthesizer) (MIT, Rust, HPCA 2027) is copied whole and run as written:

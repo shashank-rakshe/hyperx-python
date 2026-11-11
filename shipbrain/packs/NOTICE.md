@@ -78,6 +78,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2026 The pid-to-kg contributors
 
+## ParseBench
+
+- Source: https://github.com/run-llama/ParseBench.git (commit 963a9e051a67)
+- Licence: Apache-2.0
+- Use: ok: permissive licence, keep the attribution
+- https://github.com/run-llama/ParseBench.git contributors
+
 ## ShipSpace-GA
 
 - Source: https://github.com/kodendaal/ShipSpace-GA (commit 78405b9521ce)
@@ -160,6 +167,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2026 Ciuntuc BIM Studio S.R.L
+
+## liteparse
+
+- Source: https://github.com/run-llama/liteparse.git (commit 64fee560cbd7)
+- Licence: Apache-2.0
+- Use: ok: permissive licence, keep the attribution
+- https://github.com/run-llama/liteparse.git contributors
 
 ## mayo
 

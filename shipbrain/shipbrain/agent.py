@@ -392,6 +392,11 @@ class Tools:
                                                          'users': {'type': 'integer'}, 'rate_per_s': {'type': 'number'},
                                                          'input_tokens': {'type': 'integer'}, 'output_tokens': {'type': 'integer'},
                                                          'scenario': {'type': 'string'}}})
+        self.register('parse_document', self.parse_document, 'Read a document (PDF, Word, Excel, PowerPoint, picture) into markdown with '
+                      'LiteParse (local, fast): headings, tables, reading order; says which pages are scanned / need OCR; ocr=true '
+                      'reads those too (Tesseract). Saves <name>.md for knowledge_search / the chat.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'ocr': {'type': 'boolean'},
+                                                         'pages': {'type': 'string'}}, 'required': ['file']})
         self.register('drawing_takeoff', self.drawing_takeoff, 'Construction drawings (electrical / architectural / P&ID) read into '
                       'a CIR file (.cir / .json): quantity takeoff - counts per item with MasterFormat / IFC codes, items to '
                       'review, connections (conductors, home runs, feeders), lengths / areas when a scale is known. '
@@ -1110,6 +1115,40 @@ class Tools:
     def drawing_takeoff(self, file, min_confidence=0.0):
         from . import construct
         return construct.takeoff(self._path(file), min_confidence)
+
+    def parse_document(self, file, ocr=False, pages=None):
+        try:
+            import liteparse
+        except ImportError:
+            raise ModuleNotFoundError("No module named 'liteparse'")
+        src = self._path(file)
+        kw = dict(output_format='markdown', ocr_enabled=bool(ocr), quiet=True, include_complexity=True)
+        if pages:
+            kw['target_pages'] = str(pages)
+        try:
+            r = liteparse.LiteParse(**kw).parse(src)
+        except Exception as e:
+            if 'tessdata' in str(e):
+                return {'error': 'OCR needs its language data from the internet once (Tesseract eng.traineddata); try again online, '
+                                 'or read without ocr'}
+            if 'LibreOffice' in str(e) or 'soffice' in str(e):
+                return {'error': 'Word / Excel / PowerPoint files need LibreOffice (free, https://www.libreoffice.org/download/) '
+                                 'to be converted first'}
+            raise
+        md = '\n\n'.join(f'<!-- page {i} -->\n' + re.sub(r'!\[[^\]]*\]\([^)]*\)\s*', '', pg.markdown or '').strip()
+                         for i, pg in enumerate(r.pages, 1))
+        out = os.path.splitext(os.path.basename(file))[0] + '.md'
+        open(self._path(out), 'w', encoding='utf-8').write(md)
+        need = [pg.page_num if hasattr(pg, 'page_num') else i for i, pg in enumerate(r.pages, 1)
+                if getattr(getattr(pg, 'complexity', None), 'needs_ocr', False)]
+        tables = md.count('\n|---') + md.count('\n| ---')
+        heads = [ln.lstrip('# ').strip() for ln in md.splitlines() if re.match(r'#{1,3} ', ln)][:8]
+        pe = (f"Read {os.path.basename(file)}: {len(r.pages)} page(s) -> {out} ({len(md):,} characters"
+              + (f', {tables} table(s)' if tables else '') + ')' + (f"; headings: {'; '.join(heads)}" if heads else '') + '.'
+              + (f" Pages {', '.join(map(str, need[:15]))} look scanned or mostly pictures"
+                 + (' and were read with OCR.' if ocr else ': ask again with ocr=true to read them.') if need else ''))
+        return {'markdown_file': out, 'pages': len(r.pages), 'needs_ocr_pages': need, 'tables': tables,
+                'preview': md[:1500], 'plain_english': pe}
 
     def serving_sim(self, action='simulate', users=50, rate_per_s=2.0, input_tokens=600, output_tokens=300, scenario=None):
         from . import serving

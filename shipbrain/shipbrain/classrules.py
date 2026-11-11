@@ -190,7 +190,7 @@ def sections(pdf_path, size=1600):
     flat = []                                             # (page, line)
     for i in range(1, len(parts), 2):
         for ln in parts[i + 1].splitlines():
-            flat.append((int(parts[i]), ln))
+            flat.append((int(parts[i]), re.sub(r'^\s*#{1,6}\s+', '', ln)))      # markdown heading marks (LiteParse)
     cur = {'section': '', 'title': '', 'page': 1, 'lines': []}
 
     def close():

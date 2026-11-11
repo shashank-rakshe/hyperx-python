@@ -128,6 +128,7 @@ SOFTWARE = {
                          'linux': 'sudo apt install dotnet-sdk-10.0', 'mac': 'download the .NET 10 SDK for macOS from the link'},
                'then': 'python -c "from shipbrain import dwsim; dwsim.build()"   (about 5 minutes, once)',
                'check': _have_exe('dotnet', 'dotnet.exe'), 'match': r'\.NET 10 SDK|dotnet not found|DWSIM is not built'},
+    'liteparse': _pip('liteparse', 'to read PDF / Word / Excel / PowerPoint documents into markdown (LiteParse)'),
     'msgpack': _pip('msgpack', 'for construction drawing sets (CIR files, ConstructDrawingAI)'),
     'pydantic': _pip('pydantic', 'for construction drawing sets (CIR) and P&ID knowledge graphs'),
     'xsdata': _pip('xsdata', 'for OCX ship models: the official OCX classes of every schema version'),

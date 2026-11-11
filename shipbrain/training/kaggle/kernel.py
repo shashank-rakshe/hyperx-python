@@ -89,7 +89,7 @@ report('started')
 shutil.rmtree('/kaggle/working/src', ignore_errors=True)        # a re-run in the same session must not fail
 sh(f'git clone -b {BRANCH} --depth 1 {REPO} src')
 os.chdir('/kaggle/working/src/shipbrain')
-sh('pip -q install unsloth scipy pyNastran ezdxf pdfplumber pypdfium2 pillow wasmtime pydantic duckdb networkx rapidocr-onnxruntime xsdata xmlschema msgpack pyyaml "langchain<1" "langchain-openai<1" "langchain-experimental<1" svglib rlPyCairo loguru')
+sh('pip -q install unsloth scipy pyNastran ezdxf pdfplumber pypdfium2 pillow wasmtime pydantic duckdb networkx rapidocr-onnxruntime liteparse xsdata xmlschema msgpack pyyaml "langchain<1" "langchain-openai<1" "langchain-experimental<1" svglib rlPyCairo loguru')
 sh('python -m shipbrain.polyglot setup awatif', required=False)        # Node packages for the copied TypeScript code
 sh('pip -q install cadquery || echo "cadquery not installed: CAD tasks skipped"')
 sh('(apt-get -qq install -y calculix-ccx >/dev/null 2>&1 || sudo apt-get -qq install -y calculix-ccx >/dev/null 2>&1) || echo "CalculiX not installed: surrogate tasks skipped"', required=False)
@@ -158,6 +158,7 @@ if not sh('python training/construct_tasks.py --n 160 --out data/construct_train
 # made on GitHub by .github/workflows/shipbrain-data.yml (release data-latest): fetched here, nothing to attach by hand
 sh(f'curl -sfL -o /tmp/real_drawings.zip https://github.com/{GH_REPO}/releases/download/data-latest/shipbrain-real-drawings.zip '
    '&& unzip -qo /tmp/real_drawings.zip -d data && wc -l data/construct_real_train.jsonl', required=False)
+sh('touch data/parsebench_train.jsonl', required=False)   # ParseBench pages come in the same release (when allowed)
 if os.path.exists('data/construct_real_train.jsonl') and os.path.getsize('data/construct_real_train.jsonl') > 0:
     print('real drawing samples: from the GitHub release data-latest', flush=True)
 elif not sh('python training/construct_real.py --out data/construct_real_train.jsonl --img-dir data/construct_real_images'
@@ -199,7 +200,7 @@ report('scoring the base model')
 sh(f'python training/cad_eval.py --local {BASE} --limit 30 --out /kaggle/working/cad_eval_before.json', required=False)
 sh(f'python training/evaluate.py --local {BASE} --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_before.json', required=False)
 report('training the main model')
-sh(f'MAX_LEN=6144 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/synth_pid_train.jsonl data/physics_train.jsonl data/ocx_train.jsonl data/construct_train.jsonl data/construct_real_train.jsonl data/cad3dify_train.jsonl data/class_rule_train.jsonl data/dexpi_train.jsonl data/dwsim_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
+sh(f'MAX_LEN=6144 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/synth_pid_train.jsonl data/physics_train.jsonl data/ocx_train.jsonl data/construct_train.jsonl data/construct_real_train.jsonl data/cad3dify_train.jsonl data/class_rule_train.jsonl data/dexpi_train.jsonl data/dwsim_train.jsonl data/parsebench_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
 report('scoring the trained model')
 sh('python training/cad_eval.py --local /kaggle/working/shipbrain_model/lora --limit 30 --out /kaggle/working/cad_eval_after.json', required=False)
 sh(f'python training/evaluate.py --local /kaggle/working/shipbrain_model/lora --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_after.json', required=False)

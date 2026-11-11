@@ -40,9 +40,27 @@ def _chunks(text, size=900):
     return out
 
 
+def _read_liteparse(path, ocr=False):
+    """PDF -> text per page ('# page N' markers) with LiteParse (Apache-2.0): spatial layout, lines and table grids kept,
+    correct reading order; None when it is not installed or fails (then pypdfium2 reads it)"""
+    try:
+        import liteparse
+    except ImportError:
+        return None
+    try:
+        r = liteparse.LiteParse(output_format='text', ocr_enabled=ocr, quiet=True).parse(path)
+        text = '\n\n'.join(f'# page {i}\n' + (pg.text or '').rstrip() for i, pg in enumerate(r.pages, 1))
+        return text if re.sub(r'# page \d+', '', text).strip() else None
+    except Exception:
+        return None
+
+
 def _read(path):
     ext = os.path.splitext(path)[1].lower()
     if ext == '.pdf':
+        md = _read_liteparse(path)                   # LiteParse (Apache-2.0): headings, tables, reading order
+        if md:
+            return md
         try:
             import pypdfium2                         # Apache-2.0 / BSD
         except ImportError:

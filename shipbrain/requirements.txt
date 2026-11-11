@@ -5,6 +5,7 @@ cadquery        # STEP import (cad_mesh), STEP export (drawing_to_3d), cadquery_
 pyNastran       # robust Nastran .bdf reading (a built-in reader is used if missing)
 ezdxf           # DXF drawings: drawing_to_3d, compare_drawings, file_info
 pdfplumber      # vector PDF drawings: lines, line styles, words (MIT)
+liteparse       # document reading: PDF -> text / markdown with layout and tables, OCR (Apache-2.0)
 pypdfium2       # PDF rendering + text for the knowledge base (Apache-2.0/BSD)
 pydantic        # pid-to-kg (P&ID -> knowledge graph, copied repo): MIT
 duckdb          # pid-to-kg graph store, MIT

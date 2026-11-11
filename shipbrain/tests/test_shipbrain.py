@@ -1842,3 +1842,36 @@ def test_serving_sim(tmp_path):
     high = T.call('serving_sim', {'users': 200, 'rate_per_s': 20})
     assert low['requests'] == 20 and high['requests'] == 200
     assert high['ttft_p50_s'] > 10 * low['ttft_p50_s'] and high['total_tokens_s'] > low['total_tokens_s']
+
+
+def test_liteparse_reading_and_parsebench_samples(tmp_path):
+    """LiteParse reads PDFs line by line for the knowledge base and as markdown for parse_document; ParseBench
+    samples pair a page picture with its verified markdown; its licence gate refuses no-derivatives licences"""
+    pytest.importorskip('reportlab')
+    from reportlab.pdfgen import canvas
+    from shipbrain import agent
+    from shipbrain.knowledge import _read
+    pdf = tmp_path / 'r.pdf'
+    c = canvas.Canvas(str(pdf))
+    for i, ln in enumerate(['3 Plating', 't = 0.0158 b sqrt(P) mm', '4 Stiffeners']):
+        c.drawString(50, 800 - 20 * i, ln)
+    c.save()
+    text = _read(str(pdf))
+    assert text.startswith('# page 1') and '\n3 Plating\n' in text + '\n' and 't = 0.0158 b sqrt(P) mm' in text
+    try:
+        import liteparse  # noqa: F401
+        r = agent.Tools(str(tmp_path)).call('parse_document', {'file': 'r.pdf'})
+        assert r['pages'] == 1 and (tmp_path / 'r.md').exists() and '0.0158' in (tmp_path / 'r.md').read_text()
+    except ImportError:
+        pass
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'training'))
+    import parsebench_tasks as pb
+    assert pb.OK_LICENCES.match('cc-by-nc-sa-4.0') and pb.OK_LICENCES.match('apache-2.0')
+    assert not pb.OK_LICENCES.match('cc-by-nc-nd-4.0') and not pb.OK_LICENCES.match('other')
+    d = tmp_path / 'pb' / 'docs' / 'table'
+    d.mkdir(parents=True)
+    shutil.copy(pdf, d / 'a.pdf')
+    (tmp_path / 'pb' / 'expected_markdown.json').write_text(json.dumps({'table/a.pdf': '| a | b |\n|---|---|\n| 1 | 2 |'}))
+    pb.main(['--data', str(tmp_path / 'pb'), '--out', str(tmp_path / 'o' / 'x.jsonl'), '--img-dir', str(tmp_path / 'o' / 'img')])
+    rows = [json.loads(l) for l in open(tmp_path / 'o' / 'x.jsonl')]
+    assert len(rows) == 1 and rows[0]['messages'][1]['content'].startswith('| a | b |') and rows[0]['images']
