@@ -274,6 +274,15 @@ set-up (Llama 3.1 8B on one RTX Pro 6000); other models / GPUs need its own GPU 
 17 s; 20 requests at 0.5/s -> first word 0.03 s, 88 tokens/s per user; 200 at 20/s -> the GPU saturates, first word
 after 9 s (90 %: 17 s). ShipBrain's one-PC planner stays `shipbrain.speed` (CPU / small GPU). Its code is a trained pack.
 
+**ShipBrain's own model on a GPU:** the Kaggle training run ends by measuring ShipBrain's model (the Qwen3-4B text
+part of the base model, dummy weights - nothing large is downloaded) on its GPU with Simthesizer's own profiler
+(Python 3.14 + vLLM 0.31 via `uv`; `training/serving/qwen3_4b.toml`, 29 batch shapes; checked here with its dry run).
+The result lands in the run's output `shipbrain_serving/`; `serving.add_profile("shipbrain_serving")` installs it and
+`serving_sim` then answers for ShipBrain itself on that card. Also as its own notebook:
+`training/kaggle/serving_profile_kernel.py`. Simthesizer models dense models with head size = hidden / heads, so
+Qwen3-4B is given as 20 heads x 128 (KV cache per token exact); the vision encoder is not included. Not run yet:
+needs the Kaggle GPU; whether vLLM 0.31 accepts the T4 shows in that run's log.
+
 ## Class society rules (ships and offshore)
 
 ShipBrain answers class rule questions **from the rules themselves**, with society, document, section and page, in

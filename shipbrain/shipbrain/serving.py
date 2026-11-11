@@ -6,10 +6,11 @@ built and run as written - Rust, no GPU needed): how fast a model server answers
   scenarios()             the measured set-ups that come with it (model + GPU; today Llama 3.1 8B on one RTX Pro 6000)
   simulate(...)           users, arrival rate, prompt / answer length -> time to first token, speed per user,
                           total tokens per second, how long each answer takes (median and 90 %)
-New set-ups (another model or GPU) need its profiling on that GPU (scripts/profile.py with vLLM) - see its README.
+ShipBrain's own model on a GPU: training/kaggle/serving_profile_kernel.py measures it on a Kaggle T4 with Simthesizer's
+own profiler (no weights needed); add_profile(folder) installs the result as a set-up here.
 ShipBrain's own one-PC speed planner is shipbrain.speed (CPU / small GPU, one user).
 """
-import json, os, random, shutil, statistics, subprocess, tempfile
+import json, os, random, re, shutil, statistics, subprocess, tempfile
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor', 'simthesizer', 'repo')
 TARGET = os.path.join(os.path.expanduser('~'), '.cache', 'shipbrain', 'simthesizer')
@@ -31,9 +32,39 @@ def build(log=print):
     return exe()
 
 
+USER_DIR = os.path.join(os.path.expanduser('~'), '.shipbrain', 'serving')    # set-ups measured for ShipBrain's own model
+
+
+def _dirs():
+    return [os.path.join(ROOT, 'examples', 'scenarios'), USER_DIR]
+
+
 def scenarios():
-    d = os.path.join(ROOT, 'examples', 'scenarios')
-    return sorted(x for x in os.listdir(d) if os.path.exists(os.path.join(d, x, 'simthesizer.toml'))) if os.path.isdir(d) else []
+    out = []
+    for d in _dirs():
+        if os.path.isdir(d):
+            out += [x for x in os.listdir(d) if os.path.exists(os.path.join(d, x, 'simthesizer.toml'))]
+    return sorted(set(out), key=lambda x: (not x.startswith(('shipbrain', '1x')), x))
+
+
+def _config(sc):
+    for d in _dirs()[::-1]:                                   # the user's own measurements first
+        p = os.path.join(d, sc, 'simthesizer.toml')
+        if os.path.exists(p):
+            return p
+    raise ValueError(f'unknown set-up {sc}; known: {", ".join(scenarios())}')
+
+
+def add_profile(folder, name=None):
+    """install the output of training/kaggle/serving_profile_kernel.py (profile.jsonl + simthesizer.toml + receipt.json)"""
+    rc = json.load(open(os.path.join(folder, 'receipt.json')))
+    gpu = re.sub(r'[^A-Za-z0-9]+', '-', rc.get('gpu', 'gpu')).strip('-').lower()
+    name = name or f'1x{gpu}--shipbrain-qwen3-4b--realistic'
+    dst = os.path.join(USER_DIR, name)
+    os.makedirs(dst, exist_ok=True)
+    for f in ('profile.jsonl', 'simthesizer.toml', 'receipt.json'):
+        shutil.copy(os.path.join(folder, f), dst)
+    return name
 
 
 def make_workload(path, users=50, rate_per_s=2.0, input_tokens=600, output_tokens=300, seed=0):
@@ -59,11 +90,11 @@ def simulate(scenario=None, workload=None, users=50, rate_per_s=2.0, input_token
     sc = scenario or (scenarios() or [None])[0]
     if not sc:
         raise RuntimeError('no Simthesizer scenario found')
-    cfg = os.path.join(ROOT, 'examples', 'scenarios', sc, 'simthesizer.toml')
+    cfg = _config(sc)
     tmp = tempfile.mkdtemp(prefix='sb_serve_')
     wl = workload or make_workload(os.path.join(tmp, 'workload.jsonl'), users, rate_per_s, input_tokens, output_tokens, seed)
     out = os.path.join(tmp, 'sim.jsonl')
-    r = subprocess.run([e, '--config', cfg, '--workload', os.path.abspath(wl), '--output-jsonl', out], cwd=ROOT,
+    r = subprocess.run([e, '--config', cfg, '--workload', os.path.abspath(wl), '--output-jsonl', out], cwd=os.path.dirname(cfg),
                        capture_output=True, text=True, timeout=3600)
     if r.returncode or not os.path.exists(out):
         raise RuntimeError('Simthesizer failed: ' + (r.stderr or r.stdout)[-800:])
@@ -90,6 +121,8 @@ def simulate(scenario=None, workload=None, users=50, rate_per_s=2.0, input_token
         f"Simthesizer simulated {res['requests']} requests on {gpu} running {model}: the first word comes after "
         f"{res['ttft_p50_s']} s (90 % within {res['ttft_p90_s']} s), each user then gets about {res['per_user_tokens_s']} tokens/s, "
         f"a whole answer takes {res['answer_p50_s']} s (90 % within {res['answer_p90_s']} s), and the server produces "
-        f"{res['total_tokens_s']} tokens/s in total. (Measured set-up of Simthesizer; other models / GPUs need its GPU profiling.)")
+        f"{res['total_tokens_s']} tokens/s in total."
+        + (' (ShipBrain\'s own model measured on this GPU; vision encoder not included.)' if 'shipbrain' in sc else
+           ' (Simthesizer\'s measured set-up; ShipBrain\'s own model: run training/kaggle/serving_profile_kernel.py on a Kaggle GPU.)'))
     shutil.rmtree(tmp, ignore_errors=True)
     return res

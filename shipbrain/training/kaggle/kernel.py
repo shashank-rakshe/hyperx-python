@@ -248,6 +248,10 @@ if token:
     for f in glob.glob('/kaggle/working/*.gguf') + ['/kaggle/working/summary.json']:
         api.upload_file(path_or_fileobj=f, path_in_repo=os.path.basename(f), repo_id=repo)
     print('uploaded to https://huggingface.co/' + repo)
+# last: measure ShipBrain's model on this GPU with Simthesizer (no weights needed) -> /kaggle/working/shipbrain_serving
+if os.environ.get('SB_SERVING_PROFILE', '1') != '0':
+    report('measuring serving speed on this GPU (Simthesizer)')
+    sh('SB_INSIDE_TRAINING=1 timeout 5400 python training/kaggle/serving_profile_kernel.py', required=False)
 shutil.rmtree('/kaggle/working/src', ignore_errors=True)
 report('ALL DONE', {'summary': summary})
 print('ALL DONE - open the Output tab and download shipbrain-q4_k_m.gguf (and summary.json)', flush=True)
