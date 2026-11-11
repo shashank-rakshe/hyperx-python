@@ -211,6 +211,10 @@ class Tools:
                       'TypeScript, JavaScript, C++, Rust...): repo (e.g. awatif, diff3d; empty = list the repos), query = words of '
                       'the file or function name. Shows file, language, signature and whether it can be called.',
                       {'type': 'object', 'properties': {'repo': {'type': 'string'}, 'query': {'type': 'string'}}})
+        self.register('code_folder', self.code_folder, 'Use a package the user downloaded to this PC (e.g. the Vibrationdata MATLAB '
+                      'package) like a copied repo: name + folder. Then code_functions / code_call work on it (.m runs in GNU Octave).',
+                      {'type': 'object', 'properties': {'name': {'type': 'string'}, 'folder': {'type': 'string'}},
+                       'required': ['name', 'folder']})
         self.register('code_call', self.code_call, 'Run a function of a copied repo IN ITS OWN LANGUAGE (Python directly, TypeScript / '
                       'JavaScript through Node.js): repo, file, function, args (JSON list; JS Map = {"__map__": [[key, value], ...]}).',
                       {'type': 'object', 'properties': {'repo': {'type': 'string'}, 'file': {'type': 'string'}, 'function': {'type': 'string'},
@@ -757,11 +761,24 @@ class Tools:
         from . import polyglot
         if not repo:
             rs = polyglot.repos()
-            return {'repos': rs, 'plain_english': 'Copied repos (whole, unchanged): ' + ', '.join(rs) + '.'}
+            more = [n for n in polyglot.DOWNLOADABLE if n not in rs]
+            return {'repos': rs, 'downloadable': more, 'plain_english': 'Copied repos (whole, unchanged): ' + ', '.join(rs) + '.'
+                    + (f" Also usable once you download them: {', '.join(more)}." if more else '')}
         fs = polyglot.list_functions(repo, query, limit=60)
         langs = sorted({f['language'] for f in fs})
         return {'functions': fs[:40], 'count': len(fs),
                 'plain_english': f"{len(fs)} function(s) in {repo}" + (f" matching '{query}'" if query else '') + f" ({', '.join(langs)})."}
+
+    def code_folder(self, name, folder):
+        from . import polyglot
+        d = polyglot.remember_repo(name, folder)
+        fs = polyglot.list_functions(name, None, limit=100000)
+        langs = sorted({f['language'] for f in fs})
+        need = ' MATLAB-language files run in GNU Octave (free: https://octave.org/download) - not found on this PC yet.' \
+            if 'octave' in langs and not polyglot.octave_exe() else ''
+        return {'repo': name, 'folder': d, 'functions': len(fs),
+                'plain_english': f"Using {d} as '{name}': {len(fs)} functions ({', '.join(langs)}). Ask for a calculation and I "
+                                 f"will find and run the right function.{need}"}
 
     def code_call(self, repo, file, function, args=None):
         from . import polyglot

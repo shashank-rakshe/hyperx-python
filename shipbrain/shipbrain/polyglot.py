@@ -46,15 +46,55 @@ process.stdin.on('end', async () => {
 """
 
 
+# Packages the USER downloads to their own PC (not copied into ShipBrain - e.g. no licence for sharing): ShipBrain
+# runs them from there. When one is needed and missing, the chat shows where to get it (shipbrain.installs).
+USER_REPOS = os.path.join(os.path.expanduser('~'), '.shipbrain', 'repos.json')
+DOWNLOADABLE = {
+    'vibrationdata_matlab': {'title': "Tom Irvine's Vibrationdata MATLAB package",
+                             'url': 'https://github.com/nkatsinas/vibrationdata_matlab',
+                             'why': 'for its vibration, shock, fatigue, acoustics and bolted-joint calculations (MATLAB language, '
+                                    'run free in GNU Octave)', 'needs': 'octave'},
+}
+
+
+def _user_repos():
+    try:
+        return json.load(open(USER_REPOS, encoding='utf-8'))
+    except Exception:
+        return {}
+
+
+def remember_repo(name, folder):
+    """use a package the user downloaded (folder on this PC) like a copied repo"""
+    folder = os.path.abspath(os.path.expanduser(folder))
+    if not os.path.isdir(folder):
+        raise ValueError(f'{folder} is not a folder')
+    sub = [d for d in os.listdir(folder) if os.path.isdir(os.path.join(folder, d))]
+    if len(sub) == 1 and not any(f.endswith(('.m', '.py', '.ts', '.js')) for f in os.listdir(folder)):
+        folder = os.path.join(folder, sub[0])                # a ZIP unpacks into one folder: use what is inside
+    d = _user_repos()
+    d[name] = folder
+    os.makedirs(os.path.dirname(USER_REPOS), exist_ok=True)
+    json.dump(d, open(USER_REPOS, 'w', encoding='utf-8'), indent=1)
+    return folder
+
+
 def repo_dir(name):
     d = os.path.join(VENDOR, name, 'repo')
-    if not os.path.isdir(d):
-        raise ValueError(f'no copied repo "{name}"; have: ' + ', '.join(repos()))
-    return d
+    if os.path.isdir(d):
+        return d
+    u = _user_repos().get(name)
+    if u and os.path.isdir(u):
+        return u
+    if name in DOWNLOADABLE:
+        k = DOWNLOADABLE[name]
+        raise RuntimeError(f"{k['title']} is not on this PC: download it ({name})")
+    raise ValueError(f'no copied repo "{name}"; have: ' + ', '.join(repos()))
 
 
 def repos():
-    return sorted(n for n in os.listdir(VENDOR) if os.path.isdir(os.path.join(VENDOR, n, 'repo'))) if os.path.isdir(VENDOR) else []
+    own = sorted(n for n in os.listdir(VENDOR) if os.path.isdir(os.path.join(VENDOR, n, 'repo'))) if os.path.isdir(VENDOR) else []
+    return own + sorted(n for n, p in _user_repos().items() if os.path.isdir(p) and n not in own)
 
 
 # ------------------------------------------------------------------ copy a repo in full

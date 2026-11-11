@@ -306,6 +306,13 @@ Octave (arguments in, every output back), `run_script` runs a whole `.m` script.
 Checked: Octave 8.4 - a two-output function and a vector function give the same numbers as the Python versions.
 Windows made with MATLAB's GUIDE (.fig) do not run in Octave, but their calculation code does.
 
+**Packages the user downloads** (not copied into ShipBrain, e.g. no licence for sharing): when a calculation needs
+one that is not on the PC, the chat says where to get it - today Tom Irvine's Vibrationdata MATLAB package
+(https://github.com/nkatsinas/vibrationdata_matlab: Code -> Download ZIP, plus GNU Octave). Tell ShipBrain the
+folder once ("use the folder D:/vibrationdata_matlab-main as vibrationdata_matlab", tool `code_folder`, remembered in
+`~/.shipbrain/repos.json`) and its functions run through `code_functions` / `code_call` like the copied repos.
+More such packages go in `polyglot.DOWNLOADABLE` (name, link, why) - one line each.
+
 ## LLM serving simulation (Simthesizer)
 
 [Simthesizer](https://github.com/casys-kaist/simthesizer) (MIT, Rust, HPCA 2027) is copied whole and run as written:

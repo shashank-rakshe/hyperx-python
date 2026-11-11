@@ -129,6 +129,15 @@ SOFTWARE = {
                'then': 'python -c "from shipbrain import dwsim; dwsim.build()"   (about 5 minutes, once)',
                'check': _have_exe('dotnet', 'dotnet.exe'), 'match': r'\.NET 10 SDK|dotnet not found|DWSIM is not built'},
     'liteparse': _pip('liteparse', 'to read PDF / Word / Excel / PowerPoint documents into markdown (LiteParse)'),
+    'vibrationdata_matlab': {'name': "Tom Irvine's Vibrationdata MATLAB package (free download)",
+                             'why': 'for its vibration, shock, fatigue, acoustics and bolted-joint calculations, run free in GNU Octave',
+                             'link': 'https://github.com/nkatsinas/vibrationdata_matlab',
+                             'steps': {'all': 'open the link -> green "Code" button -> Download ZIP -> unzip it (or: git clone '
+                                              'https://github.com/nkatsinas/vibrationdata_matlab.git), install GNU Octave '
+                                              '(https://octave.org/download), then tell me the folder: "use the folder <path> as '
+                                              'vibrationdata_matlab"'},
+                             'check': lambda: 'vibrationdata_matlab' in __import__('shipbrain.polyglot', fromlist=['x']).repos(),
+                             'match': r'Vibrationdata MATLAB package is not on this PC'},
     'octave': {'name': 'GNU Octave (free MATLAB alternative)', 'why': 'to run MATLAB-language (.m) code without MATLAB',
                'link': 'https://octave.org/download', 'steps': {'windows': 'download the Windows installer from the link and run it',
                                                                   'linux': 'sudo apt install octave', 'mac': 'brew install octave'},

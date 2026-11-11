@@ -1920,3 +1920,20 @@ def test_octave_runs_matlab_language(tmp_path, monkeypatch):
     assert fs['nut']['callable'] and fs['nut']['language'] == 'octave'
     assert polyglot.call('demo', 'nut.m', 'nut', [0.2, 12, 40000]) == pytest.approx([96.0, 40000])
     assert polyglot.call('demo', 'grms.m', 'grms', [[20, 2000], [0.04, 0.04]]) == pytest.approx((0.04 * 1980) ** 0.5)
+
+
+def test_user_downloaded_package(tmp_path, monkeypatch):
+    """a package the user downloads (not copied into ShipBrain): missing -> install card with the GitHub link;
+    given its folder -> its .m functions run in Octave"""
+    from shipbrain import polyglot, agent
+    monkeypatch.setattr(polyglot, 'USER_REPOS', str(tmp_path / 'repos.json'))
+    T = agent.Tools(str(tmp_path))
+    r = T.call('code_functions', {'repo': 'vibrationdata_matlab'})
+    assert r['install']['link'] == 'https://github.com/nkatsinas/vibrationdata_matlab'
+    z = tmp_path / 'dl' / 'vibrationdata_matlab-main'
+    z.mkdir(parents=True)
+    (z / 'nut.m').write_text('function T = nut(K, D, F)\n  T = K * D * F;\nend\n')
+    assert T.call('code_folder', {'name': 'vibrationdata_matlab', 'folder': str(tmp_path / 'dl')})['functions'] == 1
+    if polyglot.octave_exe():
+        assert T.call('code_call', {'repo': 'vibrationdata_matlab', 'file': 'nut.m', 'function': 'nut',
+                                    'args': [0.2, 0.012, 40000]})['result'] == pytest.approx(96.0)
