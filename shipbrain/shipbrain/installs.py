@@ -163,6 +163,10 @@ SOFTWARE = {
                                '(all modules, program moose-opt; ShipBrain runs it by itself). Or the conda / source build from '
                                'the link (Windows: inside WSL2).'},
               'check': lambda: __import__('shipbrain.moose', fromlist=['x']).exe() is not None, 'match': r'MOOSE is not installed'},
+    'vtracer': {'name': 'VTracer (free, MIT)', 'why': 'to turn scanned drawings (PNG / JPG / TIFF / scanned PDF) into vectors (DXF / SVG)',
+                'link': 'https://pypi.org/project/vtracer/', 'steps': {'all': 'pip install "vtracer==1.0.0a4"'},
+                'check': lambda: (lambda m: m is not None and hasattr(m, 'Config'))(__import__('importlib').util.find_spec('vtracer') and __import__('vtracer')),
+                'match': r'needs VTracer|VTracer is too old'},
     'rhino3dm': _pip('rhino3dm', 'to read Rhino .3dm files exactly (McNeel\'s free library): solids, surfaces, meshes, '
                      'curves, layers and blocks', match=r'need rhino3dm'),
     'cadmpeg': {'name': 'cadmpeg (free, Apache-2.0)', 'why': 'to open native CAD files (SolidWorks, CATIA, Inventor, Fusion 360, '

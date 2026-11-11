@@ -305,3 +305,10 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2024 Tom Irvine
+
+## vtracer
+
+- Source: https://github.com/visioncortex/vtracer (commit 85caecf12ec9)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2024 TSANG, Hao Fung

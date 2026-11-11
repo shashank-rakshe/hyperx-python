@@ -269,6 +269,19 @@ ShipBrain runs its own program, pinned to commit `6c775550` (version 0.6.11):
   instead. Its docs and code are the knowledge pack `packs/cadmpeg.sbpack` (7,202 chunks); 240 training conversations
   come from real runs on its public CC0 / NIST sample files (`training/cadmpeg_tasks.py`).
 
+## Scanned drawings -> vectors: VTracer (MIT)
+
+[VTracer](https://github.com/visioncortex/vtracer) (visioncortex; built for high-resolution scans of historic blueprints)
+- its Rust crates copied as written in `vendor/vtracer`, run through its Python package (`pip install "vtracer==1.0.0a4"`).
+- Tool `trace_drawing(file, page, scale)`: a scan (PNG / JPG / TIFF, or a scanned PDF page) -> DXF (layer TRACE) + SVG,
+  black-and-white line-art preset with adaptive threshold for uneven scans and a dust filter; `scale` = drawing units
+  per pixel. The SVG -> DXF step is ShipBrain's own code (paths, curves flattened, y flipped).
+- What it is for: a clean vector copy of an old paper drawing, to open in CAD or lay over a model. Each pen stroke comes
+  out as its outline (a thin closed shape), not a centre line.
+- Not used for comparing two scans: tested, a line-by-line compare of two traces reported 361 "changes" where there
+  were 2 (each trace splits the outlines differently). Two scans are compared by `compare_drawings`' picture overlay.
+- 30 training conversations from real traces (`training/vtracer_tasks.py`), pack `packs/vtracer.sbpack`, tests.
+
 ## Multiphysics FE: MOOSE (Idaho National Laboratory, LGPL-2.1)
 
 [MOOSE](https://github.com/idaholab/moose) - fully-coupled implicit multiphysics: shells, solids, plasticity, contact,

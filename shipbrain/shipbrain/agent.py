@@ -313,6 +313,12 @@ class Tools:
         self.register('moose_run', self.moose_run, 'Run any MOOSE input file (.i) - solid mechanics, contact, heat transfer, '
                       'XFEM fracture, Navier-Stokes, porous flow, thermal hydraulics - and read its postprocessors (CSV).',
                       {'type': 'object', 'properties': {'input': {'type': 'string'}}, 'required': ['input']})
+        self.register('trace_drawing', self.trace_drawing, 'Scanned drawing (PNG / JPG / TIFF, or a scanned PDF page) -> vectors with '
+                      'VTracer: DXF (layer TRACE) + SVG, scan noise removed. scale = drawing units per pixel (optional). Every pen '
+                      'stroke becomes its outline (good for a clean vector copy / overlay; for comparing two scans use compare_drawings, '
+                      'which overlays the pictures).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'page': {'type': 'integer'}, 'scale': num,
+                                                         'dpi': num}, 'required': ['file']})
         self.register('reverse_cad', self.reverse_cad, 'Mesh (STL scan / 3D-print / mesh export) -> STEP AP242 solid with ReverseCAD '
                       '(non-commercial licence): watertight B-Rep, volume, area, centre of mass, inertia, mass for a material, '
                       'recognised holes / ISO threads / fillets / chamfers / slots / cavities, and its own verification of the STEP '
@@ -1179,6 +1185,12 @@ class Tools:
         pp = r.get('postprocessors', {})
         r['plain_english'] = (f"MOOSE ran {os.path.basename(input)}" + (': ' + ', '.join(f'{k} = {v:.5g}' for k, v in pp.items() if k != 'time')
                                                                        if pp else ' (no postprocessor CSV: add [Outputs] csv = true)') + '.')
+        return r
+
+    def trace_drawing(self, file, page=0, scale=None, dpi=200):
+        from . import vectorize
+        r = vectorize.trace(self._path(file), page=int(page), scale=scale, dpi=dpi)
+        r['svg'], r['dxf'] = os.path.basename(r['svg']), os.path.basename(r['dxf'])
         return r
 
     def reverse_cad(self, file, material=None, heatmap=False):

@@ -1,0 +1,29 @@
+[package]
+name = "vtracer-bench"
+description = "Blind fidelity benchmark for raster-to-vector tracers: compare the original raster with a rendered reconstruction and get one 0..1 fidelity score built from PSNR, SSIM and a clustered-diff patch metric."
+version = "1.0.0-alpha.6"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories = ["graphics", "development-tools::testing"]
+keywords = ["vectorization", "benchmark", "fidelity", "ssim", "psnr"]
+
+[features]
+default = ["cli"]
+# The CLI decodes originals and rendered candidates from files; the
+# library itself only speaks the image crate's buffer types, so a
+# tracer embedding the metric pulls no codec at all.
+cli = ["image/png", "image/jpeg", "image/webp"]
+
+[[bin]]
+name = "vtracer-bench"
+required-features = ["cli"]
+
+[dependencies]
+visioncortex.workspace = true
+# ~3.4: the only line whose no-`threads` fallback compiles (3.3 and 3.5 both fail)
+dssim-core = { version = "~3.4", default-features = false }
+rgb = "0.8"
+image = { version = "0.25", default-features = false }
