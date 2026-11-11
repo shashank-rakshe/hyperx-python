@@ -161,7 +161,7 @@ def plate_input(mesh_file, t, E, nu, q, edges, a, b, out='plate.i', clamped=Fals
   nl_rel_tol = 1e-10
   nl_abs_tol = 1e-10
   dt = 1
-  dtmin = 0.001
+  dtmin = 0.05
   end_time = 1.
 []
 
@@ -245,7 +245,17 @@ def plate(a, b, t, q, E=206000.0, nu=0.3, clamped=False, n=None, workdir='.', na
     edges = {'edge_bottom': ((0, 0), (a, 0)), 'edge_top': ((0, b), (a, b)), 'edge_left': ((0, 0), (0, b)), 'edge_right': ((a, 0), (a, b))}
     inp = plate_input(msh, float(t), float(E), float(nu), float(q), edges, float(a), float(b),
                       out=os.path.join(workdir, f'{name}.i'), clamped=clamped)
-    r = run(inp)
+    try:
+        r = run(inp)
+    except RuntimeError as e:
+        if 'Solve failed' not in str(e) and 'did not converge' not in str(e):
+            raise
+        wn = navier(a, b, t, E, nu, q) if not clamped else None
+        raise RuntimeError(
+            f"MOOSE's solver did not converge for this plate ({a:g} x {b:g}, t = {t:g}, q = {q:g})"
+            + (f": linear theory expects a deflection of about {wn:.3g}, {wn / t:.1f} times the thickness" if wn else '')
+            + ". Such a large deflection is a large-deflection (membrane) problem: use a nonlinear analysis "
+              "(analysis_run with 'ultimate', or a thicker plate / closer stiffeners). MOOSE said: " + str(e)[:300]) from e
     pp = r.get('postprocessors', {})
     w = max(abs(pp.get('w_min', 0.0)), abs(pp.get('w_max', 0.0)))
     res = {'input': inp, 'mesh': msh, 'elements': len(quads), 'max_deflection': w, 'centre_deflection': pp.get('w_centre'),
