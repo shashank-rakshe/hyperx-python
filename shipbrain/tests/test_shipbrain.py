@@ -656,7 +656,21 @@ def _fake_repo(root, licence=MIT_TEXT):
     return root
 
 
-def test_repopack_licence_decision():
+@pytest.fixture
+def strict_licences(monkeypatch):
+    """the default rules (no copyleft / non-commercial switch): what any other user of ShipBrain gets"""
+    from shipbrain import repopack
+    monkeypatch.setattr(repopack, 'copyleft_training_ok', lambda: False)
+    monkeypatch.setattr(repopack, 'noncommercial_ok', lambda: False)
+
+
+def test_repopack_copyleft_switch():
+    from shipbrain import repopack
+    r = repopack.check_licence('GNU AFFERO GENERAL PUBLIC LICENSE\nVersion 3')
+    assert r['allowed'] and r['kind'] == 'copyleft'
+
+
+def test_repopack_licence_decision(strict_licences):
     from shipbrain import repopack
     ok = repopack.check_licence(MIT_TEXT)
     assert ok['allowed'] and ok['license'] == 'MIT' and ok['attribution'] == ['Copyright (c) 2026 Hull Tools Ltd']
@@ -670,7 +684,7 @@ def test_repopack_licence_decision():
 
 
 @pytest.mark.skipif(not shutil.which('git'), reason='git not installed')
-def test_repopack_round_trip_and_load(tmp_path):
+def test_repopack_round_trip_and_load(tmp_path, strict_licences):
     from shipbrain import repopack
     repo = _fake_repo(tmp_path / 'hulltools')
     out = tmp_path / 'packs'
@@ -700,7 +714,7 @@ def test_repopack_round_trip_and_load(tmp_path):
 
 
 @pytest.mark.skipif(not shutil.which('git'), reason='git not installed')
-def test_repo_tasks_make_valid_samples(tmp_path):
+def test_repo_tasks_make_valid_samples(tmp_path, strict_licences):
     import re
     from shipbrain import repopack
     from shipbrain.examples import Examples, verify_all
@@ -1691,3 +1705,23 @@ def test_ocx_to_step_with_ocxreader(tmp_path):
     ocx.write(m, str(tmp_path / 'a.3docx'))
     r = ocx.to_step(str(tmp_path / 'a.3docx'), str(tmp_path / 'a.step'))
     assert os.path.exists(r['step']) and '2.8' in r['note']
+
+
+def test_real_drawing_datasets_and_copyleft_packs(tmp_path):
+    """real-dataset training (formats of PID2Graph GraphML and CubiCasa5K SVG) and the licence switches:
+    copyleft packs are trainable and marked, nothing is left private-only"""
+    import glob
+    from shipbrain import repopack
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    assert repopack.copyleft_training_ok() and repopack.noncommercial_ok()
+    assert not glob.glob(os.path.join(root, 'packs', '*.private.sbpack'))
+    for n in ('LibreCAD', 'qcad', 'OCXReader'):
+        p = repopack.read_pack(os.path.join(root, 'packs', n + '.sbpack'))
+        assert p['allowed_for_training'] and 'COPYLEFT' in p['usage']
+    sys.path.insert(0, os.path.join(root, 'training'))
+    import construct_real
+    svg = tmp_path / 'model.svg'
+    svg.write_text('<svg><g class="Space Bedroom"/><g class="Space Bedroom"/><g class="Space Bath"/><g class="Door Swing"/>'
+                   '<g class="Window Regular"/><g class="Window Regular"/><g class="Wall"/></svg>')
+    rooms, doors, windows = construct_real.cubicasa_counts(str(svg))
+    assert rooms == {'bedroom': 2, 'bathroom': 1} and doors == 1 and windows == 2

@@ -162,9 +162,10 @@ Nothing is rewritten when it can be used as it is, so no core function can go mi
   20 packs, ~460,000 searchable pieces. Languages read: Python, C, C++, C#, Rust, TypeScript, JavaScript, Fortran, Julia,
   MATLAB, CUDA, Java, Kotlin, Go, Lua, Tcl, R, shell, GLSL, SQL, CMake, Qt UI. The search index is cached
   (`~/.cache/shipbrain`): first start ~40 s, then ~3 s; a search takes 0.01-0.2 s.
-- Licences decide how a repo is used: permissive = copied whole, searched and trained on; GPL / AGPL / LGPL = searched
-  only (with their licence), never trained on or copied into the code; brand material (SolidCraft's UI kit, look,
-  theme, logo under its brand licence) left out.
+- Licences decide how a repo is used: permissive = copied whole, searched and trained on; GPL / AGPL / LGPL / MPL and
+  non-commercial = searched and trained on too, because the owner declared ShipBrain open and non-commercial
+  (`shipbrain/licence_mode.json`; GPL code is only run as a separate program, never mixed into ShipBrain's code);
+  brand material (SolidCraft's UI kit, look, theme, logo under its brand licence) left out.
 
 ## STL meshes -> exact STEP solids (next.BREP.io's stl2step, used unchanged)
 
@@ -190,7 +191,7 @@ production). ShipBrain carries two repos, copied whole and used as written:
   of **every version 2.8.6 to 3.2.0 (12 versions)** as XSD and as **Python classes** - every element, type, attribute,
   child, allowed value and its documentation (554 classes in 3.2.0). The model is trained on it.
 - **OCXReader** ([skfcz/OCXReader](https://github.com/skfcz/OCXReader), LGPL-2.1, C++ / OpenCascade): OCX -> exact STEP.
-  LGPL, so it is copied **unchanged**, built and run **as its own program**, never trained on (`NOT_FOR_TRAINING.md`).
+  LGPL, so it is copied **unchanged**, built and run **as its own program**; its code is also a trained knowledge pack (`COPYLEFT.md`).
   Its sample ship models (company / ship names) were left out.
 
 Tools:
@@ -239,11 +240,19 @@ P&ID) into one schema, the CIR, and answers from it:
   answer key checked by its own validator. The vision model learns to count symbols, do a takeoff with MasterFormat
   codes, and read panel voltage / circuits straight from the picture; 12 sets give 64 samples (60 with pictures).
   Its code is also a knowledge pack (`packs/ConstructDrawingAI.sbpack`, 1,066 chunks) for search and code training.
-- Trained detectors (images -> CIR) need its weights and a GPU; not included.
+- **Real drawings too** (`training/construct_real.py`, in the Kaggle run, downloaded there): **PID2Graph** (CC BY-SA:
+  real OPEN100 P&IDs + Dataset-P&ID + synthetic, every symbol and line connection annotated; converted with
+  ConstructDrawingAI's own converter) -> valves / instruments / other symbols / line connections per sheet; and
+  **CubiCasa5K** (CC BY-NC: 5,000 real floor plans) -> rooms by type, bedrooms, bathrooms, doors, windows. Up to about
+  740 picture samples, answers from the datasets' own annotation.
+- Not used: its trained detectors (no weights published; training them is a separate GPU job), DELP ground truth
+  (given by its authors on request), FloorPlanCAD (manual download), PIDQA (its pictures are in a separate collection).
 
-**Licence: ShipBrain is now declared non-commercial** (`shipbrain/licence_mode.json`, set on the owner's word). That
-is what allows non-commercial material (PolyForm Noncommercial, CC BY-NC) to be copied and trained on; every such item
-is marked (`vendor/*/NONCOMMERCIAL.md`, `noncommercial` in its pack, NOTICE.md). Before any commercial use of ShipBrain
+**Licence: ShipBrain is declared open and non-commercial** (`shipbrain/licence_mode.json`, set on the owner's word:
+"I am not going to use commercial"). That allows non-commercial material (PolyForm Noncommercial, CC BY-NC) and
+copyleft code (GPL, LGPL, AGPL, MPL: LibreCAD, QCAD, Inkscape, OpenCourant, OCXReader packs) to be searched and trained
+on; every such item is marked (`vendor/*/NONCOMMERCIAL.md` / `COPYLEFT.md`, `usage` in its pack, packs/NOTICE.md).
+Copyleft means ShipBrain and models trained with it stay open under the same terms. No pack is private-only any more. Before any commercial use of ShipBrain
 or of a model trained with it: set `noncommercial` to false, remove those items and train again - or get a commercial
 licence from their authors.
 
@@ -559,7 +568,7 @@ converters and are never needed.
 - [text-to-cad](https://github.com/earthtojake/text-to-cad) (MIT): check the user's sizes against the built solid, not against the model's words; an example corpus with prompts.
 - [solidcraft](https://github.com/tangency-labs/solidcraft) (MIT/Apache-2.0): a verified example and oracle set; small tool replies.
 - [CAD2Program](https://manycore-research.github.io/CAD2Program/): small models do better emitting short parametric primitives than free B-rep code; used for `build_structure`.
-- [OpenCourantRP](https://github.com/CAMLAB-UChile/OpenCourantRP) (AGPL-3.0): knowledge-only pack (manual, explicit-dynamics example decks for impact / crash / sloshing); never trained on, no code copied.
+- [OpenCourantRP](https://github.com/CAMLAB-UChile/OpenCourantRP) (AGPL-3.0): knowledge pack (manual, explicit-dynamics example decks for impact / crash / sloshing), trained on (copyleft allowed by the owner); no code copied.
 - [Voitta](https://github.com/voitta-ai/voitta-rag) (voitta-rag is AGPL-3.0, so nothing was copied): hybrid search, re-indexing only changed files, search scope, assistant memory with like/dislike, tools over MCP.
 - [CAD-pdf-chatbot](https://github.com/adityawalture/CAD-pdf-chatbot) (no licence, so nothing copied): checking written dimension arithmetic, OCR fallback for scans.
 - [CADCraft](https://github.com/storytold/cadcraft) (MIT/Apache-2.0): DXF as the drawing exchange format.

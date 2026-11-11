@@ -44,7 +44,8 @@ elif op == 'info':
                                         'discipline': s.discipline.value if s.discipline else None,
                                         'entities': sum(len(v.entities) for v in s.views),
                                         'connections': sum(len(v.connections) for v in s.views)} for s in ds.sheets],
-           'qa_pairs': (ds.metadata or {}).get('qa_pairs', [])}
+           'qa_pairs': (ds.metadata or {}).get('qa_pairs', []),
+           'metadata': {k: v for k, v in (ds.metadata or {}).items() if k != 'qa_pairs' and isinstance(v, (str, int, float, bool))}}
 print('@@JSON@@' + json.dumps(out, default=str))
 '''
 
@@ -110,6 +111,17 @@ def rfi(path, review_threshold=0.5):
 
 def info(path):
     return _call('info', path)
+
+
+def convert_pid2graph(raw_root, out_dir, cap=None, timeout=7200):
+    """its PID2Graph converter (GraphML + image -> CIR with symbols, line nodes and connections), run as written"""
+    cmd = [_python(), '-m', 'datasets.preparers.graphml_cir', '--raw', os.path.abspath(raw_root), '--out', os.path.abspath(out_dir)]
+    if cap:
+        cmd += ['--cap', str(cap)]
+    r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=timeout)
+    if r.returncode:
+        raise RuntimeError('PID2Graph conversion failed: ' + (r.stderr or r.stdout)[-800:])
+    return sorted(os.path.join(out_dir, f) for f in os.listdir(out_dir) if f.endswith('.cir'))
 
 
 def generate(out_dir, n=10, kind='electrical', seed=0, degradation='0..3', qa_pairs=True, timeout=7200):

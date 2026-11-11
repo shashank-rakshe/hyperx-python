@@ -1,6 +1,6 @@
 # Third-party notices for ShipBrain repo packs
 
-Each .sbpack holds text chunks (docs and code excerpts) from the repository named below, under its own licence. Keep this file with the packs. Packs marked PRIVATE ONLY must not be shared or used for training.
+Each .sbpack holds text chunks (docs and code excerpts) from the repository named below, under its own licence. Keep this file with the packs. Packs marked PRIVATE ONLY must not be shared or used for training. Packs marked COPYLEFT or NON-COMMERCIAL are used because the owner declared ShipBrain open and non-commercial (shipbrain/licence_mode.json).
 
 ## CAD2Program
 
@@ -27,7 +27,7 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 
 - Source: local copy of LibreCAD (upstream release) (commit working-tree)
 - Licence: GPL
-- Use: PRIVATE ONLY: do not use for training, do not redistribute
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
 
 ## M3D
 
@@ -43,11 +43,18 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2020 drbillcase
 
+## OCXReader
+
+- Source: https://github.com/skfcz/OCXReader.git (commit ba5c5acdd12b)
+- Licence: LGPL
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- Copyright (C) 1991, 1999 Free Software Foundation, Inc
+
 ## OpenCourantRP
 
 - Source: https://github.com/CAMLAB-UChile/OpenCourantRP.git (commit cec23cbdd405)
 - Licence: AGPL-3.0
-- Use: PRIVATE ONLY: do not use for training, do not redistribute
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
 - Copyright (C) 2007 Free Software Foundation, Inc
 
 ## OpenPhysicsAI
@@ -124,7 +131,7 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 
 - Source: local copy of inkscape (upstream release) (commit working-tree)
 - Licence: LGPL + MPL-2.0
-- Use: PRIVATE ONLY: do not use for training, do not redistribute
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
 
 ## lapin
 
@@ -171,8 +178,8 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 ## qcad
 
 - Source: local copy of qcad (upstream release) (commit working-tree)
-- Licence: unknown
-- Use: PRIVATE ONLY: do not use for training, do not redistribute
+- Licence: GPL-3.0
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
 
 ## solidcraft
 

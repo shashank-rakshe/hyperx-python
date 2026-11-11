@@ -111,10 +111,14 @@ def add(url, name=None, skip_media=True, separate_program=False, exclude=()):
                      'Before any commercial use of ShipBrain or of a model trained with it: remove this folder, its pack and '
                      'its training data, and train again (or get a commercial licence from the author).\n')
     if gpl_ok:
-        with open(os.path.join(VENDOR, name, 'NOT_FOR_TRAINING.md'), 'w') as fh:
-            fh.write(f'# {name}: separate program only\n\nLicence {spdx} (see repo/). ShipBrain copies it unchanged, builds it and runs '
-                     'it as its own program. It is never imported into ShipBrain\'s code, never modified (changes go to its '
-                     'author) and never used as training data.\n')
+        from .repopack import copyleft_training_ok
+        trained = copyleft_training_ok()
+        with open(os.path.join(VENDOR, name, 'COPYLEFT.md' if trained else 'NOT_FOR_TRAINING.md'), 'w') as fh:
+            fh.write(f'# {name}: separate program\n\nLicence {spdx} (see repo/). ShipBrain copies it unchanged, builds it and runs '
+                     'it as its own program; it is never imported into ShipBrain\'s code and never modified (changes go to its '
+                     'author). ' + ('Its code is searched and trained on, allowed by the owner (shipbrain/licence_mode.json); '
+                                    'ShipBrain and its models stay open under the same terms.\n' if trained else
+                                    'It is not used as training data.\n'))
     with open(os.path.join(VENDOR, name, 'SOURCE.md'), 'w') as fh:
         fh.write(f'# {name} (copied unchanged)\n\nFrom {url}, commit {commit}. Licence: {spdx} (see repo/).\n'
                  + (f'{skipped} media / binary / excluded files left out'

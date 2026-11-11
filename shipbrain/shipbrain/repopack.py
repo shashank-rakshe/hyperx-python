@@ -91,6 +91,18 @@ WHY = {'copyleft': 'is a copyleft licence: anything built from it (also a traine
 _RANK = {'permissive': 0, 'conditional': 0.5, 'noncommercial': 0.8, 'unknown': 1, 'restricted': 2, 'copyleft': 3}
 
 
+def _mode(key):
+    try:
+        return bool(json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'licence_mode.json'))).get(key))
+    except Exception:
+        return False
+
+
+def copyleft_training_ok():
+    """the owner allowed copyleft code for search + training (shipbrain/licence_mode.json)"""
+    return _mode('copyleft_training')
+
+
 def noncommercial_ok():
     """the project owner declared ShipBrain non-commercial (shipbrain/licence_mode.json)"""
     try:
@@ -164,10 +176,15 @@ def check_licence(files):
         return {'allowed': False, 'license': 'none', 'kind': 'none', 'attribution': attribution,
                 'reason': 'No licence file was found. Without a licence nobody may copy or reuse the code (all rights '
                           'reserved), so it is not packed. Use --private-only for your own private use only.'}
-    ok_kinds = ('permissive', 'conditional') + (('noncommercial',) if noncommercial_ok() else ())
+    ok_kinds = ('permissive', 'conditional') + (('noncommercial',) if noncommercial_ok() else ()) + \
+        (('copyleft',) if copyleft_training_ok() else ())
     perm = [f for f in found if f[1] in ok_kinds]
     bad = [f for f in found if f[1] not in ok_kinds]
     lic = ' + '.join(dict.fromkeys(f[0] for f in (perm or found)))
+    if perm and not bad and any(f[1] == 'copyleft' for f in perm):
+        return {'allowed': True, 'license': lic, 'kind': 'copyleft', 'attribution': attribution,
+                'reason': f'{lic}: copyleft. The owner allowed copyleft code for search and training (shipbrain/licence_mode.json); '
+                          'ShipBrain and models trained with it stay open under the same terms, never closed or commercial.'}
     if perm and not bad and any(f[1] == 'noncommercial' for f in perm):
         return {'allowed': True, 'license': lic, 'kind': 'noncommercial', 'attribution': attribution,
                 'reason': f'{lic}: NON-COMMERCIAL use only. ShipBrain is declared non-commercial (shipbrain/licence_mode.json), '
@@ -780,6 +797,8 @@ def build_pack(src, out_dir, cache_dir=None, private_only=False, max_kb=DEFAULT_
              'PRIVATE ONLY: do not use for training, do not redistribute')
     if allowed and lic.get('kind') == 'conditional':
         usage = 'ok UNCHANGED, keep the notice; its licence adds conditions on modifications (never modify it)'
+    if allowed and lic.get('kind') == 'copyleft':
+        usage = 'COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms'
     if allowed and lic.get('kind') == 'noncommercial':
         usage = 'NON-COMMERCIAL ONLY: knowledge + training of a non-commercial model; remove it before any commercial use'
     if own == 'public':        # your own code, cleaned of names, shared by its author: knowledge + training, public
@@ -811,6 +830,30 @@ def read_pack(path):
         return json.load(f)
 
 
+def allow_pack(path, license=None, why=''):
+    """re-mark a pack that was built PRIVATE ONLY because of a copyleft licence as trainable (licence_mode allows it);
+    the file is renamed from .private.sbpack to .sbpack"""
+    p = read_pack(path)
+    lic = license or p['license']
+    if not copyleft_training_ok():
+        raise ValueError('copyleft training is not allowed in shipbrain/licence_mode.json')
+    if p.get('own'):
+        raise ValueError('own private packs stay private')
+    p.update(license=lic, allowed_for_training=True, private_only=False, usage='COPYLEFT: knowledge + training allowed by the owner; '
+             'keep ShipBrain and its models open under the same terms',
+             license_reason=f'{lic}: copyleft; allowed for search and training by the owner (shipbrain/licence_mode.json). {why}'.strip())
+    raw = json.dumps(p, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+    new = path.replace('.private.sbpack', '.sbpack')
+    buf = io.BytesIO()
+    with gzip.GzipFile(fileobj=buf, mode='wb', compresslevel=9, mtime=0) as g:
+        g.write(raw)
+    with open(new, 'wb') as f:
+        f.write(buf.getvalue())
+    if new != path:
+        os.remove(path)
+    return new
+
+
 def write_notice(out_dir):
     """packs/NOTICE.md: attribution for every pack in the folder"""
     rows = []
@@ -827,7 +870,9 @@ def write_notice(out_dir):
                         f"- Use: {p.get('usage', '')}\n" + ''.join(f'- {a}\n' for a in p['attribution'] if '/' not in a or 'http' in a))
     text = ('# Third-party notices for ShipBrain repo packs\n\n'
             'Each .sbpack holds text chunks (docs and code excerpts) from the repository named below, under its own '
-            'licence. Keep this file with the packs. Packs marked PRIVATE ONLY must not be shared or used for training.\n\n'
+            'licence. Keep this file with the packs. Packs marked PRIVATE ONLY must not be shared or used for training. '
+            'Packs marked COPYLEFT or NON-COMMERCIAL are used because the owner declared ShipBrain open and non-commercial '
+            '(shipbrain/licence_mode.json).\n\n'
             + '\n'.join(rows))
     with open(os.path.join(out_dir, 'NOTICE.md'), 'w', encoding='utf-8') as f:
         f.write(text)
