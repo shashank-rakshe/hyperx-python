@@ -59,30 +59,50 @@ def main(argv=None):
     ap.add_argument('--seed', type=int, default=0)
     a = ap.parse_args(argv)
     r = random.Random(a.seed)
-    em = json.load(open(os.path.join(a.data, 'expected_markdown.json'), encoding='utf-8'))
+    # verified markdown per (pdf, page): from each category's rows ("expected_markdown"), as ParseBench's own loader
+    # reads it, and from expected_markdown.json where an older release has it
+    md_by = {}
+    emp = os.path.join(a.data, 'expected_markdown.json')
+    if os.path.exists(emp):
+        for k, v in json.load(open(emp, encoding='utf-8')).items():
+            md_by.setdefault((str(k), None), v)
+    for fn in sorted(os.listdir(a.data)):
+        if not fn.endswith('.jsonl'):
+            continue
+        for line in open(os.path.join(a.data, fn), encoding='utf-8'):
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(row, dict) and row.get('expected_markdown') and row.get('pdf'):
+                md_by.setdefault((row['pdf'], row.get('page')), row['expected_markdown'])
     pdfs = {}
     for dp, _, fs in os.walk(a.data):
         for f in fs:
             if f.lower().endswith('.pdf'):
-                pdfs.setdefault(os.path.splitext(f)[0], os.path.join(dp, f))
-    items = list(em.items()) if isinstance(em, dict) else [(x.get('id') or x.get('file'), x.get('markdown')) for x in em]
+                full = os.path.join(dp, f)
+                pdfs.setdefault(os.path.relpath(full, a.data).replace(os.sep, '/'), full)
+                pdfs.setdefault(os.path.splitext(f)[0], full)
+    items = sorted(md_by.items(), key=lambda kv: (kv[0][0], str(kv[0][1])))
     r.shuffle(items)
     out_dir = os.path.dirname(os.path.abspath(a.out))
     rows, missing = [], 0
-    for key, md in items:
+    for (key, page), md in items:
         if len(rows) >= a.cap:
             break
         if not isinstance(md, str) or not md.strip() or len(md) > a.max_chars:
             continue
-        stem = os.path.splitext(os.path.basename(str(key)))[0]
+        key = str(key).replace('\\', '/')
+        stem = os.path.splitext(os.path.basename(key))[0]
         m = re.search(r'(?:_p|page[_-]?)(\d+)$', stem)
-        pdf = pdfs.get(stem) or (pdfs.get(stem[:m.start()]) if m else None)
+        pdf = (pdfs.get(key) or next((v for k, v in pdfs.items() if '/' in k and k.endswith(key)), None) or pdfs.get(stem)
+               or (pdfs.get(stem[:m.start()]) if m else None))
         if not pdf:
             missing += 1
             continue
-        page = int(m.group(1)) if m and not pdfs.get(stem) else 1
+        pg = int(page) if page not in (None, '') else (int(m.group(1)) if m and not pdfs.get(stem) else 1)
         try:
-            img = _render(pdf, page, os.path.join(a.img_dir, f'pb_{len(rows):05d}.png'))
+            img = _render(pdf, max(1, pg), os.path.join(a.img_dir, f'pb_{len(rows):05d}.png'))
         except Exception:
             continue
         rows.append({'task': 'parsebench_read', 'images': [os.path.relpath(img, out_dir)],
@@ -90,7 +110,7 @@ def main(argv=None):
     with open(a.out, 'w', encoding='utf-8') as fh:
         for x in rows:
             fh.write(json.dumps(x) + '\n')
-    print(a.out, len(rows), 'samples;', missing, 'expected pages without their PDF')
+    print(a.out, len(rows), 'samples;', missing, 'expected pages without their PDF;', len(md_by), 'verified pages found')
 
 
 if __name__ == '__main__':

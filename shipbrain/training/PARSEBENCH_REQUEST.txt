@@ -1,2 +1,2 @@
 Changing this file starts .github/workflows/shipbrain-parsebench.yml (ParseBench pages -> release data-latest).
-request 1
+request 2: read the verified markdown from the category rows
