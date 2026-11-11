@@ -141,7 +141,7 @@ def gpu_layers_for(choice, model_path):
     return 999
 
 
-def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None, draft=None, extra='', gpu_layers=0):
+def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None, draft=None, extra='', gpu_layers=0, fast=True):
     """start llama-server (for .gguf) or the llamafile itself; returns the base URL once /health answers"""
     path = os.path.abspath(path)
     if path.endswith('.gguf'):
@@ -168,6 +168,14 @@ def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None, draf
             os.chmod(path, 0o755)
         cmd = ([path] if os.name == 'nt' else ['sh', path]) if not path.endswith('.exe') else [path]
         cmd += ['--server', '--nobrowser', '--port', str(port), '-c', str(ctx), '--host', '127.0.0.1']
+    if fast and path.endswith('.gguf'):             # CPU speed: flash attention + 8-bit KV cache (half the cache bytes per
+        cmd += ['-fa', 'on', '-ctk', 'q8_0', '-ctv', 'q8_0', '-ub', '512']      # token), bigger prompt batches
+    if not threads:
+        try:
+            import psutil
+            threads = psutil.cpu_count(logical=False)     # physical cores: hyper-threads slow the CPU path down
+        except ImportError:
+            threads = None
     if gpu_layers:                                   # GPU: the layers live in graphics memory (CUDA or Vulkan build of llama.cpp)
         cmd += ['-ngl', str(gpu_layers)]
     if threads:
@@ -179,6 +187,14 @@ def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None, draf
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
     url = f'http://127.0.0.1:{port}'
     llm = agent.LLM(url)
+    def plain_again(why):
+        print(f'llama-server did not accept the fast settings ({why}): starting with its defaults')
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        return start_model(path, port, threads, ctx, mmproj, bin_, draft, extra, gpu_layers, fast=False)
+
     def cpu_again(why):
         print(f'the GPU did not work ({why}): starting again on the CPU')
         try:
@@ -188,9 +204,11 @@ def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None, draf
         return start_model(path, port, threads, ctx, mmproj, bin_, draft, extra, 0)
     for _ in range(600):
         if proc.poll() is not None:
+            if fast and path.endswith('.gguf'):          # an older llama-server without -fa on / -ctk: plain settings
+                return plain_again('it stopped while loading')
             if draft:                                    # the draft model does not pair with this model: run without it
                 print('the draft model could not be used with this model: starting without it')
-                return start_model(path, port, threads, ctx, mmproj, bin_, None, extra, gpu_layers)
+                return start_model(path, port, threads, ctx, mmproj, bin_, None, extra, gpu_layers, fast=False)
             if gpu_layers:                           # old card / driver / wrong llama.cpp build: never leave the user stuck
                 return cpu_again('the model server stopped while loading')
             sys.exit('the model server stopped while loading (not enough RAM? wrong file?)')
@@ -241,6 +259,8 @@ def main(argv=None):
     ap.add_argument('--draft', help='small draft model .gguf of the same family (e.g. Qwen3-0.6B q8_0) for faster generation')
     ap.add_argument('--gpu', default='auto', help='NVIDIA GPU for the model: auto (use it when the model fits) | on | off | '
                                                   '<number of layers>; needs the CUDA build of llama.cpp')
+    ap.add_argument('--rag-budget', type=int, default=None, help='characters of retrieved knowledge per question (default 1800; '
+                                                                    'less = faster first word on a CPU)')
     ap.add_argument('--llama-args', default='', help='extra llama-server arguments, e.g. "-fa on --mlock"')
     ap.add_argument('--full-prompt', action='store_true', help='long tool descriptions (for an UNtrained base model; slower)')
     ap.add_argument('--ctx', type=int, default=8192)
@@ -259,9 +279,11 @@ def main(argv=None):
     a = ap.parse_args(argv)
 
     proc = None
+    if a.rag_budget:
+        agent.RAG_BUDGET_CHARS = a.rag_budget
+    from . import chatstate
+    chatstate.CTX_TOKENS = a.ctx                           # long chats are fitted to this window
     if a.model:
-        from . import chatstate
-        chatstate.CTX_TOKENS = a.ctx                       # long chats are fitted to this window
         a.server, proc = start_model(a.model, 8081, a.threads, a.ctx, a.mmproj, a.llama_bin, a.draft, a.llama_args,
                                      gpu_layers_for(a.gpu, a.model) if a.model.endswith('.gguf') or 'llamafile' in a.model else 0)
     agent.PROMPT_COMPACT = not a.full_prompt

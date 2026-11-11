@@ -9,6 +9,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - https://github.com/manycore-research/CAD2Program contributors
 
+## HuggingArch
+
+- Source: https://github.com/shenh10/HuggingArch (commit 50341a4cd171)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2026 shenh10
+
 ## LibreCAD
 
 - Source: local copy of LibreCAD (upstream release) (commit working-tree)

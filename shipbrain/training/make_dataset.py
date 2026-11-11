@@ -1007,8 +1007,7 @@ def main(argv=None):
                 if not msgs:
                     continue
                 ctx, _ = agent.retrieve(tools, msgs[0]['content'])          # same RAG context as at run time
-                head = [sysmsg] + ([{'role': 'system', 'content': ctx}] if ctx else [])
-                f.write(json.dumps({'task': name, 'messages': head + msgs}) + '\n')
+                f.write(json.dumps({'task': name, 'messages': [sysmsg] + agent.attach_context(msgs, ctx, 0)}) + '\n')
                 if tools.profile.data:                          # a task set a profile for its own sample only
                     tools.profile.data.clear()
                     tools.profile.update()

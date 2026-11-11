@@ -1355,3 +1355,30 @@ def test_synthetic_pid_sheets_are_valid_training_data(tmp_path):
         assert os.path.exists(tmp_path / r['images'][0]) and r['messages'][-1]['role'] == 'assistant'
         if r['messages'][0]['role'] == 'user':                                   # reading task: the answer is pid-to-kg data
             assert r['messages'][0]['content'].startswith('You read P&ID sheet') and json.loads(r['messages'][-1]['content'])['equipment']
+
+
+def test_speed_planner_and_prompt_layout(tmp_path):
+    import struct
+    from shipbrain import speed
+    p = tmp_path / 'tiny.gguf'                                  # a GGUF header with the metadata the planner reads
+    kv = [('general.architecture', 8, 'qwen3vl'), ('qwen3vl.block_count', 4, 36), ('qwen3vl.embedding_length', 4, 2560),
+          ('qwen3vl.attention.head_count', 4, 32), ('qwen3vl.attention.head_count_kv', 4, 8), ('general.file_type', 4, 15)]
+    b = b'GGUF' + struct.pack('<IQQ', 3, 0, len(kv))
+    for k, t, v in kv:
+        b += struct.pack('<Q', len(k)) + k.encode() + struct.pack('<I', t)
+        b += struct.pack('<Q', len(v)) + v.encode() if t == 8 else struct.pack('<I', v)
+    p.write_bytes(b + b'\0' * 1000)
+    info = speed.model_info(str(p))
+    assert info['layers'] == 36 and info['kv_heads'] == 8 and info['head_dim'] == 80
+    hw = {'bandwidth_GBs': 40.0, 'gflops': 500.0, 'physical_cores': 8}
+    base = speed.estimate(speed.DEFAULT, hw)
+    assert base['write_tokens_per_s_short_chat'] > base['write_tokens_per_s_long_chat'] > 0          # the KV cache costs
+    assert speed.estimate(speed.DEFAULT, hw, gpu_mb=4096)['read_tokens_per_s'] > 5 * base['read_tokens_per_s']
+    assert speed.estimate(speed.DEFAULT, hw, kv_bits=16)['kv_cache_MB_full_ctx'] == 2 * base['kv_cache_MB_full_ctx']
+    h = [{'role': 'user', 'content': 'mesh deck A'}, {'role': 'assistant', 'content': 'done'}, {'role': 'user', 'content': 'check it'}]
+    out = agent.attach_context(h, 'Retrieved context: X')
+    assert out[:2] == h[:2] and out[2]['content'].endswith('Question: check it')                        # history = cached prefix
+    T = agent.Tools(tmp_path)
+    T.call('set_profile', {'units': 'in-lbf-psi', 'notes': 'x' * 2000})
+    ctx, _ = agent.retrieve(T, 'Clean up bracket.step for FEA', budget=600)
+    assert len(ctx) < 600 + 200                                                                        # the budget holds

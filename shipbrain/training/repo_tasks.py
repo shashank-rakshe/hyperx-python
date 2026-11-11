@@ -220,8 +220,7 @@ def make(packs_dir, workdir, seed=0, per_pack=40, cad=True, cad_variants=2, exam
         rows = []
         for task, msgs in part:
             ctx, _ = agent.retrieve(tools, msgs[0]['content'])          # same RAG context as at run time
-            head = [sysmsg] + ([{'role': 'system', 'content': ctx}] if ctx else [])
-            rows.append({'task': task, 'messages': head + msgs})
+            rows.append({'task': task, 'messages': [sysmsg] + agent.attach_context(msgs, ctx, 0)})
         r.shuffle(rows)
         out.append(rows)
     return out[0], out[1]

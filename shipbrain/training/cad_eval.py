@@ -56,9 +56,7 @@ def run_item(llm, item, workdir, examples, repairs=2, tok=None):
     tools = make_tools(workdir, examples)
     msgs = [{'role': 'system', 'content': agent.system_prompt(tools, agent.PROMPT_COMPACT)}]
     ctx, used = agent.retrieve(tools, item['prompt'])
-    if ctx:
-        msgs.append({'role': 'system', 'content': ctx})
-    msgs.append({'role': 'user', 'content': item['prompt']})
+    msgs += agent.attach_context([{'role': 'user', 'content': item['prompt']}], ctx)
     rec = {'id': item['id'], 'context': used, 'builds': [], 'built': False, 'pass_first': False, 'pass': False, 'turns': 0}
     t0 = time.time()
     for turn in range(1 + repairs):

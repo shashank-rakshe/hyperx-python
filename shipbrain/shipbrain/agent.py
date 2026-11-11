@@ -1194,42 +1194,69 @@ def _strip_think(t):
 CAD_WORDS = re.compile(r'\b(cad|cadquery|step|stl|solid|3d|3-d|part|extrude)\b|model of|make a model|3d model', re.I)
 
 
-def retrieve(tools, question, k=3, min_score=3.0):
-    """RAG: best rule-book / notes chunks and (for CAD requests) verified CadQuery examples, as one context message"""
-    parts, used = [], []
+RAG_BUDGET_CHARS = 1800      # retrieved text per question (~500 tokens). On a CPU every retrieved token is READ before the
+                             # first word (~20-60 tokens/s for a 4B model), so this budget is the main lever on waiting time
+
+
+def retrieve(tools, question, k=3, min_score=3.0, budget=None):
+    """RAG within a budget: the most personal and most reliable parts first, each cut to its share -
+    profile, matching skill, the user's memory, one verified CAD example (CAD requests), rule book / notes, repo text"""
+    budget = RAG_BUDGET_CHARS if budget is None else budget
+    cands = []                                                  # (priority group, text, id, max chars)
     prof = getattr(tools, 'profile', None)
     if prof is not None and prof.context():
-        parts.append(prof.context())
-        used.append('profile')
+        cands.append((prof.context(), 'profile', 300))
     sk = getattr(tools, 'skills', None)
     if sk is not None:
         from .skills import context as _skill_ctx
         for x in sk.match(question, 1):
-            parts.append(_skill_ctx(x))
-            used.append('skill:' + x['name'])
+            cands.append((_skill_ctx(x), 'skill:' + x['name'], 700))
     if tools.memory is not None:
-        for m in tools.memory.recall(question, 3):
-            parts.append(f"[memory {m['id']}] (taught by the user) {m['text']}")
-            used.append('memory:' + m['id'])
+        for m in tools.memory.recall(question, 2):
+            cands.append((f"[memory {m['id']}] (taught by the user) {m['text']}", 'memory:' + m['id'], 300))
+    cad = CAD_WORDS.search(question) and not re.search(r'\bmesh', question, re.I)
+    if tools.examples is not None and cad:
+        for e in tools.examples.search(question, 1):
+            cands.append((f"[example {e['name']}] verified {e.get('metrics', {})}\n```python\n{e['code'][:1100]}\n```",
+                          'example:' + e['name'], 1300))
     if tools.kb is not None and len(tools.kb):
         for h in tools.kb.search(question, k):
             if h['score'] >= min_score or getattr(tools.kb, 'embedder', None):
-                parts.append(f"[{h['id']}] ({h['source']}) {h['text'][:600]}")
-                used.append(h['id'])
+                cands.append((f"[{h['id']}] ({h['source']}) {h['text']}", h['id'], 450))
     rk = getattr(tools, 'repo_kb', None)
     names = [str(n.get('name', '') if isinstance(n, dict) else n).lower() for n in (getattr(rk, 'packs', None) or [])]
     if rk is not None and len(rk) and (CAD_WORDS.search(question) or any(n in question.lower() for n in names)):
-        for h in rk.search(question, 2):
+        for h in rk.search(question, 1):
             if h['score'] >= 3 * min_score:                       # repo text only when clearly relevant
-                parts.append(f"[{h['id']}] ({h['source']}) {h['text'][:500]}")
-                used.append(h['id'])
-    if tools.examples is not None and CAD_WORDS.search(question) and not re.search(r'\bmesh', question, re.I):
-        for e in tools.examples.search(question, 2):
-            parts.append(f"[example {e['name']}] verified {e.get('metrics', {})}\n```python\n{e['code'][:1500]}\n```")
-            used.append('example:' + e['name'])
+                cands.append((f"[{h['id']}] ({h['source']}) {h['text']}", h['id'], 400))
+    parts, used, left = [], [], budget
+    for text, cid, cap in cands:
+        if left < 120:
+            break
+        piece = text[:min(cap, left)]
+        if len(piece) < len(text):
+            piece = piece.rsplit(' ', 1)[0] + ' ...'
+        parts.append(piece)
+        used.append(cid)
+        left -= len(piece) + 2
     if not parts:
         return None, []
     return ('Retrieved context (use it if relevant, cite the [ids]; it may be incomplete):\n\n' + '\n\n'.join(parts)), used
+
+
+def attach_context(msgs, ctx, index=-1):
+    """put the retrieved knowledge INTO the newest user message (at the end of the prompt), not in a system message
+    before the chat: the system prompt and the earlier turns then stay one fixed prefix that llama.cpp's prompt cache
+    reuses, so each turn only reads its new tokens (much faster on a CPU). Used at run time AND in the training data."""
+    if not ctx:
+        return msgs
+    msgs = list(msgs)
+    users = [i for i, m in enumerate(msgs) if m['role'] == 'user' and not str(m['content']).startswith('TOOL_RESULT')]
+    if not users:
+        return msgs
+    i = users[index]
+    msgs[i] = dict(msgs[i], content=f"{ctx}\n\n---\nQuestion: {msgs[i]['content']}")
+    return msgs
 
 
 def run(llm, tools, history, max_steps=MAX_STEPS):
@@ -1241,7 +1268,6 @@ def run(llm, tools, history, max_steps=MAX_STEPS):
         ctx = (ctx + '\n\n' if ctx else '') + '[hook] ' + h
         used.append('hook')
     if ctx:
-        msgs.append({'role': 'system', 'content': ctx})
         yield {'type': 'context', 'sources': used}
     from . import chatstate                                  # long chat: oldest turns -> notes made by code (never lost)
     fixed = sum(chatstate.tokens(m['content']) for m in msgs)
@@ -1251,7 +1277,7 @@ def run(llm, tools, history, max_steps=MAX_STEPS):
             note += '\n\n[hook] ' + h
         msgs.append({'role': 'system', 'content': note})
         yield {'type': 'context', 'sources': ['chat notes']}
-    msgs += list(history)
+    msgs += attach_context(list(history), ctx)           # knowledge at the end: the chat so far stays a cached prefix
     seen = set()
     for step in range(max_steps):
         text = ''

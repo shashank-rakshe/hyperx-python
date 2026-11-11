@@ -249,22 +249,25 @@ itself and keeps going. So trying the GPU can never leave the app broken.
 Training stays on Kaggle (free 16 GB T4): 4 GB is too little to fine-tune even the 1.7B model comfortably. The CAE tools
 (mesher, surrogate, CalculiX) run on the CPU and do not need the GPU.
 
-## Fast on a CPU
+## Fast on a CPU (and with pictures)
 
-How ShipBrain keeps answers quick without a GPU:
+**Where the time goes** (`python -m shipbrain.speed` measures your PC and predicts it; method from
+[HuggingArch](https://github.com/shenh10/HuggingArch), MIT: cost from the architecture, bounded by the hardware):
 
-| Measure | Effect |
+- **Reading** the prompt (question, retrieved knowledge, pictures) is compute-bound: a 4B model reads ~20-60 tokens/s
+  on a CPU. This is what makes you wait for the first word.
+- **Writing** each word is memory-bound: all weights (~2.5 GB) + the KV cache are read per token, ~10-20 tokens/s.
+
+| Measure | What it saves |
 |---|---|
-| one fixed base model: **Qwen3-VL-4B-Instruct q4_k_m (~2.5 GB + 0.8 GB image part)** - text, tools, code and drawings in one model (`training/base_model.json`) | answers stay good; the draft model, the GPU and the prompt cache keep it quick |
-| knowledge lives in the search index and tools, not in the weights | the model stays small; new repos and documents need no retraining |
-| **compact system prompt**: tool names and argument names only (~870 tokens instead of ~2,800). The training data uses the same prompt | the first answer starts about 3x sooner |
-| **prompt cache** (`cache_prompt`, `--cache-reuse`): the fixed system prompt is read once and reused | later questions skip that part |
-| **shorter tool results** (lists cut, numbers rounded) in both the app and the training data | less to read after each tool call |
-| **speculative decoding**: `--draft shipbrain-draft-q8_0.gguf` (a Qwen3-0.6B fine-tuned on the same data; the Kaggle run makes it) | typically 1.5-2x faster writing, same answers |
-| extra llama.cpp settings: `--llama-args "-fa on --mlock"`, `--threads <physical cores>` | depends on the CPU |
-
-Measure your PC: `python -m shipbrain.bench --server http://127.0.0.1:8081`. It reports prompt-reading and writing speed
-in tokens per second, checks that the prompt cache works, and gives tips.
+| **Knowledge at the end of the prompt**: retrieved text goes into the newest question, so the system prompt and the earlier turns stay one fixed prefix for llama.cpp's prompt cache | each turn reads only its new tokens; a long chat no longer re-reads its history |
+| **Retrieval budget** (`--rag-budget`, default 1800 characters ~ 500 tokens), filled by priority: profile, skill, your memory, one CAD example, rule book, repo text; each cut to its share | at ~45 tokens/s every 100 retrieved tokens cost ~2 s of waiting |
+| **Fast llama.cpp settings** set by ShipBrain: flash attention, 8-bit KV cache (`-fa on -ctk q8_0 -ctv q8_0`), physical-core threads, 512-token prompt batches; dropped automatically on an older llama-server | half the KV-cache bytes per written token; faster prompt reading |
+| **Draft model** (`--draft shipbrain-draft-q8_0.gguf`, Qwen3-0.6B) | ~1.5-2x faster writing, same answers |
+| **The 4 GB graphics card** (`--gpu auto`) | mostly speeds up READING: ~1500 tokens/s instead of ~45, the first word comes in about a second |
+| **Pictures**: `look` sends 1024 px (~740 image tokens, ~25 s to read on a CPU, ~10 s with the card); crops of the part you need are cheaper; several questions about the same picture reuse the cache | image tokens grow with the square of the size |
+| **Long chats**: old turns are folded into code-made notes at the context limit (`--ctx 8192`) | the KV cache, and so the writing speed, stays bounded |
+| **Compact system prompt and short tool results** (in training too); knowledge lives in the search index, not the weights | fewer tokens to read |
 
 ## Weight-space tools (`training/weightspace.py`)
 
