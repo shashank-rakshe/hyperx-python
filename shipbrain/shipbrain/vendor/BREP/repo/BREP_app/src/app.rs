@@ -1,0 +1,3414 @@
+//! `BrepApp` — the THIN shell of the engine-native UI.
+//!
+//! One eframe [`App`](eframe::App) that hosts the EXISTING `brep-render` engine and lays out
+//! the panels. The heavy lifting lives in focused modules; this file only owns
+//! the shell:
+//!
+//! * [`Documents`] (`crate::document`) holds the OPEN MODELS — one
+//!   [`EngineState`] per document plus its identity, exactly one active. Panels
+//!   borrow the active engine through `self.docs.engine_mut()`, which borrows
+//!   only that FIELD and so still composes with the disjoint panel borrows
+//!   beside it. [`EngineState`] (`brep-render`) is still the single
+//!   windowing-agnostic BRAIN per document (scene / camera / controls / settings
+//!   / widgets + pointer/wheel/viewcube/pick); we do NOT fork it.
+//! * [`crate::viewport::Viewport`] draws + drives the central 3D viewport (the
+//!   offscreen texture, the `egui_wgpu` blit callback, input routing).
+//! * [`crate::panels`] — one module per left-panel section, each a small state
+//!   struct + a `show(&mut self, ui, state, …)` method. Adding a panel = add
+//!   `panels/<name>.rs`, one field here, one `self.<name>.show(…)` call in
+//!   [`eframe::App::ui`] below (see `README.md` → "Adding a panel").
+//!
+//! Native (`run_native`) and wasm (`WebRunner`) run this SAME code.
+
+use crate::document::{Documents, EngineFactory};
+use crate::panels::assembly_constraints::AssemblyConstraintsPanel;
+use crate::panels::bug_report::BugReportPanel;
+use crate::panels::wire_harness::WireHarnessPanel;
+use crate::panels::component_actions::ComponentActionRequest;
+use crate::panels::context_bar::ContextBarPanel;
+use crate::panels::mode_bar::ModeBar;
+use crate::panels::expressions::ExpressionsPanel;
+use crate::panels::file::{FileAction, FileDialog};
+use crate::panels::history::HistoryPanel;
+use crate::panels::info_windows::InfoWindows;
+use crate::panels::scene::ScenePanel;
+use crate::panels::selection::SelectionPanel;
+use crate::panels::sketch::SketchPanel;
+use crate::panels::sketch3d::Sketch3dPanel;
+use crate::panels::part_properties::PartPropertiesPanel;
+use crate::panels::settings::SettingsPanel;
+use crate::panels::toasts::Toasts;
+use crate::panels::toolbar::ToolbarPanel;
+use crate::panels::workbench_toolbar::WorkbenchToolbarPanel;
+use crate::panels::update_components::UpdateComponents;
+use crate::panels::bom::BomPanel;
+use crate::panels::dock::{DockContext, DockState, PaneKind};
+use crate::panels::document_tabs;
+use crate::store::{default_model_store, ModelStore, SETTINGS_KEY};
+use crate::viewport::Viewport;
+use brep_render::engine_state::EngineState;
+use brep_render::style::ThemeMode;
+use eframe::egui;
+
+/// A measured camera spin: an orbit drag the app steps ITSELF, one pointer move
+/// per frame, from `perf_spin`. See `BrepApp::spin` for why it is not driven
+/// from outside.
+///
+/// The steps run through the same `EngineState::pointer_down/move/up` the
+/// viewport's real drag uses (see `viewport::interaction`), so a spin costs
+/// exactly what dragging the mouse costs — no shortcut past the controls.
+#[cfg(feature = "automation")]
+pub struct Spin {
+    /// Pointer steps still to make; the drag ends (pointer_up) on the last one.
+    pub left: u32,
+    /// Where the drag started, in viewport-local logical px.
+    pub origin: (f64, f64),
+    /// Pointer step, in viewport-local logical px per frame.
+    pub step: (f64, f64),
+    /// Steps already made — the drag is a straight sweep from `origin`, and
+    /// reversing at the halfway mark keeps it inside the viewport however many
+    /// frames are asked for.
+    pub made: u32,
+    /// False until the first frame has pressed the button.
+    pub pressed: bool,
+}
+
+pub struct BrepApp {
+    /// Every OPEN MODEL and which one is active. Each document owns a full
+    /// `EngineState` (the shared viewer brain `desktop.rs` / the wasm shell
+    /// wrap) plus its file identity; panels borrow the active one.
+    pub(crate) docs: Documents,
+    /// The central 3D viewport: engine render core + offscreen texture + blit +
+    /// input routing.
+    pub(crate) viewport: Viewport,
+    /// The single persistence seam for settings, layout, and model documents
+    /// (native filesystem / wasm IndexedDB + download/upload).
+    pub(crate) model_store: Box<dyn ModelStore>,
+
+    // --- one small state value per panel --------------------------------------
+    /// Top toolbar: undo/redo, wireframe toggle, zoom-to-fit + standard views,
+    /// and the File-actions seam (owned by the concurrent file panel).
+    pub(crate) toolbar: ToolbarPanel,
+    /// New / Open / Save / Save As of the model document (the `.nbrep`
+    /// recipe) — a reusable modal file dialog opened from the toolbar.
+    file: FileDialog,
+    stl_import: Option<crate::panels::stl_import::StlImportPreview>,
+    /// The "Submit Bug" flow: on the toolbar bug button it screenshots the app
+    /// (UI + 3D model) BEFORE its own dialog opens, then collects a description
+    /// (+ optional email) and POSTs the model + screenshot to the public reports
+    /// endpoint. Native + wasm, one path.
+    bug_report: BugReportPanel,
+    /// The Info window: the licences and this session's diagnostics, toggled
+    /// from the toolbar's info button.
+    info: crate::panels::info::InfoPanel,
+    /// What this session is running on — captured ONCE, from the adapter eframe
+    /// actually gave us (never re-probed), and read by BOTH the Info window and
+    /// the problem report so the two cannot disagree. See
+    /// [`crate::diagnostics`].
+    diagnostics: crate::diagnostics::Diagnostics,
+    /// Workbench actions toolbar: the second top strip under the primary
+    /// toolbar — one button per feature the active workbench offers, plus the
+    /// constraint types where the Constraints panel is shown. Gated by the
+    /// `showWorkbenchToolbar` setting and hidden in the special modes. A click
+    /// flows out as the type to add; the shell adds it through the SAME paths
+    /// the palette / context bar use.
+    workbench_toolbar: WorkbenchToolbarPanel,
+    /// Display-settings + per-solid color panel (Phase 1): a FLOATING window
+    /// (movable + resizable, toggled from the toolbar gear button), no longer a
+    /// left-panel section.
+    settings: SettingsPanel,
+    pub(crate) plugins: crate::plugins::PluginsPanel,
+    pub(crate) javascript: crate::javascript::JavaScriptEditor,
+    /// The active document's OWN BOM attributes (Part Number, Material, Mass,
+    /// …) as a floating window, toggled from the toolbar's Properties button.
+    /// Document-level, not selection-level: entity inspection is the context
+    /// bar's `info_windows`.
+    part_properties: PartPropertiesPanel,
+    /// The Replace component chooser + result summary.
+    replace_dialog: crate::panels::replace_component::ReplaceDialog,
+    /// History feature-tree + schema-driven feature dialog panel (Phase 2).
+    /// NOTE: the editable history is NOT owned here — it lives in the engine core
+    /// (`EngineState.history`), the single source of truth; this panel only reads
+    /// it back to draw and calls the engine's `history_*` methods to mutate.
+    history: HistoryPanel,
+    /// Scene tree ("Scene Manager"): the display scene as a file-tree — per-solid
+    /// visibility + Faces/Edges/Vertices with two-way selection sync. Reads the
+    /// engine scene/emphasis; owns only transient expand + hit state.
+    scene: ScenePanel,
+    /// Assembly Structure tree (claimed by the Assembly workbench): a VIEW over
+    /// the scene's component records — per-instance fixed/visibility/status
+    /// adornments, actions routed to the owning ACOMP feature.
+    /// The BOM panel (claimed by the Assembly workbench): the parts list on
+    /// the shared column-tree widget, with the editable part/occurrence
+    /// attribute columns the Settings "Assemblies" section configures.
+    bom: BomPanel,
+    /// Assembly Constraints panel (claimed by the Assembly workbench): the
+    /// schema-driven constraint collection widget + Solve/auto-solve/DOF header.
+    assembly_constraints: AssemblyConstraintsPanel,
+    /// The wire-harness connection list (a Wire harness workbench pane): add /
+    /// edit / remove wires, read their routed length + status, hover to
+    /// highlight. Document data lives in the engine; this holds the widget's
+    /// transient state.
+    wire_harness: WireHarnessPanel,
+    /// The PMI view tree + annotation forms (the PMI workbench's pane).
+    pmi: crate::panels::pmi::PmiPanel,
+    /// The CAM browser tree (the CAM workbench's pane): setups and their
+    /// operations, NC programs and the tool library over the document's
+    /// `cam` block.
+    pub(crate) cam: crate::panels::cam::CamPanel,
+    pub(crate) instructions: crate::panels::instructions::InstructionsPanel,
+    pub(crate) instructions_player: crate::panels::instructions_player::InstructionsPlayerPanel,
+    /// The Simulation workbench's pane: the studies and the active timeline.
+    pub(crate) simulation: crate::panels::simulation::SimulationPanel,
+    /// The drawing sheets + their forms (the Drawing workbench's pane).
+    sheets: crate::panels::sheets::SheetsPanel,
+    /// Update-components checker: compares each parts-library entry's
+    /// `sourceSignature` against the model store's current content. Kept
+    /// current once per frame (cheap generation key: applied run + store
+    /// save); the constraints header reads the count + runs the batch refresh,
+    /// the structure tree reads per-part badges.
+    update_components: UpdateComponents,
+    /// Expressions / parameters panel: the variable sheet (engine-owned history
+    /// `expressions`) feature params reference. Owns only its editor buffer.
+    expressions: ExpressionsPanel,
+    /// Qualify: the part's declared CONNECTION POINTS, on whichever surface is
+    /// on screen (symbol, pads or 3D). Holds only the selected address; the
+    /// block and both consistency reports come from the engine.
+    qualify: crate::panels::qualify::QualifyPanel,
+    /// The family table editor: a `.fbrep` family seed's member table. Holds
+    /// the selection, the cell being typed and the last Generate report; the
+    /// table itself is the document's `familyTable` block.
+    family_table: crate::panels::family_table_editor::FamilyTableEditor,
+    /// Every PLM panel (`panels::plm_host`): empty in a file-based session.
+    pub(crate) plm: crate::panels::plm_host::PlmHost,
+    /// Info windows: MULTIPLE pinned per-entity inspector windows opened from the
+    /// selection-driven context bar's Info action. Each floating (movable +
+    /// resizable) window is PINNED to one object name at open time — a Metadata
+    /// (editable attribute) tab + a read-only Info (measurements + provenance) tab —
+    /// and keeps showing that entity regardless of later selection changes. Replaces
+    /// the old single Properties window.
+    info_windows: InfoWindows,
+    /// Interference results window: opened by the Assembly workbench's `∩`
+    /// toolbar button, which runs the engine's pairwise-intersect check; a
+    /// floating window like the Info windows with a row per interfering pair
+    /// (click = select both components), a green all-clear pass line, and a
+    /// Re-run button.
+    interference: crate::panels::interference::InterferenceWindow,
+    /// Auto Constraints window (Assembly workbench): opened by the `⚿` toolbar
+    /// button, it lists the constraint types the kernel's inference lane can
+    /// read out of the components' current placement, with what a scan found
+    /// for each, and creates the whole accepted set as one undo step.
+    auto_constraints: crate::panels::auto_constraints::AutoConstraintsWindow,
+    /// step.parts online model library browser (Assembly workbench): a ctx-level
+    /// window (opened by the library toolbar button) that searches the public
+    /// step.parts v1 API, shows results with thumbnails, and imports a chosen
+    /// STEP model as a new part document + adds it to the assembly as an ACOMP.
+    step_parts: crate::panels::step_parts::StepPartsPanel,
+    /// Selection panel: the pickable-kinds filter (which entity kinds a viewport
+    /// click may select — honored by the engine's `select_top_at`). The filter +
+    /// selection live in `EngineState`; this panel only reads/writes them.
+    selection: SelectionPanel,
+    /// Context action toolbar: the selection-driven action bar (Clear / Hide /
+    /// Edit-owning-feature + the feature-from-selection actions whose primary
+    /// reference accepts the selected kind). Shown only while something is
+    /// selected; drives the engine directly and returns a feature id for the shell
+    /// to expand in the history tree.
+    context_bar: ContextBarPanel,
+    /// Sketch (S0): a seeded, read-only sketch preview — pushes a solved rectangle
+    /// + circle to the `set_overlay` channel colored by solver mobility, and shows
+    /// the DOF status readout. The engine-native sketcher's foundation surface.
+    sketch: SketchPanel,
+    sketch3d: Sketch3dPanel,
+    /// Special-mode EXIT controls (Finish/Cancel), always pinned to the top-right
+    /// corner — a card-based reference pick, sketch mode, and any future
+    /// special mode. A form field's pick draws no card: its field is the UI.
+    mode_bar: ModeBar,
+    pick_bar: crate::panels::pick_bar::PickBar,
+    /// Transient toast overlay: drains the engine's queued notices each frame
+    /// (e.g. a sketch solve that failed after an edit) and shows each briefly.
+    pub(crate) toasts: Toasts,
+    /// The status bar's app-wide working indicator (`panels::busy`): what is
+    /// in flight, collected from every source each frame.
+    busy: crate::panels::busy::BusyIndicator,
+    /// Dockable / tabbed side-panel layout (egui_tiles): the shared, persisted
+    /// tree that hosts every side-panel section AND the 3D viewport as tiles the
+    /// user can split, tab, resize, and drag-rearrange. Owns the layout; borrows
+    /// each panel + the engine per frame through [`DockContext`]. Drawn in normal
+    /// modeling mode; sketch / ref-select mode bypasses it (viewport drawn direct).
+    dock: DockState,
+
+    /// Whether the ONE-SHOT first-model framing has fired. The seed run is async
+    /// under a background runner (native thread / wasm worker), so the boot
+    /// `zoom_to_fit` can run before the first solids exist → an unframed first
+    /// model. Once the seed run has landed (`has_solids() && !run_pending()`), the
+    /// `ui` loop frames it once and sets this. Under the synchronous Inline runner
+    /// (tests) the scene is already populated, so this fires on the very first frame.
+    first_run_framed: bool,
+
+    /// A model fetch kicked off at boot from a `?loadModel=<url>` query param
+    /// (wasm only). When the fetch lands it REPLACES the seed model. `None` on
+    /// native and once applied.
+    pending_boot_load: Option<std::sync::mpsc::Receiver<Result<String, String>>>,
+
+    /// The PLM tab's Connect now, on its way: the sign-in and index load run on
+    /// the frame loop's executor and the frame switches stores when they end.
+    #[cfg(not(target_arch = "wasm32"))]
+    reconnecting: Option<crate::store::PendingBoot>,
+
+    /// "Open in CAD" from the PLM's page: the `?open=part/…/rev/…` this page
+    /// was started with (wasm only), driven once a frame until it settles.
+    plm_launch: Option<crate::panels::plm_launch::Launch>,
+
+    /// The document handle the shared panels were last reset for. Compared to
+    /// `docs.view_id()` at the top of every frame: ONE check catches a switch
+    /// from any source (a tab click, a close, New, Open, Edit Part, a Work
+    /// part entered or left in place) instead of a hook per call site, and it
+    /// runs BEFORE any panel draws this frame.
+    active_document: u64,
+    /// The TAB the panels were last drawn for. A Work part entered or left in
+    /// place changes the view but not the tab, and the BOM — the assembly's
+    /// product structure in both — keeps its packed/expanded state.
+    active_tab: u64,
+
+    /// Whether the active workbench showed the Sheets pane LAST frame — the
+    /// edge the paper is closed on. Closing is a transition, not a condition:
+    /// a sheet opened while another workbench is active (a command, a script)
+    /// stays open until the Drawing workbench is LEFT, exactly as PMI's view
+    /// deactivates on leaving rather than on every frame outside it.
+    sheets_pane_shown: bool,
+
+    /// The DOCUMENT TAB STRIP's per-tab hit-rects from the last dock frame,
+    /// published for the headed verifier. The strip is drawn inside the dock's
+    /// viewport pane, so its rects have to ride back out through the outcome.
+    document_tab_hits: Vec<(String, egui::Rect)>,
+
+    /// The `__brepParams` blob and the document state it was built from:
+    /// `(document, rolled-to step, history revision, json)`.
+    ///
+    /// The blob is the rolled-to feature's whole `inputParams`, and for an
+    /// `IMPORT3D` those params carry the embedded model text — 681 KB on the
+    /// heaviest corpus model. It was rebuilt EVERY frame, which on the browser
+    /// build (where the state registry is always on) also transcoded it into a
+    /// fresh JS string every frame, on the one thread that also has to answer
+    /// the pointer. Nothing reads it per frame; it only has to be correct when
+    /// someone asks. The revision is a mutation counter the document hands out
+    /// (`EngineState::history_revision`), so this cannot go stale without the
+    /// borrow checker having let a mutation past the door that bumps it.
+    params_blob: (u64, usize, u64, String),
+    /// Plain-state blobs rebuilt only when their whole input changed (see
+    /// [`StateBlobCache`]).
+    state_blob_cache: StateBlobCache,
+
+    /// A measured camera spin in flight (`perf_spin`): the orbit drag the app
+    /// drives ITSELF, one pointer step per frame, so the frames run back to back.
+    /// Driving it from a host instead would put a round trip between every pair
+    /// of frames, and `dt` — the frame period, the number a user feels as a
+    /// freeze — would measure the host's latency rather than the app's.
+    #[cfg(feature = "automation")]
+    spin: Option<Spin>,
+
+    /// The debounced autosave of every dirty document (`crate::recovery`), and
+    /// the boot-time **Recover unsaved work?** prompt its blob feeds. The
+    /// autosave is held while the prompt is open: the clean seed tab would
+    /// otherwise remove the very blob being offered.
+    autosave: crate::recovery::Autosave,
+    /// Closing (the window's close button, or `app_close`): when it was asked
+    /// (egui clock). The close waits until the store's writes have landed.
+    closing: Option<f64>,
+    /// A close the automation layer asked for, taken by the next frame.
+    pub(crate) close_asked: bool,
+    /// The app let the window close: nothing was left on its way.
+    closed: bool,
+    /// Where a close stands once the store's writes have settled: `0` not
+    /// yet, `1` one frame given to the failure drain (a write that failed
+    /// makes its tab unsaved), `2` the recovery blob written again.
+    close_stage: u8,
+    recovery: crate::recovery::RecoveryPanel,
+    /// The desktop update check and its notice. Inert until the desktop
+    /// binary's `main` starts it, so a harness or a test never checks.
+    #[cfg(not(target_arch = "wasm32"))]
+    updater: crate::update::Updater,
+    /// The reports this user submitted, checked for resolution
+    /// (`crate::report_followup`). Inert until the entry point starts it.
+    report_followup: crate::report_followup::ReportFollowup,
+
+    /// The UI zoom scale CURRENTLY applied to the egui context. Tracks
+    /// `settings.ui_scale` but is only synced to it while the pointer is up, so
+    /// dragging the Settings "UI scale" slider doesn't rescale the whole UI under
+    /// the cursor mid-drag — the settled value is committed on release. See the
+    /// zoom-apply block in `ui`.
+    applied_ui_scale: f32,
+    /// The automation channel (hosts submit commands; the frame drains them at
+    /// three fixed points — see `automation::queue`).
+    #[cfg(feature = "automation")]
+    pub(crate) automation: std::sync::Arc<crate::automation::queue::AutomationQueue>,
+}
+
+/// The caption text size, points (egui's own `Small` is 9). See `app_style`.
+pub const SMALL_TEXT_SIZE: f32 = 10.5;
+
+/// The app's tweaks over egui's style, applied to both themes at startup.
+pub(crate) fn app_style(style: &mut egui::Style) {
+    // Keep overflow discoverable without hovering or scrolling first, in
+    // both themes and every child UI (including eCAD and plugin panels).
+    // ScrollArea's default VisibleWhenNeeded still hides bars that aren't needed.
+    style.spacing.scroll = egui::style::ScrollStyle::solid();
+    // Captions (`ui.small`, `RichText::small`): egui's 9 pt was too small to
+    // read beside 12.5 pt body text in the Info window, the eCAD inspectors and
+    // the Selection actions summary (lane U audit item 9). 10.5 keeps them
+    // visibly secondary. The toolbar/Ribbon group captions stay at 9
+    // (`ribbon::CHROME_CAPTION_SIZE`) so the chrome keeps its height.
+    style.text_styles.insert(egui::TextStyle::Small, egui::FontId::new(SMALL_TEXT_SIZE, egui::FontFamily::Proportional));
+}
+
+
+/// How long a close waits for writes still on their way to the store (a PLM
+/// server that stopped answering must not keep the app open forever).
+const CLOSE_WAIT_SECS: f64 = 30.0;
+
+impl BrepApp {
+    /// Closing the window. What is unsaved is written for recovery at once
+    /// (the next start offers it, as after a crash), and the window stays open
+    /// until every write the store issued (a Save, that recovery blob) has
+    /// landed: a write-behind store would otherwise lose a Save made just
+    /// before. After [`CLOSE_WAIT_SECS`] it closes anyway.
+    fn close_when_written(&mut self, ctx: &egui::Context) {
+        let asked = ctx.input(|i| i.viewport().close_requested()) || std::mem::take(&mut self.close_asked);
+        if self.closed {
+            return;
+        }
+        let now = ctx.input(|i| i.time);
+        if asked && self.closing.is_none() {
+            if !self.recovery.is_open() {
+                self.autosave.flush(&self.docs, self.model_store.as_ref());
+            }
+            self.closing = Some(now);
+        }
+        let Some(since) = self.closing else { return };
+        let pending = self.model_store.pending_writes();
+        let timed_out = now - since > CLOSE_WAIT_SECS;
+        if pending == 0 || timed_out {
+            match self.close_stage {
+                // The writes settled. A failed one (the server down) makes its
+                // tab unsaved when the failures are drained, later in this
+                // frame: give that a frame…
+                0 => self.close_stage = 1,
+                // …then write the recovery blob again, so a Save that never
+                // reached the server is offered at the next start.
+                1 => {
+                    if !self.recovery.is_open() {
+                        self.autosave.flush(&self.docs, self.model_store.as_ref());
+                    }
+                    self.close_stage = 2;
+                }
+                _ if self.model_store.pending_writes() == 0 || timed_out => {
+                    self.closed = true;
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    return;
+                }
+                _ => {}
+            }
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            ctx.request_repaint();
+            return;
+        }
+        ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        egui::Area::new(egui::Id::new("brep-closing"))
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(format!("Finishing {pending} save(s) before closing…"));
+                    });
+                });
+            });
+        ctx.request_repaint_after(std::time::Duration::from_millis(50));
+    }
+
+    /// The close state, for automation (`__brepClosing`).
+    pub(crate) fn closing_json(&self) -> String {
+        serde_json::json!({
+            "closing": self.closing.is_some(),
+            "closed": self.closed,
+            "pending": self.model_store.pending_writes(),
+        })
+        .to_string()
+    }
+
+    /// The automation queue a host submits commands to.
+    #[cfg(feature = "automation")]
+    pub fn automation(&self) -> &std::sync::Arc<crate::automation::queue::AutomationQueue> {
+        &self.automation
+    }
+
+    /// Open a `.nbrep` file named on the command line — `brep-app model.nbrep`,
+    /// which is also what a desktop file association hands us (`Exec=… %f`).
+    ///
+    /// The path goes through the same `FileDialog::open_document` door as
+    /// File>Open, so the document keeps the full path as its identity and a
+    /// later plain Save writes back to the file the user double-clicked, rather
+    /// than to a copy in the app's own models directory. A path that does not
+    /// parse leaves the status line saying so and the seed document in place —
+    /// a bad argument must not cost the user a window.
+    ///
+    /// Native only: called once, before the first frame.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn open_path_from_command_line(&mut self, path: &std::path::Path) {
+        // Absolute, so the store resolves it as a real file rather than as a
+        // name inside the models directory (`store::resolve` routes anything
+        // with a separator straight to the filesystem).
+        let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        let Some(name) = path.to_str() else {
+            log::warn!("brep-app: {} is not valid UTF-8; not opening it", path.display());
+            return;
+        };
+        // Field-by-field, because `open_document` borrows the documents and the
+        // store while `self.file` is borrowed mutably.
+        let Self { file, docs, model_store, .. } = self;
+        file.open_document(docs, model_store.as_ref(), name);
+    }
+
+    /// The 3D viewport rect of the last frame, in egui points.
+    pub fn view_rect(&self) -> Option<egui::Rect> {
+        self.viewport.last_rect()
+    }
+
+    /// The session's store, read-only (the automation layer's `frame_info`
+    /// counts its writes still on their way).
+    pub(crate) fn model_store(&self) -> &dyn ModelStore {
+        self.model_store.as_ref()
+    }
+
+    /// Why this session cannot switch stores live, or `None` when it can: every
+    /// open document untitled and clean, the state a fresh start has. A named
+    /// document's identity belongs to the store it came from, and a dirty one's
+    /// work has nowhere to go in a new store.
+    pub(crate) fn reconnect_blocker(&self) -> Option<String> {
+        self.reconnect_blocker_with(crate::document::Document::is_dirty)
+    }
+
+    fn reconnect_blocker_with(&self, is_dirty: impl Fn(&crate::document::Document) -> bool) -> Option<String> {
+        let named = self.docs.iter().filter(|d| d.name().is_some()).count();
+        let dirty = self.docs.iter().filter(|d| is_dirty(d)).count();
+        match (named, dirty) {
+            (0, 0) => None,
+            (_, 0) => Some(format!("{named} document(s) from this store are open: close them, then Connect now (or restart)")),
+            _ => Some(format!("{dirty} document(s) have unsaved work: save or close them, then Connect now (or restart)")),
+        }
+    }
+
+    /// Start switching this session to the PLM configured at `root`, live
+    /// (S1's named limit): the native boot S2 runs at start, without blocking
+    /// the frame; [`Self::finish_reconnect`] takes the store when it ends.
+    /// Only while [`Self::reconnect_blocker`] is `None`.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn start_reconnect(&mut self, root: std::path::PathBuf) -> Result<(), String> {
+        if self.reconnecting.is_some() {
+            return Err("already connecting".into());
+        }
+        if let Some(why) = self.reconnect_blocker() {
+            return Err(why);
+        }
+        let config = crate::plm::config::resolve(&root, &|_| None, &Default::default())?
+            .ok_or_else(|| format!("no PLM is configured in {}", root.display()))?;
+        self.reconnecting = Some(crate::store::start_native_boot(root, config));
+        Ok(())
+    }
+
+    /// A Connect now is on its way (settle waits for it).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn reconnecting(&self) -> bool {
+        self.reconnecting.is_some()
+    }
+
+    /// The Connect now under way, once its boot has ended: switch stores (or
+    /// say why not) and tell the PLM tab.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn poll_reconnect(&mut self) {
+        let Some(store) = self.reconnecting.as_mut().and_then(crate::store::PendingBoot::poll) else { return };
+        self.reconnecting = None;
+        let outcome = self.finish_reconnect(store);
+        self.settings.reconnected(outcome);
+    }
+
+    /// Switch this session to `store`, the boot a Connect now started: then
+    /// everything the app read from the store when it was built is read again
+    /// from the new one. A refused boot, or a session that took a named or
+    /// dirty document meanwhile, changes nothing and says why.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn finish_reconnect(&mut self, store: Box<dyn ModelStore>) -> Result<String, String> {
+        use crate::plm::connection::Status;
+        if let Some(why) = self.reconnect_blocker() {
+            return Err(why);
+        }
+        let Some(Status::Connected { url, username }) = store.plm_session().map(|s| s.status) else {
+            let why = store.take_persistence_errors().join("; ");
+            return Err(if why.is_empty() { "the PLM did not take this session".into() } else { why });
+        };
+        self.model_store = store;
+        self.docs.set_canonicalizer(self.model_store.canonicalizer());
+        // Settings: every open engine, and every later tab, starts from the
+        // defaults with the new store's settings over them, as a fresh boot
+        // would; nothing of the old store's carries over.
+        let saved = self.model_store.read(SETTINGS_KEY);
+        let fresh = move |mut state: EngineState| {
+            state.settings = brep_render::style::RenderSettings::default();
+            let defaults = state.settings.to_json();
+            let _ = state.apply_settings_json(&defaults);
+            if let Some(saved) = &saved {
+                let _ = state.apply_settings_json(saved);
+            }
+            state
+        };
+        for doc in self.docs.iter_mut() {
+            let engine = std::mem::replace(&mut doc.engine, EngineState::new());
+            doc.engine = fresh(engine);
+        }
+        self.docs.wrap_engine_factory(fresh);
+        self.dock = DockState::new(self.model_store.as_ref());
+        self.recovery.arm_from_store(
+            self.model_store.as_ref(),
+            self.docs.engine().settings.disable_recovery_prompt,
+        );
+        self.file = FileDialog::new();
+        self.update_components = UpdateComponents::new();
+        Ok(format!("connected to {url} as {username}"))
+    }
+
+    /// Keep automation waits active until the File dialog has delivered the PDF.
+    pub(crate) fn instructions_pdf_pending(&self) -> bool {
+        self.file.instructions_pdf_pending()
+    }
+
+    /// Keep automation waits active until a PLM Save As has landed or failed.
+    pub(crate) fn plm_save_as_pending(&self) -> bool {
+        self.file.plm_save_as_pending()
+    }
+
+    /// The file dialog, the documents and the store together — for the
+    /// automation commands that drive a document-class flow (Generate, a
+    /// store read-back) exactly as the panels do.
+    pub(crate) fn file_docs_store(&mut self) -> (&mut FileDialog, &mut Documents, &dyn ModelStore) {
+        (&mut self.file, &mut self.docs, self.model_store.as_ref())
+    }
+
+    /// The active document's engine.
+    pub fn docs_engine(&self) -> &EngineState {
+        self.docs.engine()
+    }
+
+    /// Open the mesh import preview for the file `name` (`.stl` or `.3mf`)
+    /// against the active document — what activating it in the Import explorer
+    /// does. The preview replaces the shell until it is accepted or cancelled.
+    pub fn open_mesh_preview(&mut self, name: String, bytes: Vec<u8>) -> Result<(), String> {
+        use brep_render::runner::MeshImportFormat;
+        let format = match name.rsplit('.').next().map(str::to_ascii_lowercase).as_deref() {
+            Some("stl") => MeshImportFormat::Stl,
+            Some("3mf") => MeshImportFormat::ThreeMf,
+            _ => return Err(format!("{name} is not an STL or 3MF file")),
+        };
+        self.start_mesh_preview(format, name, bytes);
+        Ok(())
+    }
+
+    fn start_mesh_preview(&mut self, format: brep_render::runner::MeshImportFormat, name: String, bytes: Vec<u8>) {
+        self.stl_import = Some(crate::panels::stl_import::StlImportPreview::new(
+            self.docs.active_id(), format, name, bytes, self.docs.spawn_engine(),
+        ));
+        self.viewport.forget_document();
+    }
+
+    /// Whether the mesh import preview is open.
+    pub fn mesh_preview_open(&self) -> bool {
+        self.stl_import.is_some()
+    }
+
+    /// The engine the 3D viewport is drawing: the mesh import preview's own
+    /// while it is open (it replaces the shell), else the active document's.
+    /// What a pointer script's `locate` must project through.
+    pub fn viewport_engine(&self) -> &EngineState {
+        match &self.stl_import {
+            Some(preview) => &preview.engine,
+            None => self.docs.engine(),
+        }
+    }
+
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Result<Self, String> {
+        Self::new_with(cc, crate::automation::AppOptions::default())
+    }
+
+    /// Build the app with host-supplied options: an isolated store (a host
+    /// MUST pass one) and whether to start on the seed model.
+    pub fn new_with(cc: &eframe::CreationContext<'_>, opts: crate::automation::AppOptions) -> Result<Self, String> {
+        // Solid scroll bars and readable captions, in both themes.
+        cc.egui_ctx.all_styles_mut(app_style);
+        // The action registry's view of each pass (`activate_widget`).
+        #[cfg(feature = "automation")]
+        crate::automation::actions::install(&cc.egui_ctx);
+        let crate::automation::AppOptions { store: opt_store, seed } = opts;
+        let render_state = cc
+            .wgpu_render_state
+            .as_ref()
+            .ok_or_else(|| "eframe was not created with a wgpu render state".to_string())?;
+
+        // The viewport owns the render core + blit pipeline, built from eframe's
+        // SHARED device/queue/format.
+        let viewport = Viewport::new(render_state);
+
+        // The session's diagnostics, taken from that same render state: the
+        // adapter about to draw every frame is the one a report must name. The
+        // WebGPU-vs-WebGL2 decision has already been made by the time we get
+        // here (eframe drops `BROWSER_WEBGPU` from the backend set when the
+        // browser offers no WebGPU adapter), so this READS the outcome — asking
+        // again later would be a second question with its own answer.
+        let diagnostics = crate::diagnostics::Diagnostics::from_render_state(render_state);
+
+        // --- storage seam: load the persisted settings ------------------------
+        let model_store = opt_store.unwrap_or_else(default_model_store);
+        // wasm: hand the store the egui context so an async file-upload load
+        // callback can wake the reactive frame loop (see `store::set_repaint_ctx`).
+        #[cfg(target_arch = "wasm32")]
+        crate::store::set_repaint_ctx(cc.egui_ctx.clone());
+        let saved_settings = model_store.read(SETTINGS_KEY);
+
+        // --- how a document's engine is built --------------------------------
+        // Every tab gets its OWN engine, and therefore its own history runner —
+        // a runner owns the resident kernel state of the document it executes,
+        // so one shared between documents would apply a background run against
+        // the wrong registry. See `crate::document`.
+        let plugins = crate::plugins::PluginsPanel::new(model_store.as_ref());
+        let javascript = crate::javascript::JavaScriptEditor::new(model_store.as_ref());
+        let plugin_packages = plugins.packages.clone();
+        let engine_factory: EngineFactory = Box::new(move || {
+            let mut state = EngineState::new();
+            // Native: run the whole history — and per-object measurement queries — on a
+            // persistent background thread so the UI never freezes during a run or a
+            // selection (M2b). Installed BEFORE anything loads so it builds through it.
+            #[cfg(not(target_arch = "wasm32"))]
+            state.set_runner(Box::new(brep_render::runner::ThreadRunner::new()));
+            // wasm: the browser-thread analogue — a dedicated web worker (M3b) so the
+            // single-threaded wasm UI stays responsive during a run. Same seam. Tests
+            // (which never hit this wasm path) keep the default synchronous InlineRunner.
+            #[cfg(target_arch = "wasm32")]
+            state.set_runner(Box::new(crate::worker::WorkerRunner::new()));
+            if !plugin_packages.borrow().is_empty() {
+                if let Err(error) = crate::plugins::restore(&mut state, &plugin_packages.borrow()) {
+                    log::error!("Plugin restore failed: {error}");
+                }
+            }
+            state.set_viewcube_enabled(true);
+            // Partial-override apply: unknown/absent keys keep their defaults.
+            if let Some(saved) = &saved_settings {
+                let _ = state.apply_settings_json(saved);
+            }
+            state
+        });
+
+        // Start with the seed model on every launch (7626103c2). Reopening the
+        // previous session can immediately rerun a problematic document and
+        // prevent the user from recovering by restarting the app, so which
+        // documents were open is not persisted at all: saved models come back
+        // through the file dialog, and work that was never saved comes back as
+        // the crash-recovery OFFER below — a prompt, never an automatic load.
+        let mut docs = Documents::new(engine_factory);
+        docs.set_canonicalizer(model_store.canonicalizer());
+        if starts_on_seed_model(seed, &docs.engine().settings) {
+            let _ = docs.engine_mut().set_history_json(&seed_history_json());
+        }
+        docs.engine_mut().zoom_to_fit();
+        docs.active_mut().mark_clean();
+
+        // The autosave blob from a session that ended with unsaved work: offer
+        // it back (a prompt, never an automatic restore — see `crate::recovery`).
+        let mut recovery = crate::recovery::RecoveryPanel::new();
+        recovery.arm_from_store(model_store.as_ref(), docs.engine().settings.disable_recovery_prompt);
+
+        // The settings panel seeds its working JSON from the (post-load) engine
+        // settings so the widgets reflect the persisted state on first paint.
+        let settings = SettingsPanel::new();
+        let part_properties = PartPropertiesPanel::new();
+
+        // New / Open / Save / Save As. Holds no document identity — that lives
+        // on each `Document`.
+        let file = FileDialog::new();
+
+        // Boot at the saved UI scale.
+        let applied_ui_scale = docs.engine().settings.ui_scale;
+        let active_document = docs.active_id();
+
+        // The dock layout (loads the persisted tree, or the default). Built before
+        // `model_store` is moved into `Self`.
+        let dock = DockState::new(model_store.as_ref());
+
+        // Boot-load: if the page URL carries `?loadModel=<url>` (wasm only), start
+        // fetching that model NOW; the seed still loads this frame and the fetched
+        // model REPLACES it when it lands (drained in `ui`). See the drain block.
+        crate::offsite::prefetch();
+        #[cfg(target_arch = "wasm32")]
+        let pending_boot_load = web_sys::window()
+            .and_then(|w| w.location().search().ok())
+            .and_then(|search| web_sys::UrlSearchParams::new_with_str(&search).ok())
+            .and_then(|params| params.get("loadModel"))
+            .filter(|url| !url.is_empty())
+            .map(|url| crate::offsite::fetch_text(&cc.egui_ctx, "Opening a model from a link", url));
+        #[cfg(not(target_arch = "wasm32"))]
+        let pending_boot_load: Option<std::sync::mpsc::Receiver<Result<String, String>>> = None;
+        #[cfg(target_arch = "wasm32")]
+        let plm_launch = crate::panels::plm_launch::Launch::from_page();
+        #[cfg(not(target_arch = "wasm32"))]
+        let plm_launch = None;
+
+        Ok(Self {
+            docs,
+            viewport,
+            toolbar: ToolbarPanel::new(),
+            workbench_toolbar: WorkbenchToolbarPanel::new(),
+            model_store,
+            file,
+            stl_import: None,
+            bug_report: BugReportPanel::new(),
+            info: crate::panels::info::InfoPanel::new(),
+            diagnostics,
+            settings,
+            plugins,
+            javascript,
+            part_properties,
+            replace_dialog: Default::default(),
+            history: HistoryPanel::new(),
+            scene: ScenePanel::new(),
+            bom: BomPanel::new(),
+            assembly_constraints: AssemblyConstraintsPanel::new(),
+            wire_harness: WireHarnessPanel::new(),
+            pmi: crate::panels::pmi::PmiPanel::new(),
+            cam: crate::panels::cam::CamPanel::new(),
+            instructions: crate::panels::instructions::InstructionsPanel::new(),
+            instructions_player: crate::panels::instructions_player::InstructionsPlayerPanel::new(),
+            simulation: crate::panels::simulation::SimulationPanel::new(),
+            sheets: crate::panels::sheets::SheetsPanel::new(),
+            update_components: UpdateComponents::new(),
+            expressions: ExpressionsPanel::new(),
+            qualify: crate::panels::qualify::QualifyPanel::new(),
+            family_table: crate::panels::family_table_editor::FamilyTableEditor::new(),
+            plm: crate::panels::plm_host::PlmHost::new(),
+            info_windows: InfoWindows::new(),
+            interference: crate::panels::interference::InterferenceWindow::new(),
+            auto_constraints: crate::panels::auto_constraints::AutoConstraintsWindow::new(),
+            step_parts: crate::panels::step_parts::StepPartsPanel::new(),
+            selection: SelectionPanel::new(),
+            context_bar: ContextBarPanel::new(),
+            sketch: SketchPanel::new(),
+            sketch3d: Sketch3dPanel::new(),
+            mode_bar: ModeBar::new(),
+            pick_bar: crate::panels::pick_bar::PickBar::new(),
+            toasts: Toasts::new(),
+            busy: crate::panels::busy::BusyIndicator::new(),
+            dock,
+            first_run_framed: false,
+            pending_boot_load,
+            #[cfg(not(target_arch = "wasm32"))]
+            reconnecting: None,
+            plm_launch,
+            active_document,
+            active_tab: active_document,
+            sheets_pane_shown: false,
+            document_tab_hits: Vec::new(),
+            params_blob: (u64::MAX, usize::MAX, u64::MAX, String::new()),
+            state_blob_cache: StateBlobCache::default(),
+            #[cfg(feature = "automation")]
+            spin: None,
+            autosave: crate::recovery::Autosave::new(),
+            closing: None,
+            close_asked: false,
+            closed: false,
+            close_stage: 0,
+            recovery,
+            #[cfg(not(target_arch = "wasm32"))]
+            updater: crate::update::Updater::inert(),
+            report_followup: crate::report_followup::ReportFollowup::new(),
+            applied_ui_scale,
+            #[cfg(feature = "automation")]
+            automation: {
+                let q = crate::automation::queue::AutomationQueue::new();
+                q.attach(&cc.egui_ctx);
+                q
+            },
+        })
+    }
+
+    /// Start the desktop update check (`crate::update`). Called by the
+    /// desktop binary's `main` only.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn start_update_check(&mut self, ctx: &egui::Context) {
+        self.updater = crate::update::Updater::start(ctx);
+    }
+
+    /// Remember submitted problem reports and check them for resolution
+    /// (`crate::report_followup`). Called by the desktop `main` and the web
+    /// entry point only.
+    pub fn start_report_followup(&mut self, ctx: &egui::Context) {
+        self.report_followup.start(ctx);
+    }
+
+    /// Arm a measured camera spin: `frames` pointer steps of `step` logical px
+    /// each, starting at the centre of the 3D viewport. Replaces any spin in
+    /// flight. See [`Spin`].
+    #[cfg(feature = "automation")]
+    pub fn start_spin(&mut self, frames: u32, step: (f64, f64)) {
+        let rect = self.viewport.last_rect();
+        let origin = rect
+            .map(|r| (r.width() as f64 * 0.5, r.height() as f64 * 0.5))
+            .unwrap_or((320.0, 240.0));
+        self.spin = Some(Spin { left: frames.max(1), origin, step, made: 0, pressed: false });
+    }
+
+    /// Is a measured spin still running?
+    #[cfg(feature = "automation")]
+    pub fn spinning(&self) -> bool {
+        self.spin.is_some()
+    }
+
+    /// Advance an in-flight spin by ONE pointer step and keep the frame loop
+    /// awake. The drag sweeps out and back over a fixed span so it never leaves
+    /// the viewport however many frames are asked for; the camera keeps turning
+    /// either way, which is all the measurement needs.
+    #[cfg(feature = "automation")]
+    fn step_spin(&mut self, ctx: &egui::Context) {
+        let Some(mut spin) = self.spin.take() else { return };
+        {
+            let state = self.docs.engine_mut();
+            if !spin.pressed {
+                state.pointer_down(spin.origin.0, spin.origin.1, brep_render::controls::BUTTON_LEFT);
+                spin.pressed = true;
+            }
+            const SPAN: f64 = 60.0;
+            let phase = f64::from(spin.made % (2 * SPAN as u32));
+            let t = if phase <= SPAN { phase } else { 2.0 * SPAN - phase };
+            state.pointer_move(spin.origin.0 + spin.step.0 * t, spin.origin.1 + spin.step.1 * t);
+            spin.made += 1;
+            spin.left -= 1;
+            if spin.left == 0 {
+                state.pointer_up();
+            }
+        }
+        if spin.left > 0 {
+            self.spin = Some(spin);
+        }
+        ctx.request_repaint();
+    }
+
+    /// The `__brepParams` JSON, rebuilt only when the document it describes can
+    /// have changed. The `params_blob` FIELD carries the reason this is not
+    /// simply built afresh each frame.
+    fn params_blob(&mut self) -> &str {
+        let key = (
+            self.docs.active_id(),
+            self.docs.engine().history_rollback(),
+            self.docs.engine().history_revision(),
+        );
+        if (self.params_blob.0, self.params_blob.1, self.params_blob.2) != key {
+            self.params_blob = (
+                key.0,
+                key.1,
+                key.2,
+                self.docs.engine().feature_params_json(key.1),
+            );
+        }
+        &self.params_blob.3
+    }
+
+    /// Global keyboard shortcuts (egui input): **Ctrl/Cmd+Z** undo,
+    /// **Ctrl/Cmd+Shift+Z** or **Ctrl/Cmd+Y** redo, **Esc** clears the selection
+    /// — unless a popup or menu is up, which the Escape closes instead.
+    ///
+    /// `Modifiers::COMMAND` is Ctrl on Windows/Linux and ⌘ on macOS, so one map
+    /// covers both. Skipped entirely while an egui TEXT edit is focused so typing
+    /// (and text-field Ctrl+Z / Esc-to-defocus) is never hijacked. Redo is
+    /// consumed BEFORE undo because egui's `consume_key` matches modifiers
+    /// logically (a plain `COMMAND+Z` pattern would also swallow `COMMAND+Shift+Z`).
+    fn handle_shortcuts(&mut self, ctx: &egui::Context) {
+        // A modal owns every key: its Escape closes it, and nothing under it —
+        // undo, a Delete, the selection — is the key's to change.
+        if ctx.text_edit_focused() || crate::viewport::modal_open_last_pass(ctx) {
+            return;
+        }
+        use egui::{Key, Modifiers};
+        // A popup or menu that was up last frame owns this Escape: it closes on
+        // `key_pressed(Escape)`, which a consumed key never is, so the key is
+        // left in the input for it and nothing below acts on it — not the
+        // sketch tool, not a pick, and not the selection its menu is about.
+        let popup_open = crate::viewport::popup_open_last_pass(ctx);
+        // On an eCAD workbench, Delete and Escape are the editor's keys, and
+        // whether they reach it is the editors' ONE rule, `keys_reach_editor`
+        // (a text field, a menu or combo box, a modal), not a copy of it here.
+        // The watch above is the host's own addition: egui's popup memory does
+        // not see the host's `open_bool` menus (a tree row's), and those own
+        // their Escape on every workbench.
+        let ecad_target = crate::workbench::ecad::Target::of_workbench(&self.docs.engine().settings.workbench);
+        let keys_free = match ecad_target {
+            Some(_) => !popup_open && brep_ecad_egui::keys_reach_editor(ctx),
+            None => !popup_open,
+        };
+        if crate::javascript::JavaScriptEditor::editing_source(ctx) {
+            return;
+        }
+        let sketching_3d = self.docs.engine().sketch3d_mode();
+        let (redo, undo, esc, tab) = ctx.input_mut(|i| {
+            let redo = i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::Z)
+                || i.consume_key(Modifiers::COMMAND, Key::Y);
+            let undo = i.consume_key(Modifiers::COMMAND, Key::Z);
+            let esc = keys_free && i.consume_key(Modifiers::NONE, Key::Escape);
+            // Tab cycles the 3D sketch's working plane; outside that mode it
+            // stays egui's focus key.
+            let tab = sketching_3d && keys_free && i.consume_key(Modifiers::NONE, Key::Tab);
+            (redo, undo, esc, tab)
+        });
+        // Delete / Backspace: THE delete-selection command
+        // (`crate::delete_selection`), whatever the selection is — sketch,
+        // 3D sketch, eCAD, sheet object, PMI annotation, constraint, component
+        // or feature — before the sketch modes return below.
+        if keys_free {
+            self.delete_selection_key(ctx);
+        }
+        // The 3D sketch editor: the same per-session undo routing as the
+        // planar one; Esc drops the armed tool's pending clicks first and the
+        // tool itself second.
+        if sketching_3d {
+            if redo {
+                self.docs.engine_mut().sketch3d_redo();
+            }
+            if undo {
+                self.docs.engine_mut().sketch3d_undo();
+            }
+            if esc {
+                let engine = self.docs.engine_mut();
+                if engine.sketch3d_pending_len() > 0 {
+                    engine.sketch3d_tool_cancel();
+                } else {
+                    let _ = engine.sketch3d_set_tool(Some("select"));
+                }
+            }
+            if tab {
+                self.docs.engine_mut().sketch3d_cycle_work_plane();
+            }
+            return;
+        }
+        // While editing a sketch, Ctrl+Z / Ctrl+Shift+Z drive the PER-SESSION sketch
+        // history (S6a), not the model-level undo — this global router consumes the
+        // keys first (before the viewport), so it must intercept here. Esc drops the
+        // active draw/trim/pick tool back to Select/drag (clearing any in-progress
+        // placement): this is the ONLY reliable capture point, since `consume_key`
+        // above already swallowed the Escape before the viewport can see it.
+        if self.docs.engine().sketch_mode() {
+            if redo {
+                self.docs.engine_mut().sketch_redo();
+            }
+            if undo {
+                self.docs.engine_mut().sketch_undo();
+            }
+            if esc {
+                self.docs.engine_mut().sketch_set_tool(Some("select"));
+            }
+            return;
+        }
+        if redo {
+            self.docs.engine_mut().redo();
+        }
+        if undo {
+            self.docs.engine_mut().undo();
+        }
+        if esc {
+            // An open pick-list popup owns the first Escape: close it WITHOUT
+            // clearing the selection (a popup-built multi-selection must survive
+            // dismissing the list); the next Escape clears as before.
+            if self.viewport.close_candidate_popup() {
+                return;
+            }
+            // An open Replace component chooser closes on Escape (its own
+            // keys never see it: this handler takes Escape first). A repair
+            // pick in its result window is cancelled the same way.
+            if self.replace_dialog.escape() {
+                return;
+            }
+            // A REFERENCE PICK owns the next one — a 3D pick or anchors on a
+            // drawing sheet alike — and Escape has to CANCEL it
+            // rather than merely clear the selection. Beginning a pick ROLLS THE
+            // MODEL BACK to the step before the edited feature so the picker sees
+            // the geometry that feature is about to consume; Finish and Cancel
+            // both restore that roll through `end_ref_select`. Escape used to do
+            // neither: it cleared the selection, left the picker open and left the
+            // history PARKED before the feature, so the feature stopped running
+            // and the viewport quietly showed the model without it. Measured on
+            // the retired `rotate-face.json`, which read the seed volume back at its
+            // closed-form step with the feature never re-run.
+            if self.docs.engine().ref_select_active() {
+                self.docs.engine_mut().cancel_ref_select();
+                return;
+            }
+            // A family-row preview owns the next one: Escape leaves the
+            // preview (the family's own values again) and keeps the selection.
+            if self.family_table.escape_preview(self.docs.engine_mut()) {
+                return;
+            }
+            // The global router owns Escape before the viewport runs its keys.
+            if let Some(target) = ecad_target {
+                self.docs.active_mut().ecad.selection_key(target, false);
+                return;
+            }
+            self.docs.engine_mut().clear_selection();
+        }
+    }
+
+    /// A FORM FIELD's reference pick, settled at the end of the frame (after
+    /// the dock has drawn every pane, the viewport's click included):
+    ///
+    /// * a SINGLE-valued field finishes on its first pick — there is nothing
+    ///   left to wait for, and the feature's result appears at once;
+    /// * a form that asked for the pick to end (`ref_select_request_finish`:
+    ///   an edit elsewhere on a feature's form) gets it now, after the frame's
+    ///   viewport click has landed in the pick;
+    /// * a pick NO form claimed this frame (`ref_select_claim`) is finished:
+    ///   its pane was tabbed away, closed, or its subject is gone, and a pick
+    ///   with no field on screen has nothing to end it.
+    ///
+    /// Card-based picks are not this method's: their card is always on screen.
+    fn settle_form_pick(&mut self) {
+        let engine = self.docs.engine_mut();
+        let Some(field) = engine.ref_select_field() else {
+            return;
+        };
+        if !engine.ref_select_in_form() {
+            return;
+        }
+        let claimed = engine.ref_select_take_claim();
+        let single_done = !field.multiple && field.picks > 0;
+        if single_done || engine.ref_select_finish_requested() || !claimed {
+            engine.finish_ref_select();
+        }
+    }
+
+    /// DELETE (or Backspace) runs THE delete-selection command
+    /// ([`crate::delete_selection`]) on whatever is selected: the same call as
+    /// that object's row ✕ / menu Delete, so the key and the menu do the same
+    /// thing (one undo step, no extra confirmation). The key is consumed only
+    /// when there IS something to delete, and left to the family-table grid
+    /// when it owns the keyboard. Never a SHEET, PMI VIEW or study: each takes
+    /// everything placed on it with it and stays behind its menu's Delete.
+    /// Called after the text-edit / modal / popup guards, so a Backspace typed
+    /// into a field never gets here.
+    fn delete_selection_key(&mut self, ctx: &egui::Context) {
+        use egui::{Key, Modifiers};
+        if self.family_table.owns_delete_key(ctx) {
+            return;
+        }
+        let Some(target) = crate::delete_selection::target(&self.docs) else {
+            return;
+        };
+        let pressed = ctx.input_mut(|i| {
+            i.consume_key(Modifiers::NONE, Key::Delete) || i.consume_key(Modifiers::NONE, Key::Backspace)
+        });
+        if !pressed {
+            return;
+        }
+        if let Err(error) = crate::delete_selection::apply(&mut self.docs, &target) {
+            self.docs.engine_mut().push_notice(format!("Delete: {error}"));
+        }
+    }
+
+    /// Open the component source, offering to recover a missing file from the
+    /// assembly's embedded part definition.
+    /// Open the Replace component chooser on `component_id` (the component
+    /// menus' Replace…).
+    pub(crate) fn open_replace(&mut self, component_id: &str) {
+        if let Err(error) = crate::panels::replace_component::finish_work_part_for_replace(&mut self.docs) {
+            self.docs.engine_mut().push_notice(format!("Replace: {error}"));
+            return;
+        }
+        let document = self.docs.active().name().map(str::to_string);
+        self.replace_dialog.open(self.docs.engine(), self.model_store.as_ref(), component_id, document.as_deref());
+    }
+
+    /// Open the Replace summary alone, for mates an earlier replace holds.
+    pub(crate) fn review_replace(&mut self) {
+        self.replace_dialog.review();
+    }
+
+    /// A component menu's document-level flow (`component_actions`): every
+    /// menu — the context bar, the viewport's right-click, the BOM row — hands
+    /// its request here, so each flow has one implementation.
+    fn run_component_request(&mut self, request: ComponentActionRequest, compact: bool) {
+        match request {
+            ComponentActionRequest::SavePartAs { component_id } => self.edit_part(&component_id),
+            ComponentActionRequest::Replace { component_id } => self.open_replace(&component_id),
+            ComponentActionRequest::WorkPart { component_path, in_place } => {
+                let mode = if in_place {
+                    crate::document::work_part::WorkPartMode::InPlace
+                } else {
+                    crate::document::work_part::WorkPartMode::NewTab
+                };
+                if let Err(error) = self.docs.begin_work_part_as(&component_path, mode) {
+                    self.docs.engine_mut().push_notice(format!("Work part: {error}"));
+                }
+            }
+            ComponentActionRequest::Info { targets } => {
+                self.info_windows.open_for(&targets, self.viewport.last_rect());
+            }
+            ComponentActionRequest::EditFeature { feature_id } => {
+                self.history.focus_feature(feature_id);
+                if compact {
+                    self.dock.show_pane(PaneKind::History);
+                }
+            }
+        }
+    }
+
+    fn edit_part(&mut self, component_id: &str) {
+        self.file.edit_component_part(
+            &mut self.docs,
+            self.model_store.as_ref(),
+            component_id,
+        );
+    }
+
+    /// Draw an isolated preview while the destination document remains untouched.
+    /// Hand the working indicator this frame's work, most important first:
+    /// the active document's runner queues, a boot load, the STEP parts
+    /// library's downloads, then every background document's queues.
+    fn collect_busy(&mut self, ctx: &egui::Context) {
+        use crate::panels::busy::{engine_activities, Activity};
+        let active = self.docs.active_index();
+        let mut activities = engine_activities(self.docs.engine(), self.docs.active_id(), None);
+        if self.pending_boot_load.is_some() {
+            activities.push(Activity::new("boot", "boot", "Loading document"));
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.reconnecting.is_some() {
+            activities.push(Activity::new("plmConnect", "plmConnect", "Connecting to the PLM"));
+        }
+        activities.extend(self.step_parts.busy_activities());
+        activities.extend(self.file.busy_activities());
+        // A write-behind store still settling saves: the browser's IndexedDB
+        // or a PLM server (not the desktop's own settings/layout files).
+        let saving = self.model_store.pending_saves();
+        if saving > 0 {
+            #[cfg(target_arch = "wasm32")]
+            let label = match saving {
+                1 => "Saving to browser storage".to_string(),
+                n => format!("Saving to browser storage ({n} writes)"),
+            };
+            #[cfg(not(target_arch = "wasm32"))]
+            let label = match saving {
+                1 => "Saving".to_string(),
+                n => format!("Saving ({n} writes)"),
+            };
+            activities.push(Activity::new("storeWrite", "storeWrite", label));
+        }
+        for (index, doc) in self.docs.iter().enumerate() {
+            if index != active {
+                activities.extend(engine_activities(&doc.engine, doc.id(), Some(&doc.title())));
+            }
+        }
+        self.busy.update(activities, ctx.input(|i| i.time));
+        self.busy.request_repaint(ctx);
+    }
+
+    fn show_stl_preview(&mut self, ui: &mut egui::Ui) -> bool {
+        use crate::panels::stl_import::PreviewAction;
+        let Some(preview) = self.stl_import.as_mut() else {
+            return false;
+        };
+        let action = if preview.destination != self.docs.active_id() {
+            PreviewAction::Cancel
+        } else {
+            preview.show(ui, &mut self.viewport)
+        };
+        if crate::automation::registry::enabled() {
+            let _publish_span = crate::perf::span(crate::perf::Phase::Publish);
+            crate::automation::registry::publish("__brepImportPreview", "STL/OBJ import preview state (tolerances, counts, accept readiness); null when no preview is open", &preview.state_json());
+            crate::automation::registry::publish("__brepImportRegions", "interactive mesh import: phase, region list (proposed kind, status, residual, refits), selected region and its form; null when no preview is open", &preview.regions_json());
+            crate::automation::registry::publish("__brepImportPreviewHit", "import preview dialog widget rects", &preview.hits_json());
+            crate::automation::registry::publish("__brepCamera", "camera state: kind, eye, target, up, near/far, projection block, worldPerPixel", &preview.engine.camera_state_json());
+            crate::automation::registry::publish("__brepPpp", "pixels per point of the surface", &format!("{}", ui.ctx().pixels_per_point()));
+            crate::automation::registry::publish("__brepHistory", "history listing {step, features:[{index,type,id}]}", &self.docs.engine().history_listing_json());
+            crate::automation::registry::publish("__brepDocuments", "open document tabs {active, tabs:[{title,name,dirty}]}", &document_tabs::state_json(&self.docs));
+        }
+        let close = match action {
+            PreviewAction::Accept => {
+                match preview.accept_into(self.docs.active_id(), self.docs.engine_mut()) {
+                    Ok(()) => true,
+                    Err(error) => {
+                        self.docs.engine_mut().push_notice(error);
+                        false
+                    }
+                }
+            }
+            PreviewAction::Cancel => true,
+            PreviewAction::None => false,
+        };
+        if close {
+            self.stl_import = None;
+            self.viewport.forget_document();
+            ui.ctx().request_repaint();
+        }
+        true
+    }
+
+    /// Phase 3 of the automation frame (§4.4): read-only commands answer from
+    /// THIS frame's registry and layout. A method rather than a block at the
+    /// end of `ui` because the import preview returns from that function early
+    /// and still owes the frame its reads.
+    #[cfg(feature = "automation")]
+    fn drain_reads(&mut self, ctx: &egui::Context) {
+        let _t = crate::perf::trace("drain reads + publish_view");
+        let queue = self.automation.clone();
+        let frame = ctx.cumulative_frame_nr();
+        queue.drain_app(
+            crate::automation::command::Phase::Read,
+            &mut crate::automation::command::Ctx { app: self, egui: ctx },
+            frame,
+        );
+        // The frame drawn now shows this document: a capture landing next
+        // frame is of it.
+        let view = self.docs.view();
+        queue.publish_view(view.handle(), view.committed_revision());
+        // This pass's layout is the current one for a layout read that comes
+        // before anything changes it (`automation::queue::Need::Layout`).
+        queue.note_pass();
+    }
+
+    /// Every notice raised since the last gather — the engine's, storage
+    /// failures found after a write returned, refused edits — mirrored to the
+    /// automation queue's `notices` drain. Called by the frame (which then
+    /// shows them as toasts) and by the frame-free service step, so a hidden
+    /// window still reports what the user would have seen.
+    fn gather_notices(&mut self) -> Vec<(brep_render::engine_state::NoticeSeverity, String)> {
+        use brep_render::engine_state::NoticeSeverity;
+        let mut raised = self.docs.engine_mut().take_graded_notices();
+        // Same lane for STORAGE failures the store could only discover after its
+        // synchronous `write` returned `Ok` (the browser backend writes behind an
+        // in-memory mirror). A save that did not persist must never be silent.
+        let errors = self.model_store.take_persistence_errors().into_iter().chain(self.autosave.take_errors());
+        let failures: Vec<String> = errors.filter_map(|text| crate::panels::plm_host::plain_write_failure(&text)).collect();
+        if let Some(last) = failures.last() {
+            // The status line said "saved …" when the write was issued.
+            self.file.status = last.clone();
+        }
+        if failures.iter().any(|text| text.contains("the PLM server is not reachable")) {
+            self.plm.note_unreachable();
+        }
+        raised.extend(failures.into_iter().map(|text| (NoticeSeverity::Error, text)));
+        // ...and the tab whose Save that was is unsaved again: it was marked
+        // clean when the write was issued, and a clean tab closes without a
+        // question.
+        let failed = self.model_store.take_failed_writes();
+        for name in &failed {
+            self.docs.mark_write_failed(self.model_store.as_ref(), name);
+        }
+        // A part an open assembly holds a copy of (saved with it): the copy
+        // keeps the change, marked, so the next Save writes it again.
+        for name in &failed {
+            self.docs.mark_failed_copies(self.model_store.as_ref(), name);
+        }
+        // An edit a read-only document refused (a PLM revision not checked out,
+        // or released): its history kept the saved bytes, and this says why.
+        for doc in self.docs.iter_mut() {
+            if let Some(text) = doc.take_refused() {
+                raised.push((NoticeSeverity::Warning, text));
+            }
+        }
+        // The automation channel's `notices` drain: what the user would have SEEN.
+        // Without this the drain has no producers at all and every script's
+        // `{"notices": []}` asserts nothing.
+        #[cfg(feature = "automation")]
+        for (_, text) in &raised {
+            self.automation.push_notice(
+                crate::automation::command::NoticeKind::Toast,
+                text.clone(),
+            );
+        }
+        raised
+    }
+
+    /// Application-command dispatch without a frame (the desktop loop's
+    /// service step; see `automation::queue`): the PLM/store tasks that
+    /// answered, the queue's frame-free head, the background runs it started,
+    /// and the notices they raised. Draws nothing. Returns whether work it
+    /// must keep servicing is still in flight.
+    #[cfg(feature = "automation")]
+    pub fn service_automation(&mut self, ctx: &egui::Context) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::plm::native::run_pending();
+        let queue = self.automation.clone();
+        let polled = queue.drain_frameless(&mut crate::automation::command::Ctx { app: self, egui: ctx });
+        let running = self.docs.pump_all();
+        let raised = self.gather_notices();
+        if polled || running || !raised.is_empty() {
+            // Work in flight or landing moves what a pass would show.
+            queue.mark_layout_dirty();
+        }
+        if !raised.is_empty() {
+            let now = ctx.input(|i| i.time);
+            self.toasts.extend(raised, now);
+        }
+        // A window that IS drawn shows the effect on its next frame.
+        ctx.request_repaint();
+        polled || running || queue.has_frameless_work()
+    }
+
+    /// Reset everything the shared panels and the viewport hold ABOUT ONE
+    /// DOCUMENT, run at the top of the first frame that sees a different active
+    /// document.
+    ///
+    /// Panel state is deliberately NOT per-document (one History panel, one
+    /// Scene tree, …): a second copy per tab would double every panel's state
+    /// for a benefit — remembering which feature form was open in a background
+    /// tab — nobody asked for. The price is that the transient state has to be
+    /// dropped on a switch, because every bit of it (expansion sets, hit maps,
+    /// an open feature form, a pinned Info window's object name) refers to the
+    /// document that just went away.
+    fn reset_document_scoped_state(&mut self) {
+        self.history = HistoryPanel::new();
+        self.scene = ScenePanel::new();
+        self.bom = BomPanel::new();
+        self.assembly_constraints = AssemblyConstraintsPanel::new();
+        self.wire_harness = WireHarnessPanel::new();
+        self.pmi = crate::panels::pmi::PmiPanel::new();
+        self.cam = crate::panels::cam::CamPanel::new();
+        self.sheets = crate::panels::sheets::SheetsPanel::new();
+        self.expressions = ExpressionsPanel::new();
+        self.qualify = crate::panels::qualify::QualifyPanel::new();
+        self.family_table = crate::panels::family_table_editor::FamilyTableEditor::new();
+        // A family-row preview left on in a document the user comes back to
+        // would have no pane state to show or end it: switching ends it.
+        self.docs.engine_mut().set_expression_preview(None);
+        // Pinned to object NAMES of the old document ("Box" exists in most of
+        // them), so these would silently retarget rather than go blank.
+        self.info_windows = InfoWindows::new();
+        self.interference = crate::panels::interference::InterferenceWindow::new();
+        self.auto_constraints = crate::panels::auto_constraints::AutoConstraintsWindow::new();
+        // The outdated-parts cache keys on `(applied_generation, save_generation)`,
+        // and two documents' generations are unrelated — a switch can land on the
+        // same key with an entirely different parts library.
+        self.update_components.invalidate();
+        self.viewport.forget_document();
+    }
+
+    /// Publish every plain-state blob ([`state_blobs::STATE_BLOBS`]) from its
+    /// producer. The frame calls this; `state_get` asks
+    /// [`state_blob_json`](Self::state_blob_json) itself, so a read of one of
+    /// these never waits for a frame.
+    ///
+    /// [`state_blobs::STATE_BLOBS`]: crate::automation::state_blobs::STATE_BLOBS
+    fn publish_state_blobs(&mut self, ctx: &egui::Context) {
+        for (name, doc) in crate::automation::state_blobs::STATE_BLOBS {
+            if let Some(json) = self.state_blob_json(name, ctx) {
+                crate::automation::registry::publish(name, doc, &json);
+            }
+        }
+    }
+
+    /// One plain-state blob by name, built from the app's data now. `None`
+    /// for a name that is not one of [`STATE_BLOBS`] (a layout blob, which
+    /// only a drawn pass publishes).
+    ///
+    /// [`STATE_BLOBS`]: crate::automation::state_blobs::STATE_BLOBS
+    pub fn state_blob_json(&mut self, name: &str, ctx: &egui::Context) -> Option<String> {
+        if name == "__brepSelectionInspection" {
+            let document = self.docs.active_id();
+            return Some(self.selection.inspection_json(self.docs.engine_mut(), document));
+        }
+        let engine = self.docs.engine();
+        Some(match name {
+            // The import preview draws its own engine while it is open.
+            "__brepCamera" => match &self.stl_import {
+                Some(preview) => preview.engine.camera_state_json(),
+                None => engine.camera_state_json(),
+            },
+            "__brepImportPreview" => self.stl_import.as_ref().map_or_else(|| "null".to_string(), |p| p.state_json()),
+            "__brepImportRegions" => self.stl_import.as_ref().map_or_else(|| "null".to_string(), |p| p.regions_json()),
+            "__brepPpp" => format!("{}", ctx.pixels_per_point()),
+            // Keyed on the settings themselves and the projection, the only
+            // inputs `settings_json` reads.
+            "__brepSettings" => {
+                let orthographic = matches!(engine.camera.projection, brep_render::view::Projection::Orthographic { .. });
+                let key = (engine.settings.clone(), orthographic);
+                StateBlobCache::keyed(&mut self.state_blob_cache.settings, key, || engine.settings_json())
+            }
+            "__brepSolidColors" => engine.solid_color_overrides_json(),
+            "__brepHistory" => engine.history_listing_json(),
+            "__brepGizmo" => engine.gizmo_state_json(),
+            "__brepFile" => self.file.file_state_json(&self.docs, self.model_store.as_ref()),
+            // Keyed on exactly what the signature reports (rollback step, each
+            // solid's name, triangle count and bounds), so building the key
+            // skips only the JSON, never a change.
+            "__brepModel" => {
+                let key = model_signature_key(engine);
+                match StateBlobCache::hit(&self.state_blob_cache.model, &key) {
+                    Some(json) => json,
+                    None => {
+                        let json = self.model_signature_json();
+                        self.state_blob_cache.model = Some((key, json.clone()));
+                        json
+                    }
+                }
+            }
+            "__brepReport" => engine.history_report_json(),
+            // The in-flight run: whether one is pending, the feature the runner
+            // says it is executing, and the feature a cancelled run was stuck on.
+            "__brepRun" => serde_json::json!({
+                "pending": engine.run_pending(),
+                "progress": engine.run_progress().map(|p| serde_json::json!({
+                    "generation": p.generation,
+                    "index": p.index,
+                    "total": p.total,
+                    "featureId": p.feature_id,
+                    "featureType": p.feature_type,
+                })),
+                "cancelled": engine.cancelled_run(),
+            })
+            .to_string(),
+            "__brepBusy" => self.busy.state_json(),
+            "__brepExpr" => serde_json::json!({
+                "expressions": engine.expressions_json(),
+                "variables": serde_json::from_str::<serde_json::Value>(&engine.expression_variables_json())
+                    .unwrap_or(serde_json::Value::Null),
+                "configurator": serde_json::from_str::<serde_json::Value>(&engine.configurator_json())
+                    .unwrap_or(serde_json::Value::Null),
+            })
+            .to_string(),
+            "__brepPlmDoc" => self.plm.state_json(&self.docs),
+            // The queued toast texts — the only trace of a refusal the app shows
+            // as a transient card (e.g. a constraint the strip could not add).
+            "__brepNotices" => self.toasts.texts_json(),
+            "__brepToasts" => self.toasts.state_json(),
+            "__brepBug" => self.bug_report.state_json(),
+            "__brepDiagnostics" => self.diagnostics.json().to_string(),
+            // Where the last ~120 frames' milliseconds went. `__brepDiagnostics`
+            // says WHICH renderer is drawing; this says what it costs, in the
+            // same split the Info window's Performance rows show.
+            "__brepPerf" => crate::perf::json(),
+            "__brepWireHarness" => engine.wire_harness_state_json(),
+            "__brepCam" => {
+                self.cam.refresh_geometry(self.docs.engine());
+                crate::panels::cam::cam_state_json(self.docs.engine(), &self.cam)
+            }
+            "__brepInstructions" => self.instructions.state_json(),
+            "__brepInstructionsPlayer" => self.instructions_player.state_json(engine),
+            "__brepSimulation" => crate::panels::simulation::state_json(engine, &self.simulation),
+            "__brepCamSim" => self.cam.sim.state_json().to_string(),
+            "__brepPorts" => engine.ports_state_json(),
+            "__brepQualify" => self.qualify.state_json(),
+            "__brepFamily" => self.family_table.state_json(),
+            "__brepPmi" => engine.pmi_state_json(),
+            "__brepSheets" => self.docs.engine_mut().sheet_state_json(),
+            // The workbench logical state (resolved current id + available
+            // ids); the dropdown's rects ride in `__brepToolbar`.
+            "__brepWorkbench" => {
+                // Its inputs: the stored workbench and the plugins' workbenches.
+                let key = (engine.settings.workbench.clone(), engine.plugin_workbenches());
+                StateBlobCache::keyed(&mut self.state_blob_cache.workbench, key, || {
+                    crate::workbench::workbench_state_scoped(engine).to_string()
+                })
+            }
+            "__brepSelection" => engine.selection_json(),
+            "__brepInfoWindows" => self.info_windows.published_json(self.docs.engine_mut()),
+            "__brepInterference" => self.interference.state_json_in(engine),
+            "__brepAutoConstraints" => self.auto_constraints.state_json(),
+            "__brepStepParts" => self.step_parts.state_json(),
+            "__brepSelectionFilter" => engine.selection_filter_json(),
+            "__brepFilterButton" => self.selection.button_json(),
+            "__brepContext" => self.context_bar.state_json(),
+            "__brepPickBar" => self.pick_bar.state_json(),
+            "__brepDocuments" => document_tabs::state_json(&self.docs),
+            "__brepRecovery" => self.recovery.state_json(),
+            "__brepClosing" => self.closing_json(),
+            "__brepComponentMove" => engine.component_move_json(),
+            "__brepSketch" => self.sketch.published_json(engine),
+            "__brepSketch3d" => self.sketch3d.published_json(engine),
+            "__brepWireframe" => format!("{}", engine.settings.wireframe),
+            // The pick's `subject` and `path` name the FORM FIELD it runs in
+            // (`<panel>/field:<path>#activate` is that field's button, Done
+            // while the pick runs); `inForm` is false for the card-based
+            // picks, whose controls are `modebar/refsel:*`.
+            "__brepRefSelect" => {
+                let field = engine.ref_select_field();
+                serde_json::json!({
+                    "active": engine.ref_select_active(),
+                    "prompt": engine.ref_select_prompt(),
+                    "names": engine.ref_select_names(),
+                    "subject": field.as_ref().map(|f| f.subject.clone()),
+                    "path": field.as_ref().map(|f| f.path.join(".")),
+                    "multiple": field.as_ref().map(|f| f.multiple),
+                    "picks": field.as_ref().map(|f| f.picks),
+                    "inForm": engine.ref_select_in_form(),
+                    "ghostsLit": engine.ref_select_ghosts_lit(),
+                })
+                .to_string()
+            }
+            "__brepStep" => format!("{}", engine.history_rollback()),
+            "__brepParams" => self.params_blob().to_string(),
+            _ => return None,
+        })
+    }
+
+    /// A signature of the CURRENT rendered model (rolled-to step) — solid count,
+    /// per-solid triangle count + bbox, and total triangles. Published to JS so
+    /// the headed verifier can prove each roll / edit produced different geometry
+    /// (names alone don't: a SUBTRACT reuses the target's name).
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    pub(crate) fn model_signature_json(&self) -> String {
+        let solids: Vec<serde_json::Value> = self
+            .docs
+            .engine()
+            .scene
+            .solids()
+            .iter()
+            .map(|s| {
+                serde_json::json!({
+                    "name": s.name,
+                    "tris": s.mesh.indices.len() / 3,
+                    "min": s.bbox.min,
+                    "max": s.bbox.max,
+                })
+            })
+            .collect();
+        let total_tris: usize = self
+            .docs
+            .engine()
+            .scene
+            .solids()
+            .iter()
+            .map(|s| s.mesh.indices.len() / 3)
+            .sum();
+        serde_json::json!({
+            "step": self.docs.engine().history_rollback(),
+            "solidCount": solids.len(),
+            "totalTris": total_tris,
+            "solids": solids,
+        })
+        .to_string()
+    }
+
+    /// Open or close the floating Settings window — the toolbar gear's flag,
+    /// reachable from the automation layer (`settings_window`).
+    pub fn set_settings_window_open(&mut self, open: bool) {
+        self.settings.open = open;
+    }
+
+    /// Open or close the floating Part Properties window — the toolbar tag
+    /// button's flag, reachable from the automation layer
+    /// (`part_properties_window`).
+    pub fn set_part_properties_window_open(&mut self, open: bool) {
+        self.part_properties.open = open;
+    }
+
+    /// Open or close the floating Info window — the toolbar info button's flag,
+    /// reachable from the automation layer (`info_window`).
+    pub fn set_info_window_open(&mut self, open: bool) {
+        self.info.open = open;
+    }
+
+    /// What this session is running on. The app's ONE record of it: the Info
+    /// window draws it, a problem report carries it, the `diagnostics` command
+    /// returns it and the MCP banner names its adapter — all from here.
+    /// Where the JavaScript editor's Run sends a program (a host's own
+    /// script runner; the desktop app installs its server's on its own).
+    pub fn set_script_host(&mut self, host: Box<dyn crate::javascript::ScriptHost>) {
+        self.javascript.host = Some(host);
+    }
+
+    pub fn diagnostics(&self) -> &crate::diagnostics::Diagnostics {
+        &self.diagnostics
+    }
+
+    /// Begin the in-app problem report: the same call the Submit Bug button
+    /// makes, and for the same reason it makes it THIS frame — `request`
+    /// captures the current frame before its own dialog exists.
+    pub fn begin_bug_report(&mut self, ctx: &egui::Context) {
+        self.bug_report.request(ctx, self.docs.engine(), &self.diagnostics);
+    }
+
+    /// Activate an available declarative panel using its stable package ID.
+    pub(crate) fn show_plugin_panel(&mut self, id: &str) -> Result<(), String> {
+        self.dock.show_plugin_panel(self.docs.engine(), id)
+    }
+
+    /// Bring a built-in dock pane to the front (`show_pane`).
+    pub fn show_pane(&mut self, kind: PaneKind) {
+        self.dock.show_pane(kind);
+    }
+
+    /// Shared document activation / unsaved-close handling for both presentations.
+    fn apply_document_actions(&mut self, activate: Option<usize>, close: Option<usize>) {
+        if (activate.is_some() || close.is_some()) && self.docs.engine().ref_select_in_form() {
+            self.docs.engine_mut().finish_ref_select();
+        }
+        if let Some(index) = activate { self.docs.activate(index); }
+        if let Some(index) = close { self.file.request_close(&mut self.docs, index); }
+    }
+
+    /// The parts-library staleness check and its refresh — the Constraints
+    /// header's "Update components (N)" button, reachable as the
+    /// `component_update` command. Returns `(outdated, missing, refreshed)`;
+    /// `run` is skipped when nothing is outdated.
+    pub fn update_components(&mut self, run: bool) -> Result<(usize, Vec<String>, usize), String> {
+        let store = self.model_store.as_ref();
+        let synced = self.docs.synced_signatures();
+        self.update_components.ensure_current(self.docs.engine_mut(), store, self.file.save_generation(), &synced);
+        let outdated = self.update_components.outdated_count();
+        let missing = self.update_components.missing().to_vec();
+        let refreshed = if run { self.update_components.run(self.docs.engine_mut(), store)? } else { 0 };
+        Ok((outdated, missing, refreshed))
+    }
+
+    /// Frame what the central tile is actually DRAWING: the OPEN SHEET's paper
+    /// when a sheet is open, the 3D scene otherwise.
+    ///
+    /// This is where the fit branch lives, and it is here rather than in the
+    /// toolbar because the two halves sit in different places — the 3D fit is an
+    /// engine camera op (`EngineState::zoom_to_fit`) while the sheet's pan/zoom
+    /// is viewport-transient state, refitted by clearing the marker the sheet
+    /// paint compares against. One method, so the toolbar's Zoom-to-fit button
+    /// and the `zoom_to_fit` command can never mean different things — and so
+    /// the paper needs no Fit button of its own.
+    ///
+    /// The toolbar draws BEFORE the dock in `ui`, so a fit requested from the
+    /// button lands on this very frame.
+    pub fn zoom_to_fit(&mut self) {
+        if self.docs.engine().sheet_open().is_some() {
+            self.viewport.request_sheet_fit();
+        } else {
+            self.docs.engine_mut().zoom_to_fit();
+        }
+    }
+
+    /// Run what a WORKBENCH TOOLBAR button does, by its `WorkbenchButton::id`.
+    ///
+    /// Split out of `ui` so a toolbar click and the `workbench_button` command
+    /// run the SAME arms: the workbench registry declares a button, this
+    /// dispatches it, and the automation surface owns no second copy of the
+    /// list. Returns whether the id was known.
+    pub fn dispatch_workbench_button(&mut self, id: &str) -> bool {
+        // The eCAD workbenches' buttons (Diagram, PCB, Symbol, Pads) are
+        // eCAD's own actions: run on the active document's editors with
+        // eCAD's `run_action`, so a press does exactly what eCAD's toolbar
+        // button does. `None` is any other id, which falls through to the
+        // arms below.
+        if crate::workbench::ecad::dispatch(&mut self.docs.active_mut().ecad, id).is_some() {
+            return true;
+        }
+        // The SHEET's constructions are the Drawing workbench's two tables plus
+        // the section and the detail, and each press is the PMI annotation
+        // buttons' workflow: the object is created on the open sheet with
+        // nothing picked yet, and its dialog opens (through the dialog door,
+        // which surfaces the Sheets pane) — where its reference rows are picked
+        // on the paper with the reference picker.
+        if let Some((kind, alignment)) = crate::workbench::drawing::dim_tool(id) {
+            let engine = self.docs.engine_mut();
+            if let Err(error) = engine.sheet_add_dimension(None, kind, Some(alignment), Vec::new()) {
+                engine.push_notice(format!("Sheet dimension: {error}"));
+            }
+            return true;
+        }
+        if let Some(axis) = crate::workbench::drawing::ord_tool(id) {
+            let engine = self.docs.engine_mut();
+            if let Err(error) = engine.sheet_add_ordinate(None, axis, None, Vec::new()) {
+                engine.push_notice(format!("Ordinate set: {error}"));
+            }
+            return true;
+        }
+        if id == crate::workbench::drawing::BOM_BUTTON_ID {
+            let engine = self.docs.engine_mut();
+            if let Err(error) = engine.sheet_insert_bom() { engine.push_notice(format!("BOM table: {error}")); }
+            return true;
+        }
+        if id == crate::workbench::drawing::SECTION_BUTTON_ID {
+            let engine = self.docs.engine_mut();
+            if let Err(error) = engine.sheet_new_section(None) {
+                engine.push_notice(format!("Section view: {error}"));
+            }
+            return true;
+        }
+        if id == crate::workbench::drawing::DETAIL_BUTTON_ID {
+            let engine = self.docs.engine_mut();
+            if let Err(error) = engine.sheet_new_detail(None) {
+                engine.push_notice(format!("Detail view: {error}"));
+            }
+            return true;
+        }
+        // The SKETCH mode's draw tools are one table too, and they are SHARED —
+        // every workbench's row carries them while a sketch is being edited, so
+        // this arm answers for all of them whatever workbench is active.
+        // Pressing the LIT tool puts it down (back to Select), matching the
+        // sheet constructions above; pressing the lit Select is already Select.
+        if let Some(tool) = crate::workbench::sketch::draw_tool(id) {
+            let engine = self.docs.engine_mut();
+            let armed = engine.sketch_active_tool().unwrap_or("select") == tool;
+            engine.sketch_set_tool(Some(if armed { "select" } else { tool }));
+            return true;
+        }
+        // The 3D sketch's tools and working-plane radio, shared the same way.
+        if let Some(tool) = crate::workbench::sketch3d::draw_tool(id) {
+            let engine = self.docs.engine_mut();
+            let armed = engine.sketch3d_active_tool().unwrap_or("select") == tool;
+            let _ = engine.sketch3d_set_tool(Some(if armed { "select" } else { tool }));
+            return true;
+        }
+        if let Some(plane) = crate::workbench::sketch3d::work_plane(id) {
+            let _ = self.docs.engine_mut().sketch3d_set_work_plane(plane);
+            return true;
+        }
+        match id {
+            // The sketch strip's one-shot action, now the row's: infer the
+            // constraints the rough-in geometry already implies.
+            crate::workbench::sketch::AUTOCONSTRAIN_BUTTON_ID => {
+                self.docs.engine_mut().sketch_auto_constrain();
+            }
+            // Sheet Metal's flat pattern: open the export modal in its DXF /
+            // SVG mode; the engine reports "no sheet-metal body in the part"
+            // as a toast on export.
+            "sheetmetal.flat_pattern" => {
+                self.file.dispatch(FileAction::ExportFlatPattern, &mut self.docs, self.model_store.as_ref());
+            }
+            // Assembly's Add Component: open the insert-component modal (the
+            // same flow as the ACOMP palette pick). ONE arm for both rows that
+            // carry it — PCB BORROWS this very button (`workbench::BORROWED`)
+            // rather than declaring a second id for the same action.
+            crate::workbench::assembly::ADD_COMPONENT_BUTTON_ID => {
+                self.file.dispatch(FileAction::InsertComponent, &mut self.docs, self.model_store.as_ref());
+            }
+            // Assembly's interference check: run the engine's pairwise
+            // intersect sweep NOW and open the results window.
+            "assembly.interference" => {
+                self.interference.open_and_run(self.docs.engine_mut());
+            }
+            // Assembly's Auto Constraints: open the inference window and scan
+            // the current placement NOW, so it opens showing real counts.
+            "assembly.auto_constrain" => {
+                self.auto_constraints.open_and_scan(self.docs.engine_mut());
+            }
+            // Assembly's step.parts library: open the online-library browser
+            // (search → thumbnails → import a STEP part → add as an ACOMP).
+            "assembly.step_parts_library" => {
+                self.step_parts.open();
+            }
+            // Wire harness's Declare connection point: the part's FIRST port
+            // group, with one point at the origin. It exists because the
+            // Qualify pane is on screen only while the part declares some — so
+            // without it a 3D-only part could never get its first one from the
+            // UI at all. The pane is surfaced by the dock's own ports door on
+            // the next frame, once the visibility pass has let it back in.
+            crate::workbench::wire_harness::DECLARE_POINT_BUTTON_ID => {
+                let engine = self.docs.engine_mut();
+                engine.history.set_ports_block(
+                    Some(serde_json::json!([{
+                        "name": crate::workbench::wire_harness::FIRST_GROUP,
+                        "purpose": crate::workbench::wire_harness::FIRST_PURPOSE,
+                        "points": [{
+                            "name": crate::workbench::wire_harness::FIRST_POINT,
+                            "transform": {
+                                "position": [0.0, 0.0, 0.0],
+                                "rotationEuler": [0.0, 0.0, 0.0],
+                            },
+                        }],
+                    }])),
+                    None,
+                );
+            }
+            // CAM's four actions: each hands the CAM pane its request and
+            // surfaces the pane, which performs it on the frame it draws (the
+            // pane owns the selection the action reads — which setup an
+            // operation goes into — so the pane performs it, not the shell).
+            crate::workbench::cam::NEW_SETUP_BUTTON_ID => {
+                self.cam.request(crate::panels::cam::CamRequest::NewSetup);
+                self.show_pane(PaneKind::Cam);
+            }
+            crate::workbench::cam::NEW_TOOL_BUTTON_ID => {
+                self.cam.request(crate::panels::cam::CamRequest::NewTool);
+                self.show_pane(PaneKind::Cam);
+            }
+            crate::workbench::cam::NEW_OPERATION_BUTTON_ID => {
+                self.cam.request(crate::panels::cam::CamRequest::NewOperation);
+                self.show_pane(PaneKind::Cam);
+            }
+            crate::workbench::cam::GENERATE_BUTTON_ID => {
+                self.cam.request(crate::panels::cam::CamRequest::Generate);
+                self.show_pane(PaneKind::Cam);
+            }
+            // Instructions: New from assembly opens the instructions in a new
+            // tab (the open assembly, saved, is the target); the wizard and a
+            // new step go to the pane, which owns the selected step.
+            crate::workbench::instructions::NEW_BUTTON_ID => {
+                let (_, docs, store) = self.file_docs_store();
+                match crate::instructions::new_instructions(docs, store, crate::instructions::Source::Active, true) {
+                    Ok(_) => self.show_pane(PaneKind::Instructions),
+                    Err(error) => self.docs.engine_mut().push_notice(format!("New instructions: {error}")),
+                }
+            }
+            crate::workbench::instructions::WIZARD_BUTTON_ID => {
+                self.instructions.request(crate::panels::instructions::InstructionsRequest::Wizard);
+                self.show_pane(PaneKind::Instructions);
+            }
+            crate::workbench::instructions::NEW_STEP_BUTTON_ID => {
+                self.instructions.request(crate::panels::instructions::InstructionsRequest::NewStep);
+                self.show_pane(PaneKind::Instructions);
+            }
+            // Play starts at the first step, or plays the shown one again.
+            crate::workbench::instructions::PLAY_BUTTON_ID => {
+                let shown = self.docs.engine().instructions_shown_step().is_some();
+                self.instructions_player.request(if shown { brep_render::engine_state::PlayTo::Replay } else { brep_render::engine_state::PlayTo::First });
+                self.show_pane(PaneKind::InstructionsPlayer);
+            }
+            // Simulation: the pane performs them (it draws the timeline the
+            // new study or motor lands on).
+            crate::workbench::simulation::NEW_STUDY_BUTTON_ID => {
+                self.simulation.request(crate::panels::simulation::SimulationRequest::NewStudy);
+                self.show_pane(PaneKind::Simulation);
+            }
+            crate::workbench::simulation::ADD_MOTOR_BUTTON_ID => {
+                self.simulation.request(crate::panels::simulation::SimulationRequest::AddMotor);
+                self.show_pane(PaneKind::Simulation);
+            }
+            // PMI's Capture view: snapshot the camera + visibility into a new
+            // active view and surface the PMI pane so its row is seen.
+            crate::workbench::pmi::CAPTURE_BUTTON_ID => {
+                self.docs.engine_mut().pmi_capture_view(None);
+                self.dock.show_pane(PaneKind::Pmi);
+            }
+            // Drawing's Back to 3D: leave the open sheet. The paper's own
+            // widgets go with it, and the sheet keeps its contents — the same
+            // edit the Sheets pane's Close sheet makes.
+            crate::workbench::drawing::SHEET_CLOSE_BUTTON_ID => {
+                let _ = self.docs.engine_mut().sheet_set_open(None);
+                self.viewport.forget_sheet();
+            }
+            // Drawing's Add sheet: a new sheet, opened on the paper, and the
+            // Sheets pane brought forward so its row is seen.
+            crate::workbench::drawing::ADD_SHEET_BUTTON_ID => {
+                self.docs.engine_mut().sheet_add(None);
+                self.dock.show_pane(PaneKind::Sheets);
+            }
+            // Drawing's Place view: the first saved PMI view on the open sheet;
+            // the placement's form opens (the door surfaces the pane), and its
+            // `view` field is where a different view is chosen.
+            crate::workbench::drawing::PLACE_VIEW_BUTTON_ID => {
+                let engine = self.docs.engine_mut();
+                let placed = match engine.sheet_pmi_view_ids().first().cloned() {
+                    Some(view) => engine.sheet_place_view(None, &view, None, None).map(|_| ()),
+                    None => Err("capture a PMI view in the PMI workbench first".to_string()),
+                };
+                if let Err(error) = placed {
+                    engine.push_notice(format!("Place view: {error}"));
+                }
+            }
+            _ => return false,
+        }
+        true
+    }
+
+}
+
+impl eframe::App for BrepApp {
+    /// The browser's automation pump reaches the app between frames through
+    /// eframe's runner (`WebRunner::app_mut`, `web_pump`). A web-only method.
+    #[cfg(target_arch = "wasm32")]
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
+    /// Phase 1 of the automation frame (§4.4): queued input commands become
+    /// egui events; a screenshot that landed completes its reply. Called by
+    /// every eframe runner before `ui`; the headless host calls it itself.
+    #[cfg(feature = "automation")]
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        let view = self.viewport.last_rect();
+        // eframe runs a pass without `ui` when the window is not visible (a
+        // hidden tab's timer frames, an occluded or minimised window): input
+        // given to it reaches no widget. Automation input waits for a pass
+        // that draws (the loop's or the page pump's own, `on_demand`, which
+        // mark theirs visible), and `activate_widget` keeps the widgets of
+        // the last pass that drew. egui hit-tests pointer input against the
+        // PREVIOUS pass's widgets, so the pass right after one that did not
+        // draw only lays out again, and input waits for the one after it.
+        //
+        // A hidden TAB with a WebMCP host attached draws every pass instead:
+        // eframe runs its timer passes right after the page pump's (each
+        // repaint request schedules one), and a pass that skips `ui` between
+        // a press and its release makes egui forget the press. eframe reads
+        // the root viewport's visibility after this hook, so marking it
+        // visible here is what has it run `ui`.
+        #[cfg(target_arch = "wasm32")]
+        if crate::automation::registry::enabled() {
+            let root = raw_input.viewports.entry(egui::ViewportId::ROOT).or_default();
+            if root.occluded == Some(true) {
+                root.occluded = Some(false);
+            }
+        }
+        let draws = raw_input.viewports.get(&egui::ViewportId::ROOT).and_then(|v| v.visible()).unwrap_or(true);
+        let drew = crate::automation::actions::note_pass(ctx, draws);
+        if !draws || !drew {
+            return;
+        }
+        self.automation.drain_input(raw_input, ctx.cumulative_frame_nr(), ctx.pixels_per_point(), view, ctx);
+    }
+
+
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // Open this frame's timing window (banks the previous frame's phase
+        // totals and its period) and bracket the whole body. See `perf`: on a
+        // single-threaded shell a long frame IS a frozen UI, so what the frame
+        // spends is the whole diagnosis.
+        crate::perf::tick();
+        let _ui_span = crate::perf::span(crate::perf::Phase::Ui);
+        let _frame_trace = crate::perf::trace("frame");
+
+        // The native store and PLM queue (`plm::native`): every task whose I/O
+        // answered since the last frame finishes here, on this thread, FIRST —
+        // before any early return below (the mesh preview's replaces the whole
+        // shell) can skip it. The browser drains its microtasks between events
+        // the same way, whatever the page is showing.
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::plm::native::run_pending();
+        // A PLM save made mid-rebuild is pictured once its run lands.
+        crate::plm::thumbnail::tick(|id| self.docs.iter().find(|d| d.id() == id).map(|d| &d.engine));
+        // Its player data too (instructions), and a refused upload is said.
+        crate::plm::player_data::tick(|id| self.docs.iter().find(|d| d.id() == id).map(|d| &d.engine));
+        if let Some(notice) = crate::plm::player_data::take_notice() {
+            self.docs.engine_mut().push_notice_as(brep_render::engine_state::NoticeSeverity::Warning, notice);
+        }
+        // The File menu's recent-file pictures that finished since last frame.
+        crate::plm::thumbnail::persist_recent(self.model_store.as_ref());
+
+        // --- global keyboard shortcuts (undo/redo/clear-selection) ------------
+        // Handled before any panel draws so a Ctrl+Z etc. this frame takes effect
+        // this frame. `ctx` is a cheap Arc clone (avoids borrowing `ui` across the
+        // `&mut self` call).
+        let ctx = ui.ctx().clone();
+
+        self.plugins.finish_installations(&mut self.docs, self.model_store.as_ref());
+        self.plugins.sync_documents(&mut self.docs);
+        self.javascript.poll(&ctx, &mut self.docs, self.model_store.as_ref());
+        self.plugins.poll(&ctx, self.docs.engine_mut(), self.model_store.as_ref());
+
+        // Phase 2 of the automation frame (§4.4): mutations run before any
+        // panel draws, so this frame shows their effect.
+        #[cfg(feature = "automation")]
+        {
+            let queue = self.automation.clone();
+            let frame = ctx.cumulative_frame_nr();
+            let _t = crate::perf::trace("drain mutate");
+            queue.drain_app(
+                crate::automation::command::Phase::Mutate,
+                &mut crate::automation::command::Ctx { app: self, egui: &ctx },
+                frame,
+            );
+        }
+
+        // A measured spin (`perf_spin`) advances one pointer step per frame, here
+        // — after the mutation drain that may have armed it, so the spin starts
+        // on the frame it was asked for.
+        #[cfg(feature = "automation")]
+        self.step_spin(&ctx);
+
+        // --- a different document is active than the panels were drawn for ----
+        // Checked FIRST, before anything draws: the switch itself happened late
+        // in some earlier frame (a tab click, a close, an Open), and every
+        // shared panel is still holding the previous document's transient state.
+        if self.active_document != self.docs.view_id() {
+            if !self.javascript.running_in(self.active_document) {
+                for doc in self.docs.iter_mut() { if doc.id() == self.active_document { doc.engine.cancel_plugin_action(); } }
+            }
+            // The Interference window is reset below, but its overlay lives in
+            // the document being left: take it down there, or switching back
+            // shows the volumes with no window to clear them.
+            for doc in self.docs.iter_mut() {
+                if doc.id() == self.active_document {
+                    doc.engine.clear_interference_overlay();
+                }
+            }
+            self.plugins.close_action();
+            self.active_document = self.docs.view_id();
+            let same_tab = self.active_tab == self.docs.active_id();
+            self.active_tab = self.docs.active_id();
+            let bom = same_tab.then(|| std::mem::take(&mut self.bom));
+            self.reset_document_scoped_state();
+            if let Some(bom) = bom {
+                self.bom = bom;
+            }
+        }
+
+        // --- the workbench decides whether placed parts show their ports -------
+        // A workbench that shows the Wire Harness panel (Wire harness, All)
+        // draws the ports components carry; the others — Modeling included,
+        // though it offers the Port feature — keep the assembly clean. A no-op
+        // when nothing changed.
+        {
+            // The document's name lives in the SHELL (the tab, the file), and a
+            // drawing sheet's title block prints it. Told to the engine here,
+            // every frame, because that is where the active tab is known; a
+            // no-op when it has not changed. It is the DISPLAY name, the one the
+            // tab shows: a stamp reading `bracket.nbrep` would be naming our
+            // file format rather than the drawing.
+            let name = self
+                .docs
+                .active()
+                .name()
+                .map(crate::store::model_display_name)
+                .unwrap_or_default();
+            let engine = self.docs.engine_mut();
+            engine.set_document_name(&name);
+            let show = crate::workbench::panel_visible(
+                &engine.settings.workbench,
+                crate::workbench::wire_harness::PANEL_ID,
+                &crate::workbench::ButtonState::of(engine),
+            );
+            engine.set_component_ports_visible(show);
+            // The PMI workbench IS the PMI editing mode: a workbench that shows
+            // the PMI panel (PMI, All) enters it — the modeling camera /
+            // visibility / wireframe are remembered — and one that hides it
+            // leaves it, deactivating the view and restoring them.
+            let pmi_shown = crate::workbench::panel_visible(
+                &engine.settings.workbench,
+                crate::workbench::pmi::PANEL_ID,
+                &crate::workbench::ButtonState::of(engine),
+            );
+            // An exploded view is shown from the Assembly workbench's Constraints
+            // pane without entering PMI (a capture still remembers the modeling
+            // state), so that pane counts as an exploded view's home too. With
+            // neither on screen (nor the paper), the view is put away, so no one
+            // models on exploded displays.
+            let exploded_shown = crate::workbench::panel_visible(
+                &engine.settings.workbench,
+                crate::workbench::assembly::CONSTRAINTS_PANEL_ID,
+                &crate::workbench::ButtonState::of(engine),
+            ) && engine
+                .pmi_active_view()
+                .is_some_and(|id| engine.is_exploded_view(id));
+            let paper_shown = crate::workbench::panel_visible(
+                &engine.settings.workbench,
+                crate::workbench::drawing::SHEETS_PANEL_ID,
+                &crate::workbench::ButtonState::of(engine),
+            );
+            // A step of the instructions shows through its view, so the
+            // Instructions and Player panes are a view's home too.
+            let instructions_shown = [crate::workbench::instructions::PANEL_ID, crate::workbench::instructions::PLAYER_PANEL_ID]
+                .into_iter()
+                .any(|panel| crate::workbench::panel_visible(&engine.settings.workbench, panel, &crate::workbench::ButtonState::of(engine)));
+            if pmi_shown && !engine.pmi_workbench_entered() {
+                engine.pmi_enter_workbench();
+            } else if !pmi_shown && !exploded_shown && !instructions_shown && engine.pmi_workbench_entered() {
+                engine.pmi_leave_workbench();
+            }
+            if !pmi_shown && !exploded_shown && !paper_shown && !instructions_shown && engine.pmi_active_view().is_some() {
+                engine.pmi_deactivate_view();
+            }
+            // The DRAWING workbench owns the paper: LEAVING it for a workbench
+            // that hides the Sheets pane closes an open sheet, so the central
+            // tile is not left drawing paper whose tools, pane and way back are
+            // all hidden. It is a MODE change — the sheets and their contents
+            // are untouched — and an edge, see `sheets_pane_shown`.
+            let sheets_shown = crate::workbench::panel_visible(
+                &engine.settings.workbench,
+                crate::workbench::drawing::SHEETS_PANEL_ID,
+                &crate::workbench::ButtonState::of(engine),
+            );
+            if self.sheets_pane_shown && !sheets_shown && engine.sheet_open().is_some() {
+                let _ = engine.sheet_set_open(None);
+                self.viewport.forget_sheet();
+            }
+            self.sheets_pane_shown = sheets_shown;
+        }
+
+        // --- GUI chrome theme -------------------------------------------------
+        // Apply the user's theme preference to the egui chrome every frame
+        // (idempotent: `set_theme` just stores the preference). Auto follows the
+        // OS/system theme (prefers-color-scheme on web); egui falls back to dark
+        // when no OS signal is available. This controls panels/windows/toolbar/
+        // text only — the 3D viewport `background` is a separate setting.
+        ctx.set_theme(match self.docs.engine().settings.theme {
+            ThemeMode::Auto => egui::ThemePreference::System,
+            ThemeMode::Light => egui::ThemePreference::Light,
+            ThemeMode::Dark => egui::ThemePreference::Dark,
+        });
+
+        // --- global UI size scale --------------------------------------------
+        // Apply the user's "UI scale" to the whole egui chrome every frame. This
+        // is idempotent when unchanged (`set_zoom_factor` only repaints on an
+        // actual change) and composes with the native device pixel ratio
+        // (pixels_per_point = zoom_factor * native_pixels_per_point).
+        //
+        // Defer live UI rescale while the user drags the Settings "UI scale" slider:
+        // the slider value updates continuously, but only commit it to the actual egui
+        // zoom once the pointer is released, so the whole UI doesn't rescale under the
+        // cursor mid-drag.
+        let pointer_down = ctx.input(|i| i.pointer.any_down());
+        if !pointer_down {
+            self.applied_ui_scale = self.docs.engine().settings.ui_scale;
+        }
+        ctx.set_zoom_factor(self.applied_ui_scale);
+        crate::viewport::touch::prepare_browser_input(ui);
+
+        // --- history-runner pump ---------------------------------------------
+        // Apply any completed background history run BEFORE panels read the scene.
+        // For the synchronous InlineRunner this is a no-op (`rerun_history` already
+        // pumped its own submit), so nothing changes today; it is the seam a future
+        // native-thread / wasm-worker runner lands its reply through. While a run is
+        // still in flight, keep the frame loop alive so its reply gets pumped — for
+        // Inline `run_pending()` is always false, so this never fires.
+        //
+        // EVERY open document is pumped, not just the active one — see
+        // `Documents::pump_all`, which also keeps the active document's parts
+        // library in the kernel's store when a background tab's run lands.
+        let work_in_flight = {
+            let _t = crate::perf::trace("pump_all");
+            self.docs.pump_all()
+        };
+        if work_in_flight {
+            ctx.request_repaint();
+        }
+        // The CAM simulation player, whether or not its pane is drawn.
+        let dt = ctx.input(|i| i.stable_dt as f64).clamp(0.0, 0.25);
+        if self.cam.sim.pump(self.docs.engine_mut(), dt) {
+            ctx.request_repaint();
+        }
+        // An exploded view's Explode / Collapse animation.
+        if self.docs.engine_mut().exploded_tick(dt) {
+            ctx.request_repaint();
+        }
+        // A motion study: its bake (a few frames per tick) and its playhead,
+        // driven only while the workbench offers the Simulation pane
+        // (Simulation, All); the frame that leaves it puts every posed part
+        // and the camera back, and a document edit made in another workbench
+        // never wakes the study there (`SimulationPanel::drive_playback`).
+        let simulation_shown = {
+            let engine = self.docs.engine();
+            crate::workbench::panel_visible(
+                &engine.settings.workbench,
+                crate::workbench::simulation::PANEL_ID,
+                &crate::workbench::ButtonState::of(engine),
+            )
+        };
+        if self.simulation.drive_playback(self.docs.engine_mut(), simulation_shown, dt) {
+            ctx.request_repaint();
+        }
+        // The pane's Export button: the app owns the viewport's render core.
+        if let Some(request) = self.simulation.take_export() {
+            #[cfg(not(target_arch = "wasm32"))]
+            let result = {
+                let spec = crate::simulation_export::ExportSpec {
+                    study: Some(request.study.clone()),
+                    format: request.format.clone(),
+                    width: request.width,
+                    height: request.height,
+                    fps: Some(request.fps),
+                    path: Some(request.path.clone()),
+                };
+                crate::simulation_export::export(self, &spec).map(|(report, _)| report.summary())
+            };
+            #[cfg(target_arch = "wasm32")]
+            let result = Err::<String, String>(format!("video export is native only (asked for {})", request.format));
+            self.simulation.report(result);
+            ctx.request_repaint();
+        }
+        // An instructions step's parts coming home along their arrows.
+        if self.docs.engine_mut().instructions_insertion_tick(dt) {
+            ctx.request_repaint();
+        }
+        self.docs.show_work_part_bar(ui, self.model_store.as_ref());
+        if self.show_stl_preview(ui) {
+            // The preview REPLACES the shell for the frame, and this early
+            // return used to take the frame's READ drain with it: while a
+            // preview was open every read-only automation command — `ping`,
+            // `state_get`, `hit_rects`, a screenshot — went unanswered until
+            // the host gave up on it, so no script could observe the preview it
+            // had just opened. The preview publishes its own state and rects
+            // above; this answers the reads that ask for them.
+            #[cfg(feature = "automation")]
+            self.drain_reads(&ctx);
+            return;
+        }
+        if crate::automation::registry::enabled() {
+            let _publish_span = crate::perf::span(crate::perf::Phase::Publish);
+            for name in ["__brepImportPreview", "__brepImportRegions"] {
+                crate::automation::registry::publish(name, crate::automation::state_blobs::doc(name), "null");
+            }
+        }
+
+        // The tab strip's dirty dots, refreshed once per frame (cheap — see
+        // `Document::refresh_dirty_marker`).
+        {
+            let _t = crate::perf::trace("refresh_dirty_markers");
+            self.docs.refresh_dirty_markers();
+        }
+
+        // --- boot-load (?loadModel=): apply the fetched model once it lands ----
+        // Replaces the seed with the URL-specified document (armed in `new`). The
+        // ehttp callback wakes the frame loop, so a plain per-frame drain suffices.
+        // `load_model_and_fit` arms deferred framing; the pump above reframes it
+        // next frame. `mark_clean` opens it as a non-dirty document.
+        if self.pending_boot_load.is_some() {
+            let received = self
+                .pending_boot_load
+                .as_ref()
+                .and_then(|rx| rx.try_recv().ok());
+            if let Some(result) = received {
+                self.pending_boot_load = None;
+                match result {
+                    Ok(json) => {
+                        // REPLACES the seed in place rather than adding a tab.
+                        // It lands on the document that is already active,
+                        // whatever the session restored.
+                        let _ = self.docs.engine_mut().load_model_and_fit(&json);
+                        self.docs.active_mut().mark_clean();
+                    }
+                    Err(e) => self
+                        .docs
+                        .engine_mut()
+                        .push_notice(format!("Could not load model from URL: {e}")),
+                }
+            }
+        }
+
+        // --- "Open in CAD" (?open=part/…/rev/…) --------------------------------
+        if let Some(launch) = self.plm_launch.as_mut() {
+            use crate::panels::plm_launch::Step;
+            let step = launch.step(self.model_store.as_ref(), &mut self.docs, &mut self.file);
+            match &step {
+                Step::SignIn(sentence) => {
+                    self.settings.show_plm_tab();
+                    self.docs.engine_mut().push_notice(sentence.clone());
+                }
+                Step::Refused(sentence) => self.docs.engine_mut().push_notice(sentence.clone()),
+                _ => {}
+            }
+            if step.settles() {
+                crate::panels::plm_launch::forget_query();
+            }
+            if launch.is_done() {
+                self.plm_launch = None;
+            } else {
+                ui.ctx().request_repaint();
+            }
+        }
+
+        crate::panels::ecad_parts::sync(self.docs.active_mut());
+        // A sheet's Duplicate past the last offered occurrence: another assembly component.
+        crate::panels::ecad_parts::answer_duplicate_requests(self.docs.active_mut());
+        let requests = crate::panels::ecad_parts::take_open_requests(self.docs.active_mut());
+        for key in requests {
+            self.file.open_document(&mut self.docs, self.model_store.as_ref(), &key);
+        }
+        // The parts pane's Add part button presses Assembly's Add Component: one arm.
+        if crate::panels::ecad_parts::take_add_part_request(self.docs.active_mut()) {
+            self.dispatch_workbench_button(crate::workbench::assembly::ADD_COMPONENT_BUTTON_ID);
+        }
+        // The eCAD host's Update parts button is Constraints' Update components.
+        if std::mem::take(&mut self.docs.active_mut().ecad_update_requested) {
+            if let Err(error) = self.update_components.run(self.docs.engine_mut(), self.model_store.as_ref()) {
+                self.docs.engine_mut().push_notice(format!("Update components: {error}"));
+            }
+        }
+
+        // --- update-components badge freshness ---------------------------------
+        // Keep the outdated-parts checker current BEFORE any assembly panel draws
+        // (the structure tree renders per-node badges ahead of the constraints
+        // header). Cheap: a real recompute happens only when an applied run or a
+        // successful store save moved the generation key.
+        let synced = self.docs.synced_signatures();
+        self.update_components.ensure_current(
+            self.docs.engine_mut(),
+            self.model_store.as_ref(),
+            self.file.save_generation(),
+            &synced,
+        );
+        // …and the eCAD host marks the components placed from those parts.
+        self.docs.active_mut().ecad_outdated = self.update_components.outdated().to_vec();
+        // An Update that would discard an edit made here asks first.
+        self.update_components.show_conflict(ui.ctx(), self.docs.engine_mut(), self.model_store.as_ref());
+
+        // --- async-safe first-model framing -----------------------------------
+        // The seed run is async under a background runner (native thread / wasm
+        // worker), so the boot `zoom_to_fit` may have run before any solid existed.
+        // Frame the model ONCE, the first frame the seed run has fully landed (solids
+        // present AND no run still in flight). Under the synchronous Inline runner
+        // (tests) both hold on the very first frame, so this is identical to today.
+        if !self.first_run_framed
+            && !self.docs.engine().run_pending()
+            && self.docs.engine().has_solids()
+        {
+            self.docs.engine_mut().zoom_to_fit();
+            self.first_run_framed = true;
+        }
+
+        self.handle_shortcuts(&ctx);
+
+        // A form field's reference pick on a touch or narrow window is a
+        // FOCUSED pick: every piece of chrome — toolbar and ribbon, workbench
+        // strip, status bar, docks and the dialog in them, the action overlay
+        // — steps aside and the view fills the window, with the PICK BAR
+        // (`panels::pick_bar`: what is picked, the picks, the filter button,
+        // Finish, Cancel) its only control. Finish or Cancel brings all of it
+        // back as it was. Decided once, here, before any of it is drawn.
+        let pick_layout = {
+            let engine = self.docs.engine();
+            crate::panels::pick_bar::PickLayout::of(
+                engine.ref_select_active(),
+                engine.ref_select_in_form(),
+                crate::viewport::touch::narrow(&ctx),
+            )
+        };
+        let focused_pick = pick_layout == crate::panels::pick_bar::PickLayout::Focused;
+        crate::viewport::touch::set_chrome_hidden(&ctx, focused_pick);
+
+        // --- top toolbar: primary actions, drawn FIRST so its top strip is
+        // reserved above the left panel + central viewport. A clicked File button
+        // returns an action the file dialog acts on (open its modal / save / new).
+        self.toolbar.read_only = !self.docs.active().access().is_editable();
+        if crate::viewport::touch::compact(&ctx) {
+            self.toolbar.documents = document_tabs::MenuState::from_documents(&self.docs);
+        }
+        let toolbar_outcome = if focused_pick {
+            self.toolbar.clear_hits();
+            crate::panels::toolbar::ToolbarOutcome::default()
+        } else {
+            let doc = self.docs.view_mut();
+            self.toolbar.show(
+                ui,
+                &mut doc.engine,
+                Some(&doc.ecad),
+                self.model_store.as_ref(),
+                &mut self.settings.open,
+                &mut self.part_properties.open,
+                &mut self.info.open,
+            )
+        };
+        crate::panels::set_chrome_bottom(&ctx, ui.available_rect_before_wrap().top());
+        if toolbar_outcome.toggle_mobile_panels { self.dock.toggle_mobile_drawer(); }
+        if crate::viewport::touch::compact(&ctx) {
+            self.apply_document_actions(toolbar_outcome.documents.activate, toolbar_outcome.documents.close);
+            self.document_tab_hits = toolbar_outcome.documents.hits;
+        }
+        if toolbar_outcome.plugins { self.plugins.open = !self.plugins.open; }
+        if toolbar_outcome.javascript { self.javascript.open = !self.javascript.open; }
+        if let Some(id) = toolbar_outcome.plugin_action {
+            if let Err(error) = self.plugins.open_action(self.docs.engine(), &id) { self.plugins.error = Some(error); }
+        }
+        self.plugins.active_document = self.docs.active_id();
+        self.plugins.show(&ctx, self.docs.engine_mut(), self.model_store.as_ref());
+        // Run goes to the app's own script runner (its server's code mode),
+        // started on the first run; installed once the window is opened.
+        #[cfg(all(not(target_arch = "wasm32"), feature = "mcp"))]
+        if self.javascript.open && self.javascript.host.is_none() {
+            self.javascript.host = Some(Box::new(crate::mcp::EditorHost::new(self.automation.clone(), self.diagnostics.adapter_line())));
+        }
+        // In the browser: the page's Web Worker runner (src/webmcp.rs).
+        #[cfg(all(target_arch = "wasm32", feature = "mcp", feature = "scripting"))]
+        if self.javascript.open && self.javascript.host.is_none() {
+            self.javascript.host = Some(Box::new(crate::webmcp::PageScripts));
+        }
+        self.javascript.show(&ctx, &mut self.docs, self.model_store.as_ref());
+        // The panels' exports (a plugin bundle, the script) leave through the
+        // file dialog's export door: the Save-file chooser on desktop, a
+        // download in the browser.
+        let exports = self.plugins.take_save_requests().into_iter().chain(self.javascript.take_save_requests());
+        for request in exports {
+            if let Err(error) = self.file.request_save_file(&mut self.docs, self.model_store.as_ref(), request) {
+                self.docs.engine_mut().push_notice(error);
+            }
+        }
+        // An inbox row opens its review in the PLM pane.
+        for event in toolbar_outcome.plm_review {
+            self.plm.open_review(event);
+        }
+        if let Some(name) = toolbar_outcome.recent_document {
+            self.file
+                .open_document(&mut self.docs, self.model_store.as_ref(), &name);
+        }
+        if let Some(action) = toolbar_outcome.file {
+            self.file
+                .dispatch(action, &mut self.docs, self.model_store.as_ref());
+        }
+        // Submit Bug: begin the screenshot-capture + report flow. `request`
+        // grabs the current frame (before its dialog exists) and the model, so
+        // it must run THIS frame while the shot is still dialog-free.
+        if toolbar_outcome.bug_report {
+            self.bug_report.request(&ctx, self.docs.engine(), &self.diagnostics);
+        }
+        // A workbench toolbar button click surfaces its id here; the dispatch
+        // itself is a METHOD so the `workbench_button` command runs the very
+        // same arms (a button an agent can only reach by clicking is a button
+        // an agent cannot reach when something covers it).
+        if let Some(id) = toolbar_outcome.workbench_button {
+            self.dispatch_workbench_button(id);
+        }
+        // Zoom-to-fit: the ONE button frames whatever the tile draws — the open
+        // sheet's paper, or the 3D scene. See `BrepApp::zoom_to_fit`.
+        if toolbar_outcome.zoom_to_fit {
+            self.zoom_to_fit();
+        }
+
+        // --- workbench actions toolbar: a second strip directly UNDER the
+        // primary toolbar (egui stacks top panels in call order) listing the
+        // active workbench's creatable features + the constraint types. Off via
+        // the Settings checkbox, and never in sketch / reference-selection mode
+        // (the panel decides — see `WorkbenchToolbarPanel::visible`). A feature
+        // click adds exactly what the palette pick would, so ACOMP still routes
+        // to the component selector; a constraint click is the context bar's
+        // constraint offer, seeded from the current selection.
+        // A read-only document (a PLM revision not checked out, or released)
+        // draws the strip disabled: every button on it creates something.
+        self.workbench_toolbar.read_only = !self.docs.active().access().is_editable();
+        let actions = if self.docs.engine().settings.toolbar_style
+            == brep_render::style::ToolbarStyle::Classic
+        {
+            self.workbench_toolbar.show(ui, self.docs.engine())
+        } else {
+            self.workbench_toolbar
+                .set_ribbon_hits(self.toolbar.home_hits());
+            toolbar_outcome.creation
+        };
+        if let Some(type_code) = actions.feature {
+            self.history
+                .add_feature_of_type(self.docs.engine_mut(), &type_code);
+            // No `show_pane` here: `HistoryPanel::open_form` moved the target and
+            // the dialog door surfaces History for it (`surface_open_dialogs`
+            // below). ACOMP opens the component-selector MODAL instead of a
+            // feature dialog, so it moves no target and surfaces no pane.
+            if self.history.take_insert_component_request() {
+                self.file.dispatch(
+                    FileAction::InsertComponent,
+                    &mut self.docs,
+                    self.model_store.as_ref(),
+                );
+            }
+        }
+        if let Some(type_id) = actions.constraint {
+            // The strip offers every type regardless of the selection (unlike the
+            // context bar's gated offers), so a refusal has to be SAID: a toast,
+            // never a silent no-op. A document with no components has no assembly
+            // session to add to (the kernel's own message names the session, not
+            // the cause) — say what is actually missing.
+            let engine = self.docs.engine_mut();
+            if !engine.history_has_assembly() {
+                engine.push_notice(
+                    "Add constraint: the document has no components — insert a component first"
+                        .to_string(),
+                );
+            } else {
+                // The add leaves the new constraint OPEN (the kernel mints it
+                // that way), so the dialog door surfaces the Constraints pane.
+                if let Err(error) =
+                    crate::panels::context_bar::add_constraint_from_selection(engine, &type_id)
+                {
+                    engine.push_notice(format!("Add constraint: {error}"));
+                }
+            }
+        }
+        if let Some(type_id) = actions.annotation {
+            // The context bar's annotation offer, from the strip: seeded from
+            // the selection, and the new annotation's form opens through the
+            // dialog door. The strip offers every type whatever is selected, so
+            // a refusal — no active view to add to — is said, not swallowed.
+            let engine = self.docs.engine_mut();
+            if let Err(error) = crate::panels::context_bar::add_pmi_from_selection(engine, &type_id) {
+                engine.push_notice(format!("Add annotation: {error}"));
+            }
+        }
+
+        // --- sketch mode has NO strip of its own: its draw tools are workbench
+        // buttons in the row above (`workbench::sketch`), offered while a sketch
+        // is being edited, so the 3D viewport is the full-width sketching
+        // surface with nothing between it and the one toolbar.
+
+        // --- bottom STATUS BAR: a persistent, full-width strip whose CONTENT is
+        // chosen by context each frame. Drawn AFTER the top bars but BEFORE the
+        // left panel(s) so it reserves the FULL bottom width and the left column
+        // stops above it (egui resolves reserved space by call order). It is a
+        // HOST: the branch below picks what to draw. A NEW context is added by
+        // extending this branch (e.g. `else if engine.some_mode() { … }`) and
+        // routing through the owning panel's `show_status_bar` for DRY styling.
+        // Its top is the floor the toasts stack up from (`Toasts::show`).
+        //
+        // Its RIGHT END is the app-wide working indicator (`panels::busy`),
+        // whatever the context: collected here from every source, drawn first
+        // in a right-to-left row so the context content gets what is left of
+        // the width and never runs under it.
+        self.collect_busy(&ctx);
+        let status_bar_top = if focused_pick {
+            // The pick bar carries the filter button; nothing of the bar
+            // stays published.
+            self.busy.clear_hits();
+            self.selection.clear_hits();
+            ui.max_rect().bottom()
+        } else { egui::containers::panel::Panel::bottom("brep-status-bar")
+            .resizable(false)
+            .min_size(30.0)
+            .show(ui, |ui| {
+                ui.add_space(2.0);
+                // `Align::Min`, not `Center`: the bar's height is not known
+                // until its content is laid out, and centring against the
+                // unbounded space below doubled the bar with the indicator on
+                // a row of its own.
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                    self.busy.show_status_bar(ui);
+                    ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                        if self.docs.engine().sketch_mode() {
+                            // Sketch context: the status row (title / DOF / N selected /
+                            // undo-redo / Lock). The selection-filter row is NOT drawn
+                            // now, so drop its stale hit-rects (the verifier must never
+                            // click a phantom rect for an off-screen widget).
+                            self.selection.clear_hits();
+                            self.sketch.show_status_bar(ui, self.docs.engine_mut());
+                        } else if self.docs.engine().sketch3d_mode() {
+                            // The 3D sketch's status row: DOF, selection, the
+                            // working plane in force and what the last click hit.
+                            self.selection.clear_hits();
+                            self.sketch3d.show_status_bar(ui, self.docs.engine_mut());
+                        } else if crate::workbench::ecad::Target::of_workbench(&self.docs.engine().settings.workbench).is_some() {
+                            // An eCAD editor owns the central tile, and a click there
+                            // picks nothing 3D: the pickable-kinds filter would be a
+                            // row of dead checkboxes. The strip carries the editor's
+                            // own line instead: where the pointer is and what is under it.
+                            self.selection.clear_hits();
+                            self.viewport.show_ecad_status(ui);
+                        } else {
+                            // Modeling context: the selection filter (pickable kinds).
+                            let document = self.docs.active_id();
+                            self.selection.show_status_bar(ui, self.docs.engine_mut(), document);
+                        }
+                    });
+                });
+                ui.add_space(2.0);
+            })
+            .response
+            .rect
+            .top() };
+        // Cancel on the working indicator: sent to the document whose run it
+        // named, which a background tab's run need not be the active one.
+        if let Some(activity) = self.busy.take_cancel() {
+            if let Some(doc) = self.docs.iter_mut().find(|doc| Some(doc.id()) == activity.document) {
+                doc.engine.cancel_run();
+            }
+        }
+
+        // --- central region: the dock tree, OR (special modes) the bare 3D view
+        // ---------------------------------------------------------------------
+        // Normal modeling mode: ONE egui_tiles tree fills the whole remaining
+        // area between the top toolbar and the bottom status bar. Every side-panel
+        // section AND the 3D viewport are tiles the user can split / tab / resize /
+        // drag-rearrange, and the layout persists. Which side panes are visible is
+        // filtered per-workbench inside the dock (`workbench::panel_visible`).
+        //
+        // Sketch mode and reference-selection are "special modes" that take over
+        // the shell: they BYPASS the tree and draw the viewport directly, so the
+        // modeling side panes don't appear (sketch's own entity-list panel + the
+        // top-right mode card own those flows). Drawing the viewport HERE — before
+        // the top-right overlay below — keeps `viewport.last_rect()` current-frame
+        // so the overlay anchors to the live 3D-view rect with no lag.
+        let sketch = self.docs.engine().any_sketch_mode();
+        // Only a CARD-based pick (a connection point's seat, a spline anchor's
+        // port) takes the shell over. A FORM FIELD's pick — a feature's, a
+        // constraint's, an annotation's, a sheet object's — keeps the dock: the
+        // field is drawn focused in its own pane and the picks go to it, the
+        // way other CAD applications keep the dialog up while you click in the
+        // view (`EngineState::ref_select_in_form`).
+        // Except on a touch or narrow window, where the dock and the dialog
+        // in it would cover the view and leave nothing to pick: there a form
+        // field's pick takes the shell over too (`focused_pick`, decided
+        // before the toolbar is drawn).
+
+        let compact = crate::viewport::touch::compact(&ctx);
+        let entity_drawer_id = egui::Id::new("brep-mobile-sketch-entities");
+        let mut entity_drawer_open = sketch && ctx.data(|d| d.get_temp::<bool>(entity_drawer_id)).unwrap_or(false);
+        let mut mobile_sketch_hits: std::collections::HashMap<String, egui::Rect> = std::collections::HashMap::new();
+        if sketch && compact {
+            egui::containers::panel::Panel::top("brep-mobile-sketch-controls").resizable(false).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    self.mode_bar.card(ui, self.docs.engine_mut());
+                });
+            });
+            self.sketch.clear_list_hits();
+            self.sketch3d.clear_list_hits();
+        } else if sketch {
+            // Sketch entity lists (Curves / Points / Constraints) + solver
+            // settings — a dedicated left panel, drawn BEFORE the viewport so it
+            // reserves the left and the viewport fills the rest.
+            egui::containers::panel::Panel::left("sketch-entities")
+                .resizable(true)
+                .default_size(300.0)
+                .size_range(200.0..=560.0)
+                .show(ui, |ui| {
+                    if self.docs.engine().sketch3d_mode() {
+                        self.sketch3d.show_entity_lists(ui, self.docs.engine_mut());
+                    } else {
+                        self.sketch.show_entity_lists(ui, self.docs.engine_mut());
+                    }
+                });
+        }
+
+        self.history.sync_palette_display(self.model_store.as_ref());
+        // The PLM panels (a PLM session only): each PLM document's access from
+        // its revision, and the revisions the user asked to open.
+        let plm = self.plm.sync(self.model_store.as_ref(), &mut self.docs, self.file.save_generation());
+        for name in plm.open {
+            self.file.open_document(&mut self.docs, self.model_store.as_ref(), &name);
+        }
+        for (name, folder) in plm.opened_from {
+            if let Some(doc) = self.docs.index_of(&name).and_then(|index| self.docs.get_mut(index)) {
+                doc.set_plm_folder(Some(folder));
+            }
+        }
+        // The CAM pane's chooser and save requests (a tool import, a library
+        // export) go through the shell's doors like the PLM pane's; the file
+        // the chooser delivers goes back to the pane.
+        let cam_requests = self.cam.take_shell_requests();
+        if let Some((tag, title)) = cam_requests.pick_file {
+            if let Err(error) = self.file.request_pick_file(self.model_store.as_ref(), &tag, &title) {
+                self.file.status = error;
+            }
+        }
+        for request in cam_requests.save_files {
+            if let Err(error) = self.file.request_save_file(&mut self.docs, self.model_store.as_ref(), request) {
+                self.docs.engine_mut().push_notice(error);
+            }
+        }
+        if let Some(file) = self.file.take_picked_file(crate::panels::cam::IMPORT_TOOLS_TAG) {
+            self.cam.deliver_picked(self.docs.engine_mut(), &file.name, &file.bytes);
+        }
+        // A PLM section asked for a file (Attach a file…, Add file…): the file
+        // chooser answers, and the file goes back to the section that asked.
+        if let Some((tag, title)) = plm.pick_file {
+            if let Err(error) = self.file.request_pick_file(self.model_store.as_ref(), &tag, &title) {
+                self.file.status = error;
+            }
+        }
+        for tag in self.plm.pick_tags() {
+            if let Some(file) = self.file.take_picked_file(&tag) {
+                self.plm.deliver_picked(&tag, file);
+            }
+        }
+        if plm.refresh_inbox {
+            self.toolbar.refresh_inbox();
+        }
+        if let Some(why) = plm.sign_in_again {
+            self.settings.ask_plm_sign_in(why);
+        }
+        // A PLM section's downloads leave through the same export door.
+        for request in plm.save_files {
+            if let Err(error) = self.file.request_save_file(&mut self.docs, self.model_store.as_ref(), request) {
+                self.docs.engine_mut().push_notice(error);
+            }
+        }
+        // Save As → "A new part" (D9): the PLM pane's New part form, shown.
+        if self.file.take_plm_new_part() {
+            self.plm.open_new_part();
+            self.show_pane(PaneKind::Plm);
+        }
+        if self.plm.busy() {
+            ui.ctx().request_repaint();
+        }
+        // Following other clients (`panels::plm_follow`): when the feed moved,
+        // the inbox asks again too; and the next question gets a frame.
+        if self.plm.take_followed() {
+            self.toolbar.refresh_inbox();
+        }
+        if let Some(next) = self.plm.next_follow_in() {
+            ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(next.max(0.1)));
+        }
+        if sketch || !pick_layout.shows_dock() {
+            self.viewport.set_chrome_obscured(compact && entity_drawer_open);
+            // Special mode: the viewport fills the remaining central area; no
+            // dock, no modeling side panes — and therefore no DOCUMENT TAB
+            // STRIP either, which is the guard that keeps a live sketch /
+            // reference-pick session from having its document swapped out from
+            // under it.
+            self.viewport.show(ui, self.docs.engine_mut());
+            // No dock, so no tab strip: its last-drawn rects must not stay
+            // published (the compact strip is the toolbar's, set above).
+            if !compact { self.document_tab_hits.clear(); }
+            if focused_pick {
+                let view = self.viewport.last_rect().unwrap_or(ui.max_rect());
+                self.pick_bar.show(&ctx, view, self.docs.engine_mut(), &mut self.selection);
+                // Settled as the dock's branch settles it: the bar claimed the
+                // pick, so this finishes a single field on its pick.
+                self.settle_form_pick();
+            } else {
+                self.pick_bar.clear_hits();
+            }
+            if compact && sketch {
+                let view = self.viewport.last_rect().unwrap_or(ui.max_rect());
+                egui::Area::new(egui::Id::new("brep-mobile-sketch-tab"))
+                    .order(egui::Order::Middle).fixed_pos(view.left_top() + egui::vec2(2.0, 4.0)).movable(false)
+                    .show(&ctx, |ui| {
+                        let tab = crate::panels::dock::mobile_tab(ui, "Entities", entity_drawer_open);
+                        mobile_sketch_hits.insert("toggle".into(), tab.rect);
+                        if entity_drawer_open { mobile_sketch_hits.insert("close".into(), tab.rect); }
+                        if tab.clicked() { entity_drawer_open = !entity_drawer_open; ctx.request_repaint(); }
+                    });
+                if entity_drawer_open {
+                    let panel = egui::Rect::from_min_size(view.left_top() + egui::vec2(52.0, 4.0),
+                        egui::vec2((view.width() - 60.0).min(400.0).max(100.0), (view.height() - 8.0).max(100.0)));
+                    crate::panels::dock::mobile_panel(&ctx, entity_drawer_id, panel, |ui| {
+                        if self.docs.engine().sketch3d_mode() {
+                            self.sketch3d.show_entity_lists(ui, self.docs.engine_mut());
+                        } else {
+                            self.sketch.show_entity_lists(ui, self.docs.engine_mut());
+                        }
+                    });
+                }
+            }
+            DockState::retract_all(DockContext {
+                docs: &mut self.docs,
+                plugins: &mut self.plugins,
+                viewport: &mut self.viewport,
+                history: &mut self.history,
+                bom: &mut self.bom,
+                assembly_constraints: &mut self.assembly_constraints,
+                wire_harness: &mut self.wire_harness,
+                pmi: &mut self.pmi,
+                sheets: &mut self.sheets,
+                scene: &mut self.scene,
+                expressions: &mut self.expressions,
+                qualify: &mut self.qualify,
+                family_table: &mut self.family_table,
+                update_components: &mut self.update_components,
+                model_store: self.model_store.as_ref(),
+                plm: &mut self.plm,
+                cam: &mut self.cam,
+                instructions: &mut self.instructions,
+                instructions_player: &mut self.instructions_player,
+                simulation: &mut self.simulation,
+            });
+        } else {
+            self.pick_bar.clear_hits();
+            // Normal mode: the dock owns the whole central area (the viewport is a
+            // pane). Cross-panel requests the panels can't act on while their
+            // borrows are held bubble OUT via the returned outcome — the SAME
+            // requests the old left-panel closure produced.
+            let outcome = self.dock.ui(
+                ui,
+                DockContext {
+                    docs: &mut self.docs,
+                    plugins: &mut self.plugins,
+                    viewport: &mut self.viewport,
+                    history: &mut self.history,
+                    bom: &mut self.bom,
+                    assembly_constraints: &mut self.assembly_constraints,
+                    wire_harness: &mut self.wire_harness,
+                    pmi: &mut self.pmi,
+                    sheets: &mut self.sheets,
+                    scene: &mut self.scene,
+                    expressions: &mut self.expressions,
+                    qualify: &mut self.qualify,
+                    family_table: &mut self.family_table,
+                    update_components: &mut self.update_components,
+                    model_store: self.model_store.as_ref(),
+                    plm: &mut self.plm,
+                    cam: &mut self.cam,
+                    instructions: &mut self.instructions,
+                    instructions_player: &mut self.instructions_player,
+                    simulation: &mut self.simulation,
+                },
+            );
+
+            // A form field's pick, settled for the frame: finished when its
+            // single field has its one pick, when its form asked (an edit
+            // elsewhere on it), or when no form drew it.
+            self.settle_form_pick();
+
+            // The ACOMP palette pick must open the COMPONENT SELECTOR, never a
+            // bare feature dialog — the file dialog is shell-owned.
+            if outcome.insert_component_requested {
+                self.file.dispatch(
+                    FileAction::InsertComponent,
+                    &mut self.docs,
+                    self.model_store.as_ref(),
+                );
+            }
+            // The DOCUMENT TAB STRIP inside the viewport tile. Activation is
+            // immediate; a close routes through the file dialog because a dirty
+            // document has to be confirmed first, and that prompt lives there.
+            // A pick runs in ONE document's engine: switching or closing a
+            // document commits a form field's pick first, so it is never left
+            // running in a document that is no longer on screen.
+            self.apply_document_actions(outcome.document_tabs.activate, outcome.document_tabs.close);
+            if !compact { self.document_tab_hits = outcome.document_tabs.hits; }
+            // A structure-tree Edit — or a BOM row's action button, which
+            // reports through the same outcome field so there is one arm and
+            // not two — expands its feature in the history tree.
+            if let Some(focus) = outcome.feature_focus {
+                self.history.focus_feature(focus);
+                if compact { self.dock.show_pane(PaneKind::History); }
+            }
+            // Structure-tree interaction hooks route through the SAME dispatcher
+            // as the context bar (one truth per action); document-level flows
+            // (edit-in-place / open-part) come back as requests the shell runs.
+            // A BOM row menu's document-level flow: its engine-mutating half
+            // already ran inside the panel, through the same dispatcher.
+            // Double-clicking empty space leaves the Work part.
+            if self.viewport.take_empty_double_click() && self.docs.work_part_path().is_some() {
+                if let Err(error) = self.docs.return_to_assembly() {
+                    self.docs.engine_mut().push_notice(format!("Work part: {error}"));
+                }
+            }
+            if let Some(request) = outcome.component_request.or_else(|| self.viewport.take_component_request()) {
+                self.run_component_request(request, compact);
+            }
+        }
+
+        self.history.sync_palette_display(self.model_store.as_ref());
+
+        // --- file dialog: a ctx-level modal (like the command palette), drawn
+        // after the panels so its backdrop dims the whole shell. Idempotent when
+        // closed; also polls for a completed async import each frame.
+        self.file
+            .show(&ctx, &mut self.docs, self.model_store.as_ref());
+
+        // --- crash recovery: the boot prompt, then the debounced autosave -----
+        // Drawn with the same ctx-level modal treatment as the file dialog. The
+        // autosave ticks only once the prompt has resolved (or never existed).
+        if self.recovery.is_open() {
+            if let Some(resolution) =
+                self.recovery.show(&ctx, &mut self.docs, self.model_store.as_ref())
+            {
+                self.autosave.note_cleared();
+                if let crate::recovery::Resolution::Restored(count) = resolution {
+                    self.docs.engine_mut().push_notice_as(NoticeSeverity::Info, format!(
+                        "Restored {count} unsaved document{}",
+                        if count == 1 { "" } else { "s" }
+                    ));
+                }
+            }
+        } else {
+            self.recovery.clear_hits();
+            let now = ctx.input(|i| i.time);
+            if let Some(due) = self.autosave.tick(&self.docs, self.model_store.as_ref(), now) {
+                // The frame loop idles between inputs; wake it when the write is due.
+                ctx.request_repaint_after(std::time::Duration::from_secs_f64(due.max(0.05)));
+            }
+        }
+
+        // --- desktop update notice: an installed update closes the app through
+        // the close path below, which keeps unsaved work for recovery.
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.updater.show(&ctx) {
+            self.close_asked = true;
+        }
+        self.close_when_written(&ctx);
+
+        if let Some((format, name, bytes)) = self.file.take_stl_import() {
+            self.start_mesh_preview(format, name, bytes);
+            ctx.request_repaint();
+        }
+
+        // --- Submit Bug: the screenshot-capture state machine + report modal.
+        // Drawn at ctx level like the file dialog; idempotent while idle. Draws
+        // NOTHING during capture, so the screenshot it requested never contains
+        // this dialog.
+        if let Some(report) = crate::form_view::take_problem_report_request(&ctx) {
+            self.bug_report.request_for_error(&ctx, self.docs.engine(), &self.diagnostics, &report.dialog, &report.error);
+        }
+        self.bug_report.show(&ctx, self.docs.engine_mut());
+        if let Some((id, summary)) = self.bug_report.take_submitted() {
+            self.report_followup.record(id, summary);
+        }
+        self.report_followup.tick(&ctx, self.docs.engine_mut());
+        self.sketch.show_text_dialog(&ctx, self.docs.engine_mut());
+
+        // --- Info: the licences + this session's diagnostics + the MCP start
+        // button, a floating window toggled from the toolbar's info button.
+        // Idempotent when closed. The server's state is read here, each frame
+        // the window is open, and a click is answered here: the shell owns the
+        // queue the server attaches to and the adapter line its session names.
+        #[cfg(all(not(target_arch = "wasm32"), feature = "mcp"))]
+        let mcp_view = if self.info.open { crate::mcp::info_view() } else { crate::panels::info::McpView::Unavailable };
+        #[cfg(not(all(not(target_arch = "wasm32"), feature = "mcp")))]
+        let mcp_view = crate::panels::info::McpView::Unavailable;
+        self.info.show(&ctx, &self.diagnostics, &mcp_view);
+        #[cfg(all(not(target_arch = "wasm32"), feature = "mcp"))]
+        if self.info.take_mcp_start() {
+            // The failure is already in `mcp::status()`, which the window
+            // shows next frame, and on stderr in the same words.
+            let _ = crate::mcp::start_from_window(self.automation.clone(), self.diagnostics.adapter_line());
+        }
+
+        // --- Settings: a floating (movable + resizable) window, toggled from the
+        // toolbar gear button, drawn at ctx level like Properties so it floats
+        // over the shell. Idempotent when closed. Replaces the old sidebar section.
+        // This preview runs every frame, including when Settings is closed.
+        // Exact dirty checks serialize the whole assembly; use the tab's cached
+        // marker here. finish_reconnect still checks the exact saved bytes before
+        // switching stores, including metadata edits the marker may not see.
+        self.settings.reconnect_blocker =
+            self.reconnect_blocker_with(crate::document::Document::dirty_marker);
+        self.settings
+            .show(&ctx, self.docs.engine_mut(), self.model_store.as_ref());
+        // Signed out here (Forget): the server's refusal that follows is the
+        // person's own doing, not news to prompt about.
+        if self.settings.take_plm_signed_out_here() {
+            self.plm.signed_out_here();
+        }
+        // Signed in again after the server refused this session's token: the
+        // live session takes the new token, for the same user, and goes on with
+        // its open tabs (no store switch, nothing to close).
+        if self.settings.plm_signed_out() {
+            if let (Some((username, token)), Some(client)) = (self.settings.take_fresh_plm_token(), self.model_store.plm_client()) {
+                if client.me().is_none_or(|me| me.username == username) {
+                    client.replace_token(&token);
+                    self.plm.follow_now();
+                } else {
+                    self.docs.engine_mut().push_notice(format!(
+                        "Signed in as {username}, not {}: restart the app (or Connect now) to use the PLM as {username}",
+                        client.me().map(|me| me.username).unwrap_or_default()
+                    ));
+                }
+            }
+        }
+        // The PLM tab's Connect now: switch this session to the PLM live.
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(root) = self.settings.take_reconnect_request() {
+            if let Err(why) = self.start_reconnect(root) {
+                self.settings.reconnected(Err(why));
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.poll_reconnect();
+            self.settings.reconnecting = self.reconnecting.is_some();
+            if self.reconnecting.is_some() {
+                // The phase limit is checked here: wake for it on a quiet frame.
+                ctx.request_repaint_after(std::time::Duration::from_millis(250));
+            }
+        }
+
+        // --- Part Properties: the active document's own BOM attribute record,
+        // in a floating window beside Settings. The title is passed in because
+        // the panel takes only the engine, and a user with several tabs open
+        // must be able to see WHICH part they are annotating.
+        let part_title = self.docs.active().title();
+        let part_document = self.docs.active().id();
+        self.part_properties.configure_plm(self.model_store.plm_client(), self.docs.active().name());
+        self.part_properties
+            .show(&ctx, self.docs.engine_mut(), &part_title, part_document);
+        if std::mem::take(&mut self.assembly_constraints.review_replace_requested) {
+            self.review_replace();
+        }
+        self.replace_dialog
+            .show(&ctx, self.docs.engine_mut(), self.model_store.as_ref());
+
+        ctx.data_mut(|d| d.insert_temp(entity_drawer_id, entity_drawer_open));
+
+        // --- top-right overlay column: the special-mode EXIT card (Finish/Cancel
+        // for reference-selection / sketch mode) stacked ABOVE the selection-driven
+        // CONTEXT ACTION rail. Both cards live in ONE ctx-level Area anchored
+        // top-right so they never overlap, and the context rail uses the SAME
+        // renderer whether it is showing modeling actions or sketch actions
+        // (`panels::action_rail`). A modeling create/edit action returns a feature
+        // id to expand in the history tree.
+        #[cfg(all(feature = "automation", target_arch = "wasm32"))]
+        crate::automation::registry::publish("__brepMobileActions", "compact action menu button rectangle", "{}");
+        if focused_pick || (compact && (entity_drawer_open || (!sketch && self.dock.mobile_drawer_open()))) {
+            crate::panels::action_rail::close_mobile_actions(&ctx);
+            self.mode_bar.clear_hits();
+            self.sketch.clear_context_hits();
+            self.sketch3d.clear_context_hits();
+            self.context_bar.clear_view();
+        } else {
+            let mut focus: Option<String> = None;
+            let mut info_targets: Vec<String> = Vec::new();
+            let mut plugin_action = None;
+            let mut component_request: Option<ComponentActionRequest> = None;
+            // Anchor the overlay to the RIGHT edge of the 3D VIEW (the viewport
+            // tile), not the window — so it stays glued to the viewport wherever
+            // docking frames it. The viewport was drawn earlier THIS frame, so its
+            // rect is current. Before the first draw (`None`) fall back to the
+            // window's top-right.
+            let mut overlay = egui::Area::new(egui::Id::new("brep-top-right-overlay"))
+                .order(egui::Order::Foreground);
+            overlay = match self.viewport.last_rect() {
+                Some(rect) => overlay
+                    .fixed_pos(rect.right_top() + egui::vec2(-12.0, 8.0))
+                    .pivot(egui::Align2::RIGHT_TOP),
+                None => overlay.anchor(egui::Align2::RIGHT_TOP, egui::vec2(-12.0, 56.0)),
+            };
+            overlay
+                .show(&ctx, |ui| {
+                    // 0. The family-row preview's card: which row, and Exit.
+                    self.family_table.preview_card(ui, self.docs.engine_mut());
+                    // 1. Exit controls for whatever special mode is active.
+                    if !(compact && sketch) { self.mode_bar.card(ui, self.docs.engine_mut()); }
+                    // 2. Context actions: sketch actions in sketch mode, else the
+                    // modeling selection actions. Same rail, mode-appropriate items.
+                    let has_actions = if self.docs.engine().sketch_mode() { self.docs.engine().sketch_selection_count() > 0 }
+                        else if self.docs.engine().sketch3d_mode() { self.docs.engine().sketch3d_selection_count() > 0 }
+                        else { self.docs.engine().has_selection() || self.docs.engine().selected_constraint().is_some() };
+                    let mut draw_actions = |ui: &mut egui::Ui| {
+                    if self.docs.engine().sketch_mode() {
+                        self.sketch.context_card(ui, self.docs.engine_mut());
+                    } else if self.docs.engine().sketch3d_mode() {
+                        self.sketch3d.context_card(ui, self.docs.engine_mut());
+                    } else {
+                        // Room down to the ViewCube's top, from wherever the
+                        // cards above left the cursor.
+                        self.context_bar.max_height = if compact { None } else { self.viewport.last_rect().and_then(|view| {
+                            let cube: serde_json::Value =
+                                serde_json::from_str(&self.docs.engine().viewcube_rect_json()).ok()?;
+                            let (top, h) = (cube["y"].as_f64()? as f32, cube["h"].as_f64()? as f32);
+                            (h > 0.0).then(|| view.top() + top - 8.0 - ui.cursor().top())
+                        }) };
+                        let outcome = self.context_bar.card(ui, self.docs.engine_mut());
+                        focus = outcome.focus;
+                        info_targets = outcome.info_targets;
+                        plugin_action = outcome.plugin_action;
+                        component_request = outcome.component;
+                    }
+                    };
+                    if compact {
+                        if has_actions {
+                            ui.set_min_width(110.0);
+                            let button = ui.add_sized([110.0, 44.0], egui::Button::new("Actions"));
+                            if button.clicked() { crate::panels::action_rail::open_mobile_actions(ui.ctx()); }
+                            draw_actions(ui);
+                            #[cfg(all(feature = "automation", target_arch = "wasm32"))]
+                            crate::automation::registry::publish("__brepMobileActions", "shared action chooser and entry rectangles",
+                                &crate::panels::action_rail::mobile_actions_json(ui.ctx(), button.rect));
+                        } else {
+                            crate::panels::action_rail::close_mobile_actions(ui.ctx());
+                            self.sketch.clear_context_hits();
+                            self.sketch3d.clear_context_hits();
+                            self.context_bar.clear_view();
+                        }
+                    } else { draw_actions(ui); }
+                });
+            if let Some(focus) = focus {
+                self.history.focus_feature(focus);
+                if compact { self.dock.show_pane(PaneKind::History); }
+            }
+            // The Info action returns one target per selected entity — open (or, on
+            // dedup, keep) a pinned Info window for each. Drawn below.
+            if let Some(id) = plugin_action {
+                if let Err(e) = self.plugins.open_action(self.docs.engine(), &id) { self.plugins.error = Some(e); }
+            }
+            if !info_targets.is_empty() {
+                self.info_windows.open_for(&info_targets, self.viewport.last_rect());
+            }
+            // Component document-level flows (the engine-mutating component
+            // actions already ran inside the bar).
+            if let Some(request) = component_request {
+                self.run_component_request(request, false);
+            }
+        }
+
+        if compact { crate::panels::action_rail::show_mobile_actions(&ctx); }
+
+        // --- THE DIALOG DOOR: every dynamically generated dialog that opened
+        // this frame makes its host pane's tab current.
+        //
+        // ONE call, placed after everything that can open one — the dock's panes
+        // and viewport, and the context bar's overlay above — so a form opened
+        // anywhere is surfaced in the same frame, before `__brepDock` publishes
+        // the active tab below. It watches the TARGETS rather than the callers
+        // because most of them set the target inside the engine or inside a
+        // panel's draw, with no dock in reach; `panels::dock::DialogTargets`
+        // carries that reasoning and the openers it covers.
+        let targets = crate::panels::dock::DialogTargets::read(
+            &self.history,
+            self.docs.engine(),
+            self.docs.active_id(),
+        );
+        self.dock.surface_opened_dialogs(targets);
+
+        // --- Info windows: the pinned per-entity inspector windows, drawn at ctx
+        // level like the file dialog so they float over the shell. Each is pinned to
+        // its open-time object name (selection changes never retarget them); closed
+        // windows (their `×`) are pruned here. Drawn AFTER the context bar so a
+        // window opened THIS frame paints this frame.
+        self.info_windows.show(&ctx, self.docs.engine_mut());
+
+        // --- interference results window: same floating idiom, owned report;
+        // its Re-run button re-drives the engine check.
+        self.interference.show(&ctx, self.docs.engine_mut());
+
+        // --- auto-constraints window: the inference scan + its Create button.
+        self.auto_constraints.show(&ctx, self.docs.engine_mut());
+        self.step_parts
+            .show(&ctx, self.docs.engine_mut(), self.model_store.as_ref());
+
+        // --- transient toasts: drain the engine's queued notices (e.g. a sketch
+        // solve that failed after an edit) and show each briefly. Drawn last so
+        // the cards float over the whole shell.
+        let now = ctx.input(|i| i.time);
+        // All three sources gathered FIRST, because the automation queue must see
+        // every one of them: `Toasts::extend` keeps only the last few on screen,
+        // and a message dropped for space is exactly the one a host wants told.
+        use brep_render::engine_state::NoticeSeverity;
+        let raised = self.gather_notices();
+        self.toasts.extend(raised, now);
+        // An edit after a card was raised supersedes it (`Toasts::note_document`).
+        self.toasts
+            .note_document(self.docs.active_id(), self.docs.engine().history.undo_top(), now);
+        self.toasts.show(&ctx, self.viewport.last_rect(), status_bar_top);
+
+        // The state registry (`automation::registry`): the live app + engine
+        // state, published by name with a one-line doc so a host can read it
+        // (and, on wasm, mirrored to `window.__brep*` for the verify scripts).
+        // Purely additive; no render effect. Published AFTER the panels draw so
+        // the hit-rects are for THIS frame's layout. Off unless a host enabled it.
+        if crate::automation::registry::enabled() {
+            let _publish_span = crate::perf::span(crate::perf::Phase::Publish);
+            // Every blob that is plain app state, from the one producer
+            // `state_get` also asks at dispatch time (`state_blob_json`).
+            self.publish_state_blobs(&ctx);
+            // Keyboard focus, for a driver typing into a widget by its rect: the
+            // frame counter says a click has been drawn, `rect` is the widget
+            // egui gave the focus to (null while nothing has it). A typed
+            // string lands only in a focused field, so a verifier waits on this
+            // rather than on time (BREP_app/web/verify_plm_helpers.mjs).
+            let focused = crate::column_tree::focused_rect(ui.ctx());
+            // The focused value editor's text, taken (not left) so a frame
+            // with no focused editor publishes null.
+            let text: Option<String> = ui.ctx().data_mut(|d| d.remove_temp::<String>(crate::column_tree::focused_text_id())).filter(|_| focused.is_some());
+            crate::automation::registry::publish("__brepFocus", "keyboard focus {frame, rect:[x,y,w,h]|null (the focused widget), text:string|null (a value editor's in-progress string)}", &serde_json::json!({
+                "frame": ui.ctx().cumulative_frame_nr(),
+                "rect": focused.map(|r| [r.min.x, r.min.y, r.width(), r.height()]),
+                "text": text,
+            }).to_string());
+            crate::automation::registry::publish("__brepFileHit", "file dialog widget rects", &self.file.hits_json());
+            crate::automation::registry::publish("__brepStatusHit", "status bar widget rects: busy, busy:more, busy:cancel (present only while the working indicator shows)", &self.busy.hits_json());
+            crate::automation::registry::publish("__brepHit", "history panel widget rects: step:i edit:i del:i box:i add:menu form:* field:* panel:clip", &self.history.hits_json());
+            crate::automation::registry::publish("__brepPaletteHit", "add-feature palette widget rects in screen points: input top item:type display display#mode (empty while closed)", &self.history.palette_hits_json());
+            crate::automation::registry::publish("__brepExprHit", "expressions panel widget rects", &self.expressions.hits_json());
+            crate::automation::registry::publish("__brepToolbar", "toolbar rects: shared File menu file:* and workbench:item:<id>; Ribbon tabs/overflow ribbon:* and Home creation wbtb:*; command keys undo redo fit projection wireframe show:* help info bug workbench:btn:<id>. Classic wraps its controls; Ribbon compacts Large commands before whole-group overflow. Keys appear when their widgets are rendered; menu entries appear while open", &self.toolbar.hits_json());
+            // The workbench actions strip's button rects (`wbtb:feature:<type>` /
+            // `wbtb:constraint:<type>` / `wbtb:annotation:<type>`); an empty map
+            // while the strip is hidden.
+            crate::automation::registry::publish("__brepWorkbenchToolbar", "creation rects: wbtb:* feature:type constraint:type annotation:type, from the Classic workbench strip or Ribbon Home; empty while hidden or another Ribbon tab is selected", &self.workbench_toolbar.hits_json());
+            // The PLM pane (a PLM session only): its sections' widget rects,
+            // `plm/section:<id>` and `plm/<section>:<widget>`, and the active
+            // document's access and revision.
+            crate::automation::registry::publish("__brepPlmHit", "PLM pane rects: section:lifecycle, lifecycle:revision:<label>, lifecycle:verb:check-out, save:<yes|no|remember>, web:<summary|revisions|attachments|structure|history|parts|workspace|reviews>", &self.plm.hits_json());
+            crate::automation::registry::publish("__brepToastsHit", "toast card rects (toast:<i> top to bottom, toast:more)", &self.toasts.hits_json());
+            crate::automation::registry::publish("__brepBugHit", "bug report panel widget rects", &self.bug_report.hits_json());
+            // The JavaScript editor window: its outer rect against the surface
+            // it may fill, and its widget rects (`javascript/panel:clip`,
+            // `javascript/source`, `javascript/output`, the buttons).
+            crate::automation::registry::publish("__brepJavascript", "JavaScript editor window {open, rect:[x,y,w,h] or null while closed, surface:[w,h], running, output}", &self.javascript.state_json());
+            crate::automation::registry::publish("__brepJavascriptHit", "JavaScript editor window widget rects (panel:clip, run, cancel, save, open, export, help, example, source, output); empty while the window is closed", &self.javascript.hits_json());
+            // The wire harness: the document's connections + the last run's
+            // routing report (engine truth), and the panel's widget rects.
+            crate::automation::registry::publish("__brepWireHarnessHit", "wire harness panel widget rects", &self.wire_harness.hits_json());
+            // The CAM block (setups with their operations, tools, operations,
+            // NC programs) plus the pane's selection and last notice, and the
+            // pane's rects (`cam:*`).
+            self.cam.refresh_geometry(self.docs.engine());
+            crate::automation::registry::publish("__brepCamHit", "CAM pane widget rects (cam:*)", &self.cam.hits_json());
+            crate::automation::registry::publish("__brepInstructionsHit", "Instructions pane widget rects (instructions:*)", &self.instructions.hits_json());
+            crate::automation::registry::publish("__brepInstructionsPlayerHit", "Player pane widget rects (player:*)", &self.instructions_player.hits_json());
+            crate::automation::registry::publish("__brepSimulationHit", "Simulation pane widget rects (simulation:*)", &self.simulation.hits_json());
+            // The part's declared connection points (the `ports` block) and the
+            // ports tail's report, beside the Qualify panel's own selection and
+            // its rects (`qualify:*`).
+            crate::automation::registry::publish("__brepQualifyHit", "Qualify panel widget rects (qualify:*)", &self.qualify.hits_json());
+            // The family table as the Family table pane last read it, its
+            // problems, selection and the last Generate report; and its rects.
+            crate::automation::registry::publish("__brepFamilyHit", "Family table pane widget rects (family:*)", &self.family_table.hits_json());
+            // The PMI block + report + active view / open annotation, and the
+            // PMI panel's rects (`pmi:capture`, `pmi:add`, `pmi:add:<type>`,
+            // `pmi:row:<id>`, `pmi:cell:<id>:<column>`, `pmi:menu:<id>`, the
+            // form's `pmi:` keys).
+            crate::automation::registry::publish("__brepPluginsHit", "Declarative plugin panel action controls", &self.plugins.panel_hits_json());
+            crate::automation::registry::publish("__brepPmiHit", "PMI panel widget rects (pmi:*)", &self.pmi.hits_json());
+            // The `sheets` block, which sheet the viewport draws, and the OPEN
+            // sheet's whole projection — the paper, the visible edge runs and
+            // the annotations that passed the parallel rule, in millimetres.
+            // The panel's rects (`sheets:add`, `sheets:place:<view>`,
+            // `sheets:row:<id>`, the form's `sheets:` keys) ride beside it.
+            crate::automation::registry::publish("__brepSheetsHit", "Sheets panel widget rects (sheets:*)", &self.sheets.hits_json());
+            crate::automation::registry::publish("__brepInfoWindowsHit", "info window widget rects", &self.info_windows.hits_json());
+            crate::automation::registry::publish("__brepInterferenceHit", "interference panel widget rects", &self.interference.hits_json());
+            crate::automation::registry::publish("__brepAutoConstraintsHit", "auto-constraints widget rects", &self.auto_constraints.hits_json());
+            crate::automation::registry::publish("__brepStepPartsHit", "STEP parts library widget rects", &self.step_parts.hits_json());
+            crate::automation::registry::publish("__brepSelectionHit", "selection bar widget rects (filter:kind, clear, hide)", &self.selection.hits_json());
+            crate::automation::registry::publish("__brepContextHit", "context action bar widget rects", &self.context_bar.hits_json());
+            crate::automation::registry::publish("__brepPickBarHit", "focused pick bar widget rects (bar, finish, cancel, x<i>)", &self.pick_bar.hits_json());
+            crate::automation::registry::publish("__brepModeBarHit", "mode bar widget rects (refsel:*, Sketch:*)", &self.mode_bar.hits_json());
+            // The DOCUMENT TABS: the open models, which one is active, and the
+            // strip's per-tab hit-rects, so an e2e script can switch and close
+            // documents the way a user does.
+            crate::automation::registry::publish(
+                "__brepDocumentsHit",
+                "document tab strip widget rects",
+                &crate::automation::hit_rects::hits_json(
+                    self.document_tab_hits.iter().map(|(key, rect)| (key, rect)),
+                ),
+            );
+            // The boot-time recovery prompt: its entries and its two buttons.
+            crate::automation::registry::publish("__brepRecoveryHit", "recovery prompt widget rects", &self.recovery.hits_json());
+            #[cfg(target_arch = "wasm32")]
+            crate::automation::registry::publish("__brepMobileDock", "compact dock drawer controls", &self.dock.mobile_state_json());
+            #[cfg(target_arch = "wasm32")]
+            crate::automation::registry::publish("__brepMobileSketch", "compact sketch entity drawer controls", &serde_json::json!({
+                "compact": compact, "open": entity_drawer_open,
+                "rects": serde_json::from_str::<serde_json::Value>(&crate::automation::hit_rects::hits_json(mobile_sketch_hits.iter())).unwrap_or_default(),
+            }).to_string());
+            crate::automation::registry::publish("__brepSketchHit", "sketch-mode overlay widget rects: the SKETCH ACTIONS card (constraint:glyph fix construction cleanup delete) \u{2014} empty out of sketch mode. The draw tools are NOT here: they are workbench buttons in the toolbar row (toolbar/workbench:btn:sketch.tool.* and sketch.autoconstrain)", &self.sketch.hits_json(self.docs.engine()));
+            crate::automation::registry::publish("__brepSketchListHit", "sketch entity-list widget rects: section:* geometry:id point:id constraint:id del:kind:id panel:clip (empty out of sketch mode)", &self.sketch.list_hits_json(self.docs.engine()));
+            crate::automation::registry::publish("__brepSketch3dHit", "3D sketch-mode overlay widget rects: the 3D SKETCH ACTIONS card (constraint:type fix construction delete) \u{2014} empty out of 3D sketch mode. The draw tools and the working-plane radio are workbench buttons in the toolbar row (toolbar/workbench:btn:sketch3d.tool.* and sketch3d.plane.*)", &self.sketch3d.hits_json(self.docs.engine()));
+            crate::automation::registry::publish("__brepSketch3dListHit", "3D sketch entity-list widget rects: section:* geometry:id point:id constraint:id del:kind:id reference:name unlink:name panel:clip (empty out of 3D sketch mode)", &self.sketch3d.list_hits_json(self.docs.engine()));
+            // Viewport origin + projected probe points (viewport-local logical
+            // px) so the verifier can click precise spots ON the Box and ON the
+            // Pin during ref-select mode. Index 0 is a Box top-corner clear of the
+            // pin; indices 1..4 are points on the Pin's cylindrical stub that
+            // protrudes above the Box top (y=20), on the camera-facing sides — the
+            // verifier tries them until one picks "Pin".
+            crate::automation::registry::publish("__brepView", "the 3D viewport rect {x,y,w,h} in egui points", &self.viewport.viewport_rect_json());
+            // Dock layout snapshot (per-pane visible / rendered) so the verifier
+            // can see which side panels are on-screen and, once a user tabs panels
+            // together, activate the right tab before asserting on its widgets.
+            // `active=false` in sketch / ref-select (the dock is bypassed).
+            crate::automation::registry::publish("__brepDock", "dock layout in tab-strip order: per-pane visible/activeTab/rendered", &self.dock.state_json(!sketch && pick_layout.shows_dock()));
+            crate::automation::registry::publish("__brepProbe", "projected seed-model probe points (viewport-local px) for the verifier",
+                &self
+                    .docs
+                    .engine()
+                    .world_to_screen_json(
+                        "[[2.0,20.0,2.0],[14.243,22.5,14.243],[16.0,22.5,10.0],\
+                          [10.0,22.5,16.0],[10.0,25.0,10.0]]",
+                    )
+                    .unwrap_or_else(|_| "[]".to_string()),
+            );
+        }
+
+        // The viewport renders only a dirty engine. A panel drawn after it this
+        // frame may have marked it dirty: draw that on the next frame instead of
+        // waiting for the next input event.
+        if self.docs.engine().dirty {
+            ctx.request_repaint();
+        }
+
+        // Phase 3 of the automation frame (§4.4): reads answer from THIS frame's
+        // registry and layout.
+        #[cfg(feature = "automation")]
+        self.drain_reads(&ctx);
+
+        #[cfg(target_arch = "wasm32")]
+        crate::viewport::touch::publish_editor(&ctx);
+
+        // NOTE: the 3D viewport is no longer drawn here — it is a dock tile drawn
+        // earlier this frame (normal mode) or drawn directly in the sketch /
+        // ref-select branch above. Drawing it before the top-right overlay is what
+        // keeps that overlay anchored to the live viewport rect.
+    }
+}
+
+
+/// Mirror an engine JSON string to `window.<name>` (wasm/verification only).
+
+/// Whether a launch opens on [`seed_history_json`]: the caller asked for the
+/// seed and the user has not turned it off with the "Start with an empty
+/// document" setting (`disableStartupModel`).
+pub(crate) fn starts_on_seed_model(seed: bool, settings: &brep_render::style::RenderSettings) -> bool {
+    seed && !settings.disable_startup_model
+}
+
+/// The seed model handed to the engine at startup: a 3-feature history so the
+/// tree / roll / edit are real —
+///   0. `P.CU` "Box"  — a 20 mm cube at the origin (spans `[0,20]³`).
+///   1. `P.CY` "Pin"  — a r=6, h=30 cylinder (axis +Y) positioned to pierce the
+///      cube through its centre in XZ (x=10, z=10) from below (y=-5) to above.
+///   2. `B`    "Cut"  — SUBTRACT: `targetSolid = Box`, tools `[Pin]` → the cube
+///      with a cylindrical through-hole (the ref-select field is visible for the
+///      next slice). Roll-to-step shows: cube → cube+cylinder → subtracted cube.
+///
+/// This is just the INITIAL document — once handed to `EngineState`, the engine
+/// OWNS the mutable history; the app keeps no copy.
+pub(crate) fn seed_history_json() -> String {
+    serde_json::json!({
+        "expressions": "",
+        "configurator": {},
+        "features": [
+            {
+                "type": "P.CU",
+                "inputParams": {
+                    "id": "Box",
+                    "sizeX": 20.0, "sizeY": 20.0, "sizeZ": 20.0,
+                    "transform": {
+                        "position": [0.0, 0.0, 0.0],
+                        "rotationEuler": [0.0, 0.0, 0.0],
+                        "scale": [1.0, 1.0, 1.0]
+                    },
+                    "boolean": { "targets": [], "operation": "NONE", "mergeCoplanarFaces": true }
+                },
+                "persistentData": {}
+            },
+            {
+                "type": "P.CY",
+                "inputParams": {
+                    "id": "Pin",
+                    "radius": 6.0, "height": 30.0,
+                    "transform": {
+                        "position": [10.0, -5.0, 10.0],
+                        "rotationEuler": [0.0, 0.0, 0.0],
+                        "scale": [1.0, 1.0, 1.0]
+                    },
+                    "boolean": { "targets": [], "operation": "NONE", "mergeCoplanarFaces": true }
+                },
+                "persistentData": {}
+            },
+            {
+                "type": "B",
+                "inputParams": {
+                    "id": "Cut",
+                    "targetSolid": "Box",
+                    "boolean": { "operation": "SUBTRACT", "targets": ["Pin"], "mergeCoplanarFaces": true }
+                },
+                "persistentData": {}
+            }
+        ]
+    })
+    .to_string()
+}
+
+/// Plain-state blobs whose whole input is cheap to compare: each is rebuilt
+/// only when that input changed, not on every frame the registry publishes
+/// (the browser build publishes for every page, as its WebMCP host attaches at
+/// boot). A key holds EVERY input its producer reads, so a cached blob is
+/// never stale; a blob whose inputs have no such key is built every frame.
+#[derive(Default)]
+struct StateBlobCache {
+    settings: Option<((brep_render::style::RenderSettings, bool), String)>,
+    workbench: Option<((String, serde_json::Value), String)>,
+    model: Option<(ModelSignatureKey, String)>,
+}
+
+/// `(rollback step, [(name, triangles, bbox min, bbox max)])`.
+type ModelSignatureKey = (usize, Vec<(String, usize, [f64; 3], [f64; 3])>);
+
+impl StateBlobCache {
+    /// The cached blob when its key is `key`.
+    fn hit<K: PartialEq>(slot: &Option<(K, String)>, key: &K) -> Option<String> {
+        slot.as_ref().filter(|(cached, _)| cached == key).map(|(_, json)| json.clone())
+    }
+
+    /// The blob for `key`: the cached one, else `build`'s, kept under `key`.
+    fn keyed<K: PartialEq>(slot: &mut Option<(K, String)>, key: K, build: impl FnOnce() -> String) -> String {
+        if let Some(json) = Self::hit(slot, &key) {
+            return json;
+        }
+        let json = build();
+        *slot = Some((key, json.clone()));
+        json
+    }
+}
+
+/// Everything `BrepApp::model_signature_json` reports, as a comparable key.
+fn model_signature_key(engine: &EngineState) -> ModelSignatureKey {
+    let solids = engine
+        .scene
+        .solids()
+        .iter()
+        .map(|s| (s.name.clone(), s.mesh.indices.len() / 3, s.bbox.min, s.bbox.max))
+        .collect();
+    (engine.history_rollback(), solids)
+}

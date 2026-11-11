@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:brep="https://brep.io/icons"
+     viewBox="0 0 24 24" width="24" height="24" brep:glyph-name="icon_feat_sm_hem" brep:unicode="E049">
+  <!-- An edge returned 180 degrees over the sheet; the near end shows the hairpin bend. -->
+  <g stroke-width="1.2" stroke-linejoin="round">
+    <path d="M2 13 14 7 21 12 9 18Z" fill="#bcd7e8" stroke="#2b4c63"/>
+    <path d="M2 13V15L9 20 21 14V12L9 18Z" fill="#5c86a6" stroke="#2b4c63"/>
+    <path d="M9 14 21 8 17 5 5 11Z" fill="#a5e8c4" stroke="#125236"/>
+    <path d="M9 14 21 8Q24 11 21 14L9 20Q12 17 9 14Z" fill="#2fa469" stroke="#125236"/>
+    <path d="M6 14 8.5 16Q10 17 8.5 18L6 16" style="fill:none" stroke="#2b4c63" stroke-linecap="round"/>
+  </g>
+</svg>

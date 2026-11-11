@@ -72,7 +72,7 @@ def add(url, name=None, skip_media=True):
     subprocess.run(['git', 'clone', '-q', '--depth', '1', url, tmp], check=True)
     lic = next((os.path.join(tmp, f) for f in os.listdir(tmp) if re.match(r'(?i)^(licen[cs]e|copying)', f)), None)
     spdx, kind = classify_licence(open(lic, errors='replace').read()) if lic else ('none', 'unknown')
-    if kind != 'permissive':
+    if kind not in ('permissive', 'conditional'):
         shutil.rmtree(tmp, ignore_errors=True)
         raise ValueError(f'{name}: licence {spdx} ({kind}) - only permissive licences are copied into ShipBrain; '
                          'use repopack (search-only knowledge) for it')
@@ -88,6 +88,11 @@ def add(url, name=None, skip_media=True):
         os.makedirs(os.path.dirname(os.path.join(dst, f)), exist_ok=True)
         shutil.copy2(os.path.join(tmp, f), os.path.join(dst, f))
     shutil.rmtree(tmp, ignore_errors=True)
+    if kind == 'conditional':
+        with open(os.path.join(VENDOR, name, 'DO_NOT_MODIFY.md'), 'w') as fh:
+            fh.write(f'# Do not modify {name}\n\nIts licence ({spdx}) allows use and sharing of the UNCHANGED code with its notice, but '
+                     'adds conditions on modifications (see repo/LICENSE*). ShipBrain uses it as it is: never patch these files; '
+                     'fixes go to the author as a pull request.\n')
     with open(os.path.join(VENDOR, name, 'SOURCE.md'), 'w') as fh:
         fh.write(f'# {name} (copied unchanged)\n\nFrom {url}, commit {commit}. Licence: {spdx} (see repo/).\n'
                  + (f'{skipped} media / binary files (pictures, videos, archives, app bundles) left out.\n' if skipped else ''))

@@ -85,7 +85,9 @@ WHY = {'copyleft': 'is a copyleft licence: anything built from it (also a traine
        'unknown': 'could not be recognised, so it is treated as "all rights reserved"'}
 
 
-_RANK = {'permissive': 0, 'unknown': 1, 'restricted': 2, 'copyleft': 3}
+_RANK = {'permissive': 0, 'conditional': 0.5, 'unknown': 1, 'restricted': 2, 'copyleft': 3}
+# permissive wording + extra conditions (e.g. 'modifications must be assigned to us', 'voids all permissions')
+_CONDITIONS = re.compile(r'assignment of (the )?copyright|void(s)? all (the )?permissions|must be submitted to|purchased? (a )?commercial licen[cs]e|non-?commercial use only|may not be used (for|in) commercial', re.I)
 
 
 def classify_licence(text):
@@ -99,7 +101,10 @@ def classify_licence(text):
         if re.search(rx, head, re.I | re.M) and not any(spdx.startswith(h[0]) or h[0].startswith(spdx) for h in hits):
             hits.append((spdx, kind))
     if hits:
-        return ' + '.join(h[0] for h in hits), max((h[1] for h in hits), key=_RANK.get)
+        spdx, kind = ' + '.join(h[0] for h in hits), max((h[1] for h in hits), key=_RANK.get)
+        if kind == 'permissive' and _CONDITIONS.search(head):
+            return spdx + ' with extra conditions', 'conditional'
+        return spdx, kind
     m = re.search(r'SPDX-License-Identifier:\s*([\w.\-+ ()]+)', head)
     if m:
         return spdx_kind(m.group(1))
@@ -148,9 +153,13 @@ def check_licence(files):
         return {'allowed': False, 'license': 'none', 'kind': 'none', 'attribution': attribution,
                 'reason': 'No licence file was found. Without a licence nobody may copy or reuse the code (all rights '
                           'reserved), so it is not packed. Use --private-only for your own private use only.'}
-    perm = [f for f in found if f[1] == 'permissive']
-    bad = [f for f in found if f[1] != 'permissive']
+    perm = [f for f in found if f[1] in ('permissive', 'conditional')]
+    bad = [f for f in found if f[1] not in ('permissive', 'conditional')]
     lic = ' + '.join(dict.fromkeys(f[0] for f in (perm or found)))
+    if perm and not bad and any(f[1] == 'conditional' for f in perm):
+        return {'allowed': True, 'license': lic, 'kind': 'conditional', 'attribution': attribution,
+                'reason': f'{lic}: use and share it UNCHANGED with its notice; its extra conditions apply to modifications '
+                          '(e.g. they must go to the author) - ShipBrain never modifies it.'}
     if perm and not bad:
         sa = any('SA' in f[0] for f in perm)
         return {'allowed': True, 'license': lic, 'kind': 'permissive', 'attribution': attribution,
@@ -359,7 +368,7 @@ def _nested_licence_dirs(tree, paths, root_holders):
                 continue
             spdx, kind = classify_licence(text)
             holders = {_holder(c) for c in copyright_lines(text)}
-            if kind != 'permissive':
+            if kind not in ('permissive', 'conditional'):
                 skip[d] = f'own licence {spdx} ({kind})'
             elif holders and root_holders and not (holders & root_holders):
                 skip[d] = f'third-party code ({"; ".join(sorted(holders))[:80]})'
@@ -753,6 +762,8 @@ def build_pack(src, out_dir, cache_dir=None, private_only=False, max_kb=DEFAULT_
     allowed = bool(lic['allowed'])
     usage = ('ok: permissive licence, keep the attribution' if allowed else
              'PRIVATE ONLY: do not use for training, do not redistribute')
+    if allowed and lic.get('kind') == 'conditional':
+        usage = 'ok UNCHANGED, keep the notice; its licence adds conditions on modifications (never modify it)'
     if own == 'public':        # your own code, cleaned of names, shared by its author: knowledge + training, public
         allowed, usage = True, "author's own code, shared for training (names removed)"
     elif own:                  # your own code: train your PRIVATE model on it, never publish the pack or that model

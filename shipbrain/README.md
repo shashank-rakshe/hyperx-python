@@ -166,6 +166,21 @@ Nothing is rewritten when it can be used as it is, so no core function can go mi
   only (with their licence), never trained on or copied into the code; brand material (SolidCraft's UI kit, look,
   theme, logo under its brand licence) left out.
 
+## STL meshes -> exact STEP solids (next.BREP.io's stl2step, used unchanged)
+
+The BREP kernel family of [next.BREP.io](https://github.com/mmiscool/next.BREP.io_RUST_BREP_KERNEL) (Rust, 373,000
+lines: NURBS, booleans, fillets, sheet metal, STEP) is copied whole into `shipbrain/vendor/BREP`. Its licence is MIT
+wording **with extra conditions on modifications** (they must go to its author), so ShipBrain uses it **unchanged**
+and never patches it (`DO_NOT_MODIFY.md`); the licence checker now marks such licences `conditional`.
+
+- `stl_to_step` (and every CAD tool: `repair_model`, `surface_extract`, `pipe_extract`, `cad_mesh` now accept `.stl`):
+  scans, 3D-print files and mesh exports become exact solids - planes, cylinders, cones, spheres and tori recognised.
+  Checked: a filleted plate with holes comes back with its 6 planes + 6 cylinders and the identical volume in 0.2 s;
+  then `repair_model` removes the holes and fillets from the STL as from a STEP.
+- Build once: Rust from rustup.rs, then `python -c "from shipbrain import brep; brep.build()"` (~5 min; Windows,
+  Linux, macOS). The Kaggle run does it by itself and adds STL inputs to the CAD training tasks.
+- Found on the way: `repair_model` failed on trimmed cylinders in real STEP files - fixed.
+
 ## Physics lab: OpenPhysicsAI, used as written
 
 [OpenPhysicsAI](https://github.com/molanocortes/OpenPhysicsAI) (Apache-2.0) is copied whole into `shipbrain/vendor/`
@@ -181,9 +196,12 @@ WSL): `python -c "from shipbrain import openphysics; openphysics.build()"` (~30 
   operations: geometry, meshing, materials, structural / thermal analysis, topology optimisation, mechanisms, 3D
   printing, the lab) and to any server you list in `<workdir>/mcp_servers.json`.
 - The engine router now RUNS flow / CFD, heat, fracture and impact questions with it (before: guidance only).
-- Training: `training/physics_tasks.py` builds it on Kaggle, runs the examples that finish within 40 s (as written and
-  with a changed load) and learns from the real records. Big 3D flow cases can take many minutes on a CPU; the
-  physics-lab skill tells the model to say so before running them.
+- Training: `training/physics_tasks.py` builds it on Kaggle and runs the 13 examples measured to finish within 40 s on
+  4 CPU cores (`training/data/physics_quick.json`), as written and with a changed load, and learns from the real records.
+- On a CPU most of its simulations are batch jobs: of the 77 examples, 13 finish within 40 s (0.3-31 s: gear tooth,
+  radar, sound, small flow / gas / heat volumes, Mach 6 capsule, orbits), 48 take longer (2D / 3D flow, fire, water,
+  fracture), 16 need macOS (Apple maths library or the GPU flow engine). The physics-lab skill tells the model to say
+  so before a long run.
 
 ## P&ID drawings -> process knowledge graph (pid-to-kg, used as written)
 

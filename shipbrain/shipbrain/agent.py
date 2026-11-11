@@ -243,6 +243,10 @@ class Tools:
         self.register('mcp_call', self.mcp_call, 'Call one operation of an MCP server (see mcp_tools): server, tool, arguments.',
                       {'type': 'object', 'properties': {'server': {'type': 'string'}, 'tool': {'type': 'string'}, 'arguments': {'type': 'object'}},
                        'required': ['tool']})
+        self.register('stl_to_step', self.stl_to_step, 'Mesh (STL: scans, 3D-print files, mesh exports) -> exact STEP solid with next.BREP.io\'s '
+                      'stl2step: planes, cylinders, cones, spheres, tori recognised. unit of the STL: mm | cm | m | inch | foot. '
+                      '(The CAD tools also accept .stl directly.)',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'unit': {'type': 'string'}}, 'required': ['file']})
         self.register('fatigue_mesh', self.fatigue_mesh, 'Fatigue hot-spot local model: cut a box around the hot spot from a plate assembly, '
                       'mesh it t x t, give the read-out points at 0.5t / 1.5t; with solve=true also run CalculiX and return the '
                       'extrapolated hot-spot stress (1.5 s(0.5t) - 0.5 s(1.5t)).',
@@ -862,6 +866,20 @@ class Tools:
         if r['is_error']:
             raise RuntimeError(f'{server}.{tool}: ' + json.dumps(r['result'], default=str)[:1500])
         return {'result': r['result'], 'plain_english': f'{server}.{tool} done.'}     # the agent shortens it for the model
+
+    def stl_to_step(self, file, unit='mm'):
+        import collections
+        from . import brep
+        import cadquery as cq
+        step, report = brep.stl_to_step(self._path(file), unit=unit)
+        s = cq.importers.importStep(step).val()
+        kinds = collections.Counter(f.geomType() for f in s.Faces())
+        out = os.path.relpath(step, self.workdir)
+        return {'file': out, 'solids': len(s.Solids()), 'faces': dict(kinds), 'volume_mm3': round(s.Volume(), 1), 'valid': s.isValid(),
+                'report': report[-1500:],
+                'plain_english': f"Converted {file} to {out}: {len(s.Solids())} solid(s), {len(s.Faces())} faces ("
+                                 + ', '.join(f'{v} {k.lower()}' for k, v in kinds.most_common()) + f"), volume {s.Volume():.0f} mm3, "
+                                 f"valid: {'yes' if s.isValid() else 'NO'}."}
 
     def geometry_clean(self, plates=None, file=None, merge_tol=2.0):
         from . import geoclean

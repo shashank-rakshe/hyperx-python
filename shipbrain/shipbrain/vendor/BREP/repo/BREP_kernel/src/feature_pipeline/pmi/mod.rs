@@ -1,0 +1,1470 @@
+//! PMI — Product and Manufacturing Information: the document's `pmi` block
+//! (views that own annotations), the annotation type table with its schemas
+//! and selection predicates, and the history tail that resolves every
+//! annotation against the just-built scene into a typed [`PmiReport`].
+//!
+//! # The `pmi` block
+//!
+//! `{ views: [{ id, name, camera?, display, annotations: [...] }], idCounter }`
+//! on the history request, round-tripped through the saved document and
+//! ABSENT on every document without PMI (so those files re-serialize
+//! byte-identically). A **view** is a named camera snapshot plus display
+//! state (text size, wireframe, section; what it hides is its hide steps) plus an
+//! ordered list of annotations; a saved view maps to an AP242
+//! `DRAUGHTING_MODEL` + `CAMERA_MODEL_D3` on export and is the unit a future
+//! drawing sheet places. What a view hides is its **hide steps** (`hide`
+//! annotations naming solids / components, tracked like explode steps; the
+//! solids hidden at capture are its baseline step): [`PmiView::hides`] is the one
+//! rule every consumer reads, and the report lists the outcome per view.
+//!
+//! An **annotation** is `{ type, enabled, inputParams, labelWorld? }`: its
+//! params follow a kernel schema exactly like a feature's or an assembly
+//! constraint's (`inputParams.id` is its id, `{SHORT}{n}` minted from the
+//! block's counter), so the app's dialog engine draws every annotation form
+//! from [`pmi_schema_catalogue`] and nothing is hand-written. Geometry is
+//! referenced by kernel entity NAME (faces / edges, `{solid}@x,y,z` vertices
+//! in WORLD coordinates, D/P frame names) — plain and component-owned
+//! geometry alike — so a rebuilt model re-resolves every value and a renamed
+//! or deleted entity puts the annotation into an error status without ever
+//! aborting the view or the run.
+//!
+//! Every drawn annotation has an **annotation plane**: its optional `plane`
+//! reference names a planar face or a reference plane the annotation lies
+//! IN (label projected onto it, drags stay in it, the dimension / extension
+//! lines and frames drawn in it, the AP242 `ANNOTATION_PLANE` placed on it);
+//! left empty, the annotation aligns to the view camera. A picked plane must
+//! be parallel to what it carries — a linear dimension's direction, an
+//! angle's or a circle's plane — or the annotation reports an error rather
+//! than a foreshortened value. Drawing sheets will show, per sheet view, the
+//! annotations whose plane is parallel to the view.
+//!
+//! # The tail
+//!
+//! `finish_history_run` runs after the wire-harness tail on every run and
+//! resolves EVERY view's annotations (a few name lookups each) into a
+//! [`PmiReport`]: per annotation the status, the display text (value +
+//! tolerance block, kernel-formatted so the viewport and the STEP file agree),
+//! the measured value, the resolved analytic geometry the presentation is laid
+//! out from ([`layout`]) and the label position (stored, or a default derived
+//! from the geometry). The report rides `HistoryResult.pmi` (never the JSON
+//! ABI) and the render crate's scene report across the runner seam. Nothing
+//! here touches the incremental feature cache: PMI is annotation state, not
+//! history, and a label drag never re-executes a feature.
+//!
+//! # Measurement contracts (kernel queries only)
+//!
+//! Every value is read from the exact BREP through `crate::assembly_resolve`
+//! (planes, carrier lines, circles, axes, points) — never from tessellation.
+//! Linear: point–point, point–line (perpendicular), line–line (carrier lines:
+//! parallel spacing or closest points), point–plane, parallel plane spacing,
+//! single straight edge length, optional X/Y/Z component. Radial: cylinder /
+//! sphere / circular edge radius from the face metadata. Angle: the two
+//! elements' directions folded to acute / obtuse / reflex, optionally
+//! reversed. Hole callout: the owning Hole feature's parameters. Datum letters
+//! are unique per part; a feature control frame's datum references must name
+//! defined datums.
+
+pub mod anchor;
+pub mod annotations;
+pub mod font;
+pub mod layout;
+pub mod resolve;
+mod plugin;
+pub use plugin::{PluginAnnotationOutput, PluginAnnotationReplay};
+
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::BTreeMap;
+
+use crate::feature_pipeline::{Env, HistoryRequest, SceneMap};
+
+pub use anchor::{
+    balloon_head, nearest_displayed_point, nearest_displayed_point_on_edge, nearest_point_on_edge, nearest_point_on_solid,
+    pose_apply, pose_unapply, BalloonAnchor, BalloonAnchorMode, HalfSpace, HeadScope, PmiPose, SolidPoses,
+};
+pub use annotations::{pmi_schema_catalogue, pmi_type, PmiTypeDef, PMI_TYPES};
+
+// ===========================================================================
+// The persisted block
+// ===========================================================================
+
+/// The document's `pmi` block. Loading it folds every view's legacy
+/// `display.hidden` list into that view's baseline hide step (see
+/// [`PmiDisplay`]), so every reader — the run, the parts library, STEP
+/// export, plugins, the 3D PDF — sees one representation.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(from = "PmiStateWire")]
+pub struct PmiState {
+    #[serde(default)]
+    pub views: Vec<PmiView>,
+    /// Mints every view AND annotation id (`VIEW{n}`, `DIM{n}`, …); monotonic,
+    /// never reused, re-seeded from the largest numeric suffix on load.
+    #[serde(default, rename = "idCounter")]
+    pub id_counter: u64,
+}
+
+/// [`PmiState`] as stored, before the legacy hidden lists are folded in.
+#[derive(Deserialize)]
+struct PmiStateWire {
+    #[serde(default)]
+    views: Vec<PmiView>,
+    #[serde(default, rename = "idCounter")]
+    id_counter: u64,
+}
+
+impl From<PmiStateWire> for PmiState {
+    fn from(wire: PmiStateWire) -> Self {
+        let mut state = PmiState { views: wire.views, id_counter: wire.id_counter };
+        for index in 0..state.views.len() {
+            let legacy = std::mem::take(&mut state.views[index].display.legacy_hidden);
+            if legacy.is_empty() {
+                continue;
+            }
+            let mut names = state.views[index].baseline_hidden();
+            for name in legacy {
+                if !names.contains(&name) {
+                    names.push(name);
+                }
+            }
+            let id = state.views[index].id.clone();
+            state.set_view_baseline(&id, &names);
+        }
+        state
+    }
+}
+
+/// A PMI view: a camera snapshot, display state and the annotations it owns.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PmiView {
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera: Option<PmiCamera>,
+    #[serde(default)]
+    pub display: PmiDisplay,
+    #[serde(default)]
+    pub annotations: Vec<PmiAnnotation>,
+}
+
+/// The camera snapshot: eye / target / up / projection / viewport size — the
+/// render crate's `ViewCamera` minus near/far, which are a per-frame depth
+/// window and never persisted. Applying a snapshot under another viewport
+/// aspect refits the frustum, preserving the apparent size at the target.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PmiCamera {
+    pub eye: [f64; 3],
+    pub target: [f64; 3],
+    pub up: [f64; 3],
+    pub projection: PmiProjection,
+    /// `[width, height]` of the viewport the snapshot was taken in (CSS px).
+    #[serde(default = "default_viewport")]
+    pub viewport: [f64; 2],
+}
+
+fn default_viewport() -> [f64; 2] {
+    [1280.0, 800.0]
+}
+
+impl PmiCamera {
+    /// The unit viewing direction (eye → target).
+    pub fn view_direction(&self) -> [f64; 3] {
+        let d = [
+            self.target[0] - self.eye[0],
+            self.target[1] - self.eye[1],
+            self.target[2] - self.eye[2],
+        ];
+        let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+        if len < 1e-12 {
+            [0.0, 0.0, -1.0]
+        } else {
+            [d[0] / len, d[1] / len, d[2] / len]
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum PmiProjection {
+    Orthographic {
+        #[serde(rename = "halfHeight")]
+        half_height: f64,
+    },
+    Perspective {
+        #[serde(rename = "fovYDeg")]
+        fov_y_deg: f64,
+    },
+}
+
+/// Per-view display state.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PmiDisplay {
+    /// Label text size in points, clamped to `[1, 288]`.
+    #[serde(default = "default_text_size", rename = "textSizePt")]
+    pub text_size_pt: f64,
+    #[serde(default)]
+    pub wireframe: bool,
+    /// The pre-2026-11-05 captured baseline (`display.hidden`), read and never
+    /// written: loading a [`PmiState`] folds it into the view's baseline
+    /// **hide step** ([`PmiAnnotation::is_baseline_hide`]), so what a view
+    /// hides has one representation, its hide steps ([`PmiView::hides`]).
+    #[serde(default, rename = "hidden", skip_serializing)]
+    legacy_hidden: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub section: Option<PmiSection>,
+}
+
+impl PmiDisplay {
+    /// A view's display state: what it hides lives in its hide steps.
+    pub fn new(text_size_pt: f64, wireframe: bool, section: Option<PmiSection>) -> Self {
+        Self { text_size_pt, wireframe, legacy_hidden: Vec::new(), section }
+    }
+}
+
+/// A display-only half-space through `origin` plus an offset along the normal.
+///
+/// `origin` (and, for the `View` axis, `normal`) is frozen from the captured
+/// camera when the section is set, so re-capturing the camera does not move
+/// the cut. A section saved before they existed reads the camera instead.
+/// The `Plane` axis takes both from `plane`, a planar face or reference plane
+/// the run resolves each time (see [`PmiViewReport::section_plane`]).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PmiSection {
+    pub axis: String,
+    pub offset: f64,
+    #[serde(default)]
+    pub flip: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<[f64; 3]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub normal: Option<[f64; 3]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plane: Option<String>,
+    /// Solids and components the cut leaves whole (shafts, fasteners): a
+    /// solid's scene name, or a component id standing for all its solids.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exclude: Vec<String>,
+    /// Further cutting planes. Material is removed only where EVERY plane
+    /// removes it: one more plane makes a half section (a quarter cut away),
+    /// two more a corner cut away. Each is an axis through the section's
+    /// origin, offset along its normal.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub planes: Vec<PmiSectionPlane>,
+}
+
+/// One further plane of a [`PmiSection`]: `X`, `Y`, `Z` or `View` (the
+/// captured camera's direction, frozen in `normal` when set), `offset` along
+/// it from the section's origin, `flip` keeping the other side.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PmiSectionPlane {
+    pub axis: String,
+    #[serde(default)]
+    pub offset: f64,
+    #[serde(default)]
+    pub flip: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub normal: Option<[f64; 3]>,
+}
+
+impl PmiSectionPlane {
+    /// The unflipped normal: the axis's, else (`View`) the frozen one, else
+    /// the camera's view direction. `None` for an unknown axis.
+    pub fn axis_normal(&self, camera: Option<&PmiCamera>) -> Option<[f64; 3]> {
+        match self.axis.as_str() {
+            "X" => Some([1., 0., 0.]),
+            "Y" => Some([0., 1., 0.]),
+            "Z" => Some([0., 0., 1.]),
+            "View" => self.normal.or_else(|| camera.map(PmiCamera::view_direction)),
+            _ => None,
+        }
+    }
+}
+/// Whether a SOLID / COMPONENT list entry names `solid`: the solid itself,
+/// or a component it belongs to (`ACOMP1` covers `ACOMP1:Part` and a nested
+/// `ACOMP1:ACOMP2:Part`; a prefix of a longer name, `ACOMP1` for
+/// `ACOMP10:Part`, is not the name). The rule a section's **Not cut** list
+/// and a view's hide steps share.
+pub fn entry_names_solid(entry: &str, solid: &str) -> bool {
+    let entry = entry.trim();
+    !entry.is_empty() && (solid == entry || solid.strip_prefix(entry).is_some_and(|rest| rest.starts_with(':')))
+}
+
+impl PmiSection {
+    /// Whether the solid named `solid` is left uncut: it is listed, or it
+    /// belongs to a listed component (`ACOMP1` covers `ACOMP1:Part` and a
+    /// nested `ACOMP1:ACOMP2:Part`).
+    pub fn excludes(&self, solid: &str) -> bool {
+        self.exclude.iter().any(|entry| entry_names_solid(entry, solid))
+    }
+
+    /// The unflipped normal: the axis's, else (`View`) the frozen one, else
+    /// the camera's view direction.
+    pub fn axis_normal(&self, camera: Option<&PmiCamera>) -> Option<[f64; 3]> {
+        match self.axis.as_str() {
+            "X" => Some([1., 0., 0.]),
+            "Y" => Some([0., 1., 0.]),
+            "Z" => Some([0., 0., 1.]),
+            "Plane" => self.normal,
+            _ => self.normal.or_else(|| camera.map(PmiCamera::view_direction)),
+        }
+    }
+
+    /// Fill a missing `origin` / `View` normal from `camera`, so the plane
+    /// stops depending on it.
+    pub fn freeze(&mut self, camera: Option<&PmiCamera>) {
+        if self.axis == "Plane" {
+            // Resolved from `plane` on every run, never from the camera.
+            self.origin = None;
+            self.normal = None;
+            return;
+        }
+        self.plane = None;
+        let Some(camera) = camera else { return };
+        for plane in &mut self.planes {
+            if plane.axis == "View" {
+                plane.normal.get_or_insert(camera.view_direction());
+            } else {
+                plane.normal = None;
+            }
+        }
+        self.origin.get_or_insert(camera.target);
+        if self.axis == "View" {
+            self.normal.get_or_insert(camera.view_direction());
+        } else {
+            self.normal = None;
+        }
+    }
+}
+impl PmiView {
+    pub fn section_plane(&self) -> Option<([f64; 3], [f64; 3])> {
+        let section = self.display.section.as_ref()?;
+        let camera = self.camera.as_ref();
+        let mut normal = section.axis_normal(camera)?;
+        let origin = section.origin.or_else(|| camera.filter(|_| section.axis != "Plane").map(|c| c.target))?;
+        let point = std::array::from_fn(|i| origin[i] + normal[i] * section.offset);
+        if section.flip {
+            normal = normal.map(|v| -v);
+        }
+        Some((point, normal))
+    }
+
+    /// [`Self::section_plane`], taking a `Plane` section's plane from the
+    /// view's last report (the document stores only the reference's name).
+    pub fn section_plane_in(&self, report: Option<&PmiViewReport>) -> Option<([f64; 3], [f64; 3])> {
+        match self.display.section.as_ref() {
+            Some(section) if section.axis == "Plane" => report.and_then(|report| report.section_plane),
+            _ => self.section_plane(),
+        }
+    }
+
+    /// Every cutting plane of the view's section, `(point, kept-side
+    /// normal)`, the first being [`Self::section_plane_in`]'s: empty without
+    /// a section (or when its first plane does not resolve). A further plane
+    /// goes through the section's origin (else the camera target, else the
+    /// first plane's point) plus its offset; an unknown axis is skipped.
+    pub fn section_planes_in(&self, report: Option<&PmiViewReport>) -> Vec<([f64; 3], [f64; 3])> {
+        self.section_plane_in(report).map_or_else(Vec::new, |first| self.with_further_planes(first))
+    }
+
+    /// [`Self::section_planes_in`] from [`Self::section_plane`] (a `Plane`
+    /// section resolved into the view itself, as the run does).
+    pub fn section_planes(&self) -> Vec<([f64; 3], [f64; 3])> {
+        self.section_plane().map_or_else(Vec::new, |first| self.with_further_planes(first))
+    }
+
+    fn with_further_planes(&self, first: ([f64; 3], [f64; 3])) -> Vec<([f64; 3], [f64; 3])> {
+        let mut planes = vec![first];
+        let Some(section) = self.display.section.as_ref() else { return planes };
+        let camera = self.camera.as_ref();
+        let origin = section.origin.or_else(|| camera.filter(|_| section.axis != "Plane").map(|c| c.target)).unwrap_or(first.0);
+        for plane in &section.planes {
+            let Some(mut normal) = plane.axis_normal(camera) else { continue };
+            let point = std::array::from_fn(|i| origin[i] + normal[i] * plane.offset);
+            if plane.flip {
+                normal = normal.map(|v| -v);
+            }
+            planes.push((point, normal));
+        }
+        planes
+    }
+}
+
+/// The `hide` step param marking a view's **baseline** step: the solids
+/// hidden when the view was captured (or a generated instructions step's
+/// not-yet-placed parts, or a pre-2026-11-05 `display.hidden` list). A name
+/// in it that no longer exists is skipped, not an error.
+pub const HIDE_BASELINE_PARAM: &str = "baseline";
+
+/// The id a view's baseline hide step is given: `HID-{view id}`, unique (one
+/// baseline per view) and derived, so making one never advances the
+/// document's id counter and every id minted after it stays what it was.
+pub fn baseline_hide_id(view_id: &str) -> String {
+    format!("{}-{view_id}", annotations::hide::DEF.short_name)
+}
+
+impl PmiAnnotation {
+    /// A `hide` step `id` naming `targets`; `baseline` marks the view's
+    /// captured baseline ([`HIDE_BASELINE_PARAM`]).
+    pub fn hide_step(id: &str, targets: &[String], baseline: bool) -> Self {
+        let mut params = serde_json::json!({ "id": id, "targets": targets });
+        if baseline {
+            params[HIDE_BASELINE_PARAM] = Value::Bool(true);
+        }
+        Self {
+            kind: annotations::hide::DEF.type_id.to_string(),
+            enabled: true,
+            params,
+            persistent_data: Value::Null,
+            plugin_replay: None,
+            label_world: None,
+        }
+    }
+
+    /// Whether this is a view's baseline hide step.
+    pub fn is_baseline_hide(&self) -> bool {
+        self.kind == annotations::hide::DEF.type_id && self.flag(HIDE_BASELINE_PARAM)
+    }
+}
+
+impl PmiView {
+    /// Whether this view hides the solid named `solid`: an ENABLED hide step
+    /// (its baseline among them) names it or a component it belongs to
+    /// ([`entry_names_solid`]). Names only, no run needed: the viewport
+    /// applies it the moment a step is added, edited, removed or undone, and
+    /// the sheets, the 3D PDF and the instructions pictures read the same
+    /// answer.
+    pub fn hides(&self, solid: &str) -> bool {
+        self.hide_targets().any(|entry| entry_names_solid(entry, solid))
+    }
+
+    /// The targets of the view's baseline hide step(s), in order.
+    pub fn baseline_hidden(&self) -> Vec<String> {
+        self.annotations.iter().filter(|a| a.is_baseline_hide()).flat_map(|a| a.references("targets")).collect()
+    }
+
+    /// Every target of the view's enabled hide steps, in step order.
+    pub fn hide_targets(&self) -> impl Iterator<Item = &str> {
+        self.annotations
+            .iter()
+            .filter(|annotation| annotation.enabled && annotation.kind == annotations::hide::DEF.type_id)
+            .flat_map(|annotation| match annotation.params.get("targets") {
+                Some(Value::String(name)) => std::slice::from_ref(name).iter().map(String::as_str).collect::<Vec<_>>(),
+                Some(Value::Array(items)) => items.iter().filter_map(Value::as_str).collect(),
+                _ => Vec::new(),
+            })
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+    }
+}
+
+fn default_text_size() -> f64 {
+    12.0
+}
+
+impl Default for PmiDisplay {
+    fn default() -> Self {
+        Self {
+            text_size_pt: default_text_size(),
+            wireframe: false,
+            legacy_hidden: Vec::new(),
+            section: None,
+        }
+    }
+}
+
+/// The text size clamp: `[1, 288]` points.
+pub fn clamp_text_size(size: f64) -> f64 {
+    if !size.is_finite() {
+        return default_text_size();
+    }
+    size.clamp(1.0, 288.0)
+}
+
+/// One annotation: schema-driven params keyed by its `type`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PmiAnnotation {
+    #[serde(rename = "type")]
+    pub kind: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default, rename = "inputParams")]
+    pub params: Value,
+    #[serde(default, rename = "persistentData", skip_serializing_if = "Value::is_null")]
+    pub persistent_data: Value,
+    /// Last accepted callback transition. Replays use its prior input, never saved geometry.
+    #[serde(default, rename = "pluginReplay", skip_serializing_if = "Option::is_none")]
+    pub plugin_replay: Option<PluginAnnotationReplay>,
+    /// The draggable label's world anchor. Absent until the user moves it —
+    /// the report then carries a default derived from the geometry.
+    #[serde(default, rename = "labelWorld", skip_serializing_if = "Option::is_none")]
+    pub label_world: Option<[f64; 3]>,
+}
+
+fn is_false(value: &bool) -> bool { !value }
+
+fn default_true() -> bool {
+    true
+}
+
+impl PmiAnnotation {
+    /// `inputParams.id` (empty when absent).
+    pub fn id(&self) -> &str {
+        self.params
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+    }
+
+    /// A string param, trimmed (`""` when absent or not a string).
+    pub fn text(&self, key: &str) -> &str {
+        self.params
+            .get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .unwrap_or("")
+    }
+
+    /// A boolean param (`false` when absent).
+    pub fn flag(&self, key: &str) -> bool {
+        self.params
+            .get(key)
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
+
+    /// A numeric param: a JSON number, or a string evaluated as an expression
+    /// against the document's variable sheet. `default` when absent / empty.
+    pub fn number(&self, key: &str, env: &Env, default: f64) -> Result<f64, String> {
+        match self.params.get(key) {
+            None | Some(Value::Null) => Ok(default),
+            Some(Value::Number(number)) => Ok(number.as_f64().unwrap_or(default)),
+            Some(Value::Bool(flag)) => Ok(if *flag { 1.0 } else { 0.0 }),
+            Some(Value::String(source)) => {
+                let source = source.trim();
+                if source.is_empty() {
+                    return Ok(default);
+                }
+                env.eval(source)
+                    .map_err(|error| format!("{key}: {error}"))
+            }
+            Some(other) => Err(format!("{key}: expected a number, got {other}")),
+        }
+    }
+
+    /// The `plane` reference (a planar face / reference plane name), when
+    /// the annotation is laid out in a picked plane rather than the view.
+    pub fn plane_ref(&self) -> Option<&str> {
+        let name = self.text("plane").trim();
+        (!name.is_empty()).then_some(name)
+    }
+
+    /// A reference param as a name list: a string, or an array of strings
+    /// (empty strings dropped).
+    pub fn references(&self, key: &str) -> Vec<String> {
+        match self.params.get(key) {
+            Some(Value::String(name)) => {
+                let name = name.trim();
+                if name.is_empty() {
+                    Vec::new()
+                } else {
+                    vec![name.to_string()]
+                }
+            }
+            Some(Value::Array(items)) => items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .map(String::from)
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+}
+
+impl PmiState {
+    /// Replace view `view_id`'s baseline hide step with one naming `names`
+    /// (none when empty), keeping the old step's id and place. False when
+    /// nothing changed or there is no such view.
+    pub fn set_view_baseline(&mut self, view_id: &str, names: &[String]) -> bool {
+        let Some(view) = self.find_view(view_id) else { return false };
+        if view.baseline_hidden() == names && view.annotations.iter().filter(|a| a.is_baseline_hide()).count() <= 1 {
+            return false;
+        }
+        let at = view.annotations.iter().position(PmiAnnotation::is_baseline_hide);
+        let kept_id = at.map(|at| view.annotations[at].id().to_string()).filter(|id| !id.is_empty());
+        let id = kept_id.unwrap_or_else(|| baseline_hide_id(view_id));
+        let view = self.find_view_mut(view_id).expect("found above");
+        view.annotations.retain(|a| !a.is_baseline_hide());
+        if !names.is_empty() {
+            let step = PmiAnnotation::hide_step(&id, names, true);
+            let at = at.unwrap_or(view.annotations.len()).min(view.annotations.len());
+            view.annotations.insert(at, step);
+        }
+        true
+    }
+
+    /// Hide `names` in view `view_id` as a new hide step (the viewport's
+    /// hide while the view is active): only the names the view does not hide
+    /// yet. The new step's id, or `None` when nothing new is hidden.
+    pub fn hide_in_view(&mut self, view_id: &str, names: &[String]) -> Option<String> {
+        let view = self.find_view(view_id)?;
+        let mut targets: Vec<String> = Vec::new();
+        for name in names {
+            if !view.hides(name) && !targets.contains(name) {
+                targets.push(name.clone());
+            }
+        }
+        if targets.is_empty() {
+            return None;
+        }
+        let id = self.next_id(annotations::hide::DEF.short_name);
+        self.find_view_mut(view_id)?.annotations.push(PmiAnnotation::hide_step(&id, &targets, false));
+        Some(id)
+    }
+
+    /// Show `names` in view `view_id` (the viewport's show while the view is
+    /// active): every enabled hide step drops them; a step target naming a
+    /// whole component one of them belongs to becomes that component's other
+    /// solids (from `solids`, the scene's names); a step left with no target
+    /// goes. True when a step changed.
+    pub fn show_in_view(&mut self, view_id: &str, names: &[String], solids: &[String]) -> bool {
+        let Some(view) = self.find_view_mut(view_id) else { return false };
+        let shown = |solid: &str| names.iter().any(|name| name == solid);
+        let mut changed = false;
+        let mut emptied: Vec<usize> = Vec::new();
+        for (index, annotation) in view.annotations.iter_mut().enumerate() {
+            if !annotation.enabled || annotation.kind != annotations::hide::DEF.type_id {
+                continue;
+            }
+            let targets = annotation.references("targets");
+            if !targets.iter().any(|entry| names.iter().any(|name| entry_names_solid(entry, name))) {
+                continue;
+            }
+            let mut kept: Vec<String> = Vec::new();
+            for entry in targets {
+                if !names.iter().any(|name| entry_names_solid(&entry, name)) {
+                    kept.push(entry);
+                    continue;
+                }
+                for solid in solids.iter().filter(|solid| entry_names_solid(&entry, solid) && !shown(solid)) {
+                    if !kept.contains(solid) {
+                        kept.push(solid.clone());
+                    }
+                }
+            }
+            changed = true;
+            if kept.is_empty() {
+                emptied.push(index);
+            } else {
+                annotation.params["targets"] = serde_json::json!(kept);
+            }
+        }
+        for index in emptied.into_iter().rev() {
+            view.annotations.remove(index);
+        }
+        changed
+    }
+
+    /// Make view `view_id` hide exactly `names` among `solids` (MCP
+    /// `pmi_set_view_display`'s `hidden`): what it hides beyond them is shown
+    /// ([`Self::show_in_view`]), and what it does not hide yet joins its
+    /// baseline step. True when a step changed.
+    pub fn set_view_hidden(&mut self, view_id: &str, names: &[String], solids: &[String]) -> bool {
+        let Some(view) = self.find_view(view_id) else { return false };
+        let extra: Vec<String> = solids.iter().filter(|solid| view.hides(solid) && !names.contains(solid)).cloned().collect();
+        let mut changed = !extra.is_empty() && self.show_in_view(view_id, &extra, solids);
+        let view = self.find_view(view_id).expect("found above");
+        let mut baseline = view.baseline_hidden();
+        let missing: Vec<String> = names.iter().filter(|name| !view.hides(name)).cloned().collect();
+        if !missing.is_empty() {
+            if view.annotations.iter().any(|step| step.is_baseline_hide() && !step.enabled) {
+                // A disabled baseline is not hiding its targets. Keep that
+                // authored state and add only the explicitly requested hides.
+                changed |= self.hide_in_view(view_id, &missing).is_some();
+            } else {
+                baseline.extend(missing);
+                changed |= self.set_view_baseline(view_id, &baseline);
+            }
+        }
+        changed
+    }
+
+    /// Mint the next id with `prefix` (`VIEW` → `VIEW3`). The counter is
+    /// re-seeded first from the largest numeric suffix already in the block,
+    /// so an edited or merged document never hands out a colliding id.
+    pub fn next_id(&mut self, prefix: &str) -> String {
+        let seen = self.max_numeric_suffix();
+        if seen > self.id_counter {
+            self.id_counter = seen;
+        }
+        loop {
+            self.id_counter += 1;
+            let candidate = format!("{prefix}{}", self.id_counter);
+            if self.find_view(&candidate).is_none() && self.find_annotation(&candidate).is_none() {
+                return candidate;
+            }
+        }
+    }
+
+    fn max_numeric_suffix(&self) -> u64 {
+        let mut best = 0u64;
+        let mut consider = |id: &str| {
+            let digits = id
+                .bytes()
+                .rev()
+                .take_while(u8::is_ascii_digit)
+                .count();
+            if digits > 0 {
+                if let Ok(value) = id[id.len() - digits..].parse::<u64>() {
+                    best = best.max(value);
+                }
+            }
+        };
+        for view in &self.views {
+            consider(&view.id);
+            for annotation in &view.annotations {
+                consider(annotation.id());
+            }
+        }
+        best
+    }
+
+    pub fn find_view(&self, id: &str) -> Option<&PmiView> {
+        self.views.iter().find(|view| view.id == id)
+    }
+
+    pub fn find_view_mut(&mut self, id: &str) -> Option<&mut PmiView> {
+        self.views.iter_mut().find(|view| view.id == id)
+    }
+
+    /// The annotation with `id` and its owning view.
+    pub fn find_annotation(&self, id: &str) -> Option<(&PmiView, &PmiAnnotation)> {
+        self.views.iter().find_map(|view| {
+            view.annotations
+                .iter()
+                .find(|annotation| annotation.id() == id)
+                .map(|annotation| (view, annotation))
+        })
+    }
+
+    /// The owning view id and index of annotation `id`.
+    pub fn locate_annotation(&self, id: &str) -> Option<(usize, usize)> {
+        self.views.iter().enumerate().find_map(|(view_index, view)| {
+            view.annotations
+                .iter()
+                .position(|annotation| annotation.id() == id)
+                .map(|index| (view_index, index))
+        })
+    }
+
+    pub fn find_annotation_mut(&mut self, id: &str) -> Option<&mut PmiAnnotation> {
+        self.views.iter_mut().find_map(|view| {
+            view.annotations
+                .iter_mut()
+                .find(|annotation| annotation.id() == id)
+        })
+    }
+
+    /// Every datum letter defined in the part (any view), in definition
+    /// order, with the defining annotation's id — the part-level datum
+    /// registry a feature control frame validates its references against.
+    pub fn datum_letters(&self) -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        for view in &self.views {
+            for annotation in &view.annotations {
+                if annotation.kind == annotations::datum::DEF.type_id {
+                    let letter = annotation.text("letter").to_uppercase();
+                    if !letter.is_empty() {
+                        out.push((letter, annotation.id().to_string()));
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// The next unused datum letter: A–Z skipping I, O and Q (ASME Y14.5),
+    /// then AA, AB, … (`None` only past ZZ).
+    pub fn next_datum_letter(&self) -> Option<String> {
+        let used: Vec<String> = self.datum_letters().into_iter().map(|(l, _)| l).collect();
+        let alphabet: Vec<char> = ('A'..='Z').filter(|c| !matches!(c, 'I' | 'O' | 'Q')).collect();
+        for letter in &alphabet {
+            let candidate = letter.to_string();
+            if !used.contains(&candidate) {
+                return Some(candidate);
+            }
+        }
+        for first in &alphabet {
+            for second in &alphabet {
+                let candidate = format!("{first}{second}");
+                if !used.contains(&candidate) {
+                    return Some(candidate);
+                }
+            }
+        }
+        None
+    }
+
+    /// Whether the block carries anything worth persisting.
+    pub fn is_empty(&self) -> bool {
+        self.views.is_empty() && self.id_counter == 0
+    }
+}
+
+// ===========================================================================
+// The resolved report
+// ===========================================================================
+
+/// The tail's resolution of every view's annotations.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct PmiReport {
+    pub views: Vec<PmiViewReport>,
+}
+
+impl PmiReport {
+    pub fn view(&self, id: &str) -> Option<&PmiViewReport> {
+        self.views.iter().find(|view| view.id == id)
+    }
+
+    pub fn annotation(&self, id: &str) -> Option<&PmiAnnotationReport> {
+        self.views
+            .iter()
+            .find_map(|view| view.annotations.iter().find(|a| a.id == id))
+    }
+
+    pub fn annotation_mut(&mut self, id: &str) -> Option<&mut PmiAnnotationReport> {
+        self.views
+            .iter_mut()
+            .find_map(|view| view.annotations.iter_mut().find(|a| a.id == id))
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct PmiViewReport {
+    pub id: String,
+    pub annotations: Vec<PmiAnnotationReport>,
+    /// A `Plane` section's cutting plane `(point, kept-side normal)`, resolved
+    /// from its reference by this run.
+    #[serde(default, rename = "sectionPlane", skip_serializing_if = "Option::is_none")]
+    pub section_plane: Option<([f64; 3], [f64; 3])>,
+    /// Why a `Plane` section's reference did not resolve (no cut is shown).
+    #[serde(default, rename = "sectionError", skip_serializing_if = "String::is_empty")]
+    pub section_error: String,
+    /// The scene solids the view hides ([`PmiView::hides`] over this run's
+    /// scene: the captured baseline plus its enabled hide steps), sorted.
+    /// Absent when it hides nothing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hidden: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PmiStatus {
+    /// Resolved: `text` / `value` / `geometry` are live.
+    Ok,
+    /// An unresolved anchor, a dangling datum reference, an unsupported
+    /// pairing …: `message` says which. The annotation stays listed.
+    Error,
+}
+
+/// One resolved annotation.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PmiAnnotationReport {
+    /// Successful provider output only; errors must preserve saved input data.
+    #[serde(default, rename = "persistentData", skip_serializing_if = "Option::is_none")]
+    pub persistent_data: Option<Value>,
+    #[serde(default, rename = "pluginReplay", skip_serializing_if = "Option::is_none")]
+    pub plugin_replay: Option<PluginAnnotationReplay>,
+    pub id: String,
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub enabled: bool,
+    pub status: PmiStatus,
+    #[serde(default)]
+    pub message: String,
+    /// The display text (value + tolerance block, note / leader text, hole
+    /// callout, datum letter, FCF cells joined).
+    #[serde(default)]
+    pub text: String,
+    /// The measured value (length in model units, angle in degrees).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<f64>,
+    /// `"mm"` / `"deg"` / `""`.
+    #[serde(default)]
+    pub unit: String,
+    /// The scene entity names the annotation resolved (for hover
+    /// highlighting and the STEP shape aspects), in reference order.
+    #[serde(default)]
+    pub references: Vec<String>,
+    /// The label anchor: the stored `labelWorld`, else the geometry's default
+    /// — projected onto the annotation plane when one is picked.
+    #[serde(rename = "labelWorld")]
+    pub label_world: [f64; 3],
+    /// The picked annotation plane; `None` aligns to the view camera.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plane: Option<PmiPlane>,
+    pub geometry: PmiGeometry,
+}
+
+/// A resolved annotation plane: the plane the annotation lies in (its
+/// `plane` reference — a planar face or a reference plane), `normal`
+/// oriented toward the view's captured camera, `x_axis` the in-plane text
+/// direction (the camera's right projected into the plane). The viewport
+/// overlay and the AP242 `ANNOTATION_PLANE` both lay the annotation out in
+/// this frame.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PmiPlane {
+    pub origin: [f64; 3],
+    pub normal: [f64; 3],
+    #[serde(rename = "xAxis")]
+    pub x_axis: [f64; 3],
+}
+
+impl PmiPlane {
+    /// `point` projected onto the plane along its normal.
+    pub fn project(&self, point: [f64; 3]) -> [f64; 3] {
+        let n = self.normal;
+        let d = (point[0] - self.origin[0]) * n[0] + (point[1] - self.origin[1]) * n[1] + (point[2] - self.origin[2]) * n[2];
+        [point[0] - n[0] * d, point[1] - n[1] * d, point[2] - n[2] * d]
+    }
+
+    /// The in-plane up direction (`normal × x_axis`).
+    pub fn y_axis(&self) -> [f64; 3] {
+        let n = self.normal;
+        let x = self.x_axis;
+        [n[1] * x[2] - n[2] * x[1], n[2] * x[0] - n[0] * x[2], n[0] * x[1] - n[1] * x[0]]
+    }
+
+    /// The ray `origin + t·dir` hit on the plane, if not parallel.
+    pub fn hit(&self, origin: [f64; 3], dir: [f64; 3]) -> Option<[f64; 3]> {
+        let n = self.normal;
+        let denominator = dir[0] * n[0] + dir[1] * n[1] + dir[2] * n[2];
+        if denominator.abs() < 1e-12 {
+            return None;
+        }
+        let diff = [self.origin[0] - origin[0], self.origin[1] - origin[1], self.origin[2] - origin[2]];
+        let t = (diff[0] * n[0] + diff[1] * n[1] + diff[2] * n[2]) / denominator;
+        Some([origin[0] + dir[0] * t, origin[1] + dir[1] * t, origin[2] + dir[2] * t])
+    }
+}
+
+/// The analytic geometry an annotation resolved to — what the presentation
+/// ([`layout`]) and the STEP semantic export are built from.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum PmiGeometry {
+    None,
+    /// Measured from `a` to `b` (world). `component` names the X/Y/Z axis
+    /// when the dimension is an aligned component, else `None`.
+    Linear {
+        a: [f64; 3],
+        b: [f64; 3],
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        component: Option<char>,
+    },
+    Radial {
+        center: [f64; 3],
+        axis: [f64; 3],
+        radius: f64,
+        diameter: bool,
+        sphere: bool,
+    },
+    /// The arc sweeps `degrees` from `dir_a` about `axis` (right-handed) at
+    /// `vertex`.
+    Angular {
+        vertex: [f64; 3],
+        #[serde(rename = "dirA")]
+        dir_a: [f64; 3],
+        #[serde(rename = "dirB")]
+        dir_b: [f64; 3],
+        axis: [f64; 3],
+        degrees: f64,
+    },
+    Leader {
+        targets: Vec<[f64; 3]>,
+        dot: bool,
+        #[serde(default, skip_serializing_if = "is_false")]
+        balloon: bool,
+        /// A balloon's head derivation recipe (`None` on a plain leader): the
+        /// viewport re-derives `targets[0]` from a dragged bubble with it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        anchor: Option<BalloonAnchor>,
+    },
+    Note {
+        position: [f64; 3],
+    },
+    Hole {
+        anchor: [f64; 3],
+        normal: [f64; 3],
+    },
+    /// Display-only: keep `solids` out of the view while it is active. Draws
+    /// nothing (no chip, no text, no line).
+    Hide {
+        solids: Vec<String>,
+    },
+    /// Display-only: pose `solids` by the delta while the view is active.
+    Explode {
+        solids: Vec<String>,
+        translate: [f64; 3],
+        #[serde(rename = "rotateDeg")]
+        rotate_deg: [f64; 3],
+        scale: [f64; 3],
+        /// The rotation / scale pivot: the targets' aggregate bbox center.
+        center: [f64; 3],
+        trace: bool,
+    },
+    Datum {
+        anchor: [f64; 3],
+        normal: [f64; 3],
+        letter: String,
+    },
+    Fcf {
+        anchor: [f64; 3],
+        normal: [f64; 3],
+        frame: FcfFrame,
+    },
+}
+
+/// The cells of a feature control frame.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct FcfFrame {
+    /// The characteristic id (`flatness`, `position`, …).
+    pub characteristic: String,
+    /// Its Unicode symbol (the glyph key).
+    pub symbol: String,
+    /// The tolerance cell text (`⌀0.1 Ⓜ`).
+    pub zone: String,
+    /// The datum reference cells (`A`, `B Ⓜ`).
+    pub datums: Vec<String>,
+}
+
+// ===========================================================================
+// Value formatting (shared by the viewport and the STEP presentation)
+// ===========================================================================
+
+/// The tolerance block of a dimension: `tolMode` none / symmetric / deviation
+/// / limits with `tolUpper` / `tolLower`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ToleranceBlock {
+    pub mode: ToleranceMode,
+    pub upper: f64,
+    pub lower: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToleranceMode {
+    None,
+    Symmetric,
+    Deviation,
+    Limits,
+}
+
+impl ToleranceMode {
+    pub fn parse(text: &str) -> Self {
+        match text.trim().to_ascii_lowercase().as_str() {
+            "symmetric" => ToleranceMode::Symmetric,
+            "deviation" => ToleranceMode::Deviation,
+            "limits" => ToleranceMode::Limits,
+            _ => ToleranceMode::None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ToleranceMode::None => "none",
+            ToleranceMode::Symmetric => "symmetric",
+            ToleranceMode::Deviation => "deviation",
+            ToleranceMode::Limits => "limits",
+        }
+    }
+}
+
+impl ToleranceBlock {
+    /// Read the block off an annotation's params.
+    pub fn read(annotation: &PmiAnnotation, env: &Env) -> Result<Self, String> {
+        Ok(Self {
+            mode: ToleranceMode::parse(annotation.text("tolMode")),
+            upper: annotation.number("tolUpper", env, 0.0)?.abs(),
+            lower: annotation.number("tolLower", env, 0.0)?.abs(),
+        })
+    }
+
+    /// The signed bounds as offsets from the nominal (`lower ≤ 0 ≤ upper`),
+    /// `None` when the mode carries no tolerance.
+    pub fn bounds(&self) -> Option<(f64, f64)> {
+        match self.mode {
+            ToleranceMode::None => None,
+            ToleranceMode::Symmetric => Some((-self.upper, self.upper)),
+            ToleranceMode::Deviation | ToleranceMode::Limits => Some((-self.lower, self.upper)),
+        }
+    }
+}
+
+/// `value` with `decimals` places (`0..=8`), no exponent.
+pub fn format_number(value: f64, decimals: usize) -> String {
+    let decimals = decimals.min(8);
+    let text = format!("{:.*}", decimals, value);
+    // `-0.000` reads as a sign error on a dimension.
+    if text.starts_with('-') && text[1..].bytes().all(|b| b == b'0' || b == b'.') {
+        text[1..].to_string()
+    } else {
+        text
+    }
+}
+
+/// The dimension text: `prefix` (`⌀` / `R` / `""`) + the nominal (+ the
+/// tolerance block) + `suffix` (`°` / `""`); a reference dimension is
+/// parenthesized and shows no tolerance.
+pub fn format_dimension(
+    value: f64,
+    decimals: usize,
+    tolerance: &ToleranceBlock,
+    is_reference: bool,
+    prefix: &str,
+    suffix: &str,
+) -> String {
+    let nominal = format!("{prefix}{}{suffix}", format_number(value, decimals));
+    if is_reference {
+        return format!("({nominal})");
+    }
+    match tolerance.mode {
+        ToleranceMode::None => nominal,
+        ToleranceMode::Symmetric => format!(
+            "{nominal} \u{00B1}{}{suffix}",
+            format_number(tolerance.upper, decimals)
+        ),
+        ToleranceMode::Deviation => format!(
+            "{nominal} +{}{suffix}/\u{2212}{}{suffix}",
+            format_number(tolerance.upper, decimals),
+            format_number(tolerance.lower, decimals)
+        ),
+        ToleranceMode::Limits => format!(
+            "{prefix}{}{suffix} / {prefix}{}{suffix}",
+            format_number(value + tolerance.upper, decimals),
+            format_number(value - tolerance.lower, decimals)
+        ),
+    }
+}
+
+// ===========================================================================
+// The history tail
+// ===========================================================================
+
+/// What the annotation resolvers read: the live scene, the request (hole
+/// features for callouts, the datum registry) and the expression sheet.
+pub struct PmiContext<'a> {
+    pub scene: &'a SceneMap,
+    pub request: &'a HistoryRequest,
+    pub env: &'a Env,
+    /// The PMI block being resolved, its `Plane` sections already resolved.
+    pub state: &'a PmiState,
+    /// The part-level datum registry (letter → annotation id).
+    pub datums: BTreeMap<String, String>,
+}
+
+/// The outcome of one annotation's resolver.
+pub struct Resolved {
+    pub text: String,
+    pub value: Option<f64>,
+    pub unit: &'static str,
+    pub references: Vec<String>,
+    pub geometry: PmiGeometry,
+    /// The default label anchor when the annotation stores none.
+    pub default_label: [f64; 3],
+}
+
+/// Resolve every view's annotations against `scene`. `None` when the request
+/// carries no `pmi` block (a document without PMI reports nothing).
+pub(crate) fn finish_history_run(
+    request: &HistoryRequest,
+    scene: &SceneMap,
+    env: &Env,
+) -> Option<PmiReport> {
+    let state = request.pmi.as_ref()?;
+    Some(resolve_state(state, scene, request, env))
+}
+
+/// Resolve `state` (the tail's body, callable on any scene).
+pub fn resolve_state(
+    state: &PmiState,
+    scene: &SceneMap,
+    request: &HistoryRequest,
+    env: &Env,
+) -> PmiReport {
+    // The datum registry: first definition of a letter wins; a duplicate is
+    // reported on the later annotation by the datum resolver.
+    let mut datums: BTreeMap<String, String> = BTreeMap::new();
+    for (letter, id) in state.datum_letters() {
+        datums.entry(letter).or_insert(id);
+    }
+    // A section on a picked plane resolves against this scene; the
+    // annotations (balloons included) then see it as a fixed plane.
+    let mut state = state.clone();
+    let mut section_errors: BTreeMap<String, String> = BTreeMap::new();
+    for view in &mut state.views {
+        if let Err(error) = resolve_section_plane(view, scene) {
+            section_errors.insert(view.id.clone(), error);
+        }
+    }
+    let state = &state;
+    let context = PmiContext {
+        scene,
+        request,
+        env,
+        state,
+        datums,
+    };
+    PmiReport {
+        views: state
+            .views
+            .iter()
+            .map(|view| {
+                let section = section_half_space(view);
+                let exempt = |reference: &str| {
+                    let section = view.display.section.as_ref();
+                    section.is_some_and(|section| reference_solid(scene, reference).is_some_and(|solid| section.excludes(&solid)))
+                };
+                let mut hidden: Vec<String> = scene.solids.keys().filter(|name| view.hides(name)).cloned().collect();
+                hidden.sort();
+                PmiViewReport {
+                    section_plane: view.display.section.as_ref().filter(|s| s.axis == "Plane").and_then(|_| view.section_plane()),
+                    section_error: section_errors.remove(&view.id).unwrap_or_default(),
+                    hidden,
+                    id: view.id.clone(),
+                    annotations: view
+                        .annotations
+                        .iter()
+                        .map(|annotation| {
+                            let report = resolve_annotation(annotation, &context, view.camera.as_ref());
+                            match &section {
+                                Some(section) => sectioned_away(report, section, &exempt),
+                                None => report,
+                            }
+                        })
+                        .collect(),
+                }
+            })
+            .collect(),
+    }
+}
+
+/// Fill a `Plane` section's origin and normal from its reference: a planar
+/// face or a reference plane (datum or sketch plane) of `scene`.
+fn resolve_section_plane(view: &mut PmiView, scene: &SceneMap) -> Result<(), String> {
+    let Some(section) = view.display.section.as_mut().filter(|s| s.axis == "Plane") else {
+        return Ok(());
+    };
+    let name = section.plane.clone().unwrap_or_default();
+    if name.trim().is_empty() {
+        return Err("pick a planar face or a datum plane to cut on".into());
+    }
+    match resolve::resolve_reference(scene, &name) {
+        Ok(crate::SelectionGeometry::Plane { origin, normal }) => {
+            section.origin = Some(resolve::a3(origin));
+            section.normal = Some(resolve::a3(normal));
+            Ok(())
+        }
+        Ok(_) => Err(format!("section plane '{name}' is not planar: pick a planar face or a datum plane")),
+        Err(error) => Err(format!("section plane '{name}': {error}")),
+    }
+}
+
+/// The half-space a sectioned view keeps, for checking where its
+/// annotations land. `None` without a section, and for a view that explodes
+/// anything: its annotations measure the modeling pose while the cut is made
+/// on the exploded display, so the two cannot be compared.
+fn section_half_space(view: &PmiView) -> Option<anchor::HalfSpace> {
+    if view.annotations.iter().any(|a| a.enabled && a.kind == "explode") {
+        return None;
+    }
+    anchor::HalfSpace::of(&view.section_planes())
+}
+
+/// A resolved annotation whose measured points lie on the side the view's
+/// section removes would be drawn on nothing; it is reported as an error,
+/// its chip kept where its label is, the way a balloon on a removed part is.
+/// Balloons check their own anchors, radial and angular annotations measure
+/// through their centre or vertex (often off the part), and notes float.
+/// A point on a solid the section leaves whole (`exempt`, by reference) is
+/// drawn whatever side it is on.
+fn sectioned_away(mut report: PmiAnnotationReport, section: &anchor::HalfSpace, exempt: &dyn Fn(&str) -> bool) -> PmiAnnotationReport {
+    if report.status != PmiStatus::Ok {
+        return report;
+    }
+    let points: Vec<[f64; 3]> = match &report.geometry {
+        PmiGeometry::Linear { a, b, component: None } => vec![*a, *b],
+        // An aligned dimension's second point is the projected corner, not geometry.
+        PmiGeometry::Linear { a, component: Some(_), .. } => vec![*a],
+        PmiGeometry::Leader { targets, balloon: false, .. } => targets.clone(),
+        PmiGeometry::Hole { anchor, .. } | PmiGeometry::Datum { anchor, .. } | PmiGeometry::Fcf { anchor, .. } => vec![*anchor],
+        _ => return report,
+    };
+    // Each point's own reference where they pair one to one (a dimension's
+    // two targets, a leader's targets); otherwise all of them must be exempt.
+    let references = &report.references;
+    let point_exempt = |index: usize| match references.len() == points.len() {
+        true => exempt(&references[index]),
+        false => !references.is_empty() && references.iter().all(|reference| exempt(reference)),
+    };
+    if points.iter().enumerate().all(|(index, point)| point_exempt(index) || section.keeps(*point, 1e-6)) {
+        return report;
+    }
+    report.status = PmiStatus::Error;
+    report.message = "it is on geometry the section removes in this view: move the section, Reverse it, or re-attach the annotation".into();
+    report.text = String::new();
+    report.value = None;
+    report.geometry = PmiGeometry::None;
+    report.plane = None;
+    report
+}
+
+/// The scene name of the solid a reference lies on: a vertex ref's solid, a
+/// face's or an edge's owner, or the solid itself.
+fn reference_solid(scene: &SceneMap, reference: &str) -> Option<String> {
+    let reference = reference.trim();
+    if let Some((solid, _)) = reference.split_once('@') {
+        return Some(solid.to_string());
+    }
+    let handle = scene
+        .resolve_face(reference)
+        .map(|face| face.handle)
+        .or_else(|| scene.resolve_edge(reference).map(|edge| edge.handle))
+        .or_else(|| scene.resolve_solid(reference))?;
+    scene.solids.iter().find(|(_, h)| **h == handle).map(|(name, _)| name.clone())
+}
+
+/// Resolve one annotation through its type's resolver into a report row:
+/// the type's measurement, then its annotation plane (`camera` orients the
+/// plane toward the view; `None` for a view without a camera).
+pub fn resolve_annotation(
+    annotation: &PmiAnnotation,
+    context: &PmiContext<'_>,
+    camera: Option<&PmiCamera>,
+) -> PmiAnnotationReport {
+    let mut persistent_data = None;
+    let mut plugin_replay = None;
+    let outcome = match pmi_type(&annotation.kind) {
+        None if annotation.kind.contains('/') && !annotation.enabled => Ok(Resolved {
+            text: String::new(), value: None, unit: "", references: Vec::new(),
+            geometry: PmiGeometry::None, default_label: annotation.label_world.unwrap_or([0.; 3]),
+        }),
+        Some(def) => (def.resolve)(annotation, context),
+        None if annotation.kind.contains('/') => plugin::resolve(annotation, context).map(|(resolved, data, replay)| {
+            persistent_data = Some(data);
+            plugin_replay = Some(replay);
+            resolved
+        }),
+        None => Err(format!("unknown PMI annotation type '{}'", annotation.kind)),
+    }
+    .and_then(|resolved| {
+        let plane = annotation_plane(annotation, context, camera, &resolved.geometry)?;
+        Ok((resolved, plane))
+    });
+    match outcome {
+        Ok((resolved, plane)) => {
+            let label = annotation.label_world.unwrap_or(resolved.default_label);
+            PmiAnnotationReport {
+                persistent_data,
+                plugin_replay,
+                id: annotation.id().to_string(),
+                kind: annotation.kind.clone(),
+                enabled: annotation.enabled,
+                status: PmiStatus::Ok,
+                message: String::new(),
+                text: resolved.text,
+                value: resolved.value,
+                unit: resolved.unit.to_string(),
+                references: resolved.references,
+                label_world: plane.map_or(label, |plane| plane.project(label)),
+                plane,
+                geometry: resolved.geometry,
+            }
+        }
+        Err(message) => PmiAnnotationReport {
+            persistent_data: None,
+            plugin_replay: None,
+            id: annotation.id().to_string(),
+            kind: annotation.kind.clone(),
+            enabled: annotation.enabled,
+            status: PmiStatus::Error,
+            message,
+            text: String::new(),
+            value: None,
+            unit: String::new(),
+            references: Vec::new(),
+            // A refused balloon's chip sits beside its occurrence, where the
+            // bubble would have been, not at the origin.
+            label_world: annotation
+                .label_world
+                .or_else(|| (annotation.kind == "balloon").then(|| annotations::balloon::error_bubble(annotation, context)).flatten())
+                .unwrap_or([0.0; 3]),
+            plane: None,
+            geometry: PmiGeometry::None,
+        },
+    }
+}
+
+/// Resolve an annotation's `plane` reference into its [`PmiPlane`]. The
+/// reference must be a planar face or a reference plane, and the plane must
+/// be parallel to what it carries — a linear dimension's direction, an
+/// angle's plane, a circle's plane — since a dimension line drawn in a
+/// non-parallel plane would be foreshortened and misstate the value. The
+/// normal faces the view's camera and the text direction follows the
+/// camera's right. `Ok(None)` when the annotation aligns to the view.
+fn annotation_plane(
+    annotation: &PmiAnnotation,
+    context: &PmiContext<'_>,
+    camera: Option<&PmiCamera>,
+    geometry: &PmiGeometry,
+) -> Result<Option<PmiPlane>, String> {
+    use crate::SelectionGeometry;
+    use resolve::{a3, perpendicular_in_plane, v3};
+    let Some(name) = annotation.plane_ref() else {
+        return Ok(None);
+    };
+    let (origin, normal) = match resolve::resolve_reference(context.scene, name)? {
+        SelectionGeometry::Plane { origin, normal } => (origin, normal),
+        _ => return Err(format!("annotation plane '{name}' must be a planar face or a reference plane")),
+    };
+    let mut normal = normal
+        .normalized()
+        .map_err(|_| format!("annotation plane '{name}' has no normal"))?;
+    // sin of the largest tolerated tilt (~0.06°).
+    const PARALLEL: f64 = 1e-3;
+    match geometry {
+        PmiGeometry::Linear { a, b, .. } => {
+            let span = v3(*b).sub(v3(*a));
+            if span.length() > 1e-9 && span.normalized().map(|d| d.dot(normal).abs()).unwrap_or(0.0) > PARALLEL {
+                return Err(format!("annotation plane '{name}' is not parallel to the measured direction"));
+            }
+        }
+        PmiGeometry::Angular { axis, .. } => {
+            if v3(*axis).cross(normal).length() > PARALLEL {
+                return Err(format!("annotation plane '{name}' is not parallel to the angle's plane"));
+            }
+        }
+        PmiGeometry::Radial { axis, sphere: false, .. } => {
+            if v3(*axis).cross(normal).length() > PARALLEL {
+                return Err(format!("annotation plane '{name}' is not parallel to the circle's plane"));
+            }
+        }
+        _ => {}
+    }
+    let x_axis = match camera {
+        Some(camera) => {
+            let view = v3(camera.view_direction());
+            if normal.dot(view) > 0.0 {
+                normal = normal.scale(-1.0);
+            }
+            perpendicular_in_plane(normal, view.cross(v3(camera.up)))
+        }
+        None => perpendicular_in_plane(normal, crate::Vec3::new(1.0, 0.0, 0.0)),
+    };
+    Ok(Some(PmiPlane {
+        origin: a3(origin),
+        normal: a3(normal),
+        x_axis: a3(x_axis),
+    }))
+}
+

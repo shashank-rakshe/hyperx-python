@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:brep="https://brep.io/icons"
+     viewBox="0 0 24 24" width="24" height="24" brep:glyph-name="icon_feat_rib" brep:unicode="E051">
+  <!-- A stiffening web added between a wall and a floor. -->
+  <path d="M2.5 19.5 8.6 23.9 8.6 22.4 2.5 18Z" fill="#f0b840" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M8.6 23.9 19.4 18.9 19.4 17.4 8.6 22.4Z" fill="#d4901f" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M2.5 18 13.3 13 19.4 17.4 8.6 22.4Z" fill="#ffd977" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M2.5 18 3.6 18.8 3.6 9.8 2.5 9Z" fill="#f0b840" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M3.6 18.8 14.4 13.8 14.4 4.8 3.6 9.8Z" fill="#d4901f" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M2.5 9 13.3 4 14.4 4.8 3.6 9.8Z" fill="#ffd977" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M7.2 10.1 11 19.9 13 19 9.2 9.2Z" fill="#2fa469" stroke="#125236" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M7.2 17.1 7.2 10.1 11 19.9Z" fill="#a5e8c4" stroke="#125236" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

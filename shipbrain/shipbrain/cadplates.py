@@ -117,7 +117,11 @@ def import_cad(path):
         return vals[0] if len(vals) == 1 else cq.Compound.makeCompound(vals)
     if low.endswith('.brep'):
         return cq.Shape.importBrep(path)
-    raise ValueError('CAD input must be STEP (.step/.stp) or BREP; for STL use a surface model in CAD first')
+    if low.endswith('.stl'):                        # mesh -> exact solid with next.BREP.io's stl2step, then as a STEP
+        from .brep import stl_to_step
+        step, _ = stl_to_step(path)
+        return import_cad(step)
+    raise ValueError('CAD input must be STEP (.step/.stp), BREP or STL')
 
 
 def mesh_cad(path, element_size=100.0, default_t=10.0, out_dir='.', name=None, loads=None, fix=None, material=None, clean=True, beams=None):

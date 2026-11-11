@@ -475,8 +475,13 @@ def t_repair(r, tools):
     b = b.faces('<Z').workplane().hole(big)
     if r.random() < 0.5:
         b = b.faces('>Z').workplane().center(0, B / 3.5).circle(bd / 2).extrude(T * 0.6)
-    name = r.choice(['bracket', 'lug', 'foundation_plate', 'pad', 'insert']) + f'_{r.randint(100, 999)}.step'
-    cq.exporters.export(b, os.path.join(tools.workdir, name))
+    from shipbrain import brep
+    ext = '.stl' if brep.built() and r.random() < 0.3 else '.step'     # meshes (scans, print files) go through stl2step
+    name = r.choice(['bracket', 'lug', 'foundation_plate', 'pad', 'insert']) + f'_{r.randint(100, 999)}{ext}'
+    if ext == '.stl':
+        cq.exporters.export(b, os.path.join(tools.workdir, name), tolerance=0.05, angularTolerance=0.1)
+    else:
+        cq.exporters.export(b, os.path.join(tools.workdir, name))
     lim = {'holes_below': hd + r.choice([2, 5, 8]), 'fillets_below': fr + r.choice([2, 4]), 'chamfers_below': ch + r.choice([1, 3]),
            'bosses_below': bd + r.choice([2, 4])}
     keys = r.sample(list(lim), r.choice([1, 2, 2, 3]))

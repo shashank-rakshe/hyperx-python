@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:brep="https://brep.io/icons"
+     viewBox="0 0 24 24" width="24" height="24" brep:glyph-name="icon_feat_refit_faces" brep:unicode="E05E">
+  <!-- A block whose triangulated top is refitted as one clean face. -->
+  <path d="M2.5 18 9.3 22.9 9.3 18.9 2.5 14Z" fill="#f0b840" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M9.3 22.9 21 17.5 21 13.5 9.3 18.9Z" fill="#d4901f" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M2.5 14 14.2 8.5 21 13.5 9.3 18.9Z" fill="#ffd977" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M5.4 12.6L5.9 16.5M8.8 15.1L9.3 18.9M5.4 12.6L12.3 17.6M8.4 11.3L8.8 15.1M11.8 13.7L12.3 17.6M8.4 11.3L15.2 16.2M5.9 16.5L11.8 13.7" style="fill:none" stroke="#7a4d10" stroke-width="0.9" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M8.4 11.3 14.2 8.5 21 13.5 15.2 16.2Z" fill="#a5e8c4" stroke="#2fa469" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

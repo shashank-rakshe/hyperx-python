@@ -126,6 +126,9 @@ if os.environ.get('SB_CONTINUE') == '1':
 sh(f'python training/make_dataset.py --n {N_TRAIN} --eval-n {N_EVAL} --out data/train.jsonl --eval-out data/eval.jsonl {extra}')
 if not sh('python training/repo_tasks.py --packs packs --out data/repo_train.jsonl --eval-out data/repo_eval.jsonl', required=False):
     open('data/repo_train.jsonl', 'w').close()          # knowledge of shared repos is a bonus, not a blocker
+# next.BREP.io's stl2step (Rust, used unchanged): STL inputs in the CAD training tasks
+sh('(command -v cargo || curl -sSf https://sh.rustup.rs | sh -s -- -y -q) && . $HOME/.cargo/env && '
+   'python -c "from shipbrain import brep; brep.build()"', required=False)
 # OpenPhysicsAI (copied whole): build it, run the examples that finish quickly, learn from the real records
 if not sh('python training/physics_tasks.py --out data/physics_train.jsonl --timeout 40', required=False):
     open('data/physics_train.jsonl', 'w').close()

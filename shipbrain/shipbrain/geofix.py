@@ -17,8 +17,8 @@ import numpy as np
 
 def _cyl_info(f):
     """(radius, full_circle, hole) for a cylindrical face; hole = material lies outside the cylinder"""
-    ad = f._geomAdaptor()
-    c = ad.Cylinder()
+    from OCP.BRepAdaptor import BRepAdaptor_Surface as _BAS
+    c = _BAS(f.wrapped).Cylinder()                 # works for trimmed surfaces too (real STEP files)
     r = c.Radius()
     u0, u1, v0, v1 = f._uvBounds()
     full = (u1 - u0) > 2 * math.pi - 1e-3
@@ -59,7 +59,8 @@ def find_features(shape, holes_below=None, fillets_below=None, chamfers_below=No
             elif not full and fillets_below and r <= fillets_below + 1e-6:
                 found['fillets'].append((f, r))
         elif t == 'TORUS' and fillets_below:
-            minor = f._geomAdaptor().Torus().MinorRadius()
+            from OCP.BRepAdaptor import BRepAdaptor_Surface as _BAS
+            minor = _BAS(f.wrapped).Torus().MinorRadius()
             if minor <= fillets_below + 1e-6:
                 found['fillets'].append((f, minor))
         elif t == 'PLANE' and chamfers_below and _strip_width(f) <= chamfers_below + 1e-6 and len(f.Edges()) == 4:

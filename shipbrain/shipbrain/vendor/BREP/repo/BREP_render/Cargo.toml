@@ -1,0 +1,118 @@
+[package]
+name = "BREP_render"
+version = "0.14.0"
+edition = "2021"
+license-file = "LICENSE.md"
+repository = "https://github.com/mmiscool/next.BREP.io_RUST_BREP_KERNEL"
+homepage = "https://v2.brep.io"
+readme = "README.md"
+keywords = ["cad", "brep", "wgpu", "renderer", "wasm"]
+categories = ["graphics", "rendering", "wasm"]
+# The `!` entries are a backstop: test code never ships. The publish snapshot
+# `cargo package` of this manifest from shipping test files.
+include = [
+    "src/**",
+    "/Cargo.toml",
+    "/LICENSE.md",
+    "/README.md",
+    "!src/**/tests/**",
+    "!**/tests.rs",
+    "!**/*_tests.rs",
+    "!**/test_support.rs",
+    "!**/testdata/**",
+]
+description = "BREP Rust rendering engine: kernel-fed scene store + wgpu renderer (headless artifact, desktop window, and wasm canvas shells)."
+
+# cdylib for the wasm-pack browser build; rlib so the native binaries/tests
+# still link the crate directly. The package publishes as BREP_render; the
+# library keeps the historical brep_render symbol so `use brep_render::` and
+# the wasm-pack artifact names stay stable.
+[lib]
+name = "brep_render"
+crate-type = ["cdylib", "rlib"]
+
+# Standalone crate (NOT a workspace with ../BREP_kernel): the kernel's own
+# Cargo.toml carries wasm-specific profile settings (panic=abort, fat LTO) that
+# a workspace root would silently override for the wasm-pack build. A plain
+# path dependency links the kernel rlib without touching its build.
+
+[dependencies]
+ttf-parser = "0.25"
+epaint_default_fonts = "0.35"
+brep_plugins = { package = "BREP_plugins", version = "0.7.0", path = "../BREP_plugins" }
+# BOM reference edits validate electronics snapshots with their owning schema.
+BREP_ecad_core = { version = "0.3.2", path = "../BREP_ecad_core" }
+# Base kernel link WITHOUT `parallel` — the wasm build must not pull rayon
+# (the shipped kernel wasm enables neither feature). `parallel` is added back
+# for native only, below.
+brep_kernel = { package = "BREP_kernel", version = "0.15.0", path = "../BREP_kernel", default-features = false }
+# The CAM engine, for the worker's generation job (`runner::Command::CamGenerate`):
+# the kernel adapter needs the resident solids, which live on the runner side.
+# `kernel` turns on that adapter; the crate is pure Rust and builds for wasm32.
+brep_cam = { package = "BREP_cam", version = "0.5.0", path = "../BREP_cam", features = ["kernel"] }
+# Manufacturing instructions: the instructions block, the wizard and step edits
+# (serde only; builds for wasm32).
+brep_instructions = { package = "BREP_instructions", version = "0.3.0", path = "../BREP_instructions" }
+# Motion studies: the simulation block, motors, clips and sampling (serde only;
+# builds for wasm32).
+brep_simulation = { package = "BREP_simulation", version = "0.1.2", path = "../BREP_simulation" }
+# Mesh imports pass through the topology-aware RANSAC reconstruction stack
+# before they enter the ordinary IMPORT3D history lane.
+brep-reconstruction = { package = "BREP_reconstruction", version = "0.12.0", path = "../BREP_reconstruction" }
+# The in-scene gizmos / overlay widgets (transform gizmo, ViewCube, datum/axis
+# visuals, dimension leaders, curve display). Pure geometry + hit-testing, no
+# GPU/kernel dep — the engine converts its emitted `Overlay` into overlay GPU
+# buffers (slice 3). A plain path dep; the crate is wasm32-clean.
+brep-gizmos = { package = "BREP_gizmos", version = "0.2.5", path = "../BREP_gizmos" }
+# Every dependency here must stay wasm32-compatible (the browser canvas shell
+# builds from this same crate). `webgl` adds wgpu's WebGL2 backend so CAD users
+# without WebGPU still get a (slower) correct renderer (R5). No std::time on any
+# shared path.
+wgpu = { version = "29", features = ["webgl"] }
+bytemuck = { version = "1", features = ["derive"] }
+png = "0.18"
+base64 = "0.22"
+# The sketch data model (`sketch::SketchDoc`) mirrors the kernel solver's JSON via
+# serde derive. serde is wasm32-clean (the kernel already links it).
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Native-only presentation/runtime helpers + kernel parallel tessellation. The
+# renderer core never touches these — they belong to the thin shells (headless
+# readback, winit window).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+brep_kernel = { package = "BREP_kernel", version = "0.15.0", path = "../BREP_kernel", features = ["parallel"] }
+# CAM contact solves on rayon for native generation (byte-identical output).
+brep_cam = { package = "BREP_cam", version = "0.5.0", path = "../BREP_cam", features = ["kernel", "parallel"] }
+pollster = "0.4"
+winit = { version = "0.30", optional = true }
+
+# The browser canvas shell (R3 wasm-bindgen API + WebGPU/WebGL device).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { version = "1", features = ["js"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+    "HtmlCanvasElement",
+    "Window",
+    "Document",
+] }
+
+[features]
+default = []
+# The winit desktop presentation shell (brep-render-desktop). Off by default so
+# the headless artifact binary builds without windowing dependencies.
+desktop = ["dep:winit"]
+
+[[bin]]
+name = "brep-render-artifact"
+path = "src/bin/artifact.rs"
+
+[[bin]]
+name = "brep-render-desktop"
+path = "src/bin/desktop.rs"
+required-features = ["desktop"]
+
+[profile.release]
+opt-level = 3

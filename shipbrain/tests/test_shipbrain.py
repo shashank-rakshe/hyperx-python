@@ -1428,3 +1428,19 @@ def test_openphysics_lab_and_mcp_client(tmp_path):
     assert ts['count'] >= 80 and 'lab_run' in T.call('mcp_tools', {'server': 'openphysics', 'query': 'lab'})['plain_english']
     cap = T.call('mcp_call', {'tool': 'capabilities_get'})
     assert cap['result']['ok'] is True
+
+
+def test_stl_to_step_and_stl_in_the_cad_tools(tmp_path):
+    cq = pytest.importorskip('cadquery')
+    from shipbrain import brep
+    from shipbrain.repopack import classify_licence
+    assert classify_licence(open(os.path.join(brep.ROOT, 'LICENSE.md')).read())[1] == 'conditional'   # never modified
+    if not brep.built():
+        pytest.skip('stl2step not built (needs Rust)')
+    part = cq.Workplane('XY').box(200, 100, 20).edges('|Z').fillet(8).faces('>Z').workplane().pushPoints([(-60, 0), (60, 0)]).hole(12).val()
+    cq.exporters.export(cq.Workplane().add(part), str(tmp_path / 'scan.stl'), tolerance=0.05, angularTolerance=0.1)
+    T = agent.Tools(tmp_path)
+    r = T.call('stl_to_step', {'file': 'scan.stl'})
+    assert r['valid'] and r['faces'] == {'CYLINDER': 6, 'PLANE': 6} and abs(r['volume_mm3'] / part.Volume() - 1) < 1e-6
+    rep = T.call('repair_model', {'file': 'scan.stl', 'request': 'remove holes below 20 and fillets below R10'})
+    assert rep['summary']['valid'] and rep['summary']['faces_after'] == 6                     # a plain box is left

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:brep="https://brep.io/icons"
+     viewBox="0 0 24 24" width="24" height="24" brep:glyph-name="icon_feat_tube" brep:unicode="E055">
+  <!-- An angled hollow tube with a thick rim and a visible inner wall. -->
+  <g transform="rotate(-35 12 12)" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M7 5V19A5 2.8 0 0 0 17 19V5Z" fill="#f0b840"/>
+    <path d="M12 5V21.8A5 2.8 0 0 0 17 19V5Z" fill="#d4901f"/>
+    <path d="M8.5 6V18.5" style="fill:none" stroke="#ffd977" stroke-width="1.2"/>
+    <path d="M7 5V19A5 2.8 0 0 0 17 19V5" style="fill:none" stroke="#7a4d10" stroke-width="1.2"/>
+    <ellipse cx="12" cy="5" rx="5" ry="2.8" fill="#ffd977" stroke="#7a4d10" stroke-width="1.2"/>
+    <ellipse cx="12" cy="5" rx="3.2" ry="1.65" fill="#7a4d10"/>
+    <path d="M8.8 5A3.2 1.65 0 0 0 15.2 5Q12 6.1 8.8 5Z" fill="#d4901f"/>
+  </g>
+</svg>

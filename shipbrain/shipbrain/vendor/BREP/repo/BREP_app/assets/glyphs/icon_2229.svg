@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:brep="https://brep.io/icons"
+     viewBox="0 0 24 24" width="24" height="24" brep:glyph-name="icon_2229" brep:unicode="2229">
+  <!-- Interference check: the intersecting volume is highlighted red. -->
+  <path d="M2 8 8 5 12 8 6 11Z" fill="#ffd977" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M2 8 6 11V18L2 15Z" fill="#f0b840" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M6 11 12 8V15L6 18Z" fill="#d4901f" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M10 11 16 8 20 11 14 14Z" fill="#c9b6f0" stroke="#3d2a6b" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M10 11 14 14V21L10 18Z" fill="#8b6fd4" stroke="#3d2a6b" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M14 14 20 11V18L14 21Z" fill="#8b6fd4" stroke="#3d2a6b" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M10 11 12 10V15L10 16 6 13V10Z" fill="#d94438" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round"/>
+</svg>

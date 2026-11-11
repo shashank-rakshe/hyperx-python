@@ -1,0 +1,1664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Instructions</title>
+<style{{NONCE}}>
+:root { --bg:#131b24; --panel:#1b2631; --line:#324452; --text:#e6edf3; --dim:#9fb0bf; --accent:#ff9a1f; --caution:#e5534b; --note:#4c9ee8; --check:#3fb950; }
+* { box-sizing:border-box; }
+html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font:16px/1.4 system-ui, sans-serif; }
+#app { display:grid; grid-template-rows:auto 1fr auto; height:100%; }
+header { display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid var(--line); }
+header h1 { font-size:18px; margin:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+header .sub { color:var(--dim); font-size:14px; }
+main { display:grid; grid-template-columns:260px 1fr 340px; min-height:0; }
+body.customer main { grid-template-columns:1fr 280px; }
+body.customer #checklist { display:none; }
+#checklist, #details { overflow:auto; padding:12px; border-right:1px solid var(--line); background:var(--panel); }
+#details { border-right:0; border-left:1px solid var(--line); }
+#viewport { position:relative; min-width:0; min-height:0; touch-action:none; }
+#viewport canvas, #viewport img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
+#chapter { color:var(--dim); font-size:13px; text-transform:uppercase; letter-spacing:.05em; }
+#title { font-size:22px; margin:4px 0 12px; }
+.check { display:flex; gap:8px; align-items:center; padding:10px 8px; border-radius:8px; cursor:pointer; min-height:44px; }
+.check.current { background:#26394a; }
+.check .box { width:22px; height:22px; border:2px solid var(--dim); border-radius:5px; flex:none; display:grid; place-items:center; }
+.check.done .box { background:var(--check); border-color:var(--check); }
+.check.done .box::after { content:"\2713"; color:#000; font-weight:bold; }
+.check.d1 { padding-left:22px; } .check.d2 { padding-left:38px; } .check.d3 { padding-left:54px; }
+.adds { display:grid; gap:8px; }
+.add { display:flex; gap:10px; align-items:center; background:#22303c; border-radius:8px; padding:6px; }
+.add img { width:56px; height:56px; background:#0e141b; border-radius:6px; }
+.add .find { min-width:28px; height:28px; border-radius:50%; border:2px solid var(--accent); display:grid; place-items:center; font-size:13px; }
+.qty { color:var(--accent); font-weight:600; }
+.section { margin-top:14px; }
+.section h3 { font-size:13px; color:var(--dim); margin:0 0 6px; text-transform:uppercase; }
+.callout { border-left:4px solid var(--note); padding:6px 10px; margin:6px 0; background:#22303c; border-radius:0 6px 6px 0; }
+.callout.caution { border-color:var(--caution); }
+.callout.check { border-color:var(--check); }
+.callout b { margin-right:6px; }
+footer { display:flex; gap:12px; padding:10px 16px; border-top:1px solid var(--line); align-items:center; }
+footer .count { flex:1; text-align:center; color:var(--dim); }
+button { font:inherit; color:var(--text); background:#2b3d4e; border:1px solid var(--line); border-radius:10px; padding:10px 22px; min-height:48px; cursor:pointer; }
+button.primary { background:var(--accent); color:#111; border-color:var(--accent); font-weight:600; }
+button:disabled { opacity:.4; cursor:default; }
+#signoff { margin-top:16px; display:grid; gap:8px; }
+#signoff input { font:inherit; padding:10px; border-radius:8px; border:1px solid var(--line); background:#0e141b; color:var(--text); min-height:44px; }
+#message { color:var(--caution); min-height:1.4em; }
+#signed { color:var(--check); }
+body.customer #notes { display:none; }
+#tools .tool { display:flex; align-items:center; gap:10px; margin:4px 0; }
+#tools .tool img { width:64px; height:64px; object-fit:contain; border-radius:6px; background:#fff; }
+/* A motion study's player: the view and a timeline, no steps. */
+body.motion main { grid-template-columns:1fr; }
+body.motion #checklist, body.motion #details, body.motion footer { display:none; }
+#timeline { display:none; padding:10px 16px; border-top:1px solid var(--line); align-items:center; gap:12px; position:relative; }
+body.motion #timeline, body.step-motion #timeline { display:flex; }
+#timeline input[type=range] { flex:1; min-height:32px; }
+#timeline .time { min-width:9em; text-align:right; color:var(--dim); font-variant-numeric:tabular-nums; }
+#timeline .marks { position:absolute; left:112px; right:11em; top:4px; height:4px; pointer-events:none; }
+#timeline .marks span { position:absolute; top:0; width:2px; height:4px; background:var(--caution); }
+#timeline .clash { color:var(--caution); min-width:7em; }
+/* The tabs: Steps (the instructions), Model (the assembly tree over the
+   model, every part shown or hidden on its own) and Parts (a card per part). */
+#tabs { display:none; gap:4px; }
+body.has-assembly #tabs { display:flex; }
+#tabs button { min-height:36px; padding:6px 14px; border-radius:8px; }
+#tabs button[aria-selected=true] { background:var(--accent); color:#111; border-color:var(--accent); font-weight:600; }
+#tree, #part-info, #parts { display:none; }
+body.tab-model #checklist, body.tab-model #details, body.tab-model footer, body.tab-model #timeline { display:none; }
+body.tab-model main, body.tab-model.customer main { grid-template-columns:300px 1fr 300px; }
+body.tab-model #tree, body.tab-model #part-info { display:block; overflow:auto; padding:12px; background:var(--panel); }
+#tree { border-right:1px solid var(--line); }
+#part-info { border-left:1px solid var(--line); }
+body.tab-parts main, body.tab-parts footer, body.tab-parts #timeline { display:none; }
+body.tab-parts #parts { display:block; overflow:auto; padding:16px; min-height:0; }
+.tree-tools { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+.tree-tools button, .part-actions button, .uses button { min-height:32px; padding:4px 10px; border-radius:7px; font-size:14px; }
+.row { display:flex; align-items:center; gap:4px; min-height:32px; border-radius:6px; padding-right:4px; }
+.row.selected { background:#26394a; }
+.row.off .name { color:var(--dim); text-decoration:line-through; }
+.row .twist { width:22px; height:22px; flex:none; display:grid; place-items:center; cursor:pointer; color:var(--dim); user-select:none; }
+.row .vis { width:18px; height:18px; flex:none; margin:0 4px; accent-color:var(--accent); }
+.row .name { flex:1; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.row .find { color:var(--accent); font-size:12px; min-width:1.5em; text-align:right; }
+.row .kind { color:var(--dim); font-size:11px; text-transform:uppercase; }
+.part-head { display:flex; gap:12px; align-items:center; }
+.part-head img, .card img { width:96px; height:96px; background:#0e141b; border-radius:8px; flex:none; object-fit:contain; }
+.part-head h2 { margin:0; font-size:18px; word-break:break-word; }
+.props { display:grid; grid-template-columns:auto 1fr; gap:2px 10px; margin:10px 0; font-size:14px; }
+.props dt { color:var(--dim); }
+.props dd { margin:0; word-break:break-word; }
+.uses { display:flex; flex-direction:column; gap:4px; align-items:flex-start; }
+.uses .none { color:var(--dim); font-size:14px; }
+.part-actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+#parts-filter { font:inherit; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:#0e141b; color:var(--text); width:min(420px, 100%); margin-bottom:14px; }
+#parts-count { color:var(--dim); margin-left:12px; }
+#parts-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:12px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px; }
+.card.flash { border-color:var(--accent); }
+.badge { display:inline-block; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--dim); border:1px solid var(--line); border-radius:4px; padding:0 5px; margin:4px 4px 0 0; }
+#pmi-toggle[aria-pressed=false] { opacity:.55; }
+#pmi-list { font-size:14px; color:var(--dim); }
+@media (max-width: 900px) {
+  main, body.customer main { grid-template-columns:1fr; grid-template-rows:45vh auto; }
+  #checklist { display:none; }
+  #details { border-left:0; border-top:1px solid var(--line); }
+  body.tab-model main, body.tab-model.customer main { grid-template-columns:1fr; grid-template-rows:45vh auto auto; }
+  body.tab-model main { overflow:auto; }
+  body.tab-model #viewport { order:-1; }
+  body.tab-model #tree, body.tab-model #part-info { border:0; border-top:1px solid var(--line); overflow:visible; }
+  header { flex-wrap:wrap; }
+  #tabs { width:100%; }
+  #tabs button { flex:1; }
+  #parts-grid { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+<script type="application/json" id="mi-config">{{CONFIG}}</script>
+<script type="application/json" id="mi-data">{{DATA}}</script>
+<div id="app">
+  <header><h1 id="doc-title">Instructions</h1><span class="sub" id="doc-sub"></span>
+    <nav id="tabs" role="tablist" aria-label="Views">
+      <button id="tab-steps" role="tab" aria-selected="true">Steps</button>
+      <button id="tab-model" role="tab" aria-selected="false">Model</button>
+      <button id="tab-parts" role="tab" aria-selected="false">Parts</button>
+    </nav>
+  </header>
+  <main>
+    <nav id="checklist" aria-label="Steps"></nav>
+    <nav id="tree" aria-label="Assembly tree"></nav>
+    <div id="viewport"><canvas id="canvas"></canvas></div>
+    <section id="details">
+      <div id="chapter"></div>
+      <h2 id="title"></h2>
+      <div class="adds" id="adds"></div>
+      <div class="section" id="tools-section"><h3>Tools</h3><div id="tools"></div></div>
+      <div class="section" id="torque-section"><h3>Torque</h3><div id="torque"></div></div>
+      <div class="section" id="callouts"></div>
+      <div class="section" id="notes"></div>
+      <div class="section" id="pmi-section"><h3>Annotations</h3><div id="pmi-list"></div></div>
+      <div id="signoff"></div>
+    </section>
+    <section id="part-info" aria-label="Part"></section>
+  </main>
+  <section id="parts" aria-label="Parts">
+    <input id="parts-filter" type="search" placeholder="Filter parts" aria-label="Filter parts"><span id="parts-count"></span>
+    <div id="parts-grid"></div>
+  </section>
+  <footer>
+    <button id="back">&#9664; Back</button>
+    <button id="replay" title="Play the insertion again">&#8635;</button>
+    <button id="pmi-toggle" title="Show or hide the view's annotations" aria-pressed="true" hidden>PMI</button>
+    <span class="count" id="count"></span>
+    <button id="next" class="primary">Next &#9654;</button>
+  </footer>
+  <div id="timeline">
+    <button id="motion-play" class="primary" title="Play / pause">&#9654;</button>
+    <div class="marks" id="motion-marks"></div>
+    <input id="motion-scrub" type="range" min="0" max="0" value="0" step="1" aria-label="Time">
+    <span class="clash" id="motion-clash"></span>
+    <span class="time" id="motion-time"></span>
+  </div>
+</div>
+<script{{NONCE}}>
+(function () {
+  'use strict';
+  var config = JSON.parse(document.getElementById('mi-config').textContent || '{}');
+  var mode = config.mode === 'customer' ? 'customer' : 'shop';
+  document.body.className = mode;
+  var $ = function (id) { return document.getElementById(id); };
+  var el = function (tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined && text !== null) e.textContent = String(text);
+    return e;
+  };
+  // Pictures from data: only data:image URLs and same-site tool pictures.
+  var safeImage = function (url) {
+    if (typeof url !== 'string') return null;
+    if (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]+$/.test(url)) return url;
+    if (/^\/api\/tools\/[A-Za-z0-9_-]+\/picture$/.test(url)) return url;
+    return null;
+  };
+
+  var data = null, steps = [], current = 0, done = {}, job = null, offline = false;
+
+  function load() {
+    var inline = JSON.parse($('mi-data').textContent || 'null');
+    if (inline) { offline = true; return Promise.resolve(inline); }
+    if (!config.dataUrl) return Promise.reject(new Error('no instructions data'));
+    return fetch(config.dataUrl, { credentials: 'same-origin' }).then(function (r) {
+      if (!r.ok) throw new Error('instructions data: HTTP ' + r.status);
+      return r.json();
+    });
+  }
+
+  // ---------- 3D ----------
+  var canvas = $('canvas'), gl = null, gl2 = false, prog = null, lines = null, hull = null, arrowBuf = null, meshes = [], view = null;
+  // Line art (data.style 'lineArt', the default for a new document): the
+  // step pictures' look (BREP_render thumbnail/line_art.rs) — a light grey
+  // ground, the placed parts flat white with grey lines and a dark grey
+  // outline, the parts the step adds flat blue under a heavy black outline,
+  // each sliding in along a thin black arrow with a filled head at its seat.
+  var LA = { ground: [0.925, 0.925, 0.925], placed: [1, 1, 1, 1], adding: [0.616, 0.722, 0.961, 1],
+    placedEdge: [0.55, 0.55, 0.55, 1], ink: [0, 0, 0, 1], placedOutline: [0.30, 0.30, 0.30, 1],
+    placedOutlinePx: 1.5, addingOutlinePx: 2.5, push: 0.01, shaftPx: 2.6, headPx: 20, headWidthPx: 14 };
+  // For automation: hold the insertion at a fraction (0 = start, 1 = home).
+  var held = null, arrowsDrawn = 0;
+  // The edge colour the step pictures draw (BREP_render thumbnail.rs).
+  var EDGE = [0.10, 0.11, 0.13], showEdges = true;
+  // The camera is the app's ViewCamera (BREP_render view.rs): an eye, a
+  // target, a free up vector, and an orthographic half height or a
+  // perspective field of view. The step's bounding radius sizes the depth
+  // range; `minHalfWidth` keeps a step captured in a wider window in sight.
+  var cam = { eye: [6, 4.5, 6.6], target: [0, 0, 0], up: [0, 1, 0], half: 5, minHalfWidth: 0, ortho: false, fov: 35, radius: 1 };
+  var anim = { start: 0, running: false };
+  var DURATION = 900;
+
+  function decode(b64, Type) {
+    var s = atob(b64), bytes = new Uint8Array(s.length);
+    for (var i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i);
+    return new Type(bytes.buffer);
+  }
+
+  function initGL() {
+    gl = canvas.getContext('webgl2', { antialias: true });
+    gl2 = !!gl;
+    if (!gl) {
+      gl = canvas.getContext('webgl', { antialias: true }) || canvas.getContext('experimental-webgl');
+      if (gl && !gl.getExtension('OES_element_index_uint')) gl = null;
+    }
+    if (!gl) return false;
+    var vs = 'attribute vec3 p; attribute vec3 n; uniform mat4 mvp; uniform mat4 model; varying vec3 vn;' +
+      'void main(){ vn = (model * vec4(n, 0.0)).xyz; gl_Position = mvp * vec4(p, 1.0); }';
+    // `unlit`: a Line art step's flat fill.
+    var fs = 'precision mediump float; varying vec3 vn; uniform vec4 color; uniform float unlit;' +
+      'void main(){ vec3 l = normalize(vec3(0.4, 0.7, 0.6)); float d = abs(dot(normalize(vn), l));' +
+      ' gl_FragColor = unlit > 0.5 ? color : vec4(color.rgb * (0.35 + 0.65 * d), color.a); }';
+    var compile = function (type, src) {
+      var s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+      return s;
+    };
+    prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, vs));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+    prog.p = gl.getAttribLocation(prog, 'p');
+    prog.n = gl.getAttribLocation(prog, 'n');
+    prog.mvp = gl.getUniformLocation(prog, 'mvp');
+    prog.model = gl.getUniformLocation(prog, 'model');
+    prog.color = gl.getUniformLocation(prog, 'color');
+    prog.unlit = gl.getUniformLocation(prog, 'unlit');
+    var lvs = 'attribute vec3 p; uniform mat4 mvp; void main(){ gl_Position = mvp * vec4(p, 1.0); }';
+    var lfs = 'precision mediump float; uniform vec4 color; void main(){ gl_FragColor = color; }';
+    lines = gl.createProgram();
+    gl.attachShader(lines, compile(gl.VERTEX_SHADER, lvs));
+    gl.attachShader(lines, compile(gl.FRAGMENT_SHADER, lfs));
+    gl.linkProgram(lines);
+    if (!gl.getProgramParameter(lines, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(lines));
+    lines.p = gl.getAttribLocation(lines, 'p');
+    lines.mvp = gl.getUniformLocation(lines, 'mvp');
+    lines.color = gl.getUniformLocation(lines, 'color');
+    // A Line art step's outline: the mesh pushed out along its normals by
+    // `px` (NDC per unit of w) and back in depth by `push`, in flat ink,
+    // drawn before the faces so only the ring round its silhouette stays.
+    // Each vertex moved in world space along the part of its normal across
+    // the screen by `px` CSS px (measured through the projection at the
+    // vertex: `vpx` is the viewport in physical px) and back along the view
+    // direction `fwd` by that distance (and the faces' polygon offset, ~3 px
+    // more) times the face's slope (capped), plus
+    // `push` in clip depth: a face moved sideways comes forward by its slope,
+    // so the copy stays behind its own body and only the ring round the
+    // silhouette is left.
+    var hvs = 'attribute vec3 p; attribute vec3 n; uniform mat4 vp; uniform mat4 model; uniform vec3 fwd; uniform vec2 vpx; uniform float px; uniform float push;' +
+      'void main(){ vec3 w = (model * vec4(p, 1.0)).xyz; vec3 m = w; vec3 wn = (model * vec4(n, 0.0)).xyz; float nl = length(wn);' +
+      ' if (nl > 1e-12) { wn /= nl; float along = dot(wn, fwd); vec3 across = wn - fwd * along; float al = length(across);' +
+      '  if (al > 1e-6) { vec3 dir = across / al; vec4 c0 = vp * vec4(w, 1.0); vec4 cd = vp * vec4(dir, 0.0);' +
+      '   float ppw = length(cd.xy * vpx * 0.5) / max(abs(c0.w), 1e-9); float d = px / max(ppw, 1e-12);' +
+      '   float back = (px + 3.0) / max(ppw, 1e-12); float slope = min(al / max(abs(along), 0.15), 6.0); m = w + dir * d + fwd * (back * slope); } }' +
+      ' vec4 c = vp * vec4(m, 1.0); c.z = min(c.z + push * c.w, c.w); gl_Position = c; }';
+    hull = gl.createProgram();
+    gl.attachShader(hull, compile(gl.VERTEX_SHADER, hvs));
+    gl.attachShader(hull, compile(gl.FRAGMENT_SHADER, lfs));
+    gl.linkProgram(hull);
+    if (!gl.getProgramParameter(hull, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(hull));
+    hull.p = gl.getAttribLocation(hull, 'p');
+    hull.n = gl.getAttribLocation(hull, 'n');
+    hull.vp = gl.getUniformLocation(hull, 'vp');
+    hull.vpx = gl.getUniformLocation(hull, 'vpx');
+    hull.px = gl.getUniformLocation(hull, 'px');
+    hull.push = gl.getUniformLocation(hull, 'push');
+    hull.color = gl.getUniformLocation(hull, 'color');
+    hull.model = gl.getUniformLocation(hull, 'model');
+    hull.fwd = gl.getUniformLocation(hull, 'fwd');
+    arrowBuf = gl.createBuffer();
+    meshes = data.meshes.map(function (m) {
+      var pos = decode(m.positions, Float32Array), nor = decode(m.normals, Float32Array), idx = decode(m.indices, Uint32Array);
+      var seg = m.edges ? decode(m.edges, Float32Array) : new Float32Array(0);
+      var buf = function (target, arr) { var b = gl.createBuffer(); gl.bindBuffer(target, b); gl.bufferData(target, arr, gl.STATIC_DRAW); return b; };
+      var lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+      for (var i = 0; i < pos.length; i += 3) for (var k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], pos[i + k]); hi[k] = Math.max(hi[k], pos[i + k]); }
+      return { p: buf(gl.ARRAY_BUFFER, pos), n: buf(gl.ARRAY_BUFFER, nor), i: buf(gl.ELEMENT_ARRAY_BUFFER, idx), count: idx.length, lo: lo, hi: hi,
+        e: seg.length ? buf(gl.ARRAY_BUFFER, seg) : null, edgeCount: seg.length / 3 };
+    });
+    return true;
+  }
+
+  function mul(a, b) {
+    var o = new Float32Array(16);
+    for (var c = 0; c < 4; c++) for (var r = 0; r < 4; r++) {
+      var s = 0; for (var k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s;
+    }
+    return o;
+  }
+  function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+  function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+  function norm(a) { var l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+  function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+  function lookAt(eye, at, up) {
+    var z = norm(sub(eye, at)), x = norm(cross(up, z)), y = cross(z, x);
+    return new Float32Array([x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -dot(x, eye), -dot(y, eye), -dot(z, eye), 1]);
+  }
+  function perspective(fov, aspect, near, far) {
+    var f = 1 / Math.tan(fov * Math.PI / 360);
+    return new Float32Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) / (near - far), -1, 0, 0, 2 * far * near / (near - far), 0]);
+  }
+  function ortho(h, aspect, near, far) {
+    var w = h * aspect;
+    return new Float32Array([1 / w, 0, 0, 0, 0, 1 / h, 0, 0, 0, 0, -2 / (far - near), 0, 0, 0, -(far + near) / (far - near), 1]);
+  }
+  function scale(a, k) { return [a[0] * k, a[1] * k, a[2] * k]; }
+  function add(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+  // `v` turned by `angle` about the unit `axis` (Rodrigues).
+  function rotate(v, axis, angle) {
+    var c = Math.cos(angle), s = Math.sin(angle);
+    return add(add(scale(v, c), scale(cross(axis, v), s)), scale(axis, dot(axis, v) * (1 - c)));
+  }
+  // The screen's up for a direction and a world up (true up = right x forward).
+  function screenUp(dir, up) {
+    var right = cross(up, dir);
+    if (Math.hypot(right[0], right[1], right[2]) < 1e-9) right = cross([0, 0, 1], dir);
+    if (Math.hypot(right[0], right[1], right[2]) < 1e-9) right = cross([0, 1, 0], dir);
+    return norm(cross(dir, norm(right)));
+  }
+  function translation(t) { return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, t[0], t[1], t[2], 1]); }
+
+  // The bounds of the nodes a step shows, in world space.
+  function bounds(indices) {
+    var lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+    indices.forEach(function (i) {
+      var node = data.nodes[i], m = meshes[node.mesh], M = node.matrix;
+      if (!m) return; // no WebGL: nothing uploaded, nothing to frame
+      for (var c = 0; c < 8; c++) {
+        var p = [(c & 1) ? m.hi[0] : m.lo[0], (c & 2) ? m.hi[1] : m.lo[1], (c & 4) ? m.hi[2] : m.lo[2]];
+        for (var k = 0; k < 3; k++) {
+          var v = M[k] * p[0] + M[4 + k] * p[1] + M[8 + k] * p[2] + M[12 + k];
+          lo[k] = Math.min(lo[k], v); hi[k] = Math.max(hi[k], v);
+        }
+      }
+    });
+    return isFinite(lo[0]) ? { lo: lo, hi: hi } : { lo: [-1, -1, -1], hi: [1, 1, 1] };
+  }
+
+  function frameStep(step) {
+    // A step with a motion draws every node (the frames may move parts a
+    // later step places), so it frames the whole assembly; any other step
+    // frames what it has placed and adds.
+    var framed = step.motion && step.motion.frames && step.motion.frames.length ? data.nodes.map(function (_, i) { return i; }) : step.placed.concat(step.adding);
+    var b = bounds(framed);
+    var center = [0, 1, 2].map(function (k) { return (b.lo[k] + b.hi[k]) / 2; });
+    var radius = Math.max(1e-6, Math.hypot(b.hi[0] - b.lo[0], b.hi[1] - b.lo[1], b.hi[2] - b.lo[2]) / 2);
+    var view = step.camera, dir, dist;
+    cam.radius = radius;
+    // A camera captured in a wider window than this one keeps the step's
+    // parts in sight across, not only its height.
+    cam.minHalfWidth = radius * 1.05;
+    if (view) {
+      var d = sub(view.eye, view.target), len = Math.hypot(d[0], d[1], d[2]);
+      cam.target = view.target.slice();
+      dir = len > 1e-12 ? scale(d, 1 / len) : [0, 0, 1];
+      cam.up = screenUp(dir, norm(view.up));
+      cam.ortho = !view.fovDeg;
+      cam.fov = view.fovDeg || 35;
+      cam.half = view.halfHeight || radius * 1.2;
+      // An orthographic eye stands well clear of the parts it frames.
+      dist = cam.ortho ? Math.max(len, radius * 4) : (len || radius * 3);
+    } else {
+      cam.target = center;
+      dir = norm([0.6, 0.45, 0.66]);
+      cam.up = screenUp(dir, [0, 1, 0]);
+      cam.ortho = false;
+      cam.half = radius * 1.2;
+      dist = radius / Math.tan(cam.fov * Math.PI / 360) * 1.25;
+    }
+    cam.eye = add(cam.target, scale(dir, dist));
+  }
+
+  function draw(now) {
+    // A frame queued before the tab changed draws nothing on another tab.
+    if (!gl || !steps.length || tab !== 'steps') return;
+    var step = steps[current];
+    var w = canvas.clientWidth * devicePixelRatio | 0, h = canvas.clientHeight * devicePixelRatio | 0;
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    gl.viewport(0, 0, w, h);
+    var lineArt = data.style === 'lineArt';
+    if (lineArt) gl.clearColor(LA.ground[0], LA.ground[1], LA.ground[2], 1); else gl.clearColor(0.075, 0.106, 0.141, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST);
+    gl.useProgram(prog);
+    gl.uniform1f(prog.unlit, 0);
+    var dist = distance(), aspect = w / Math.max(1, h), far = dist + cam.radius * 8, near = Math.max(dist / 1000, 1e-4);
+    var proj = cam.ortho ? ortho(effectiveHalf(), aspect, -far, far) : perspective(cam.fov, aspect, near, far);
+    var vp = mul(proj, lookAt(cam.eye, cam.target, cam.up));
+    var t = held !== null ? held : anim.running ? Math.min(1, (now - anim.start) / DURATION) : 1;
+    // A held insertion stands exactly at the fraction asked for.
+    var ease = held !== null ? held : 1 - Math.pow(1 - t, 3);
+    // The step's motion (a study's published frames), when it has one: its
+    // frame poses the nodes in place of the insertion slide and the view's
+    // explode poses.
+    if (motion && mplaying) {
+      mclock += Math.max(0, (now - mlast) / 1000); mlast = now;
+      var at = Math.round(mclock * motion.fps);
+      if (at >= motion.frames.length) { at = motion.frames.length - 1; mplaying = false; mclock = at / motion.fps; }
+      if (at !== mframe) { mframe = at; motionShow(); }
+    }
+    var mf = motion ? motion.frames[mframe] : null;
+    var poses = mf ? (mf.poses || {}) : {}, hidden = mf ? (mf.hidden || []) : [], opacity = mf ? (mf.opacity || {}) : {};
+    var offsets = {}, explode = {};
+    if (!mf) {
+      (step.insertion || []).forEach(function (ins) { offsets[ins.node] = ins.offset; });
+      // The step view's explode poses, after the node's own placement.
+      (step.poses || []).forEach(function (pose) { explode[pose.node] = new Float32Array(pose.matrix); });
+    }
+    var modelOf = function (i) {
+      var node = data.nodes[i], model = new Float32Array(node.matrix);
+      var ex = explode[i];
+      if (ex) model = mul(ex, model);
+      var off = offsets[i];
+      if (off) model = mul(translation([off[0] * (1 - ease), off[1] * (1 - ease), off[2] * (1 - ease)]), model);
+      if (mf) { var pose = motionPoseFor(node.occurrence, poses); if (pose) model = mul(new Float32Array(pose), model); }
+      return model;
+    };
+    var shown = function (i) { return !mf || !motionHas(data.nodes[i].occurrence, hidden); };
+    var fade = function (i) { var a = mf ? motionPoseFor(data.nodes[i].occurrence, opacity) : null; return a === null ? 1 : a; };
+    // With a motion every other node is drawn ghosted: the clip may move
+    // parts a later step places.
+    var adding = step.adding.filter(shown);
+    var inAdding = {};
+    step.adding.forEach(function (i) { inAdding[i] = true; });
+    var placed = (mf ? data.nodes.map(function (_, i) { return i; }).filter(function (i) { return !inAdding[i]; }) : step.placed).filter(shown);
+    var drawNode = function (i, color) {
+      var m = meshes[data.nodes[i].mesh], model = modelOf(i);
+      gl.uniformMatrix4fv(prog.mvp, false, mul(vp, model));
+      gl.uniformMatrix4fv(prog.model, false, model);
+      gl.uniform4fv(prog.color, color);
+      gl.bindBuffer(gl.ARRAY_BUFFER, m.p); gl.enableVertexAttribArray(prog.p); gl.vertexAttribPointer(prog.p, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, m.n); gl.enableVertexAttribArray(prog.n); gl.vertexAttribPointer(prog.n, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.i);
+      gl.drawElements(gl.TRIANGLES, m.count, gl.UNSIGNED_INT, 0);
+    };
+    // The edges over the faces, as the viewport draws them: the faces are
+    // pushed back a little so a line on a face is not lost in it.
+    var drawEdges = function (i, alpha, rgb) {
+      var m = meshes[data.nodes[i].mesh];
+      if (!m.e) return;
+      var ink = rgb || EDGE;
+      gl.uniformMatrix4fv(lines.mvp, false, mul(vp, modelOf(i)));
+      gl.uniform4fv(lines.color, [ink[0], ink[1], ink[2], alpha]);
+      gl.bindBuffer(gl.ARRAY_BUFFER, m.e); gl.enableVertexAttribArray(lines.p); gl.vertexAttribPointer(lines.p, 3, gl.FLOAT, false, 0, 0);
+      gl.drawArrays(gl.LINES, 0, m.edgeCount);
+    };
+    if (lineArt) {
+      drawLineArt(adding, placed, modelOf, drawNode, drawEdges, vp, w, h, cam.radius * LA.push / Math.max(far, 1e-9));
+      arrowsDrawn = drawArrows(insertionArrows(step, modelOf, ease, mf, vp), vp, w, h);
+      drawPmi(step, vp);
+      if ((t < 1 && held === null) || (motion && mplaying)) requestAnimationFrame(draw); else anim.running = false;
+      return;
+    }
+    arrowsDrawn = 0;
+    gl.enable(gl.POLYGON_OFFSET_FILL);
+    gl.polygonOffset(1, 1);
+    gl.disable(gl.BLEND);
+    gl.depthMask(true);
+    adding.forEach(function (i) { if (fade(i) >= 1) drawNode(i, [1.0, 0.6, 0.12, 1]); });
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.depthMask(false);
+    adding.forEach(function (i) { var a = fade(i); if (a < 1) drawNode(i, [1.0, 0.6, 0.12, a]); });
+    placed.forEach(function (i) {
+      var c = data.nodes[i].color;
+      drawNode(i, [c[0] * 0.5 + 0.25, c[1] * 0.5 + 0.25, c[2] * 0.5 + 0.25, 0.35 * fade(i)]);
+    });
+    gl.depthMask(true);
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    if (showEdges) {
+      gl.useProgram(lines);
+      gl.disableVertexAttribArray(prog.n);
+      adding.forEach(function (i) { drawEdges(i, fade(i)); });
+      gl.depthMask(false);
+      placed.forEach(function (i) { drawEdges(i, 0.35 * fade(i)); });
+      gl.depthMask(true);
+    }
+    drawPmi(step, vp);
+    if (t < 1 || (motion && mplaying)) requestAnimationFrame(draw); else anim.running = false;
+  }
+  // ---------- Line art ----------
+  // The flat fills first, opaque with depth writes so no hidden line shows
+  // through; then the outlines: each part's mesh pushed out on screen and
+  // back in depth (`push`: LA.push of the step's radius, in clip depth),
+  // depth-tested but not written,
+  // so only the ring round its silhouette passes; then the visible edges in
+  // the tier's ink.
+  function drawLineArt(adding, placed, modelOf, drawNode, drawEdges, vp, w, h, push) {
+    gl.disable(gl.BLEND);
+    gl.depthMask(true);
+    gl.useProgram(prog);
+    gl.uniform1f(prog.unlit, 1);
+    gl.enable(gl.POLYGON_OFFSET_FILL);
+    gl.polygonOffset(1, 1);
+    placed.forEach(function (i) { drawNode(i, LA.placed); });
+    adding.forEach(function (i) { drawNode(i, LA.adding); });
+    gl.uniform1f(prog.unlit, 0);
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    gl.useProgram(hull);
+    gl.disableVertexAttribArray(prog.n);
+    gl.depthMask(false);
+    gl.depthFunc(gl.LEQUAL);
+    var outline = function (i, px, color) {
+      var m = meshes[data.nodes[i].mesh];
+      gl.uniformMatrix4fv(hull.vp, false, vp);
+      gl.uniformMatrix4fv(hull.model, false, modelOf(i));
+      gl.uniform3fv(hull.fwd, norm(sub(cam.target, cam.eye)));
+      gl.uniform2f(hull.vpx, w, h);
+      gl.uniform1f(hull.px, px * devicePixelRatio);
+      gl.uniform1f(hull.push, push);
+      gl.uniform4fv(hull.color, color);
+      gl.bindBuffer(gl.ARRAY_BUFFER, m.p); gl.enableVertexAttribArray(hull.p); gl.vertexAttribPointer(hull.p, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, m.n); gl.enableVertexAttribArray(hull.n); gl.vertexAttribPointer(hull.n, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.i);
+      gl.drawElements(gl.TRIANGLES, m.count, gl.UNSIGNED_INT, 0);
+    };
+    placed.forEach(function (i) { outline(i, LA.placedOutlinePx, LA.placedOutline); });
+    adding.forEach(function (i) { outline(i, LA.addingOutlinePx, LA.ink); });
+    gl.disableVertexAttribArray(hull.n);
+    gl.depthFunc(gl.LESS);
+    gl.depthMask(true);
+    if (showEdges) {
+      gl.useProgram(lines);
+      placed.forEach(function (i) { drawEdges(i, 1, LA.placedEdge); });
+      adding.forEach(function (i) { drawEdges(i, 1, LA.ink); });
+    }
+  }
+  // A node's world bounds through `model` (its mesh's box corners).
+  function worldBox(i, model) {
+    var m = meshes[data.nodes[i].mesh], lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+    for (var c = 0; c < 8; c++) {
+      var p = [(c & 1) ? m.hi[0] : m.lo[0], (c & 2) ? m.hi[1] : m.lo[1], (c & 4) ? m.hi[2] : m.lo[2]];
+      for (var k = 0; k < 3; k++) {
+        var v = model[k] * p[0] + model[4 + k] * p[1] + model[8 + k] * p[2] + model[12 + k];
+        lo[k] = Math.min(lo[k], v); hi[k] = Math.max(hi[k], v);
+      }
+    }
+    return { lo: lo, hi: hi };
+  }
+  // An arrow for a group of nodes (`box`, their bounds at home) whose motion
+  // starts `start` away from home, `left` of it still to go: from their
+  // leading face where they are to their leading face at home; with `vp`,
+  // from the edge of their screen outline (on their centre line, on the side
+  // they travel toward) to where that point lands at home, so it never
+  // crosses them and is gone once they are seated.
+  function seatArrow(box, start, left, vp) {
+    var len = Math.hypot(start[0], start[1], start[2]);
+    if (!(len > 1e-12) || !isFinite(box.lo[0])) return null;
+    var d = [-start[0] / len, -start[1] / len, -start[2] / len];
+    var c = [0, 1, 2].map(function (k) { return (box.lo[k] + box.hi[k]) / 2; });
+    var hh = 0.5 * [0, 1, 2].reduce(function (s, k) { return s + (box.hi[k] - box.lo[k]) * Math.abs(d[k]); }, 0);
+    var lead = hh;
+    if (vp) {
+      var ndc = function (p) {
+        var q = vp[3] * p[0] + vp[7] * p[1] + vp[11] * p[2] + vp[15];
+        return [(vp[0] * p[0] + vp[4] * p[1] + vp[8] * p[2] + vp[12]) / q, (vp[1] * p[0] + vp[5] * p[1] + vp[9] * p[2] + vp[13]) / q];
+      };
+      var eps = hh > 0 ? hh : len * 0.01, a = ndc(c), b = ndc([c[0] + d[0] * eps, c[1] + d[1] * eps, c[2] + d[2] * eps]);
+      var sd = [(b[0] - a[0]) / eps, (b[1] - a[1]) / eps], sl = Math.hypot(sd[0], sd[1]);
+      if (sl > 1e-12) {
+        var u = [sd[0] / sl, sd[1] / sl], reach = -Infinity;
+        for (var k = 0; k < 8; k++) {
+          var p = ndc([(k & 1) ? box.hi[0] : box.lo[0], (k & 2) ? box.hi[1] : box.lo[1], (k & 4) ? box.hi[2] : box.lo[2]]);
+          reach = Math.max(reach, (p[0] - a[0]) * u[0] + (p[1] - a[1]) * u[1]);
+        }
+        lead = Math.max(hh, reach / sl);
+      }
+    }
+    // Both ends at that point of the outline: where the parts are and where
+    // it lands at home, so the arrow is the travel left.
+    var home = [0, 1, 2].map(function (k) { return c[k] + d[k] * lead; });
+    var from = [0, 1, 2].map(function (k) { return home[k] + start[k] * left; });
+    return left * len > len * 1e-3 ? [from, home] : null;
+  }
+  // The step's arrows: one per insertion arrow while its parts slide home
+  // (gone once they are), and one per exploded part of the step's view from
+  // where it is exploded to its seat.
+  function insertionArrows(step, modelOf, ease, mf, vp) {
+    var out = [];
+    if (mf) return out;
+    var groups = {};
+    (step.insertion || []).forEach(function (ins) {
+      var key = ins.arrow || 0, g = groups[key] || (groups[key] = { lo: [Infinity, Infinity, Infinity], hi: [-Infinity, -Infinity, -Infinity], offset: ins.offset, nodes: {} });
+      var node = data.nodes[ins.node], home = new Float32Array(node.matrix);
+      var ex = (step.poses || []).filter(function (p) { return p.node === ins.node; })[0];
+      if (ex) home = mul(new Float32Array(ex.matrix), home);
+      var b = worldBox(ins.node, home);
+      for (var k = 0; k < 3; k++) { g.lo[k] = Math.min(g.lo[k], b.lo[k]); g.hi[k] = Math.max(g.hi[k], b.hi[k]); }
+      g.nodes[ins.node] = true;
+    });
+    Object.keys(groups).forEach(function (key) {
+      var g = groups[key], a = seatArrow(g, g.offset, 1 - ease, vp);
+      if (a) out.push(a);
+    });
+    var sliding = {};
+    Object.keys(groups).forEach(function (key) { Object.keys(groups[key].nodes).forEach(function (n) { sliding[n] = true; }); });
+    (step.poses || []).forEach(function (pose) {
+      if (sliding[pose.node]) return;
+      var node = data.nodes[pose.node], home = new Float32Array(node.matrix);
+      var seated = worldBox(pose.node, home), posed = worldBox(pose.node, mul(new Float32Array(pose.matrix), home));
+      var move = [0, 1, 2].map(function (k) { return (posed.lo[k] + posed.hi[k]) / 2 - (seated.lo[k] + seated.hi[k]) / 2; });
+      var a = seatArrow(seated, move, 1, vp);
+      if (a) out.push(a);
+    });
+    return out;
+  }
+  // Thin solid black shafts and filled black heads at the seat, in screen
+  // space over everything. Returns how many were drawn.
+  function drawArrows(list, vp, w, h) {
+    if (!list.length) return 0;
+    var tri = [], sx = 2 * devicePixelRatio / Math.max(1, w), sy = 2 * devicePixelRatio / Math.max(1, h);
+    var ndc = function (p) {
+      var x = vp[0] * p[0] + vp[4] * p[1] + vp[8] * p[2] + vp[12], y = vp[1] * p[0] + vp[5] * p[1] + vp[9] * p[2] + vp[13], q = vp[3] * p[0] + vp[7] * p[1] + vp[11] * p[2] + vp[15];
+      return [x / q, y / q];
+    };
+    var drawn = 0;
+    list.forEach(function (a) {
+      var p = ndc(a[0]), q = ndc(a[1]);
+      // In CSS px, so the widths are screen-constant.
+      var dx = (q[0] - p[0]) / sx, dy = (q[1] - p[1]) / sy, len = Math.hypot(dx, dy);
+      if (len < 2) return;
+      var ux = dx / len, uy = dy / len, head = Math.min(LA.headPx, len * 0.6);
+      var base = [q[0] - ux * head * sx, q[1] - uy * head * sy];
+      var nx = -uy, ny = ux, hw = LA.shaftPx / 2, hh = LA.headWidthPx / 2;
+      var at = function (o, s, t) { return [o[0] + nx * s * sx + ux * t * sx, o[1] + ny * s * sy + uy * t * sy]; };
+      var a0 = at(p, hw, 0), a1 = at(p, -hw, 0), b0 = at(base, hw, 0), b1 = at(base, -hw, 0);
+      var h0 = at(base, hh, 0), h1 = at(base, -hh, 0);
+      [a0, a1, b0, a1, b1, b0, h0, h1, q].forEach(function (v) { tri.push(v[0], v[1], 0); });
+      drawn++;
+    });
+    if (!tri.length) return 0;
+    gl.useProgram(lines);
+    gl.disableVertexAttribArray(prog.n);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.uniformMatrix4fv(lines.mvp, false, new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]));
+    gl.uniform4fv(lines.color, LA.ink);
+    gl.bindBuffer(gl.ARRAY_BUFFER, arrowBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(tri), gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(lines.p); gl.vertexAttribPointer(lines.p, 3, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, tri.length / 3);
+    gl.enable(gl.DEPTH_TEST);
+    return drawn;
+  }
+
+  // ---------- PMI ----------
+  // A step's view annotations (step.pmi): lines (the stroked text among
+  // them) and filled arrowheads in world space, drawn over the parts in the
+  // viewport's PMI amber, never hidden by them, as the app's overlay draws.
+  var PMI = [0.98, 0.78, 0.22, 1], showPmi = true;
+  function pmiBuffers(step) {
+    if (!step.pmi || !gl) return null;
+    if (!step.pmiGl) {
+      var seg = step.pmi.lines ? decode(step.pmi.lines, Float32Array) : new Float32Array(0);
+      var tri = step.pmi.arrows ? decode(step.pmi.arrows, Float32Array) : new Float32Array(0);
+      var buf = function (arr) { var b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW); return b; };
+      step.pmiGl = { l: seg.length ? buf(seg) : null, lc: seg.length / 3, a: tri.length ? buf(tri) : null, ac: tri.length / 3 };
+    }
+    return step.pmiGl;
+  }
+  function drawPmi(step, vp) {
+    var b = showPmi ? pmiBuffers(step) : null;
+    if (!b) return;
+    gl.useProgram(lines);
+    gl.disableVertexAttribArray(prog.n);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.uniformMatrix4fv(lines.mvp, false, vp);
+    gl.uniform4fv(lines.color, PMI);
+    if (b.l) { gl.bindBuffer(gl.ARRAY_BUFFER, b.l); gl.enableVertexAttribArray(lines.p); gl.vertexAttribPointer(lines.p, 3, gl.FLOAT, false, 0, 0); gl.drawArrays(gl.LINES, 0, b.lc); }
+    if (b.a) { gl.bindBuffer(gl.ARRAY_BUFFER, b.a); gl.enableVertexAttribArray(lines.p); gl.vertexAttribPointer(lines.p, 3, gl.FLOAT, false, 0, 0); gl.drawArrays(gl.TRIANGLES, 0, b.ac); }
+    gl.enable(gl.DEPTH_TEST);
+  }
+  function redraw() {
+    if (tab === 'model') { requestAnimationFrame(drawModel); return; }
+    if (tab === 'parts') return;
+    requestAnimationFrame(motion && !motionInStep ? drawMotion : draw);
+  }
+  // Replay: the step's motion from its first frame, else the insertion slide.
+  function play() {
+    if (motion && motionInStep) { motionSeek(0); motionPlay(); return; }
+    anim.start = performance.now(); anim.running = true; redraw();
+  }
+
+  // ---------- A motion study (data.motion, no steps) ----------
+  // The frames play on a timeline; each node draws under the frame's pose for
+  // its occurrence (a node's occurrence is its solid under the posed one),
+  // hidden or faded as the frame says, red-tinted when it clashes, and the
+  // camera follows a frame that carries one.
+  // `motionInStep`: the motion is a step's (data.steps[current].motion), drawn
+  // by draw() with the step's highlight and ghosts; else the page is a study's.
+  var motion = null, mframe = 0, mplaying = false, mclock = 0, mlast = 0, motionInStep = false, timelineBound = false;
+  function motionPoseFor(occurrence, map) {
+    var best = null, bestLen = -1;
+    for (var key in map) {
+      if ((occurrence === key || occurrence.indexOf(key + ':') === 0) && key.length > bestLen) { best = map[key]; bestLen = key.length; }
+    }
+    return best;
+  }
+  function motionHas(occurrence, list) {
+    for (var i = 0; i < list.length; i++) {
+      var key = list[i];
+      if (occurrence === key || occurrence.indexOf(key + ':') === 0) return true;
+    }
+    return false;
+  }
+  // The camera for a frame: the frame's own when it carries one, else the
+  // whole assembly framed from the default direction (as a step without a
+  // camera is).
+  function motionCamera(view) {
+    var all = data.nodes.map(function (_, i) { return i; });
+    var b = bounds(all);
+    var center = [0, 1, 2].map(function (k) { return (b.lo[k] + b.hi[k]) / 2; });
+    var radius = Math.max(1e-6, Math.hypot(b.hi[0] - b.lo[0], b.hi[1] - b.lo[1], b.hi[2] - b.lo[2]) / 2);
+    var dir, dist;
+    cam.radius = radius;
+    cam.minHalfWidth = radius * 1.05;
+    if (view) {
+      var d = sub(view.eye, view.target), len = Math.hypot(d[0], d[1], d[2]);
+      cam.target = view.target.slice();
+      dir = len > 1e-12 ? scale(d, 1 / len) : [0, 0, 1];
+      cam.up = screenUp(dir, norm(view.up));
+      cam.ortho = !view.fovDeg;
+      cam.fov = view.fovDeg || 35;
+      cam.half = view.halfHeight || radius * 1.2;
+      dist = cam.ortho ? Math.max(len, radius * 4) : (len || radius * 3);
+    } else {
+      cam.target = center;
+      dir = norm([0.6, 0.45, 0.66]);
+      cam.up = screenUp(dir, [0, 0, 1]);
+      cam.ortho = false;
+      cam.half = radius * 1.2;
+      dist = radius / Math.tan(cam.fov * Math.PI / 360) * 1.25;
+    }
+    cam.eye = add(cam.target, scale(dir, dist));
+  }
+  function drawMotion(now) {
+    if (!gl || !motion || tab !== 'steps') return;
+    if (mplaying) {
+      mclock += Math.max(0, (now - mlast) / 1000); mlast = now;
+      var at = Math.round(mclock * motion.fps);
+      if (at >= motion.frames.length) { at = motion.frames.length - 1; mplaying = false; mclock = at / motion.fps; }
+      if (at !== mframe) { mframe = at; motionShow(); }
+    }
+    var frame = motion.frames[mframe];
+    var w = canvas.clientWidth * devicePixelRatio | 0, h = canvas.clientHeight * devicePixelRatio | 0;
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    gl.viewport(0, 0, w, h);
+    gl.clearColor(0.075, 0.106, 0.141, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST);
+    gl.useProgram(prog);
+    var dist = distance(), aspect = w / Math.max(1, h), far = dist + cam.radius * 8, near = Math.max(dist / 1000, 1e-4);
+    var proj = cam.ortho ? ortho(effectiveHalf(), aspect, -far, far) : perspective(cam.fov, aspect, near, far);
+    var vp = mul(proj, lookAt(cam.eye, cam.target, cam.up));
+    var poses = frame.poses || {}, hidden = frame.hidden || [], opacity = frame.opacity || {}, clashing = frame.clashing || [];
+    var modelOf = function (i) {
+      var node = data.nodes[i], model = new Float32Array(node.matrix);
+      var pose = motionPoseFor(node.occurrence, poses);
+      return pose ? mul(new Float32Array(pose), model) : model;
+    };
+    var drawOne = function (i, alpha) {
+      var node = data.nodes[i], m = meshes[node.mesh];
+      if (!m) return;
+      var model = modelOf(i), c = node.color;
+      if (motionHas(node.occurrence, clashing)) c = [c[0] * 0.3 + 0.65, c[1] * 0.3 + 0.1, c[2] * 0.3 + 0.1];
+      gl.uniformMatrix4fv(prog.mvp, false, mul(vp, model));
+      gl.uniformMatrix4fv(prog.model, false, model);
+      gl.uniform4fv(prog.color, [c[0], c[1], c[2], alpha]);
+      gl.bindBuffer(gl.ARRAY_BUFFER, m.p); gl.enableVertexAttribArray(prog.p); gl.vertexAttribPointer(prog.p, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, m.n); gl.enableVertexAttribArray(prog.n); gl.vertexAttribPointer(prog.n, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.i);
+      gl.drawElements(gl.TRIANGLES, m.count, gl.UNSIGNED_INT, 0);
+    };
+    var drawEdgesOf = function (i, alpha) {
+      var m = meshes[data.nodes[i].mesh];
+      if (!m || !m.e) return;
+      gl.uniformMatrix4fv(lines.mvp, false, mul(vp, modelOf(i)));
+      gl.uniform4fv(lines.color, [EDGE[0], EDGE[1], EDGE[2], alpha]);
+      gl.bindBuffer(gl.ARRAY_BUFFER, m.e); gl.enableVertexAttribArray(lines.p); gl.vertexAttribPointer(lines.p, 3, gl.FLOAT, false, 0, 0);
+      gl.drawArrays(gl.LINES, 0, m.edgeCount);
+    };
+    var solid = [], faded = [];
+    data.nodes.forEach(function (node, i) {
+      if (motionHas(node.occurrence, hidden)) return;
+      var a = motionPoseFor(node.occurrence, opacity);
+      if (a !== null && a < 1) faded.push([i, a]); else solid.push(i);
+    });
+    gl.enable(gl.POLYGON_OFFSET_FILL);
+    gl.polygonOffset(1, 1);
+    gl.disable(gl.BLEND);
+    gl.depthMask(true);
+    solid.forEach(function (i) { drawOne(i, 1); });
+    if (faded.length) {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+      faded.forEach(function (f) { drawOne(f[0], f[1]); });
+      gl.depthMask(true);
+    }
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    if (showEdges && lines) {
+      gl.useProgram(lines);
+      gl.disableVertexAttribArray(prog.n);
+      solid.forEach(function (i) { drawEdgesOf(i, 1); });
+      gl.depthMask(false);
+      faded.forEach(function (f) { drawEdgesOf(f[0], f[1]); });
+      gl.depthMask(true);
+    }
+    if (mplaying) requestAnimationFrame(drawMotion);
+  }
+  function motionShow() {
+    var frame = motion.frames[mframe];
+    $('motion-scrub').value = String(mframe);
+    $('motion-time').textContent = frame.time.toFixed(2) + ' s · ' + (mframe + 1) + '/' + motion.frames.length;
+    $('motion-clash').textContent = frame.clashing && frame.clashing.length ? 'Interference' : '';
+    $('motion-play').textContent = mplaying ? '\u2759\u2759' : '\u25B6';
+    if (frame.camera && !motionInStep) motionCamera(frame.camera);
+  }
+  function motionSeek(i) {
+    if (!motion) return;
+    mframe = Math.max(0, Math.min(motion.frames.length - 1, i | 0));
+    mclock = mframe / motion.fps;
+    motionShow();
+    redraw();
+  }
+  function motionPlay() {
+    if (!motion) return;
+    if (mframe >= motion.frames.length - 1) { mframe = 0; mclock = 0; }
+    mplaying = true; mlast = performance.now(); motionShow(); redraw();
+  }
+  function motionPause() { mplaying = false; motionShow(); redraw(); }
+  function bindTimeline() {
+    var scrub = $('motion-scrub');
+    scrub.max = String(motion.frames.length - 1);
+    if (!timelineBound) {
+      timelineBound = true;
+      // Read the slider before pausing: pausing redraws the slider at the frame shown.
+      scrub.addEventListener('input', function () { var at = parseInt(scrub.value, 10); mplaying = false; motionSeek(at); });
+      $('motion-play').addEventListener('click', function () { if (mplaying) motionPause(); else motionPlay(); });
+    }
+    var marks = $('motion-marks');
+    marks.textContent = '';
+    motion.frames.forEach(function (frame, i) {
+      if (!frame.clashing || !frame.clashing.length) return;
+      var mark = el('span');
+      mark.style.left = (motion.frames.length > 1 ? (100 * i / (motion.frames.length - 1)) : 0) + '%';
+      marks.appendChild(mark);
+    });
+  }
+  // A step's motion, when the step has one: the timeline shows under the
+  // view and the frames pose the step's drawing; go() plays it from frame 0.
+  function setStepMotion(step) {
+    var next = step && step.motion && step.motion.frames && step.motion.frames.length ? step.motion : null;
+    mplaying = false; mframe = 0; mclock = 0;
+    motion = next;
+    motionInStep = !!next;
+    document.body.classList.toggle('step-motion', motionInStep);
+    if (next) { bindTimeline(); motionShow(); }
+  }
+  function startMotion() {
+    motion = data.motion;
+    document.body.classList.add('motion');
+    $('title').textContent = '';
+    bindTimeline();
+    document.addEventListener('keydown', function (e) {
+      if (e.target && e.target.tagName === 'INPUT') return;
+      if (e.key === ' ') { e.preventDefault(); if (mplaying) motionPause(); else motionPlay(); }
+      if (e.key === 'ArrowRight') { motionPause(); motionSeek(mframe + 1); }
+      if (e.key === 'ArrowLeft') { motionPause(); motionSeek(mframe - 1); }
+    });
+    var first = motion.frames[0];
+    motionCamera(first.camera || null);
+    motionSeek(0);
+  }
+
+  // The camera as the app's viewport reports it (BREP_render view.rs): its
+  // size in CSS px, its basis, the world units one pixel spans on the focus
+  // plane, and a world point's place on the screen.
+  function camWidth() { return Math.max(1, canvas.clientWidth); }
+  function camHeight() { return Math.max(1, canvas.clientHeight); }
+  function effectiveHalf() { return Math.max(cam.half, cam.minHalfWidth / (camWidth() / camHeight())); }
+  function distance() { return Math.max(1e-9, Math.hypot(cam.eye[0] - cam.target[0], cam.eye[1] - cam.target[1], cam.eye[2] - cam.target[2])); }
+  function basis() {
+    var forward = norm(sub(cam.target, cam.eye)), right = norm(cross(forward, cam.up));
+    return { right: right, up: cross(right, forward), forward: forward };
+  }
+  function worldPerPixel() {
+    return cam.ortho ? 2 * effectiveHalf() / camHeight() : 2 * Math.tan(cam.fov * Math.PI / 360) * distance() / camHeight();
+  }
+  function project(world) {
+    var b = basis(), rel = sub(world, cam.eye), vx = dot(rel, b.right), vy = dot(rel, b.up), depth = dot(rel, b.forward);
+    var aspect = camWidth() / camHeight();
+    if (cam.ortho) {
+      var hh = effectiveHalf(), hw = hh * aspect;
+      return [(vx / hw * 0.5 + 0.5) * camWidth(), (0.5 - vy / hh * 0.5) * camHeight(), depth];
+    }
+    var ph = Math.tan(cam.fov * Math.PI / 360), pw = ph * aspect, d = Math.max(depth, 1e-9);
+    return [(vx / (pw * d) * 0.5 + 0.5) * camWidth(), (0.5 - vy / (ph * d) * 0.5) * camHeight(), depth];
+  }
+  // The world point on the focus plane (through the target) under a CSS px.
+  function focusPointAt(cx, cy) {
+    var b = basis(), wpp = worldPerPixel();
+    return add(cam.target, add(scale(b.right, (cx - camWidth() * 0.5) * wpp), scale(b.up, -(cy - camHeight() * 0.5) * wpp)));
+  }
+
+  // The app's viewport controls (BREP_render controls.rs), the same maths and
+  // constants: a left drag is a free trackball rotate about the target, a
+  // middle or right drag pans the scene with the cursor, the wheel zooms by
+  // 1.08 per 70 points toward the cursor, and two fingers pinch and pan at
+  // once. Positions are CSS px from the canvas's top-left corner.
+  var ZOOM_PER_NOTCH = 1.08, WHEEL_POINTS_PER_NOTCH = 70, MAX_WHEEL_NOTCHES_PER_EVENT = 3;
+  var MIN_ORTHO_HALF_HEIGHT = 1e-9, MIN_PERSP_DISTANCE = 1e-6;
+  // Zoom by `factor` (> 1 zooms out) keeping the focus-plane point under the
+  // cursor where it is.
+  function zoomToward(factor, cx, cy) {
+    var b = basis(), wpp = worldPerPixel();
+    var off = add(scale(b.right, (cx - camWidth() * 0.5) * wpp), scale(b.up, -(cy - camHeight() * 0.5) * wpp));
+    if (cam.ortho) {
+      var old = effectiveHalf(), f = Math.max(old * factor, MIN_ORTHO_HALF_HEIGHT) / old;
+      cam.half *= f;
+      cam.minHalfWidth *= f;
+      var shift = scale(off, 1 - f);
+      cam.target = add(cam.target, shift);
+      cam.eye = add(cam.eye, shift);
+    } else {
+      var at = add(cam.target, off);
+      var nt = add(at, scale(sub(cam.target, at), factor)), ne = add(at, scale(sub(cam.eye, at), factor));
+      var dir = sub(ne, nt), dist = Math.max(Math.hypot(dir[0], dir[1], dir[2]), MIN_PERSP_DISTANCE);
+      cam.target = nt;
+      cam.eye = add(nt, scale(norm(dir), dist));
+    }
+  }
+  // Pan by a screen delta: the scene follows the cursor.
+  function pan(dx, dy) {
+    var b = basis(), wpp = worldPerPixel();
+    var offset = add(scale(b.right, -dx * wpp), scale(b.up, dy * wpp));
+    cam.eye = add(cam.eye, offset);
+    cam.target = add(cam.target, offset);
+  }
+  // A cursor on the virtual trackball: Shoemake's sphere with a hyperbolic
+  // skirt past its edge, in camera space.
+  function trackballPoint(x, y) {
+    var radius = 0.5 * Math.max(1, Math.min(camWidth(), camHeight())) * 0.75;
+    var px = x - camWidth() * 0.5, py = camHeight() * 0.5 - y, r2 = radius * radius, d2 = px * px + py * py;
+    var pz = d2 <= r2 * 0.5 ? Math.sqrt(r2 - d2) : r2 * 0.5 / Math.sqrt(d2);
+    return norm([px, py, pz]);
+  }
+  // Trackball rotate from one cursor to the next: the eye and the up vector
+  // turn about the target, with no up-axis lock.
+  function rotateArcball(from, to) {
+    var v0 = trackballPoint(from[0], from[1]), v1 = trackballPoint(to[0], to[1]);
+    var axisCam = cross(v0, v1), axisLen = Math.hypot(axisCam[0], axisCam[1], axisCam[2]);
+    if (axisLen < 1e-12) return;
+    var angle = Math.acos(Math.max(-1, Math.min(1, dot(v0, v1))));
+    if (Math.abs(angle) < 1e-12) return;
+    var b = basis();
+    axisCam = scale(axisCam, 1 / axisLen);
+    var axis = norm(add(add(scale(b.right, axisCam[0]), scale(b.up, axisCam[1])), scale(b.forward, -axisCam[2])));
+    cam.eye = add(cam.target, rotate(sub(cam.eye, cam.target), axis, -angle));
+    cam.up = norm(rotate(cam.up, axis, -angle));
+  }
+  // Two fingers: zoom about the previous midpoint by the distance ratio, then
+  // carry that point to the new midpoint.
+  function touchNavigation(from, to, k) {
+    if (!(k > 0) || !isFinite(k) || (from[0] === to[0] && from[1] === to[1] && k === 1)) return false;
+    zoomToward(1 / k, from[0], from[1]);
+    pan(to[0] - from[0], to[1] - from[1]);
+    return true;
+  }
+
+  // Input, routed as the app's viewport routes it (BREP_app viewport/touch.rs):
+  // a mouse or a single finger drives a gesture by button (left rotates,
+  // middle or right pans); the second finger captures navigation for both
+  // until every finger lifts, so a leftover finger never becomes an orbit.
+  var gesture = 'none', last = [0, 0], touches = {}, captured = false;
+  function local(e) { var r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+  function pair() {
+    var ids = Object.keys(touches);
+    if (ids.length !== 2) return null;
+    var a = touches[ids[0]], b = touches[ids[1]];
+    return { mid: [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5], span: Math.hypot(a[0] - b[0], a[1] - b[1]) };
+  }
+  canvas.addEventListener('pointerdown', function (e) {
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* a synthetic pointer */ }
+    if (e.pointerType === 'touch') {
+      touches[e.pointerId] = local(e);
+      if (pair()) { captured = true; gesture = 'none'; }
+    }
+    if (captured) return;
+    gesture = e.button === 0 ? 'rotate' : (e.button === 1 || e.button === 2) ? 'pan' : 'none';
+    last = local(e);
+  });
+  function release(e) {
+    delete touches[e.pointerId];
+    if (!Object.keys(touches).length) captured = false;
+    gesture = 'none';
+  }
+  canvas.addEventListener('pointerup', release);
+  canvas.addEventListener('pointercancel', release);
+  canvas.addEventListener('pointermove', function (e) {
+    var changed = false;
+    if (e.pointerType === 'touch' && touches[e.pointerId]) {
+      var before = pair();
+      touches[e.pointerId] = local(e);
+      var after = pair();
+      if (captured && before && after) {
+        // Nearly coincident fingers have no reliable scale: keep panning.
+        var k = before.span >= 4 && after.span >= 4 ? after.span / before.span : 1;
+        changed = touchNavigation(before.mid, after.mid, k);
+      }
+    } else if (gesture !== 'none' && !captured) {
+      var now = local(e);
+      if (now[0] !== last[0] || now[1] !== last[1]) {
+        if (gesture === 'rotate') rotateArcball(last, now); else pan(now[0] - last[0], now[1] - last[1]);
+        last = now;
+        changed = true;
+      }
+    }
+    if (changed) redraw();
+  });
+  canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  canvas.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    // Browser deltas to points as the app's bridge does: lines are 40 points,
+    // pages 20 lines; then a fractional notch count and an exponential step.
+    var points = e.deltaY * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1);
+    if (!points) return;
+    var notches = Math.max(-MAX_WHEEL_NOTCHES_PER_EVENT, Math.min(MAX_WHEEL_NOTCHES_PER_EVENT, points / WHEEL_POINTS_PER_NOTCH));
+    var p = local(e);
+    zoomToward(Math.pow(ZOOM_PER_NOTCH, notches), p[0], p[1]);
+    redraw();
+  }, { passive: false });
+  window.addEventListener('resize', redraw);
+
+  // ---------- Steps ----------
+  // The data lists the steps flat in reading order (a step's children before
+  // it), each with its parent's id and depth. Data from before the step tree
+  // carried chapters of steps: flattened the same way, every step at the top.
+  function flatten() {
+    steps = data.steps ? data.steps.slice() : [];
+    if (!data.steps && data.chapters) {
+      data.chapters.forEach(function (chapter) {
+        chapter.steps.forEach(function (step) { step.chapter = chapter.title; steps.push(step); });
+      });
+    }
+    var byId = {};
+    steps.forEach(function (step) { byId[step.id] = step; });
+    steps.forEach(function (step) {
+      step.depth = step.depth || 0;
+      var parent = step.parent ? byId[step.parent] : null;
+      step.group = parent ? parent.title : (step.chapter || '');
+    });
+  }
+
+  function renderChecklist() {
+    var list = $('checklist');
+    list.textContent = '';
+    steps.forEach(function (step, i) {
+      var row = el('div', 'check d' + Math.min(step.depth, 3) + (i === current ? ' current' : '') + (done[step.id] ? ' done' : ''));
+      row.setAttribute('data-step', step.id);
+      row.appendChild(el('span', 'box'));
+      row.appendChild(el('span', '', step.number + '. ' + step.title));
+      row.addEventListener('click', function () { go(i); });
+      list.appendChild(row);
+    });
+  }
+
+  function renderStep() {
+    var step = steps[current];
+    $('chapter').textContent = step.group;
+    $('title').textContent = step.number + '. ' + step.title;
+    $('count').textContent = 'Step ' + (current + 1) + ' of ' + steps.length;
+    $('back').disabled = current === 0;
+    $('next').disabled = current === steps.length - 1;
+    var adds = $('adds');
+    adds.textContent = '';
+    step.adds.forEach(function (add) {
+      var row = el('div', 'add');
+      var pic = safeImage(add.thumbnail);
+      if (pic) { var img = el('img'); img.alt = ''; img.src = pic; row.appendChild(img); }
+      if (add.findNumber) row.appendChild(el('span', 'find', add.findNumber));
+      var label = el('span');
+      label.appendChild(el('span', 'qty', add.quantity + '× '));
+      label.appendChild(document.createTextNode(add.name || add.part));
+      row.appendChild(label);
+      // The part's card on the Parts tab.
+      if (partsByKey[add.part]) {
+        row.title = 'Show this part on the Parts tab';
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', function () { showPartCard(add.part); });
+      }
+      adds.appendChild(row);
+    });
+    var tools = $('tools');
+    tools.textContent = '';
+    // A tool's picture from the library (customer mode shows the tools for
+    // their pictures: name and picture, no spec); an offline page has only
+    // the inlined ones, and a picture that fails to load is taken out.
+    (step.tools || []).forEach(function (tool) {
+      var row = el('div', 'tool');
+      var url = tool.toolId && data.toolPictures ? safeImage(data.toolPictures[tool.toolId]) : null;
+      if (url && offline && url.indexOf('data:') !== 0) url = null;
+      if (url) {
+        var img = el('img');
+        img.alt = tool.name;
+        img.onerror = function () { if (img.parentNode) img.parentNode.removeChild(img); };
+        img.src = url;
+        row.appendChild(img);
+      }
+      row.appendChild(el('span', '', mode === 'customer' || !tool.spec ? tool.name : tool.name + ' — ' + tool.spec));
+      tools.appendChild(row);
+    });
+    $('tools-section').hidden = !(step.tools && step.tools.length);
+    $('torque').textContent = step.torque || '';
+    $('torque-section').hidden = !step.torque;
+    var callouts = $('callouts');
+    callouts.textContent = '';
+    (step.callouts || []).forEach(function (c) {
+      if (mode === 'customer' && c.kind !== 'caution') return;
+      var box = el('div', 'callout ' + (c.kind === 'caution' || c.kind === 'check' ? c.kind : 'note'));
+      box.appendChild(el('b', '', c.kind === 'caution' ? 'Caution' : c.kind === 'check' ? 'Check' : 'Note'));
+      box.appendChild(document.createTextNode(c.text));
+      callouts.appendChild(box);
+    });
+    $('notes').textContent = step.notes || '';
+    // Without WebGL the view's annotations are listed (the step's picture
+    // does not draw them).
+    var pmiList = $('pmi-list');
+    pmiList.textContent = '';
+    var texts = step.pmi && step.pmi.texts ? step.pmi.texts : [];
+    texts.forEach(function (t) { pmiList.appendChild(el('div', '', t)); });
+    $('pmi-section').hidden = !!gl || !texts.length;
+    $('pmi-toggle').hidden = !gl || !step.pmi;
+    renderSignoff(step);
+    if (mode === 'shop') renderChecklist();
+    var fallback = $('fallback');
+    if (!gl) {
+      var pic2 = safeImage(step.image);
+      if (pic2) {
+        if (!fallback) { fallback = el('img'); fallback.id = 'fallback'; fallback.alt = step.title; $('viewport').appendChild(fallback); }
+        fallback.src = pic2;
+      }
+    }
+  }
+
+  function renderSignoff(step) {
+    var box = $('signoff');
+    box.textContent = '';
+    if (mode !== 'shop' || !step.signoff) return;
+    var signedRecord = job && job.steps ? job.steps.filter(function (s) { return s.step === step.id && s.signed_by; })[0] : null;
+    if (signedRecord) {
+      box.appendChild(el('div', '', 'Signed by ' + signedRecord.signed_by + ' at ' + signedRecord.signed_at)).id = 'signed';
+      return;
+    }
+    if (done[step.id] && !config.job) {
+      box.appendChild(el('div', '', 'Checked')).id = 'signed';
+      var undo = el('button', '', 'Uncheck');
+      undo.addEventListener('click', function () { delete done[step.id]; renderStep(); });
+      box.appendChild(undo);
+      return;
+    }
+    var inputs = [];
+    if (config.job) {
+      step.adds.forEach(function (add) {
+        if (!add.serialTracked) return;
+        add.occurrences.forEach(function (occ, k) {
+          var input = el('input');
+          input.placeholder = 'Serial: ' + (add.name || add.part) + (add.quantity > 1 ? ' #' + (k + 1) : '');
+          input.setAttribute('data-occurrence', occ);
+          input.setAttribute('data-part', add.part);
+          inputs.push(input);
+          box.appendChild(input);
+        });
+      });
+    }
+    var button = el('button', 'primary', config.job ? 'Sign off step' : 'Mark step done');
+    button.id = 'signoff-button';
+    var message = el('div', '', '');
+    message.id = 'message';
+    button.addEventListener('click', function () {
+      if (!config.job) { done[step.id] = true; renderStep(); return; }
+      var serials = inputs.map(function (i) { return { occurrence: i.getAttribute('data-occurrence'), part: i.getAttribute('data-part'), serial: i.value.trim() }; });
+      if (serials.some(function (s) { return !s.serial; })) { message.textContent = 'Enter every serial number first.'; return; }
+      button.disabled = true;
+      signoff(step.id, serials).then(function () { button.disabled = false; renderStep(); }, function (err) {
+        button.disabled = false;
+        message.textContent = err.message;
+      });
+    });
+    box.appendChild(button);
+    box.appendChild(message);
+  }
+
+  // ---------- Model and Parts tabs ----------
+  // data.assembly is the occurrence tree, depth first. Each row owns the
+  // nodes whose occurrence is its path or under it and under no deeper row;
+  // a row is shown when neither it nor any row above it is switched off.
+  // The Parts tab groups the rows by part (a card per part) with the steps
+  // that add them.
+  var tab = 'steps', rows = [], byPath = {}, nodeRow = [], off = {}, open = {}, selected = null;
+  var partList = [], partsByKey = {}, savedCam = {};
+  var ROOT = '';
+  function copyCam() { return JSON.parse(JSON.stringify(cam)); }
+  function under(occurrence, path) { return occurrence === path || occurrence.indexOf(path + ':') === 0; }
+  function buildAssembly() {
+    var list = data.assembly || [];
+    if (!list.length) return;
+    document.body.classList.add('has-assembly');
+    rows = list.map(function (r) {
+      return { path: r.path, parent: r.parent || ROOT, depth: r.depth || 0, name: r.name || r.part, part: r.part || r.name, src: r, children: [], nodes: [], steps: [] };
+    });
+    byPath[ROOT] = { path: ROOT, parent: null, depth: -1, name: data.target && data.target.name ? data.target.name : (data.title || 'Assembly'), children: [], nodes: [], steps: [] };
+    rows.forEach(function (r) { byPath[r.path] = r; });
+    rows.forEach(function (r) { (byPath[r.parent] || byPath[ROOT]).children.push(r); });
+    nodeRow = data.nodes.map(function (node, i) {
+      var best = byPath[ROOT];
+      rows.forEach(function (r) { if (under(node.occurrence, r.path) && r.path.length > (best.path || '').length) best = r; });
+      best.nodes.push(i);
+      return best;
+    });
+    // The steps that use a row: those that add it, else those that add the
+    // sub-assembly it came in with.
+    rows.forEach(function (r) {
+      var direct = [], within = [];
+      steps.forEach(function (step, i) {
+        (step.adds || []).forEach(function (add) {
+          var occs = add.occurrences || [];
+          if (occs.indexOf(r.path) >= 0 || (!occs.length && add.part === r.part)) { if (direct.indexOf(i) < 0) direct.push(i); }
+          else if (occs.some(function (o) { return under(r.path, o); })) { if (within.indexOf(i) < 0) within.push(i); }
+        });
+      });
+      r.steps = direct.length ? direct : within;
+    });
+    rows.forEach(function (r) { if (r.depth === 0) open[r.path] = false; });
+    open[ROOT] = true;
+    rows.forEach(function (r) {
+      var p = partsByKey[r.part];
+      if (!p) { p = partsByKey[r.part] = { key: r.part, name: r.name, src: r.src, rows: [], steps: [], thumbnail: r.src.thumbnail }; partList.push(p); }
+      p.rows.push(r);
+      if (!p.thumbnail) p.thumbnail = r.src.thumbnail;
+      r.steps.forEach(function (i) { if (p.steps.indexOf(i) < 0) p.steps.push(i); });
+    });
+    partList.forEach(function (p) { p.steps.sort(function (a, b) { return a - b; }); });
+    $('tab-steps').addEventListener('click', function () { setTab('steps'); });
+    $('tab-model').addEventListener('click', function () { setTab('model'); });
+    $('tab-parts').addEventListener('click', function () { setTab('parts'); });
+    $('parts-filter').addEventListener('input', renderParts);
+    $('tab-steps').hidden = !steps.length;
+  }
+  function chain(row) { var out = []; for (var r = row; r; r = r.parent === null ? null : byPath[r.parent]) out.push(r); return out; }
+  function subtree(row) { var out = [row]; row.children.forEach(function (c) { out = out.concat(subtree(c)); }); return out; }
+  function nodeShown(i) { return !chain(nodeRow[i] || byPath[ROOT]).some(function (r) { return off[r.path]; }); }
+  function nodesOf(row) { var out = []; subtree(row).forEach(function (r) { out = out.concat(r.nodes); }); return out; }
+  function setShown(path, on) {
+    var row = byPath[path];
+    if (!row) return;
+    subtree(row).forEach(function (r) { off[r.path] = !on; });
+    if (on) chain(row).forEach(function (r) { off[r.path] = false; });
+    renderTree(); redraw();
+  }
+  function isolate(path) {
+    var row = byPath[path];
+    if (!row) return;
+    off = {};
+    var keep = {};
+    chain(row).concat(subtree(row)).forEach(function (r) { keep[r.path] = true; });
+    rows.forEach(function (r) { off[r.path] = !keep[r.path]; });
+    chain(row).forEach(function (r) { if (r !== row) open[r.path] = true; });
+    selectRow(path, true);
+  }
+  function selectRow(path, fit) {
+    selected = byPath[path] && path !== ROOT ? path : null;
+    if (selected) chain(byPath[selected]).forEach(function (r) { if (r.path !== selected) open[r.path] = true; });
+    renderTree(); renderPartInfo();
+    if (fit && selected) fitNodes(nodesOf(byPath[selected]).filter(nodeShown), true);
+    redraw();
+  }
+  function renderTree() {
+    var tree = $('tree');
+    tree.textContent = '';
+    var tools = el('div', 'tree-tools');
+    var tool = function (label, title, fn) { var b = el('button', '', label); b.title = title; b.addEventListener('click', fn); tools.appendChild(b); };
+    tool('Show all', 'Show every part', function () { off = {}; renderTree(); redraw(); });
+    tool('Hide all', 'Hide every part', function () { setShown(ROOT, false); });
+    tool('Expand', 'Open every sub-assembly', function () { rows.forEach(function (r) { if (r.children.length) open[r.path] = true; }); renderTree(); });
+    tool('Collapse', 'Close every sub-assembly', function () { rows.forEach(function (r) { open[r.path] = false; }); renderTree(); });
+    tool('Fit', 'Fit what is shown in the view', function () { fitNodes(data.nodes.map(function (_, i) { return i; }).filter(nodeShown), true); redraw(); });
+    tree.appendChild(tools);
+    var line = function (row) {
+      var div = el('div', 'row' + (row.path === selected ? ' selected' : '') + (off[row.path] ? ' off' : ''));
+      div.setAttribute('data-path', row.path);
+      div.style.paddingLeft = (Math.max(0, row.depth + 1) * 16) + 'px';
+      var twist = el('span', 'twist', row.children.length ? (open[row.path] ? '▾' : '▸') : '');
+      if (row.children.length) twist.addEventListener('click', function () { open[row.path] = !open[row.path]; renderTree(); });
+      div.appendChild(twist);
+      var vis = el('input', 'vis');
+      vis.type = 'checkbox';
+      vis.checked = !off[row.path];
+      vis.title = 'Show or hide';
+      vis.setAttribute('aria-label', 'Show ' + row.name);
+      vis.addEventListener('change', function () { setShown(row.path, vis.checked); });
+      div.appendChild(vis);
+      if (row.src && row.src.findNumber) div.appendChild(el('span', 'find', row.src.findNumber));
+      var name = el('span', 'name', row.name);
+      name.title = row.path || row.name;
+      name.addEventListener('click', function () { selectRow(row.path === selected ? null : row.path); });
+      name.addEventListener('dblclick', function () { selectRow(row.path, true); });
+      div.appendChild(name);
+      if (row.src && row.src.subassembly) div.appendChild(el('span', 'kind', 'asm'));
+      tree.appendChild(div);
+      if (open[row.path]) row.children.forEach(line);
+    };
+    line(byPath[ROOT]);
+  }
+  // The details of a part (`p`, a parts-list entry), for the Model tab's
+  // panel (`row`: the occurrence selected) and the Parts tab's card.
+  function partDetails(box, p, row) {
+    var head = el('div', 'part-head');
+    var pic = safeImage(p.thumbnail);
+    if (pic) { var img = el('img'); img.alt = ''; img.src = pic; head.appendChild(img); }
+    var titles = el('div');
+    titles.appendChild(el('h2', '', p.name));
+    var src = p.src;
+    if (src.subassembly) titles.appendChild(el('span', 'badge', 'Sub-assembly'));
+    if (src.fastener) titles.appendChild(el('span', 'badge', 'Fastener'));
+    if (src.serialTracked) titles.appendChild(el('span', 'badge', 'Serial tracked'));
+    head.appendChild(titles);
+    box.appendChild(head);
+    var props = el('dl', 'props');
+    var prop = function (k, v) { if (v === undefined || v === null || v === '') return; props.appendChild(el('dt', '', k)); props.appendChild(el('dd', '', v)); };
+    prop('Part', src.partId || '');
+    var finds = [];
+    p.rows.forEach(function (r) { var f = r.src.findNumber; if (f && finds.indexOf(f) < 0) finds.push(f); });
+    prop('Find no.', finds.join(', '));
+    prop('Quantity', String(p.rows.length));
+    if (row) prop('Occurrence', row.path);
+    prop('Torque', src.torque || '');
+    (src.attributes || []).forEach(function (a) { if (a && a.length === 2) prop(String(a[0]).replace(/_/g, ' '), a[1]); });
+    box.appendChild(props);
+    box.appendChild(el('h3', '', 'Used in steps'));
+    var uses = el('div', 'uses');
+    var list = row ? row.steps : p.steps;
+    if (!list.length) uses.appendChild(el('span', 'none', 'No step adds it.'));
+    list.forEach(function (i) {
+      var b = el('button', '', steps[i].number + '. ' + steps[i].title);
+      b.setAttribute('data-step', steps[i].id);
+      b.addEventListener('click', function () { go(i); });
+      uses.appendChild(b);
+    });
+    box.appendChild(uses);
+    var actions = el('div', 'part-actions');
+    var action = function (label, fn) { var b = el('button', '', label); b.addEventListener('click', fn); actions.appendChild(b); };
+    if (row) {
+      action('Isolate', function () { isolate(row.path); });
+      action(off[row.path] ? 'Show' : 'Hide', function () { setShown(row.path, !!off[row.path]); renderPartInfo(); });
+      action('Fit', function () { fitNodes(nodesOf(row), true); redraw(); });
+      action('Part card', function () { showPartCard(p.key); });
+    } else {
+      action('Show in model', function () { showInModel(p); });
+    }
+    box.appendChild(actions);
+  }
+  function renderPartInfo() {
+    var box = $('part-info');
+    box.textContent = '';
+    var row = selected ? byPath[selected] : null;
+    if (!row) {
+      box.appendChild(el('h3', '', 'Model'));
+      var shown = data.nodes.map(function (_, i) { return i; }).filter(nodeShown).length;
+      box.appendChild(el('p', '', rows.length + ' components, ' + partList.length + ' distinct parts; ' + shown + ' of ' + data.nodes.length + ' bodies shown.'));
+      box.appendChild(el('p', 'none', 'Pick a part in the tree to see its details. Double-click to fit it.'));
+      return;
+    }
+    partDetails(box, partsByKey[row.part], row);
+  }
+  function renderParts() {
+    var grid = $('parts-grid');
+    grid.textContent = '';
+    var q = $('parts-filter').value.trim().toLowerCase();
+    var shown = partList.filter(function (p) {
+      if (!q) return true;
+      var hay = [p.name, p.key, p.src.partId || ''].concat(p.rows.map(function (r) { return r.src.findNumber || ''; }))
+        .concat((p.src.attributes || []).map(function (a) { return a.join(' '); })).join(' ').toLowerCase();
+      return hay.indexOf(q) >= 0;
+    });
+    shown.forEach(function (p) {
+      var card = el('div', 'card');
+      card.setAttribute('data-part', p.key);
+      partDetails(card, p, null);
+      grid.appendChild(card);
+    });
+    $('parts-count').textContent = shown.length + ' of ' + partList.length + ' parts';
+  }
+  function showPartCard(key) {
+    setTab('parts');
+    $('parts-filter').value = '';
+    renderParts();
+    var cards = $('parts-grid').children;
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].getAttribute('data-part') === key) {
+        cards[i].classList.add('flash');
+        if (cards[i].scrollIntoView) cards[i].scrollIntoView({ block: 'center' });
+      }
+    }
+  }
+  function showInModel(p) {
+    setTab('model');
+    off = {};
+    var keep = {};
+    p.rows.forEach(function (row) { chain(row).concat(subtree(row)).forEach(function (r) { keep[r.path] = true; }); chain(row).forEach(function (r) { if (r !== row) open[r.path] = true; }); });
+    rows.forEach(function (r) { off[r.path] = !keep[r.path]; });
+    selected = p.rows[0].path;
+    renderTree(); renderPartInfo();
+    var nodes = [];
+    p.rows.forEach(function (row) { nodes = nodes.concat(nodesOf(row)); });
+    fitNodes(nodes, true);
+    redraw();
+  }
+  // Frame `indices` (keep the view direction when `keep` and the camera has
+  // one), as a step without a camera is framed.
+  function fitNodes(indices, keep) {
+    if (!indices.length) indices = data.nodes.map(function (_, i) { return i; });
+    var b = bounds(indices);
+    var center = [0, 1, 2].map(function (k) { return (b.lo[k] + b.hi[k]) / 2; });
+    var radius = Math.max(1e-6, Math.hypot(b.hi[0] - b.lo[0], b.hi[1] - b.lo[1], b.hi[2] - b.lo[2]) / 2);
+    var dir = keep ? norm(sub(cam.eye, cam.target)) : norm([0.6, 0.45, 0.66]);
+    if (!keep) { cam.up = screenUp(dir, [0, 1, 0]); cam.ortho = false; cam.fov = 35; }
+    cam.radius = radius;
+    cam.minHalfWidth = radius * 1.05;
+    cam.half = radius * 1.2;
+    cam.target = center;
+    var dist = cam.ortho ? radius * 4 : radius / Math.tan(cam.fov * Math.PI / 360) * 1.25;
+    cam.eye = add(center, scale(dir, dist));
+  }
+  function setTab(name, quiet) {
+    if (name !== 'steps' && name !== 'model' && name !== 'parts') return;
+    if ((name === 'model' || name === 'parts') && !rows.length) return;
+    if (name === 'steps' && !steps.length) return;
+    if (name === tab) return;
+    savedCam[tab] = copyCam();
+    if (motion && mplaying) { mplaying = false; motionShow(); }
+    anim.running = false;
+    tab = name;
+    ['steps', 'model', 'parts'].forEach(function (t) {
+      document.body.classList.toggle('tab-' + t, t === name);
+      $('tab-' + t).setAttribute('aria-selected', t === name ? 'true' : 'false');
+    });
+    if (name === 'model') {
+      if (savedCam.model) cam = savedCam.model; else fitNodes([], false);
+      renderTree(); renderPartInfo();
+    } else if (name === 'parts') {
+      renderParts();
+    } else if (!quiet && savedCam.steps) {
+      cam = savedCam.steps;
+    }
+    redraw();
+  }
+  // The Model tab's drawing: every shown node in its own colour with its
+  // edges, the selected component's in the highlight colour.
+  function drawModel() {
+    if (!gl || tab !== 'model') return;
+    var w = canvas.clientWidth * devicePixelRatio | 0, h = canvas.clientHeight * devicePixelRatio | 0;
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    gl.viewport(0, 0, w, h);
+    gl.clearColor(0.075, 0.106, 0.141, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.depthMask(true);
+    gl.useProgram(prog);
+    var dist = distance(), aspect = w / Math.max(1, h), far = dist + cam.radius * 8, near = Math.max(dist / 1000, 1e-4);
+    var proj = cam.ortho ? ortho(effectiveHalf(), aspect, -far, far) : perspective(cam.fov, aspect, near, far);
+    var vp = mul(proj, lookAt(cam.eye, cam.target, cam.up));
+    var lit = {};
+    if (selected && byPath[selected]) nodesOf(byPath[selected]).forEach(function (i) { lit[i] = true; });
+    var shown = data.nodes.map(function (_, i) { return i; }).filter(nodeShown);
+    gl.enable(gl.POLYGON_OFFSET_FILL);
+    gl.polygonOffset(1, 1);
+    shown.forEach(function (i) {
+      var node = data.nodes[i], m = meshes[node.mesh];
+      if (!m) return;
+      var model = new Float32Array(node.matrix), c = lit[i] ? [1.0, 0.6, 0.12] : node.color;
+      gl.uniformMatrix4fv(prog.mvp, false, mul(vp, model));
+      gl.uniformMatrix4fv(prog.model, false, model);
+      gl.uniform4fv(prog.color, [c[0], c[1], c[2], 1]);
+      gl.bindBuffer(gl.ARRAY_BUFFER, m.p); gl.enableVertexAttribArray(prog.p); gl.vertexAttribPointer(prog.p, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, m.n); gl.enableVertexAttribArray(prog.n); gl.vertexAttribPointer(prog.n, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.i);
+      gl.drawElements(gl.TRIANGLES, m.count, gl.UNSIGNED_INT, 0);
+    });
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    if (showEdges) {
+      gl.useProgram(lines);
+      gl.disableVertexAttribArray(prog.n);
+      shown.forEach(function (i) {
+        var node = data.nodes[i], m = meshes[node.mesh];
+        if (!m || !m.e) return;
+        gl.uniformMatrix4fv(lines.mvp, false, mul(vp, new Float32Array(node.matrix)));
+        gl.uniform4fv(lines.color, [EDGE[0], EDGE[1], EDGE[2], 1]);
+        gl.bindBuffer(gl.ARRAY_BUFFER, m.e); gl.enableVertexAttribArray(lines.p); gl.vertexAttribPointer(lines.p, 3, gl.FLOAT, false, 0, 0);
+        gl.drawArrays(gl.LINES, 0, m.edgeCount);
+      });
+    }
+  }
+
+  // ---------- Jobs floor (served by the PLM, shop mode with a job) ----------
+  var csrf = '';
+  function api(method, path, body) {
+    var headers = { 'Accept': 'application/json' };
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    if (method !== 'GET' && csrf) headers['X-CSRF-Token'] = csrf;
+    return fetch(path, { method: method, headers: headers, credentials: 'same-origin', body: body === undefined ? undefined : JSON.stringify(body) })
+      .then(function (r) {
+        return r.text().then(function (text) {
+          var json = null;
+          try { json = text ? JSON.parse(text) : null; } catch (e) { json = null; }
+          if (!r.ok) throw new Error((json && (json.error || json.message)) || ('HTTP ' + r.status));
+          return json;
+        });
+      });
+  }
+  function loadJob() {
+    var id = encodeURIComponent(config.job);
+    return api('GET', '/api/me').then(function (me) { csrf = (me && me.csrf) || ''; })
+      .then(function () { return api('GET', '/api/jobs/' + id); })
+      .then(function (j) {
+        job = j;
+        (j.steps || []).forEach(function (s) { if (s.signed_by) done[s.step] = true; });
+      });
+  }
+  function signoff(stepId, serials) {
+    var path = '/api/jobs/' + encodeURIComponent(config.job) + '/steps/' + encodeURIComponent(stepId) + '/signoff';
+    return api('POST', path, { serials: serials }).then(function (record) {
+      done[stepId] = true;
+      if (job) {
+        var row = (job.steps || []).filter(function (s) { return s.step === stepId; })[0];
+        if (row && record) { row.signed_by = record.signed_by; row.signed_at = record.signed_at; }
+      }
+    });
+  }
+
+  function go(i) {
+    if (i < 0 || i >= steps.length) return;
+    if (tab !== 'steps') setTab('steps', true);
+    current = i;
+    frameStep(steps[current]);
+    renderStep();
+    setStepMotion(steps[current]);
+    play();
+  }
+
+  $('back').addEventListener('click', function () { go(current - 1); });
+  $('next').addEventListener('click', function () { go(current + 1); });
+  $('replay').addEventListener('click', play);
+  $('pmi-toggle').addEventListener('click', function () {
+    showPmi = !showPmi;
+    $('pmi-toggle').setAttribute('aria-pressed', showPmi ? 'true' : 'false');
+    redraw();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.target && e.target.tagName === 'INPUT') return;
+    if (tab !== 'steps') return;
+    if (e.key === 'ArrowRight' || e.key === 'PageDown') go(current + 1);
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') go(current - 1);
+    if (e.key === ' ' && motion && motionInStep) { e.preventDefault(); if (mplaying) motionPause(); else motionPlay(); }
+  });
+
+  // For automation: the player's state, read-only.
+  // For automation: a motion study's player, read-only state plus seek/play.
+  window.brepMotion = {
+    state: function () {
+      if (!motion) return null;
+      var frame = motion.frames[mframe];
+      return { frame: mframe, frames: motion.frames.length, time: frame.time, playing: mplaying, fps: motion.fps, hidden: frame.hidden || [], clashing: frame.clashing || [], camera: !!frame.camera, webgl: !!gl,
+        step: motionInStep && steps[current] ? steps[current].id : null };
+    },
+    seek: motionSeek, play: motionPlay, pause: motionPause
+  };
+  window.brepInstructions = {
+    state: function () {
+      var st = steps[current];
+      return { mode: mode, step: st ? st.id : null, index: current, steps: steps.length, done: Object.keys(done), webgl: !!gl, webgl2: gl2, animating: anim.running,
+        edges: meshes.filter(function (m) { return m.edgeCount > 0; }).length, tab: tab,
+        pmi: st && st.pmi ? st.pmi.annotations : 0, pmiShown: showPmi && !!(st && st.pmi),
+        style: data.style || 'shaded', arrows: arrowsDrawn, held: held };
+    },
+    go: go,
+    // For automation: hold the step's insertion at `fraction` (0 = where
+    // the parts start, 1 = seated); null lets it play again.
+    hold: function (fraction) { held = (fraction === null || fraction === undefined) ? null : Math.max(0, Math.min(1, +fraction)); anim.running = false; redraw(); return held; },
+    camera: function () {
+      return { eye: cam.eye.slice(), target: cam.target.slice(), up: basis().up, ortho: cam.ortho, halfHeight: effectiveHalf(), fovDeg: cam.fov,
+        width: camWidth(), height: camHeight(), worldPerPixel: worldPerPixel() };
+    },
+    project: project,
+    focusPointAt: focusPointAt,
+    // For automation: draw the edges or not (the verifier compares the two).
+    edges: function (on) { showEdges = !!on; redraw(); },
+    // For automation: draw the step's PMI or not.
+    pmi: function (on) { showPmi = !!on; $('pmi-toggle').setAttribute('aria-pressed', showPmi ? 'true' : 'false'); redraw(); },
+    // The tabs: 'steps', 'model' or 'parts'.
+    tab: function (name) { setTab(name); return tab; },
+    // The Model tab: the tree's rows, what is shown, and the selection.
+    model: function () {
+      return { rows: rows.map(function (r) { return { path: r.path, name: r.name, part: r.part, depth: r.depth, on: !off[r.path], open: !!open[r.path], nodes: r.nodes.length, steps: r.steps.map(function (i) { return steps[i].id; }) }; }),
+        shown: data.nodes.map(function (_, i) { return i; }).filter(nodeShown).length, nodes: data.nodes.length, selected: selected };
+    },
+    show: function (path, on) { setShown(path, on !== false); },
+    select: function (path) { selectRow(path); },
+    isolate: function (path) { isolate(path); },
+    parts: function () { return partList.map(function (p) { return { part: p.key, name: p.name, quantity: p.rows.length, steps: p.steps.map(function (i) { return steps[i].id; }), thumbnail: !!safeImage(p.thumbnail) }; }); }
+  };
+
+  load().then(function (d) {
+    data = d;
+    $('doc-title').textContent = data.title || 'Instructions';
+    document.title = data.title || 'Instructions';
+    $('doc-sub').textContent = data.subtitle || '';
+    flatten();
+    try { initGL(); } catch (e) { gl = null; }
+    buildAssembly();
+    document.body.classList.add('tab-steps');
+    if (!steps.length && data.motion && data.motion.frames && data.motion.frames.length) { startMotion(); return; }
+    if (!steps.length) { $('title').textContent = 'No steps'; if (rows.length) setTab('model'); return; }
+    var ready = (mode === 'shop' && config.job) ? loadJob().catch(function (err) { $('doc-sub').textContent = 'Job: ' + err.message; }) : Promise.resolve();
+    return ready.then(function () { go(0); });
+  }).catch(function (err) {
+    $('title').textContent = 'Could not load the instructions';
+    $('notes').textContent = err.message;
+  });
+})();
+</script>
+</body>
+</html>

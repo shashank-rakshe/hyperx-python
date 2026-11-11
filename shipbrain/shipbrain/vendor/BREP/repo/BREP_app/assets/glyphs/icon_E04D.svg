@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:brep="https://brep.io/icons"
+     viewBox="0 0 24 24" width="24" height="24" brep:glyph-name="icon_feat_loft" brep:unicode="E04D">
+  <!-- A solid blended between a square base profile and a round top profile. -->
+  <path d="M3 20 12.9 15.4 19 19.8 9.1 24.4Z" fill="#d4901f" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M3 20L9.1 24.4L19 19.8L17.8 5.5A4.8 1.9 0 0 0 8.2 5.5Z" fill="#f0b840" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M9.1 24.4L19 19.8L17.8 5.5L13 7.4Z" fill="#d4901f" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="13" cy="5.5" rx="4.8" ry="1.9" fill="#ffd977" stroke="#7a4d10" stroke-width="1.2"/>
+  <path d="M3 20L9.1 24.4L19 19.8" style="fill:none" stroke="#2fa469" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="13" cy="5.5" rx="4.8" ry="1.9" style="fill:none" stroke="#2fa469" stroke-width="2"/>
+</svg>

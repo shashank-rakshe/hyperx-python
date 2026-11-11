@@ -33,10 +33,12 @@ def _scale_change(sc):
         if isinstance(v, dict):
             for k, x in v.items():
                 if k.endswith(('_n', '_w', '_pa', '_m_s', '_nm', '_hz')):
+                    unit = {'_n': 'N', '_w': 'W', '_pa': 'Pa', '_m_s': 'm/s', '_nm': 'N m', '_hz': 'Hz'}[next(u for u in ('_m_s', '_nm', '_n', '_w', '_pa', '_hz') if k.endswith(u))]
+                    what = k[:-len(next(u for u in ('_m_s', '_nm', '_n', '_w', '_pa', '_hz') if k.endswith(u)))].replace('_', ' ')
                     if isinstance(x, (int, float)) and x:
-                        return {key: {k: round(x * 1.5, 6)}}, f'{k.rsplit("_", 1)[0].replace("_", " ")} x 1.5'
+                        return {key: {k: round(x * 1.5, 6)}}, f'{what} {round(x * 1.5, 6):g} {unit}'
                     if isinstance(x, list) and x and all(isinstance(e, (int, float)) for e in x):
-                        return {key: {k: [round(max(x) * 1.5, 6)]}}, f'{k.rsplit("_", 1)[0].replace("_", " ")} {round(max(x) * 1.5, 6):g}'
+                        return {key: {k: [round(max(x) * 1.5, 6)]}}, f'{what} {round(max(x) * 1.5, 6):g} {unit}'
     return None, None
 
 
@@ -45,6 +47,7 @@ def main(argv=None):
     ap.add_argument('--out', default='data/physics_train.jsonl')
     ap.add_argument('--timeout', type=int, default=40)
     ap.add_argument('--seed', type=int, default=0)
+    ap.add_argument('--probe-all', action='store_true', help='try every scenario, not only training/data/physics_quick.json')
     a = ap.parse_args(argv)
     r = random.Random(a.seed)
     if not openphysics.built():
@@ -54,7 +57,11 @@ def main(argv=None):
     T = agent.Tools(work)
     sysmsg = {'role': 'system', 'content': agent.system_prompt(T)}
     rows, quick = [], []
+    qfile = os.path.join(HERE, 'data', 'physics_quick.json')
+    known = set(json.load(open(qfile))['quick']) if os.path.exists(qfile) and not a.probe_all else None
     for sc in openphysics.scenarios():
+        if known is not None and sc['name'] not in known:
+            continue                                         # measured slow (> 40 s on 4 cores) or macOS-only: skipped
         t0 = time.time()
         try:
             p = subprocess.run([openphysics.LABRUN, os.path.join(openphysics.ROOT, 'examples', 'lab', sc['name'] + '.json'),

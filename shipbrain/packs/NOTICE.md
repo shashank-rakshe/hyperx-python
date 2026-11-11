@@ -133,6 +133,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2022 [Authors](http://mofem.eng.gla.ac.uk/mofem/html/authors.html)
 
+## next.BREP.io_RUST_BREP_KERNEL
+
+- Source: https://github.com/mmiscool/next.BREP.io_RUST_BREP_KERNEL (commit 2bce4a613b6f)
+- Licence: MIT with extra conditions
+- Use: ok UNCHANGED, keep the notice; its licence adds conditions on modifications (never modify it)
+- Copyright 2025 Autodrop3d LLC
+
 ## public-chemical-manufacturing-datasets
 
 - Source: https://github.com/ScottDuncanAI/public-chemical-manufacturing-datasets (commit 3f21a8540cac)

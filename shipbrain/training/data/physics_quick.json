@@ -1,0 +1,18 @@
+{
+ "note": "OpenPhysicsAI examples that finished within 40 s on a 4-core Linux CPU (measured 2026-11-11); training/physics_tasks.py runs these first",
+ "quick": [
+  "apophis_2029",
+  "apophis_flyby",
+  "capsule_mach6_l2",
+  "flow_volume",
+  "gas_volume",
+  "heat_volume",
+  "lisle_tooth_root",
+  "loudspeaker",
+  "radar_pulse",
+  "radar_volume",
+  "shoebox_hall",
+  "sound_volume",
+  "wing_volume"
+ ]
+}
