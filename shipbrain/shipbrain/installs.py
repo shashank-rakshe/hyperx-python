@@ -128,6 +128,14 @@ SOFTWARE = {
                          'linux': 'sudo apt install dotnet-sdk-10.0', 'mac': 'download the .NET 10 SDK for macOS from the link'},
                'then': 'python -c "from shipbrain import dwsim; dwsim.build()"   (about 5 minutes, once)',
                'check': _have_exe('dotnet', 'dotnet.exe'), 'match': r'\.NET 10 SDK|dotnet not found|DWSIM is not built'},
+    'rhinoinside_nx': {'name': 'RhinoInside.NX (free download; needs your own Siemens NX 1980+ and Rhino 7 licences, Windows)',
+                       'why': 'to run Rhino / Grasshopper inside Siemens NX and pass bodies between them (early beta by its author; '
+                              'it has no open licence, so ShipBrain does not copy or train on it)',
+                       'link': 'https://github.com/zcstkhk/RhinoInside.NX/releases/',
+                       'steps': {'windows': 'install NX and Rhino 7, download the release from the link, open "RhinoInside.NX '
+                                            'Starter", pick the NX and Rhino folders, Start (NX needs its STEP AP242 licence)',
+                                 'linux': 'Windows only', 'mac': 'Windows only'},
+                       'check': lambda: False, 'match': r'RhinoInside'},
     'cadmpeg': {'name': 'cadmpeg (free, Apache-2.0)', 'why': 'to open native CAD files (SolidWorks, CATIA, Inventor, Fusion 360, '
                 'Rhino, FreeCAD, ACIS, IGES) without the CAD program', 'link': 'https://github.com/cadmpeg/cadmpeg#install',
                 'steps': {'windows': 'PowerShell: powershell -ExecutionPolicy Bypass -c "irm https://github.com/cadmpeg/cadmpeg/'

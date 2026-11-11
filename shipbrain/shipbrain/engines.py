@@ -46,6 +46,9 @@ ENGINES = [
      ['nastran', 'nx_nastran'], None, 'BDF written by ShipBrain; needs a Nastran licence'),
     ('ANSYS MAPDL / PyMAPDL', {'static': 'writes', 'modal': 'writes', 'buckling': 'writes', 'ultimate': 'knowledge', 'contact': 'knowledge', 'heat': 'knowledge'}, 'writes',
      'fe_convert(file, to=["mac"]) (+ PyMAPDL script)', ['ansys', 'mapdl', 'ansys241', 'ansys242'], None, 'needs an ANSYS licence'),
+    ('Siemens NX / Rhino (RhinoInside.NX)', {'cad'}, 'knowledge', 'native_cad(file) reads NX .prt partly and Rhino .3dm geometry; '
+     'STEP to and from NX', ['ugraf', 'ugraf.exe', 'rhino', 'Rhino.exe'], None,
+     'paid programs; RhinoInside.NX (no open licence, early beta) links them - ShipBrain gives its download link only'),
     ('cadmpeg (native CAD reader)', {'cad'}, 'runs', 'native_cad(file, op="convert"|"inspect"|"measure"|"diff")', ['@cadmpeg'], 'cadmpeg',
      'opens SolidWorks / CATIA / Inventor / Fusion / Rhino / FreeCAD / ACIS / IGES files and writes STEP (Apache-2.0)'),
     ('ReverseCAD (STL -> STEP)', {'reverse'}, 'runs', 'reverse_cad(file, material)', ['@reversecad'], 'reverse-cad',
