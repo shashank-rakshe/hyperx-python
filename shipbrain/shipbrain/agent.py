@@ -127,6 +127,13 @@ class Tools:
         self.register('mesh_check', self.mesh_check, 'Check any shell mesh file (.bdf/.inp, from any mesher): free nodes, duplicate nodes, '
                       'unconnected parts, free edges, element quality.',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
+        self.register('fe_quality', self.fe_quality, 'Pre-processor quality check of an FE model (.bdf/.fem/.inp), as HyperMesh / ANSA do: '
+                      'per shell element aspect, warpage, skew, taper, Jacobian, corner angles, shortest edge, share of triangles '
+                      'against pass/warn/fail limits (criteria: {check: [warn, fail]} overrides; mesh_size sets the shortest-edge '
+                      'limit), plus a model check (missing properties/materials, zero thickness, duplicate elements, loads on '
+                      'missing nodes, no constraints). Failing elements are saved as named sets.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'criteria': {'type': 'object'},
+                                                         'mesh_size': {'type': 'number'}}, 'required': ['file']})
         self.register('solve_calculix', self.solve_calculix, 'Run CalculiX on an .inp in the workspace (linear static) and return max displacement and von Mises stress.',
                       {'type': 'object', 'properties': {'inp': {'type': 'string'}}, 'required': ['inp']})
         self.register('plate_check', _fea.plate_pressure, 'Hand check (Roark): plate field a x b x t under lateral pressure q -> max stress, deflection.',
@@ -146,7 +153,7 @@ class Tools:
         self.register('file_info', self.file_info, 'Describe any file in the workspace in plain English (FE model, STEP, DXF, PDF, image, JSON, XML, text): '
                       'what it is, what is inside, problems found. Call this first when the user asks about an uploaded file.',
                       path_arg('file name in the workspace'))
-        self.register('fe_convert', self.fe_convert, 'Convert an FE model between Nastran .bdf, Abaqus/CalculiX .inp and ANSYS APDL .mac '
+        self.register('fe_convert', self.fe_convert, '(to: bdf Nastran | fem OptiStruct/HyperMesh | inp Abaqus/CalculiX | mac ANSYS) Convert an FE model between Nastran .bdf, Abaqus/CalculiX .inp and ANSYS APDL .mac '
                       '(+ PyMAPDL and Abaqus driver scripts). 1D/2D/3D elements, properties, materials, supports and loads are kept.',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'to': {'type': 'array', 'description': '["bdf","inp","mac"]'}},
                        'required': ['file']})
@@ -1420,6 +1427,14 @@ class Tools:
 
     def mesh_check(self, file):
         return _mc.check_file(self._path(file))
+
+    def fe_quality(self, file, criteria=None, mesh_size=None):
+        from . import elemquality
+        r = elemquality.check_file(self._path(file), criteria, mesh_size)
+        if r.get('failed_sets_file'):
+            r['failed_sets_file'] = os.path.basename(r['failed_sets_file'])
+        r['quality'].pop('failed_ids', None)
+        return r
 
     def solve_calculix(self, inp):
         r = _solver.run_calculix(self._path(inp))

@@ -408,8 +408,8 @@ def t_fileinfo(r, tools):
 def t_convert(r, tools):
     name, res = _small_model(r, tools)
     src = name + '.bdf'
-    to = r.choice([['inp'], ['mac'], ['inp', 'mac'], ['bdf', 'inp', 'mac']])
-    words = {'inp': 'Abaqus/CalculiX', 'mac': 'ANSYS', 'bdf': 'Nastran'}
+    to = r.choice([['inp'], ['mac'], ['inp', 'mac'], ['bdf', 'inp', 'mac'], ['fem'], ['fem', 'inp']])
+    words = {'inp': 'Abaqus/CalculiX', 'mac': 'ANSYS', 'bdf': 'Nastran', 'fem': 'OptiStruct / HyperMesh'}
     q = f"Convert {src} to {' and '.join(words[t] for t in to)}"
     out = tools.call('fe_convert', {'file': src, 'to': to})
     if 'error' in out:
@@ -417,6 +417,39 @@ def t_convert(r, tools):
     ans = out['plain_english'] + (' The ANSYS file runs in MAPDL as it is; the _pymapdl.py script runs it from Python (needs an ANSYS licence).' if 'mac' in to else '')
     return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('fe_convert', {'file': src, 'to': to})},
             result_msg('fe_convert', out), {'role': 'assistant', 'content': ans}]
+
+
+def t_fe_quality(r, tools):
+    """HyperMesh-style pre-processing questions -> fe_quality (element quality + model check) -> plain answer"""
+    import numpy as np
+    from shipbrain.femodel import FEModel
+    name, res = _small_model(r, tools)
+    m = FEModel.read(os.path.join(tools.workdir, name + '.bdf'))
+    ids = sorted(m.nodes)
+    for nid in r.sample(ids, min(len(ids), r.choice([0, 2, 4, 8]))):      # some distorted nodes, like a hand-edited mesh
+        m.nodes[nid] = m.nodes[nid] + np.array([r.uniform(-120, 120), r.uniform(-120, 120), r.uniform(-60, 60)])
+    if r.random() < 0.25 and m.props:
+        m.props[next(iter(m.props))]['t'] = 0.0
+    src = name + '_q' + r.choice(['.bdf', '.fem', '.inp'])
+    m.write(os.path.join(tools.workdir, src))
+    args = {'file': src}
+    q = r.choice([f'Check the element quality of {src}', f'Run a HyperMesh style quality check on {src}',
+                  f'Is {src} ready for the solver? Check Jacobian, warpage, skew and aspect.',
+                  f'{src}: kitne elements quality fail kar rahe hain?', f'Model check and mesh quality report for {src}'])
+    if r.random() < 0.4:
+        args['mesh_size'] = 250
+        q += ' (target size 250 mm)'
+    if r.random() < 0.3:
+        args['criteria'] = {'aspect': [3, 4], 'warpage': [10, 15]}
+        q += ' Use aspect 3/4 and warpage 10/15 deg as warn/fail.'
+    out = tools.call('fe_quality', args)
+    if 'error' in out:
+        return None
+    ans = out['plain_english'] + (' Open the sets file in HyperMesh, ANSA or PrePoMax next to the model to see them; '
+                                  'fe_edit (repair, equivalence, orient_normals) or a finer remesh fixes most of them.'
+                                  if out.get('failed_sets_file') else '')
+    return [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': tool_block('fe_quality', args)},
+            result_msg('fe_quality', out), {'role': 'assistant', 'content': ans}]
 
 
 def t_edit(r, tools):
@@ -1171,7 +1204,7 @@ TASKS = [('mesh', 30, lambda r, T: t_mesh(r, T)), ('mesh_fix', 6, lambda r, T: t
          ('fileinfo', 4, t_fileinfo), ('convert', 4, t_convert), ('edit', 5, t_edit), ('clean', 3, t_clean), ('fe_repair', 3, t_fe_repair),
          ('sur_build', 1, t_sur_build), ('units', 5, t_units), ('profile', 2, t_profile), ('add_skill', 2, t_add_skill), ('frame', 5, t_frame), ('code', 2, t_code), ('pid', 3, t_pid), ('sur_predict', 4, t_sur_predict), ('insight', 3, t_insight),
          ('install', 4, t_install), ('setup', 1, t_setup),
-         ('ocx_syntax', 6, t_ocx_syntax), ('bolt', 4, t_bolt), ('ocx_find', 3, t_ocx_find), ('ocx_rw', 3, t_ocx_rw)]
+         ('ocx_syntax', 6, t_ocx_syntax), ('bolt', 4, t_bolt), ('fe_quality', 4, t_fe_quality), ('ocx_find', 3, t_ocx_find), ('ocx_rw', 3, t_ocx_rw)]
 
 
 def main(argv=None):

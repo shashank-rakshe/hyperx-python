@@ -45,6 +45,10 @@ ENGINES = [
      ['nastran', 'nx_nastran'], None, 'BDF written by ShipBrain; needs a Nastran licence'),
     ('ANSYS MAPDL / PyMAPDL', {'static': 'writes', 'modal': 'writes', 'buckling': 'writes', 'ultimate': 'knowledge', 'contact': 'knowledge', 'heat': 'knowledge'}, 'writes',
      'fe_convert(file, to=["mac"]) (+ PyMAPDL script)', ['ansys', 'mapdl', 'ansys241', 'ansys242'], None, 'needs an ANSYS licence'),
+    ('HyperMesh / OptiStruct (Altair)', {'static': 'writes', 'modal': 'writes', 'buckling': 'writes', 'ultimate': 'knowledge'}, 'writes',
+     'fe_convert(file, to=["fem"]); fe_quality(file) does the same element checks in ShipBrain', ['hm', 'hmopengl', 'hw', 'optistruct'],
+     None, 'Altair pre-processor and solver (paid licence); ShipBrain writes the .fem/.bdf/.inp HyperMesh imports, and its own '
+           'mesher, fe_edit, repair_model and fe_quality cover meshing, cleanup and quality checks for free'),
     ('Abaqus', {'static': 'writes', 'modal': 'writes', 'buckling': 'writes', 'ultimate': 'knowledge', 'contact': 'knowledge', 'impact': 'knowledge'}, 'writes', 'fe_convert(file, to=["inp"]) (+ Abaqus script)',
      ['abaqus'], None, 'needs an Abaqus licence'),
     ('MoFEM', {'contact', 'ultimate', 'fracture', 'heat'}, 'knowledge', 'knowledge_search(query, scope="mofem")',

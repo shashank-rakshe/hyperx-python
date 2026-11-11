@@ -4,7 +4,7 @@ One FE model in memory for 1D, 2D and 3D meshes, with readers, writers, conversi
 Elements: bar (1D: CBAR/B31/BEAM188), tria, quad (2D shells: CTRIA3/CQUAD4, S3/S4, SHELL181),
           tetra, penta, hexa (3D solids: CTETRA/CPENTA/CHEXA, C3D4/C3D6/C3D8, SOLID185).
 Read:     Nastran .bdf/.dat/.nas (pyNastran when installed, else built-in), Abaqus/CalculiX .inp, shipbrain meshes.
-Write:    Nastran .bdf (large-field GRID* = full precision), Abaqus/CalculiX .inp, ANSYS APDL .mac (runs in MAPDL or
+Write:    Nastran .bdf (large-field GRID* = full precision), OptiStruct / HyperMesh .fem, Abaqus/CalculiX .inp, ANSYS APDL .mac (runs in MAPDL or
           PyMAPDL: mapdl.input('x.mac')), plus small driver scripts for PyMAPDL and Abaqus/CAE (python).
 Convert:  2D -> 3D (shell to solid through the thickness), 3D -> 2D (solid skin), 2D -> 1D (edges to beams),
           1D -> 2D (offset beams to shell webs), quad -> tria.
@@ -116,7 +116,18 @@ class FEModel:
             np.in1d = np.isin
         from pyNastran.bdf.bdf import BDF
         b = BDF(debug=None, log=None)
-        b.read_bdf(path, xref=False, punch=_is_punch(path))
+        head = open(path, errors='replace').read(20000).upper()
+        if 'BEGIN BULK' in head and 'CEND' not in head:   # OptiStruct .fem: case control without the Nastran CEND line
+            import tempfile
+            fd, tmp = tempfile.mkstemp(suffix='.bdf')
+            with os.fdopen(fd, 'w') as fh:
+                fh.write('CEND\n' + open(path, errors='replace').read())
+            try:
+                b.read_bdf(tmp, xref=False)
+            finally:
+                os.remove(tmp)
+        else:
+            b.read_bdf(path, xref=False, punch=_is_punch(path))
         f = cls()
         f.name = os.path.splitext(os.path.basename(path))[0]
         for nid, n in b.nodes.items():
@@ -311,7 +322,18 @@ class FEModel:
             return self.write_inp(path)
         if low.endswith(('.mac', '.apdl', '.cdb.mac')):
             return self.write_apdl(path)
-        raise ValueError('write: .bdf / .inp / .mac')
+        if low.endswith('.fem'):
+            return self.write_fem(path)
+        raise ValueError('write: .bdf / .inp / .mac / .fem')
+
+    def write_fem(self, path):
+        """OptiStruct / HyperMesh input: the same bulk data as the .bdf, without the Nastran-only executive lines
+        (an OptiStruct subcase with SPC and LOAD is a linear static run)"""
+        self.write_bdf(path)
+        L = [l for l in open(path).read().splitlines() if l.strip() not in ('SOL 101', 'CEND') and not l.startswith('PARAM   POST')]
+        L[0] = f'$ shipbrain FEModel: {self.name} (OptiStruct .fem; HyperMesh opens it with the OptiStruct profile)'
+        open(path, 'w').write('\n'.join(L) + '\n')
+        return path
 
     def _mat(self, mid):
         return self.mats.get(mid) or next(iter(self.mats.values()), {'E': 206000.0, 'nu': 0.3, 'rho': 7.85e-9})

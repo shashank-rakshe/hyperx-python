@@ -240,6 +240,27 @@ All outside data is downloaded on Kaggle, which has internet:
    "rules" in its name, attach it to the training notebook too.
 4. Optional: `training/kaggle/detector_kernel.py` in a GPU notebook trains the drawing symbol detector.
 
+## Pre-processing like HyperMesh (element quality, model check, OptiStruct .fem)
+
+HyperMesh (Altair) is a paid pre-processor; its manual is Altair's copyright, so nothing from it is copied. ShipBrain
+does the same jobs with its own free code, and writes files HyperMesh opens directly:
+
+| HyperMesh step | ShipBrain |
+|---|---|
+| geometry cleanup / defeature | `repair_model` (holes, fillets, chamfers, small faces, sewing) |
+| midsurface | `surface_extract(kind="mid")` |
+| automesh (shells, solids) | own mesher: `plates_mesh`, `panel_mesh`, `structure_to_mesh`, `cad_mesh`, `fatigue_mesh` |
+| check elements / quality index | **`fe_quality`** (new): aspect, warpage, skew, taper, Jacobian, quad/tria corner angles, shortest edge, % triangles, pass/warn/fail limits you can change; failing elements saved as named sets (`*ELSET` or `SET`) that any pre-processor shows |
+| model checker | **`fe_quality`**: elements without property, property without material, zero thickness, duplicate elements, loads/constraints on missing nodes, no constraints |
+| equivalence, free edges, normals | `mesh_check`, `fe_edit` (equivalence, orient_normals, remove_degenerate, repair ...) |
+| export solver deck | `fe_convert(to=["fem"])` = OptiStruct (new), `bdf` Nastran, `inp` Abaqus/CalculiX, `mac` ANSYS |
+| solve | free: MYSTRAN (`.bdf`), CalculiX (`.inp`) |
+
+The skill `fe-preprocess` tells the model this order of work. Default quality limits are typical ship FE practice;
+give your class or company limits as `criteria`, e.g. `{"aspect": [3, 5], "warpage": [10, 15]}`. If you have a HyperMesh
+licence and its help pages or PDFs, put them in your private knowledge folder (not in this public repo) and ShipBrain
+will search them too.
+
 ## Process simulation (DWSIM) and DEXPI P&IDs (pyDEXPI)
 
 **DWSIM** ([DanWBR/dwsim10](https://github.com/DanWBR/dwsim10), GPL-3.0): the open-source chemical process simulator.
