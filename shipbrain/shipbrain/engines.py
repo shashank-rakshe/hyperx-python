@@ -23,6 +23,7 @@ ANALYSES = {   # analysis type -> words that point to it
     'heat': r'thermal|temperature|heat|fire|insulation',
     'cad': r'3d model|\bcad\b|step file|solid model|drawing to|make a model|cadquery|mid.?surface|outer surface|piping|pipes?\b',
     'mesh': r'\bmesh|elements?\b|bdf|\.inp|nastran deck|shell model',
+    'reverse': r'\bstl\b|scan(ned)? (part|mesh)|reverse.?engineer|mesh to (step|cad|solid)|3d.?print(ed)? (part|file)',
     'process': r'process simulat|flowsheet|\bflash\b|distillation|column|vapou?r fraction|heat and mass balance|property package|'
                r'thermodynamic|dew point|bubble point|absorber|stripper|reactor|dwsim|phase envelope',
 }
@@ -45,6 +46,8 @@ ENGINES = [
      ['nastran', 'nx_nastran'], None, 'BDF written by ShipBrain; needs a Nastran licence'),
     ('ANSYS MAPDL / PyMAPDL', {'static': 'writes', 'modal': 'writes', 'buckling': 'writes', 'ultimate': 'knowledge', 'contact': 'knowledge', 'heat': 'knowledge'}, 'writes',
      'fe_convert(file, to=["mac"]) (+ PyMAPDL script)', ['ansys', 'mapdl', 'ansys241', 'ansys242'], None, 'needs an ANSYS licence'),
+    ('ReverseCAD (STL -> STEP)', {'reverse'}, 'runs', 'reverse_cad(file, material)', ['@reversecad'], 'reverse-cad',
+     'mesh to STEP solid + holes, threads, fillets, mass, verification (PolyForm Noncommercial: non-commercial use only)'),
     ('HyperMesh / OptiStruct (Altair)', {'static': 'writes', 'modal': 'writes', 'buckling': 'writes', 'ultimate': 'knowledge'}, 'writes',
      'fe_convert(file, to=["fem"]); fe_quality(file) does the same element checks in ShipBrain', ['hm', 'hmopengl', 'hw', 'optistruct'],
      None, 'Altair pre-processor and solver (paid licence); ShipBrain writes the .fem/.bdf/.inp HyperMesh imports, and its own '
@@ -101,6 +104,9 @@ def installed(names):
     if names == ['@solidcraft']:
         from .mcp_client import solidcraft_cli
         return solidcraft_cli() is not None
+    if names == ['@reversecad']:                       # copied in vendor/, built on first use with Node.js
+        from . import reversecad
+        return reversecad.available() and reversecad.node() is not None
     if names == ['@dwsim']:
         from . import dwsim
         return dwsim.exe() is not None

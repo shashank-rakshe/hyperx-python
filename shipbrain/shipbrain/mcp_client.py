@@ -97,6 +97,9 @@ def servers(workdir=None):
     from . import dwsim
     if dwsim.exe():                                    # DWSIM process simulator (GPL), built with dwsim.build()
         out['dwsim'] = {'command': [dwsim.exe(), '--stdio']}
+    from . import reversecad
+    if reversecad.available() and reversecad.node():   # ReverseCAD (PolyForm Noncommercial): STL -> STEP, built on first use
+        out['reverse-cad'] = {'command': None, 'builtin': True}
     try:
         import importlib.util
         if importlib.util.find_spec('pydexpi'):        # pyDEXPI (AGPL): DEXPI P&ID models
@@ -121,6 +124,9 @@ def client(name, workdir=None):
     if not cfg:
         raise ValueError(f'unknown MCP server {name}; known: ' + ', '.join(servers(workdir)))
     cmd = cfg.get('command')
+    if cfg.get('builtin') and name == 'reverse-cad':
+        from . import reversecad
+        cmd = reversecad.mcp_command()
     if cfg.get('builtin') and name == 'openphysics':
         from . import openphysics
         cmd = openphysics.server_command()

@@ -240,6 +240,23 @@ All outside data is downloaded on Kaggle, which has internet:
    "rules" in its name, attach it to the training notebook too.
 4. Optional: `training/kaggle/detector_kernel.py` in a GPU notebook trains the drawing symbol detector.
 
+## STL -> STEP with features: ReverseCAD (non-commercial licence)
+
+[ReverseCAD](https://github.com/grizlizora/reverse-cad) (PolyForm Noncommercial 1.0.0; used because ShipBrain is declared
+non-commercial) is copied whole into `shipbrain/vendor/reverse-cad` and run as written with Node.js. ShipBrain builds it
+by itself on first use (`npm install` + TypeScript, about 10 s).
+
+- Tool `reverse_cad(file, material)`: STL -> watertight STEP AP242 solid, volume / area / centre of mass / inertia, mass
+  for steel, aluminium, PLA, PETG, ABS or glass, recognised holes, ISO threads, fillets, chamfers, slots, cavities, and its
+  own 5-gate check of the STEP against the mesh (Hausdorff distance). The answer says the features are recognised from
+  the mesh and must be checked (on test parts it sometimes calls a plain hole a tapped one).
+- Its MCP server is built in as `reverse-cad` (cad_analyze_stl, cad_detect_threads, cad_verify_rsvs, cad_convert_to_step).
+- Skill `reverse-cad`; knowledge pack `packs/reverse-cad.sbpack` (1,716 chunks); 80 training conversations made from real
+  conversions of CadQuery parts (`training/reversecad_tasks.py` -> `training/data/reversecad_train.jsonl.gz`).
+- `stl_to_step` (next.BREP.io) stays for exact curved faces; use both when needed.
+- **Licence:** non-commercial only, and not by or for a for-profit company. Before any commercial or company use remove
+  `vendor/reverse-cad`, its pack and its training data and train again, or buy the author's commercial licence.
+
 ## Pre-processing like HyperMesh (element quality, model check, OptiStruct .fem)
 
 HyperMesh (Altair) is a paid pre-processor; its manual is Altair's copyright, so nothing from it is copied. ShipBrain
@@ -751,7 +768,7 @@ Everything ShipBrain needs is free and open source: numpy and scipy (BSD), CadQu
 pyNastran (BSD), ezdxf (MIT), pdfplumber (MIT), pypdfium2 (Apache/BSD), Pillow (MIT-CMU), CalculiX (GPL, run as a
 separate program), llama.cpp (MIT) and llamafile (Apache-2.0), the OCX schema (Apache-2.0), xsdata and xmlschema (MIT),
 OCXReader (LGPL-2.1, unchanged, run as a separate program). Non-commercial only (allowed because ShipBrain is
-declared non-commercial, see above): ConstructDrawingAI (PolyForm Noncommercial 1.0.0). Training uses Qwen3 (Apache-2.0), Unsloth (Apache-2.0),
+declared non-commercial, see above): ConstructDrawingAI and ReverseCAD (PolyForm Noncommercial 1.0.0). Training uses Qwen3 (Apache-2.0), Unsloth (Apache-2.0),
 Transformers and PEFT (Apache-2.0). PyMuPDF (AGPL or paid) was replaced. ANSYS and Abaqus are only targets of the file
 converters and are never needed.
 

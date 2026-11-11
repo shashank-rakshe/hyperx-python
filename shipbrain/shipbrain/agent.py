@@ -258,6 +258,13 @@ class Tools:
                       'stl2step: planes, cylinders, cones, spheres, tori recognised. unit of the STL: mm | cm | m | inch | foot. '
                       '(The CAD tools also accept .stl directly.)',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'unit': {'type': 'string'}}, 'required': ['file']})
+        self.register('reverse_cad', self.reverse_cad, 'Mesh (STL scan / 3D-print / mesh export) -> STEP AP242 solid with ReverseCAD '
+                      '(non-commercial licence): watertight B-Rep, volume, area, centre of mass, inertia, mass for a material, '
+                      'recognised holes / ISO threads / fillets / chamfers / slots / cavities, and its own verification of the STEP '
+                      'against the mesh (Hausdorff distance, 5 gates). material: steel | aluminum | pla | petg | abs | glass. '
+                      'Use it when the user wants the features or the verification; stl_to_step fits exact curved faces.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'material': {'type': 'string'},
+                                                         'heatmap': {'type': 'boolean'}}, 'required': ['file']})
         self.register('fatigue_mesh', self.fatigue_mesh, 'Fatigue hot-spot local model: cut a box around the hot spot from a plate assembly, '
                       'mesh it t x t, give the read-out points at 0.5t / 1.5t; with solve=true also run CalculiX and return the '
                       'extrapolated hot-spot stress (1.5 s(0.5t) - 0.5 s(1.5t)).',
@@ -1007,6 +1014,14 @@ class Tools:
                 'plain_english': f"Converted {file} to {out}: {len(s.Solids())} solid(s), {len(s.Faces())} faces ("
                                  + ', '.join(f'{v} {k.lower()}' for k, v in kinds.most_common()) + f"), volume {s.Volume():.0f} mm3, "
                                  f"valid: {'yes' if s.isValid() else 'NO'}."}
+
+    def reverse_cad(self, file, material=None, heatmap=False):
+        from . import reversecad
+        src = self._path(file)
+        out_dir = os.path.join(self.workdir, os.path.splitext(os.path.basename(file))[0] + '_reversecad')
+        r = reversecad.convert(src, out_dir, emit='step,summary,report' + (',heatmap' if heatmap else ''), material=material)
+        r['files'] = {k: os.path.relpath(v, self.workdir) for k, v in r['files'].items()}
+        return r
 
     def geometry_clean(self, plates=None, file=None, merge_tol=2.0):
         from . import geoclean

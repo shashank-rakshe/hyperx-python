@@ -128,6 +128,12 @@ SOFTWARE = {
                          'linux': 'sudo apt install dotnet-sdk-10.0', 'mac': 'download the .NET 10 SDK for macOS from the link'},
                'then': 'python -c "from shipbrain import dwsim; dwsim.build()"   (about 5 minutes, once)',
                'check': _have_exe('dotnet', 'dotnet.exe'), 'match': r'\.NET 10 SDK|dotnet not found|DWSIM is not built'},
+    'reverse_cad': {'name': 'ReverseCAD (comes with ShipBrain; needs Node.js)', 'why': 'to turn an STL mesh into a STEP solid '
+                    'with its holes, threads and fillets (non-commercial licence)', 'link': 'https://nodejs.org/en/download',
+                    'steps': {'windows': 'install Node.js LTS from the link; ShipBrain builds ReverseCAD by itself on first use',
+                              'linux': 'sudo apt install nodejs npm (Node 20+); ShipBrain builds ReverseCAD on first use',
+                              'mac': 'brew install node; ShipBrain builds ReverseCAD on first use'},
+                    'check': _have_exe('node', 'node.exe'), 'match': r'ReverseCAD needs'},
     'liteparse': _pip('liteparse', 'to read PDF / Word / Excel / PowerPoint documents into markdown (LiteParse)'),
     'vibrationdata_matlab': {'name': "Tom Irvine's Vibrationdata MATLAB package (free download)",
                              'why': 'for its vibration, shock, fatigue, acoustics and bolted-joint calculations, run free in GNU Octave',

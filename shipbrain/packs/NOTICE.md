@@ -226,6 +226,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: GPL-3.0
 - Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
 
+## reverse-cad
+
+- Source: https://github.com/grizlizora/reverse-cad (commit 33aca3b6eae8)
+- Licence: PolyForm-Noncommercial-1.0.0
+- Use: NON-COMMERCIAL ONLY: knowledge + training of a non-commercial model; remove it before any commercial use
+- Copyright (c) 2026 Roman Vaida (@grizlizora). All rights reserved
+
 ## simthesizer
 
 - Source: https://github.com/casys-kaist/simthesizer.git (commit ebd06db53cfb)
