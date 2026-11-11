@@ -1148,6 +1148,11 @@ class LLM:
             h['Authorization'] = 'Bearer ' + self.key
         return urllib.request.Request(self.base + path, data=json.dumps(body).encode() if body is not None else None, headers=h)
 
+    def count_tokens(self, text):
+        """exact number of tokens with the model's own tokenizer (llama-server /tokenize; raises if not supported)"""
+        with urllib.request.urlopen(self._req('/tokenize', {'content': text}), timeout=20) as r:
+            return len(json.loads(r.read())['tokens'])
+
     def ok(self):
         try:
             with urllib.request.urlopen(self._req('/v1/models'), timeout=3) as r:
@@ -1270,6 +1275,9 @@ def run(llm, tools, history, max_steps=MAX_STEPS):
     if ctx:
         yield {'type': 'context', 'sources': used}
     from . import chatstate                                  # long chat: oldest turns -> notes made by code (never lost)
+    if chatstate.COUNTER is None and not getattr(llm, '_count_tried', False) and hasattr(llm, 'count_tokens'):
+        llm._count_tried = True                              # exact token counts from the model's own tokenizer, once set up
+        chatstate.use_counter(llm.count_tokens, msgs[0]['content'])
     fixed = sum(chatstate.tokens(m['content']) for m in msgs)
     history, note = chatstate.compact(list(history), getattr(tools, 'workdir', None), fixed_tokens=fixed)
     if note:

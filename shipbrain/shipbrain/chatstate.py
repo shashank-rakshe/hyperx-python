@@ -24,8 +24,42 @@ _FILE = re.compile(r'[\w\-./\\:]+\.(?:step|stp|brep|iges|igs|stl|bdf|dat|nas|inp
 _ID = re.compile(r'\b(?:[A-Z]{1,4}[-_]?\d{2,}[A-Za-z0-9_-]*|[a-z]+_[0-9a-f]{6,}|trig_\w+|session_\w+)\b')
 
 
+RATIO = 3.5                # characters per token; calibrated against the model's own tokenizer when it can count
+COUNTER = None             # exact counter: text -> number of tokens (llama-server /tokenize), set by use_counter()
+_CACHE = {}
+
+
+def use_counter(fn, sample=None):
+    """count with the model's own tokenizer from now on; calibrate the estimate on a sample (e.g. the system prompt).
+    A server that cannot count (Ollama, LM Studio...) keeps the estimate."""
+    global COUNTER, RATIO
+    try:
+        n = fn(sample or 'Plate 2400 x 800 x 12 mm under 0.05 MPa, clamped edges: stress and deflection?')
+    except Exception:
+        return False
+    if not n:
+        return False
+    COUNTER = fn
+    if sample and len(sample) > 200:
+        RATIO = max(1.5, min(6.0, len(sample) / n))
+    return True
+
+
 def tokens(text):
-    return int(len(text) / 3.5) + 4                      # rough: ~3.5 characters per token for English + numbers
+    """tokens in text: exact from the model's tokenizer when available (cached), else ~len / RATIO"""
+    if COUNTER is not None and text:
+        key = hash(text)
+        if key in _CACHE:
+            return _CACHE[key]
+        try:
+            n = COUNTER(text) + 4                         # + the chat-template tokens around a message
+            if len(_CACHE) > 5000:
+                _CACHE.clear()
+            _CACHE[key] = n
+            return n
+        except Exception:
+            pass
+    return int(len(text) / RATIO) + 4
 
 
 def chat_id(history):

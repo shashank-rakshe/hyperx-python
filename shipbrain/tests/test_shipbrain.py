@@ -1382,3 +1382,29 @@ def test_speed_planner_and_prompt_layout(tmp_path):
     T.call('set_profile', {'units': 'in-lbf-psi', 'notes': 'x' * 2000})
     ctx, _ = agent.retrieve(T, 'Clean up bracket.step for FEA', budget=600)
     assert len(ctx) < 600 + 200                                                                        # the budget holds
+
+
+def test_exact_token_counts_from_the_model_server(tmp_path):
+    from shipbrain import chatstate
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            self.send_response(200); self.end_headers()
+            self.wfile.write(json.dumps({'tokens': list(range(len(body['content'].split())))}).encode())   # 1 token per word
+    srv = ThreadingHTTPServer(('127.0.0.1', 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    old = (chatstate.COUNTER, chatstate.RATIO)
+    try:
+        llm = agent.LLM(f'http://127.0.0.1:{srv.server_address[1]}')
+        sample = 'word ' * 300
+        assert chatstate.use_counter(llm.count_tokens, sample) and chatstate.RATIO == 5.0
+        assert chatstate.tokens('one two three') == 3 + 4                       # exact (+ template tokens)
+        assert not chatstate.use_counter(lambda t: (_ for _ in ()).throw(OSError('no /tokenize')))   # server cannot count
+    finally:
+        srv.shutdown()
+        chatstate.COUNTER, chatstate.RATIO = old
+        chatstate._CACHE.clear()
