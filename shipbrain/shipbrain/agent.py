@@ -295,6 +295,10 @@ class Tools:
                       'names the best engine installed on this PC (CalculiX, Nastran/ANSYS/Abaqus decks, MoFEM, OpenCourant, OpenFOAM, '
                       'Code_Aster, Elmer, CadQuery ...) and the ShipBrain tool to call next.',
                       {'type': 'object', 'properties': {'question': {'type': 'string'}}, 'required': ['question']})
+        self.register('setup_check', self.setup_check, 'What free software ShipBrain can use on THIS PC (solvers, DWG converter, '
+                      'Node.js, Rust, OCR, Python packages ...): installed or not, why it is needed and the download link. Use when '
+                      'the user asks what to install or how to set up a PC.',
+                      {'type': 'object', 'properties': {'only_missing': {'type': 'boolean'}}})
         self.register('find_solvers', self.find_solvers, 'List the FE / CFD solvers installed on THIS workstation (CalculiX, MSC / NX '
                       'Nastran, MYSTRAN, ANSYS, Abaqus, OpenFOAM, Code_Aster) with their paths, so the user can choose one.',
                       {'type': 'object', 'properties': {}})
@@ -998,8 +1002,21 @@ class Tools:
         return out
 
     def choose_engine(self, question):
-        from . import engines
-        return engines.choose(question)
+        from . import engines, installs
+        out = engines.choose(question)
+        for p in out['plan']:
+            best = p['engines'][0] if p['engines'] else None
+            if best and not best['installed']:
+                i = installs.for_engine(best['engine'])
+                if i:
+                    i['message'] = installs.message(i)
+                    out.setdefault('install', i)
+                    out['plain_english'] += f" To run it here, install {i['name']}: {i['link']}"
+        return out
+
+    def setup_check(self, only_missing=False):
+        from . import installs
+        return installs.setup_check(only_missing)
 
     def find_solvers(self):
         from . import solvers
@@ -1126,9 +1143,11 @@ class Tools:
         fn = self.t[name][0]
         try:
             args = args if isinstance(args, dict) else json.loads(args or '{}')
-            return fn(**args)
+            res = fn(**args)
         except Exception as e:
-            return {'error': f'{type(e).__name__}: {e}'}
+            res = {'error': f'{type(e).__name__}: {e}'}
+        from . import installs                               # missing program / package -> what to install + link
+        return installs.attach(res)
 
     def describe(self):
         return '\n'.join(f'- {n}: {d}\n  args: {json.dumps(s.get("properties", {}), separators=(",", ":"))}'
@@ -1153,6 +1172,8 @@ Rules:
    You will get back a message starting with TOOL_RESULT. Then answer, or call the next tool.
 4. If a needed value is missing, choose a sensible default, say which one you assumed, and continue.
 5. Finish with a short answer: what was done, key numbers, files written, checks/warnings.
+6. If a tool result has "install", something is not installed: tell the user what to install, why, and give the
+   download link and the steps exactly as written there. Never guess another link.
 
 Tools:
 {tools}
@@ -1168,6 +1189,7 @@ Call a tool with ONLY:
 {{"name": "<tool>", "args": {{...}}}}
 ```
 then wait for TOOL_RESULT. Missing value: assume a sensible one and say so. End with a short answer: done, key numbers, files, warnings.
+Result with "install": tell the user what to install and give its link and steps exactly as written.
 Tools: {tools}
 """
 
@@ -1351,6 +1373,12 @@ def attach_context(msgs, ctx, index=-1):
     return msgs
 
 
+def _install_note(text, shown):
+    """the model must give the download link; if a small model forgot it, add it under its answer"""
+    miss = [i for link, i in shown.items() if link not in text]
+    return ''.join('\n\n**Install needed:** ' + i['message'] for i in miss)
+
+
 def run(llm, tools, history, max_steps=MAX_STEPS):
     """history: [{'role','content'}] of the chat so far (user last). Yields UI events (dicts)."""
     tools.llm = llm                                          # look / pid_kg read show pictures to this same model
@@ -1373,7 +1401,7 @@ def run(llm, tools, history, max_steps=MAX_STEPS):
         msgs.append({'role': 'system', 'content': note})
         yield {'type': 'context', 'sources': ['chat notes']}
     msgs += attach_context(list(history), ctx)           # knowledge at the end: the chat so far stays a cached prefix
-    seen = set()
+    seen, shown = set(), {}                                  # shown: install notices (link -> block) in this turn
     for step in range(max_steps):
         text = ''
         for piece in llm.stream(msgs):
@@ -1383,7 +1411,7 @@ def run(llm, tools, history, max_steps=MAX_STEPS):
         call = parse_tool_call(text)
         msgs.append({'role': 'assistant', 'content': text})
         if not call:
-            yield {'type': 'done', 'content': text}
+            yield {'type': 'done', 'content': text + _install_note(text, shown)}
             return
         if call['name'] == '__bad__':
             res = {'error': 'the tool block is not valid JSON: ' + call['raw'][:200] + ' - write it again as JSON'}
@@ -1402,6 +1430,9 @@ def run(llm, tools, history, max_steps=MAX_STEPS):
         if call['name'] in MESH_TOOLS and 'error' not in res and tools.last_mesh:
             ev['mesh'] = tools.last_mesh
         yield ev
+        if isinstance(res, dict) and res.get('install') and res['install']['link'] not in shown:
+            shown[res['install']['link']] = res['install']
+            yield {'type': 'install', **res['install']}
         extra = tools.hook('tool_result', call['name'], call['args'], res) if hasattr(tools, 'hook') else []
         msgs.append({'role': 'user', 'content': f"TOOL_RESULT {call['name']}: " + compact_result(res)
                      + ''.join('\n[hook] ' + h for h in extra)})
@@ -1420,6 +1451,8 @@ def run_offline(tools, history):
         if name in MESH_TOOLS and 'error' not in res:
             ev['mesh'] = tools.last_mesh
         yield ev
+        if isinstance(res, dict) and res.get('install'):
+            yield {'type': 'install', **res['install']}
         yield {'type': 'done', 'content': ''}
         return
     res = tools.knowledge_search(q)

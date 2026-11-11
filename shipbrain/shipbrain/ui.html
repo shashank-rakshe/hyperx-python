@@ -35,6 +35,7 @@ details.tool{background:var(--tool);border:1px solid var(--line);border-radius:8
 details.tool summary{padding:6px 10px;cursor:pointer;color:var(--mute)}details.tool summary b{color:var(--ink)}
 details.tool pre{margin:0;padding:8px 10px;overflow:auto;max-height:320px;border-top:1px solid var(--line);white-space:pre-wrap}
 .err{color:var(--err)}
+.inst{border:1px solid var(--err);border-left:4px solid var(--err);border-radius:8px;padding:8px 12px;margin:8px 0;font-size:14px}.inst b{display:block;margin-bottom:4px}.inst a{font-weight:600;word-break:break-all}.inst code{display:block;white-space:pre-wrap;margin:4px 0;opacity:.9}
 .ov{max-width:100%;border:1px solid var(--line);border-radius:8px;margin:6px 0}
 .fb{font-size:13px;color:var(--mute);margin:2px 0 4px}.fb button{background:none;border:0;padding:2px 6px;opacity:.6}.fb button:hover{opacity:1}
 .ctx{font-size:12px;color:var(--mute);margin:2px 0 6px}
@@ -128,6 +129,11 @@ function render(){
     EX.map(e=>'<button>'+esc(e)+'</button>').join('')+'</div></div>';
     box.querySelectorAll('.ex button').forEach(b=>b.onclick=()=>{$('in').value=b.textContent;send()});return}
   box.innerHTML='';c.msgs.forEach(m=>box.appendChild(view(m)));$('log').scrollTop=1e9}
+function instCard(s){const ok=/^https?:\/\//.test(s.link||'');
+  return '<div class="inst"><b>⬇ Install needed: '+esc(s.name)+'</b>'+esc('Needed '+s.why+'.')+
+    '<br>Download: '+(ok?'<a href="'+esc(s.link).replace(/"/g,'&quot;')+'" target="_blank" rel="noopener noreferrer">'+esc(s.link)+'</a>':esc(s.link||''))+
+    '<code>'+esc(s.steps||'')+'</code>'+(s.then?'Then run once:<code>'+esc(s.then)+'</code>':'')+(s.other?esc('Other way: '+s.other):'')+
+    '<br>After installing, ask again.</div>'}
 function view(m){
   const d=document.createElement('div');d.className='msg '+m.role;
   if(m.role==='user'){d.innerHTML='<div class="b"></div>';d.firstChild.textContent=m.content;return d}
@@ -138,6 +144,7 @@ function view(m){
       (s.result&&s.result.plain_english?'<div class="b"><p>'+esc(s.result.plain_english)+'</p></div>':'')+
       (s.result&&s.result.overlay?'<img class="ov" src="/files/'+encodeURIComponent(s.result.overlay)+'">':'');
     else if(s.kind==='error')h+='<div class="err">'+esc(s.text)+'</div>';
+    else if(s.kind==='install')h+=instCard(s);
     else if(s.kind==='ctx')h+='<div class="ctx">📚 used: '+s.sources.map(esc).join(', ')+'</div>'});
   if(m.content&&!m.rated)h+='<div class="fb"><button title="good answer" onclick="rate(this,true)">👍</button><button title="wrong answer - tell me the correct one" onclick="rate(this,false)">👎</button></div>';
   if(m.rated)h+='<div class="fb">'+(m.rated==='good'?'👍 thanks':'👎 noted - I will use your correction')+'</div>';
@@ -168,6 +175,7 @@ async function send(){
           if(ev.mesh){drawMesh(ev.mesh);$('right').classList.remove('hide')}loadFiles()}
         else if(ev.type==='done'){a.content=ev.content||a.steps.filter(s=>s.kind==='text').map(s=>s.text).join('\n')}
         else if(ev.type==='error'){a.steps.push({kind:'error',text:ev.message})}
+        else if(ev.type==='install'){a.steps.push(Object.assign({},ev,{kind:'install'}))}
         const nv=view(a);node.replaceWith(nv);node=nv;$('log').scrollTop=1e9}}
   }catch(e){a.steps.push({kind:'error',text:String(e)})}
   if(!a.content)a.content=a.steps.filter(s=>s.kind==='text').map(s=>s.text).join('\n')||'(tool run)';

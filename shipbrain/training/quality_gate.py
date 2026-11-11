@@ -85,7 +85,7 @@ def data(n):
             if x['role'] == 'assistant' and '```tool' in x['content']:
                 c = agent.parse_tool_call(x['content'])
                 bad_call += (c is None or c['name'] == '__bad__')
-            if x['role'] == 'user' and x['content'].startswith('TOOL_RESULT') and '"error"' in x['content'] and r['task'] != 'mesh_fix':
+            if x['role'] == 'user' and x['content'].startswith('TOOL_RESULT') and '"error"' in x['content'] and r['task'] not in ('mesh_fix', 'install'):
                 err += 1
         final = m[-1]['content']
         res = [x['content'] for x in m if x['role'] == 'user' and x['content'].startswith('TOOL_RESULT')]

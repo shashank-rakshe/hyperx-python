@@ -963,11 +963,68 @@ def make_rules_task(entries):
     return t_rules
 
 
+_INSTALL_CASES = [   # (user question, tool, args, the real error text that tool gives when the program is missing, key)
+    ('Compare {a}.dwg with {b}.dwg and list the changes', 'compare_drawings', {'a': '{a}.dwg', 'b': '{b}.dwg'},
+     'RuntimeError: DWG needs the free ODA File Converter (free download: https://www.opendesign.com/guestfiles/oda_file_converter ).', 'oda'),
+    ('What changed between revision A and B? Files {a}.dwg and {b}.dwg', 'compare_drawings', {'a': '{a}.dwg', 'b': '{b}.dwg'},
+     'RuntimeError: DWG needs the free ODA File Converter (free download: https://www.opendesign.com/guestfiles/oda_file_converter ).', 'oda'),
+    ('Run a static analysis of {a}.inp', 'analysis_run', {'file': '{a}.inp', 'analysis': 'static'},
+     'RuntimeError: CalculiX (ccx) not found on PATH; set CCX=path\\to\\ccx.exe', 'calculix'),
+    ('Solve {a}.bdf with MYSTRAN', 'solve', {'file': '{a}.bdf', 'solver': 'mystran'},
+     'RuntimeError: mystran was not found on this PC: give its path once with remember_solver', 'mystran'),
+    ('Turn {a}.stl into a STEP solid', 'stl_to_step', {'file': '{a}.stl'},
+     'RuntimeError: Rust is needed to build stl2step once: install it from https://rustup.rs', 'rust'),
+    ('Check this portal frame: span 6 m, height 4 m, HEB200, 20 kN at mid-span', 'frame_solve', {'file': '{a}.json'},
+     "ModuleNotFoundError: No module named 'wasmtime'", 'wasmtime'),
+    ('Read the text in the scanned drawing {a}.png', 'compare_drawings', {'a': '{a}.png', 'b': '{b}.png'},
+     "TesseractNotFoundError: tesseract is not installed or it's not in your PATH", 'tesseract'),
+    ('Simulate sloshing in a tank with the physics lab', 'physics_lab', {'action': 'run', 'scenario': 'sloshing_tank'},
+     'RuntimeError: a C compiler and make are needed: Linux `sudo apt install clang make`, macOS `xcode-select --install`', 'cc'),
+]
+
+
+def t_install(r, tools):
+    """a tool fails because a free program is missing: tell the user what to install, why, the link and the steps
+    (for Windows, Linux or macOS), and to ask again - never invent another link"""
+    from shipbrain import installs
+    user, name, args, err, key = r.choice(_INSTALL_CASES)
+    a_, b_ = r.choice(['deck', 'frame', 'bulkhead', 'ga', 'skid', 'bracket', 'pump_base']) + f'_rev{r.choice("ABC")}', \
+        r.choice(['deck', 'frame', 'bulkhead', 'ga', 'skid']) + f'_rev{r.choice("DEF")}'
+    fill = lambda x: x.format(a=a_, b=b_) if isinstance(x, str) else x
+    args = {k: fill(v) for k, v in args.items()}
+    osn = r.choice(['windows', 'linux', 'mac'])
+    i = installs.info(key)
+    st = installs.SOFTWARE[key]['steps']
+    i['steps'] = st.get(osn) or st.get('all') or i['steps']
+    i['message'] = installs.message(i)
+    res = {'error': err, 'install': i, 'plain_english': i['message']}
+    ans = (f"I could not do this yet: **{i['name']}** is not installed on this PC. It is needed {i['why']}.\n\n"
+           f"- Download: {i['link']}\n- How: {i['steps']}\n" + (f"- Then run once: {i['then']}\n" if i.get('then') else '')
+           + (f"- Other way: {i['other']}\n" if i.get('other') else '') + '\nAfter installing, ask me again and I will run it.')
+    sysnote = {'windows': 'I use Windows. ', 'linux': 'I am on Ubuntu. ', 'mac': 'I have a Mac. '}[osn] if r.random() < 0.6 else ''
+    return [{'role': 'user', 'content': sysnote + fill(user)}, {'role': 'assistant', 'content': tool_block(name, args)},
+            result_msg(name, res), {'role': 'assistant', 'content': ans}]
+
+
+def t_setup(r, tools):
+    """'what do I need to install?' -> setup_check -> the list with links"""
+    only = r.random() < 0.5
+    user = r.choice(['What do I need to install for ShipBrain?', 'Which programs are missing on this PC?', 'How do I set up a new PC for you?',
+                     'Is everything installed?', 'What free software can you use and do I have it?'])
+    res = tools.call('setup_check', {'only_missing': only})
+    miss = [x for x in res['software'] if not x['installed']]
+    ans = res['plain_english'] if not miss else ('These are not installed yet (install only what you need):\n\n' + '\n'.join(
+        f"- **{x['name']}** - {x['why']}: {x['link']}" for x in miss) + '\n\nEverything else is ready.')
+    return [{'role': 'user', 'content': user}, {'role': 'assistant', 'content': tool_block('setup_check', {'only_missing': only})},
+            result_msg('setup_check', res), {'role': 'assistant', 'content': ans}]
+
+
 TASKS = [('mesh', 30, lambda r, T: t_mesh(r, T)), ('mesh_fix', 6, lambda r, T: t_mesh(r, T, 'fix')),
          ('mesh_assume', 6, lambda r, T: t_mesh(r, T, 'assume')), ('plate', 12, t_plate), ('stiff', 12, t_stiff),
          ('buckle', 5, t_buckle), ('section', 8, t_section), ('calc', 4, t_calc), ('chat', 3, t_chat), ('plates', 4, t_plates), ('program', 12, t_program), ('cad_bank', 14, t_cad_bank),
          ('fileinfo', 4, t_fileinfo), ('convert', 4, t_convert), ('edit', 5, t_edit), ('clean', 3, t_clean), ('fe_repair', 3, t_fe_repair),
-         ('sur_build', 1, t_sur_build), ('units', 5, t_units), ('profile', 2, t_profile), ('add_skill', 2, t_add_skill), ('frame', 5, t_frame), ('code', 2, t_code), ('pid', 3, t_pid), ('sur_predict', 4, t_sur_predict), ('insight', 3, t_insight)]
+         ('sur_build', 1, t_sur_build), ('units', 5, t_units), ('profile', 2, t_profile), ('add_skill', 2, t_add_skill), ('frame', 5, t_frame), ('code', 2, t_code), ('pid', 3, t_pid), ('sur_predict', 4, t_sur_predict), ('insight', 3, t_insight),
+         ('install', 4, t_install), ('setup', 1, t_setup)]
 
 
 def main(argv=None):

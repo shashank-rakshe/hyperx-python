@@ -1538,3 +1538,37 @@ def test_drawing_compare_numbered_clouds_filters_dwg(tmp_path):
         assert 'layer changed' not in c['semantic']['by_kind'] and 'AutoCAD' in c['plain_english']
     finally:
         del os.environ['SHIPBRAIN_ODA']
+
+
+def test_missing_software_shows_install_link(tmp_path, monkeypatch):
+    """a tool that needs a program not on this PC -> install block with the download link, chat card, link in the answer"""
+    from shipbrain import agent, installs, dwg
+    monkeypatch.delenv('SHIPBRAIN_ODA', raising=False)
+    monkeypatch.setattr(dwg, 'find', lambda: None)
+    T = agent.Tools(str(tmp_path))
+    (tmp_path / 'a.dwg').write_bytes(b'x')
+    (tmp_path / 'b.dwg').write_bytes(b'y')
+    r = T.call('compare_drawings', {'a': 'a.dwg', 'b': 'b.dwg'})
+    assert r['install']['key'] == 'oda' and r['install']['link'].startswith('https://www.opendesign.com/')
+    assert r['install']['link'] in r['plain_english']
+    for err, key in [('CalculiX (ccx) not found on PATH', 'calculix'), ("No module named 'wasmtime'", 'wasmtime'),
+                     ("No module named 'OCP.BRep'", 'cadquery'), ('Node.js is needed: install it', 'node'),
+                     ('gfortran is needed to build MYSTRAN', 'fortran'), ('Rust is needed to build stl2step', 'rust'),
+                     ('ValueError: plate too thin', None)]:
+        assert installs.detect(err) == key, err
+    for k in installs.SOFTWARE:
+        assert installs.info(k)['link'].startswith('http'), k
+
+    class FakeLLM:                                           # a small model that forgets the link in its answer
+        n = 0
+
+        def stream(self, msgs):
+            FakeLLM.n += 1
+            yield ('```tool\n{"name": "compare_drawings", "args": {"a": "a.dwg", "b": "b.dwg"}}\n```' if FakeLLM.n == 1
+                   else 'The DWG converter is missing.')
+    ev = list(agent.run(FakeLLM(), T, [{'role': 'user', 'content': 'compare a.dwg and b.dwg'}]))
+    card = [e for e in ev if e['type'] == 'install']
+    assert len(card) == 1 and card[0]['name'].startswith('ODA')
+    assert card[0]['link'] in ev[-1]['content']               # added under the answer
+    sc = T.call('setup_check', {})
+    assert sc['software'] and all('installed' in x for x in sc['software'])

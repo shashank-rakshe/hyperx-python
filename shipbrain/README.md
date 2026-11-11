@@ -197,6 +197,15 @@ and never patches it (`DO_NOT_MODIFY.md`); the licence checker now marks such li
   install folders) or from `SHIPBRAIN_ODA` / `~/.shipbrain/oda.txt`. Each DWG is converted once and cached.
   Without it: save the drawing as DXF in AutoCAD.
 
+## Something not installed? The chat says what, why, and gives the link
+
+When a tool needs free software that is not on the PC (ODA File Converter for DWG, CalculiX, MYSTRAN, Node.js, Rust,
+a C compiler, Tesseract OCR, llama.cpp, or a Python package), the chat shows an **Install needed** card: the name,
+why it is needed, the official download link (clickable) and the steps for Windows, Linux or macOS, then "ask again".
+The model is trained to repeat it, and if it forgets the link, the app adds it under the answer. Ask *"what do I need
+to install?"* (tool `setup_check`, or `python -m shipbrain.installs`) for the whole list with installed / missing.
+All links live in one place: `shipbrain/installs.py`. Only free software is listed.
+
 ## MYSTRAN: a free Nastran-compatible solver that RUNS the .bdf ShipBrain writes
 
 [MYSTRAN](https://github.com/MystranSolver/MYSTRANSolver) (MIT) is copied whole into `shipbrain/vendor/MYSTRAN`. It solves

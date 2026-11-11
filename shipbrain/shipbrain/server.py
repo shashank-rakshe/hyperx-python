@@ -147,8 +147,9 @@ def start_model(path, port, threads=None, ctx=8192, mmproj=None, bin_=None, draf
     if path.endswith('.gguf'):
         exe = bin_ or shutil.which('llama-server') or shutil.which('llama-server.exe')
         if not exe:
-            sys.exit('llama-server not found. Download llama.cpp (CPU build) and put llama-server on PATH, or pass --llama-bin, '
-                     'or use a .llamafile model.')
+            from . import installs
+            sys.exit('llama-server not found. ' + installs.message(installs.info('llama')) +
+                     ' (Or pass --llama-bin, or use a .llamafile model.)')
         if not mmproj:                                       # vision model: its image part lies next to it
             import glob as _g
             mm = sorted(_g.glob(os.path.join(os.path.dirname(path), '*mmproj*.gguf')))

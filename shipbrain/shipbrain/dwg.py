@@ -44,7 +44,7 @@ def remember(path):
 def to_dxf(dwg, version='ACAD2018', exe=None, timeout=600):
     exe = exe or find()
     if not exe:
-        raise RuntimeError('DWG needs the free ODA File Converter (opendesign.com -> ODA File Converter, free download). '
+        raise RuntimeError('DWG needs the free ODA File Converter (free download: https://www.opendesign.com/guestfiles/oda_file_converter ). '
                            'Install it, or save the drawing as DXF in AutoCAD (SAVEAS -> DXF). If it is installed in an '
                            'unusual folder, tell ShipBrain once where ODAFileConverter is.')
     dwg = os.path.abspath(dwg)
