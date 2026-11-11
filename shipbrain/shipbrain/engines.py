@@ -104,6 +104,10 @@ ENGINES = [
      'its own MCP server (58 operations); all 22 of its sample plants solved through ShipBrain'),
     ('ShipBrain mesher', {'mesh'}, 'runs', 'build_structure / plates_mesh / panel_mesh / cad_mesh / structure_to_mesh', [], None,
      'own conforming 1D + 2D mesher; no free nodes'),
+    ('MOOSE (INL multiphysics)', {'static': 'runs', 'heat': 'knowledge', 'contact': 'knowledge', 'fracture': 'knowledge',
+                                  'cfd': 'knowledge', 'ultimate': 'knowledge'}, 'runs',
+     'moose_plate(a, b, t, q, clamped) / moose_run(input.i)', ['@moose'], 'moose',
+     'LGPL-2.1; shells, solids, contact, XFEM, heat transfer, Navier-Stokes, porous flow; run from the Docker image idaholab/moose'),
 ]
 
 
@@ -120,6 +124,9 @@ def installed(names):
     if names == ['@solidcraft']:
         from .mcp_client import solidcraft_cli
         return solidcraft_cli() is not None
+    if names == ['@moose']:
+        from . import moose
+        return moose.exe() is not None
     if names == ['@torch']:
         import importlib.util
         return importlib.util.find_spec('torch') is not None

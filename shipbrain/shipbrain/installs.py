@@ -157,6 +157,12 @@ SOFTWARE = {
               '(topology optimisation, fast solid solves)', 'link': 'https://pytorch.org/get-started/locally/',
               'steps': {'all': 'pip install torch torch-sla meshio   (GPU: pick the CUDA build on the link)'},
               'check': _have_mod('torch'), 'match': r'TensorMesh needs PyTorch'},
+    'moose': {'name': 'MOOSE (free multiphysics FE, Idaho National Laboratory)', 'why': 'for shells, contact, heat transfer, '
+                    'fracture and other multiphysics runs', 'link': 'https://mooseframework.inl.gov/getting_started/installation/',
+              'steps': {'all': 'easiest: install Docker (https://docs.docker.com/get-docker/), then: docker pull idaholab/moose   '
+                               '(all modules, program moose-opt; ShipBrain runs it by itself). Or the conda / source build from '
+                               'the link (Windows: inside WSL2).'},
+              'check': lambda: __import__('shipbrain.moose', fromlist=['x']).exe() is not None, 'match': r'MOOSE is not installed'},
     'rhino3dm': _pip('rhino3dm', 'to read Rhino .3dm files exactly (McNeel\'s free library): solids, surfaces, meshes, '
                      'curves, layers and blocks', match=r'need rhino3dm'),
     'cadmpeg': {'name': 'cadmpeg (free, Apache-2.0)', 'why': 'to open native CAD files (SolidWorks, CATIA, Inventor, Fusion 360, '

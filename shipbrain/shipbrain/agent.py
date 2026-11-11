@@ -304,6 +304,15 @@ class Tools:
                       '(total force spread over the selected nodes); E, nu.',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'fixed': {'type': 'array'}, 'loads': {'type': 'array'},
                                                          'E': num, 'nu': num}, 'required': ['file', 'fixed', 'loads']})
+        self.register('moose_plate', self.moose_plate, 'Plate field (between stiffeners and frames) under lateral pressure with '
+                      'MOOSE\'s shell element (Idaho National Laboratory, free): a = span, b = stiffener spacing, t = thickness '
+                      '(mm), q = pressure (MPa), clamped or simply supported edges. Gives the deflection and the comparison '
+                      'with the Navier series. Needs MOOSE (Docker image idaholab/moose or moose-opt).',
+                      {'type': 'object', 'properties': {'a': num, 'b': num, 't': num, 'q': num, 'E': num, 'nu': num,
+                                                         'clamped': {'type': 'boolean'}}, 'required': ['a', 'b', 't', 'q']})
+        self.register('moose_run', self.moose_run, 'Run any MOOSE input file (.i) - solid mechanics, contact, heat transfer, '
+                      'XFEM fracture, Navier-Stokes, porous flow, thermal hydraulics - and read its postprocessors (CSV).',
+                      {'type': 'object', 'properties': {'input': {'type': 'string'}}, 'required': ['input']})
         self.register('reverse_cad', self.reverse_cad, 'Mesh (STL scan / 3D-print / mesh export) -> STEP AP242 solid with ReverseCAD '
                       '(non-commercial licence): watertight B-Rep, volume, area, centre of mass, inertia, mass for a material, '
                       'recognised holes / ISO threads / fillets / chamfers / slots / cavities, and its own verification of the STEP '
@@ -1157,6 +1166,20 @@ class Tools:
     def tensor_fem(self, file, fixed, loads, E=206000.0, nu=0.3):
         from . import tensorfem
         return tensorfem.solid_static(self._path(file), fixed, loads, E=E, nu=nu)
+
+    def moose_plate(self, a, b, t, q, E=206000.0, nu=0.3, clamped=False):
+        from . import moose
+        r = moose.plate(a, b, t, q, E=E, nu=nu, clamped=clamped, workdir=self.workdir, name=f'moose_plate_{int(a)}x{int(b)}x{t:g}')
+        r['input'], r['mesh'] = os.path.basename(r['input']), os.path.basename(r['mesh'])
+        return r
+
+    def moose_run(self, input):
+        from . import moose
+        r = moose.run(self._path(input))
+        pp = r.get('postprocessors', {})
+        r['plain_english'] = (f"MOOSE ran {os.path.basename(input)}" + (': ' + ', '.join(f'{k} = {v:.5g}' for k, v in pp.items() if k != 'time')
+                                                                       if pp else ' (no postprocessor CSV: add [Outputs] csv = true)') + '.')
+        return r
 
     def reverse_cad(self, file, material=None, heatmap=False):
         from . import reversecad

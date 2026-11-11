@@ -269,6 +269,25 @@ ShipBrain runs its own program, pinned to commit `6c775550` (version 0.6.11):
   instead. Its docs and code are the knowledge pack `packs/cadmpeg.sbpack` (7,202 chunks); 240 training conversations
   come from real runs on its public CC0 / NIST sample files (`training/cadmpeg_tasks.py`).
 
+## Multiphysics FE: MOOSE (Idaho National Laboratory, LGPL-2.1)
+
+[MOOSE](https://github.com/idaholab/moose) - fully-coupled implicit multiphysics: shells, solids, plasticity, contact,
+XFEM fracture, heat transfer, Navier-Stokes, porous flow, thermal hydraulics. It is 48 000 files and takes hours to build,
+so it is NOT copied here: ShipBrain runs the user's MOOSE as written - `moose-opt` on the PATH, or the official Docker
+image `idaholab/moose` (all modules compiled; ShipBrain runs it by itself with the work folder mounted).
+
+- Tool `moose_plate(a, b, t, q, clamped)`: a plate field under lateral pressure with MOOSE's shell element. The input file
+  is patterned on MOOSE's own test `shell/static/clamped_plate_flat.i` (every object and parameter appears in MOOSE's
+  test inputs); the mesh is written in the .msh file format by ShipBrain's own code (no Gmsh program). Every answer is
+  compared with the Navier series (simply supported; it reproduces MOOSE's quoted 2.998536e-3 m) or Roark's clamped
+  coefficients.
+- Tool `moose_run(input.i)`: any MOOSE input, postprocessors read from its CSV.
+- Checked on GitHub, not here: `.github/workflows/shipbrain-moose.yml` runs 41 plate cases in the official MOOSE image,
+  publishes the comparison table and the training conversations as the release `moose-latest` (the Kaggle run downloads
+  them). Started by a change to `shipbrain/training/MOOSE_REQUEST.txt`.
+- Knowledge pack `packs/moose.sbpack`: the docs of the framework syntax, solid mechanics, heat transfer, contact and XFEM,
+  and their example / test input files (6 344 chunks). Skill `moose`; install card (Docker is the easiest).
+
 ## Differentiable FE and topology optimisation: TensorMesh (Apache-2.0)
 
 [TensorMesh](https://github.com/camlab-ethz/TensorMesh) (CAMLab, ETH Zurich) is copied as written in `vendor/tensormesh`

@@ -68,14 +68,12 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Source: https://github.com/skfcz/OCXReader.git (commit ba5c5acdd12b)
 - Licence: LGPL
 - Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
-- Copyright (C) 1991, 1999 Free Software Foundation, Inc
 
 ## OpenCourantRP
 
 - Source: https://github.com/CAMLAB-UChile/OpenCourantRP.git (commit cec23cbdd405)
 - Licence: AGPL-3.0
 - Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
-- Copyright (C) 2007 Free Software Foundation, Inc
 
 ## OpenPhysicsAI
 
@@ -187,7 +185,6 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Source: https://github.com/DanWBR/dwsim10.git (commit 84a83e0e8be0)
 - Licence: GPL
 - Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
-- Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
 
 ## inkscape
 
@@ -223,6 +220,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2022 [Authors](http://mofem.eng.gla.ac.uk/mofem/html/authors.html)
 
+## moose
+
+- Source: https://github.com/idaholab/moose (commit 46ddb41b49a8)
+- Licence: LGPL-2.1
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- Large portions developed at Idaho National Laboratory; major contributors CSIRO and UKAEA, others listed in its COPYRIGHT file
+
 ## next.BREP.io_RUST_BREP_KERNEL
 
 - Source: https://github.com/mmiscool/next.BREP.io_RUST_BREP_KERNEL (commit 2bce4a613b6f)
@@ -249,7 +253,6 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Source: https://github.com/process-intelligence-research/pyDEXPI.git (commit 309f1433a718)
 - Licence: AGPL-3.0
 - Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
-- Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
 - (c) 2025 DEXPI (DEXPI e.V.), licensed under the Creative Commons Attribution 4.0 International
 - (c) 2026 DEXPI (DEXPI e.V.), licensed under the Creative Commons Attribution 4.0 International
 - Copyright (c) 2026 Shady Khella
