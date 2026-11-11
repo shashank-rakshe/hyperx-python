@@ -151,7 +151,7 @@ def _norm(t):
     return re.sub(r'[^A-Z0-9]', '', str(t).upper())
 
 
-def pidqa_samples(p2g_root, img_dir, out_dir, r, cap, sysmsg, log=print):
+def pidqa_samples(p2g_root, img_dir, out_dir, r, cap, sysmsg, log=print, pidqa_dir=None):
     """PIDQA's question / answer pairs (CC0) on the Dataset-P&ID sheet pictures inside PID2Graph. The pairing (sheet number
     -> picture) is CHECKED first: the tags PIDQA lists for a sheet must be readable (OCR) on that picture."""
     import csv, subprocess
@@ -166,8 +166,7 @@ def pidqa_samples(p2g_root, img_dir, out_dir, r, cap, sysmsg, log=print):
         m = re.fullmatch(r'\D*(\d+)', stem)
         if ext.lower() in ('.png', '.jpg', '.jpeg') and m:
             pics[int(m.group(1))] = os.path.join(d, f)
-    tmp = tempfile.mkdtemp(prefix='sb_pidqa_')
-    subprocess.run(['git', 'clone', '-q', '--depth', '1', PIDQA_REPO, tmp], check=True, timeout=600)
+    tmp = pidqa_dir if pidqa_dir and os.path.isdir(pidqa_dir) else fetch_pidqa(tempfile.mkdtemp(prefix='sb_pidqa_'))
     by = collections.defaultdict(list)
     for rel in _PIDQA_CSV:
         for row in csv.DictReader(open(os.path.join(tmp, rel), encoding='utf-8')):
@@ -276,6 +275,47 @@ def _fetch_floorplancad(dst, log=print):
     return dst
 
 
+def fetch_pid2graph(dst, log=print):
+    """PID2Graph -> dst/PID2Graph/{Complete, Patched/PID2Graph OPEN100} (the slices the converter uses)"""
+    os.makedirs(dst, exist_ok=True)
+    z = download(PID2GRAPH_URL, os.path.join(dst, 'PID2Graph.zip'), log)
+    with zipfile.ZipFile(z) as zf:
+        for n in zf.namelist():
+            if '/Complete/' in n or '/Patched/PID2Graph OPEN100/' in n or n.startswith(('Complete/', 'Patched/PID2Graph OPEN100/')):
+                zf.extract(n, os.path.join(dst, '_x'))
+    os.remove(z)
+    base = _find(os.path.join(dst, '_x'), 'Complete')
+    if not base:
+        raise RuntimeError('PID2Graph zip has no Complete/ folder')
+    shutil.move(base, os.path.join(dst, 'PID2Graph'))
+    shutil.rmtree(os.path.join(dst, '_x'), ignore_errors=True)
+    return dst
+
+
+def fetch_cubicasa(dst, max_plans=2000, seed=0, log=print):
+    """CubiCasa5K -> dst/<plan>/{model.svg, F1_scaled.png} for max_plans plans (not the whole 5.6 GB)"""
+    os.makedirs(dst, exist_ok=True)
+    z = download(CUBICASA_URL, os.path.join(dst, 'cubicasa5k.zip'), log)
+    with zipfile.ZipFile(z) as zf:
+        names = [n for n in zf.namelist() if n.endswith(('/model.svg', '/F1_scaled.png'))]
+        dirs = sorted({os.path.dirname(n) for n in names})
+        random.Random(seed).shuffle(dirs)
+        keep = set(dirs[:max_plans])
+        for n in names:
+            if os.path.dirname(n) in keep:
+                zf.extract(n, dst)
+    os.remove(z)
+    return dst
+
+
+def fetch_pidqa(dst):
+    import subprocess
+    if not os.path.isdir(os.path.join(dst, 'Value')):
+        subprocess.run(['git', 'clone', '-q', '--depth', '1', PIDQA_REPO, dst], check=True, timeout=600)
+        shutil.rmtree(os.path.join(dst, '.git'), ignore_errors=True)
+    return dst
+
+
 def _find(root, marker):
     for dp, dirs, files in os.walk(root):
         if marker in dirs:
@@ -295,9 +335,19 @@ def main(argv=None):
     ap.add_argument('--pidqa-cap', type=int, default=150, help='Dataset-P&ID sheets with PIDQA questions')
     ap.add_argument('--floorplancad-dir', help='a local copy of FloorPlanCAD instead of downloading')
     ap.add_argument('--floorplancad-cap', type=int, default=250)
+    ap.add_argument('--data-root', help='folder made by training/fetch_data.py (the Kaggle data notebook): used instead of downloading')
     ap.add_argument('--seed', type=int, default=0)
     a = ap.parse_args(argv)
     r = random.Random(a.seed)
+    pidqa_dir = None
+    if a.data_root:
+        sub = lambda n: os.path.join(a.data_root, n) if os.path.isdir(os.path.join(a.data_root, n)) else None
+        a.pid2graph_dir = a.pid2graph_dir or sub('pid2graph')
+        a.cubicasa_dir = a.cubicasa_dir or sub('cubicasa5k')
+        a.floorplancad_dir = a.floorplancad_dir or sub('floorplancad')
+        pidqa_dir = sub('pidqa')
+        for name, d in (('pid2graph', a.pid2graph_dir), ('cubicasa', a.cubicasa_dir), ('floorplancad', a.floorplancad_dir)):
+            print(f'{name}: ' + (f'from {d}' if d else f'not in {a.data_root} - downloading it here instead'))
     os.makedirs(a.img_dir, exist_ok=True)
     out_dir = os.path.dirname(os.path.abspath(a.out))
     sysmsg = {'role': 'system', 'content': agent.system_prompt(agent.Tools(tempfile.mkdtemp()))}
@@ -307,10 +357,7 @@ def main(argv=None):
         try:
             root = a.pid2graph_dir
             if not root:
-                z = download(PID2GRAPH_URL, os.path.join(tmp, 'PID2Graph.zip'))
-                zipfile.ZipFile(z).extractall(os.path.join(tmp, 'p2g'))
-                os.remove(z)
-                root = os.path.join(tmp, 'p2g')
+                root = fetch_pid2graph(os.path.join(tmp, 'p2g'))
             base = _find(root, 'Complete')                         # the folder that holds Complete/ and Patched/
             if base and os.path.basename(base) != 'PID2Graph':
                 os.makedirs(os.path.join(tmp, 'p2g_root'), exist_ok=True)
@@ -323,7 +370,7 @@ def main(argv=None):
             print('PID2Graph:', len(got), 'samples')
             if 'pidqa' not in a.skip:
                 try:
-                    got = pidqa_samples(root, a.img_dir, out_dir, r, a.pidqa_cap, sysmsg)
+                    got = pidqa_samples(root, a.img_dir, out_dir, r, a.pidqa_cap, sysmsg, pidqa_dir=pidqa_dir)
                     rows += got
                     print('PIDQA:', len(got), 'samples')
                 except Exception as e:
@@ -334,17 +381,7 @@ def main(argv=None):
         try:
             root = a.cubicasa_dir
             if not root:
-                z = download(CUBICASA_URL, os.path.join(tmp, 'cubicasa5k.zip'))
-                with zipfile.ZipFile(z) as zf:                  # only the plans needed: svg + scaled picture
-                    names = [n for n in zf.namelist() if n.endswith(('/model.svg', '/F1_scaled.png'))]
-                    dirs = sorted({os.path.dirname(n) for n in names})
-                    r.shuffle(dirs)
-                    keep = set(dirs[:a.cubicasa_cap * 2])
-                    for n in names:
-                        if os.path.dirname(n) in keep:
-                            zf.extract(n, os.path.join(tmp, 'cc5k'))
-                os.remove(z)
-                root = os.path.join(tmp, 'cc5k')
+                root = fetch_cubicasa(os.path.join(tmp, 'cc5k'), a.cubicasa_cap * 2, a.seed)
             got = cubicasa_samples(root, a.img_dir, out_dir, r, a.cubicasa_cap, sysmsg)
             rows += got
             print('CubiCasa5K:', len(got), 'samples')

@@ -226,6 +226,20 @@ builds it, unchanged, against the system OpenCascade 7.6 C++ files: on Linux `su
 2.8.5 / 2.8.6 real models become STEP in 0.4-21 s (up to 430,000 STEP entities). OCXReader reads OCX 2.8.x only; for
 3.x files `ocx_to_step` uses ShipBrain's own solids and says why.
 
+## Outside data on Kaggle (the build session has no internet to those sites)
+
+All outside data is downloaded on Kaggle, which has internet:
+
+1. **Data notebook** (once, no GPU): Kaggle -> New Notebook -> Internet ON -> paste `training/kaggle/data_kernel.py`
+   -> Save & Run All (30-90 min). It downloads PID2Graph, CubiCasa5K (2,000 plans), PIDQA, FloorPlanCAD (if its links
+   work) and the free class rule books of IACS + 12 societies, builds the private class-rule packs, and leaves it all
+   in its output `shipbrain_data/` with `manifest.json` (what came, what did not). Keep it **private** (default).
+2. **Training notebook** (`training/kaggle/kernel.py`): Add Input -> Your Work -> Notebooks -> the data notebook. The run
+   finds `shipbrain_data/` itself and uses it; anything missing in it is downloaded during the run instead.
+3. Rule books that need a login: save them on your PC as `<society>/*.pdf`, upload as a private Kaggle dataset with
+   "rules" in its name, attach it to the training notebook too.
+4. Optional: `training/kaggle/detector_kernel.py` in a GPU notebook trains the drawing symbol detector.
+
 ## Class society rules (ships and offshore)
 
 ShipBrain answers class rule questions **from the rules themselves**, with society, document, section and page, in

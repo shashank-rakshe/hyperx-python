@@ -102,7 +102,11 @@ PRIVATE_TRAIN = sorted(f for f in glob.glob('/kaggle/input/**/*.jsonl*', recursi
 PRIVATE_EVAL = sorted(f for f in glob.glob('/kaggle/input/**/*eval*.jsonl*', recursive=True))
 # ---- class society rules (copyright of each society -> private): download the free rule books here (SB_CLASS_RULES=0 to skip)
 #      + any rule PDFs you attach (a Kaggle dataset with folders <society>/*.pdf, e.g. the ones that need a login)
-if os.environ.get('SB_CLASS_RULES', '1') != '0':
+_dm = sorted(glob.glob('/kaggle/input/**/shipbrain_data/manifest.json', recursive=True))
+DATA = os.path.dirname(_dm[0]) if _dm else None       # the DATA notebook's output (training/kaggle/data_kernel.py), if attached
+if DATA:
+    print('data folder attached:', DATA, open(_dm[0]).read()[:1500], flush=True)
+if os.environ.get('SB_CLASS_RULES', '1') != '0' and not (DATA and glob.glob(f'{DATA}/packs/class_rules_*.private.sbpack')):
     sh('python -m shipbrain.classrules download --out /tmp/class_rules_pdfs --max-files 80', required=False)
     for d in sorted(set(os.path.dirname(os.path.dirname(f)) for f in glob.glob('/kaggle/input/**/*.pdf', recursive=True)
                         if 'rule' in f.lower())):
@@ -151,7 +155,8 @@ if not sh('python training/public_pids.py --out data/public_pid_train.jsonl --ma
 if not sh('python training/construct_tasks.py --n 160 --out data/construct_train.jsonl --img-dir data/construct_images', required=False):
     open('data/construct_train.jsonl', 'w').close()
 # real drawings with full answer keys: PID2Graph P&IDs (CC BY-SA) + CubiCasa5K floor plans (CC BY-NC); downloaded here
-if not sh('python training/construct_real.py --out data/construct_real_train.jsonl --img-dir data/construct_real_images', required=False):
+if not sh('python training/construct_real.py --out data/construct_real_train.jsonl --img-dir data/construct_real_images'
+          + (f' --data-root "{DATA}"' if DATA else ''), required=False):
     open('data/construct_real_train.jsonl', 'w').close()
 # cad3dify's own drawing -> CadQuery -> render -> correct loop, in its own prompt format, on the verified CAD examples
 if not sh('python training/cad3dify_tasks.py --out data/cad3dify_train.jsonl --img-dir data/cad3dify_images', required=False):
