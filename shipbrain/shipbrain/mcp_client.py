@@ -73,12 +73,27 @@ class MCPClient:
             pass
 
 
+def solidcraft_cli():
+    """SolidCraft's command-line program (its MCP server is `solidcraft-cli mcp`): PATH, SHIPBRAIN_SOLIDCRAFT, usual installs"""
+    import glob, shutil
+    for c in [os.environ.get('SHIPBRAIN_SOLIDCRAFT'), shutil.which('solidcraft-cli'), shutil.which('solidcraft-cli.exe')] + \
+            sorted(glob.glob(r'C:\Program Files\SolidCraft*\solidcraft-cli.exe')) + \
+            sorted(glob.glob(os.path.expanduser('~/AppData/Local/Programs/SolidCraft*/solidcraft-cli.exe'))) + \
+            ['/Applications/SolidCraft.app/Contents/MacOS/solidcraft-cli', '/snap/bin/solidcraft.solidcraft-cli']:
+        if c and os.path.exists(c):
+            return c
+    return None
+
+
 def servers(workdir=None):
     """name -> {command, cwd, env}"""
     out = {}
     from . import openphysics
     if openphysics.available():
         out['openphysics'] = {'command': None, 'cwd': openphysics.ROOT, 'builtin': True}
+    sc = solidcraft_cli()
+    if sc:                                             # SolidCraft parametric CAD (MIT / Apache), installed from solidcraft.io
+        out['solidcraft'] = {'command': [sc, 'mcp']}
     from . import dwsim
     if dwsim.exe():                                    # DWSIM process simulator (GPL), built with dwsim.build()
         out['dwsim'] = {'command': [dwsim.exe(), '--stdio']}
@@ -99,6 +114,10 @@ def client(name, workdir=None):
     if name in _LIVE and _LIVE[name].p.poll() is None:
         return _LIVE[name]
     cfg = servers(workdir).get(name)
+    if not cfg and name.lower() == 'solidcraft':
+        raise RuntimeError('SolidCraft is not installed on this PC (it is needed for its MCP server: solidcraft-cli mcp)')
+    if not cfg and name.lower() == 'dwsim':
+        raise RuntimeError('DWSIM is not built yet: the .NET 10 SDK is needed to build the DWSIM MCP server')
     if not cfg:
         raise ValueError(f'unknown MCP server {name}; known: ' + ', '.join(servers(workdir)))
     cmd = cfg.get('command')

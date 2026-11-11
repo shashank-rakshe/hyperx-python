@@ -116,6 +116,12 @@ SOFTWARE = {
     'ultralytics': _pip('ultralytics', 'to run the trained drawing symbol detector (drawing_detect; AGPL - fine for open, non-commercial use)'),
     'pydexpi': dict(_pip('pydexpi', 'for DEXPI P&ID files (pyDEXPI)', mod='pydexpi'),
                     steps={'all': 'pip install "pydexpi[png,pdf]"'}),
+    'solidcraft': {'name': 'SolidCraft (free parametric CAD)', 'why': 'to model parts in a full parametric CAD through its MCP server '
+                   '(sketches, constraints, features, sheet metal, assemblies)', 'link': 'https://solidcraft.io/download',
+                   'steps': {'windows': 'download the installer from the link and run it', 'linux': 'sudo snap install solidcraft '
+                             '(or the AppImage from the link)', 'mac': 'download the disk image from the link'},
+                   'check': lambda: __import__('shipbrain.mcp_client', fromlist=['x']).solidcraft_cli() is not None,
+                   'match': r'solidcraft'},
     'dotnet': {'name': '.NET 10 SDK (free)', 'why': 'to build the DWSIM process simulator server once',
                'link': 'https://dotnet.microsoft.com/download/dotnet/10.0',
                'steps': {'windows': 'download the .NET 10 SDK installer (x64) from the link and run it',

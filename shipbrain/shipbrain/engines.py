@@ -71,6 +71,8 @@ ENGINES = [
      'runs', 'physics_lab(action="list" / "run") ; mcp_tools / mcp_call(server="openphysics")', ['@openphysics'], None,
      'C solvers checked against closed forms / measurements: flow up to shocks, heat, fire, water / sloshing, sound, '
      'radar, magnetics, fracture, impact, gears, 3D printing, topology optimisation (Apache-2.0, copied whole)'),
+    ('SolidCraft (parametric CAD)', {'cad'}, 'runs', 'mcp_tools / mcp_call(server="solidcraft") with its modelling skills', ['@solidcraft'], None,
+     'free (MIT / Apache) parametric CAD in Rust: sketch, constrain, features, sheet metal, assemblies, STEP; its own MCP server'),
     ('DWSIM process simulator (built in)', {'process'}, 'runs', 'process_sim(action="run" / "flash") ; mcp_call(server="dwsim")', ['@dwsim'], None,
      'free (GPL) chemical process simulator: property packages, flashes, unit operations, columns, reactors, dynamics; '
      'its own MCP server (58 operations); all 22 of its sample plants solved through ShipBrain'),
@@ -89,6 +91,9 @@ def installed(names):
     if names == ['@mystran']:                          # found on PATH, in a usual folder, remembered, or built by ShipBrain
         from . import solvers
         return any(x['solver'] == 'mystran' for x in solvers.find())
+    if names == ['@solidcraft']:
+        from .mcp_client import solidcraft_cli
+        return solidcraft_cli() is not None
     if names == ['@dwsim']:
         from . import dwsim
         return dwsim.exe() is not None

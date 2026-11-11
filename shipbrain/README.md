@@ -673,6 +673,10 @@ converters and are never needed.
 - [agent3dify](https://github.com/neka-nat/agent3dify) (MIT): a fixed script contract with one JSON result line; a stall guard for repair loops; checking the model's projected views against the drawing.
 - [text-to-cad](https://github.com/earthtojake/text-to-cad) (MIT): check the user's sizes against the built solid, not against the model's words; an example corpus with prompts.
 - [solidcraft](https://github.com/tangency-labs/solidcraft) (MIT/Apache-2.0): a verified example and oracle set; small tool replies.
+  Now also: its five modelling skills (modeling, editing, checking, mechanisms, sheet metal; `vendor/solidcraft`) load
+  in ShipBrain, and when SolidCraft is installed (free, https://solidcraft.io/download) its own MCP server
+  (`solidcraft-cli mcp`) is a built-in server: `mcp_tools` / `mcp_call(server="solidcraft")`; without it the chat shows
+  the download link. Its full code is a trained knowledge pack (3,580 files).
 - [CAD2Program](https://manycore-research.github.io/CAD2Program/): small models do better emitting short parametric primitives than free B-rep code; used for `build_structure`.
 - [OpenCourantRP](https://github.com/CAMLAB-UChile/OpenCourantRP) (AGPL-3.0): knowledge pack (manual, explicit-dynamics example decks for impact / crash / sloshing), trained on (copyleft allowed by the owner); no code copied.
 - [Voitta](https://github.com/voitta-ai/voitta-rag) (voitta-rag is AGPL-3.0, so nothing was copied): hybrid search, re-indexing only changed files, search scope, assistant memory with like/dislike, tools over MCP.
