@@ -181,6 +181,22 @@ and never patches it (`DO_NOT_MODIFY.md`); the licence checker now marks such li
   Linux, macOS). The Kaggle run does it by itself and adds STL inputs to the CAD training tasks.
 - Found on the way: `repair_model` failed on trimmed cylinders in real STEP files - fixed.
 
+## Drawing compare like a CAD compare tool (DXF, DWG, PDF)
+
+`compare_drawings` on two revisions of a drawing now gives what a CAD compare tool gives:
+
+- **A result drawing** `compare_<a>_vs_<b>_changes.dxf`: removed in red, added in green, changed in yellow, and
+  every change inside a **numbered revision cloud** (magenta). It opens in any CAD program.
+- **A numbered change list** (also as `.csv` for Excel): number, kind, what it was, what it is now, layer and position.
+- **More than lines and text**: block insert moved / added / removed, block attributes changed, dimension value
+  changed (e.g. 4000 → 3900), hatch changed, circles and arcs, and layer settings (colour, linetype, on/off, frozen).
+- **Filters and tolerance**: ignore kinds (`ignore: ["hatches", "dimensions"]`) or layers (`ignore_layers`), and a
+  position tolerance so tiny shifts do not count as changes.
+- **DWG**: through the free **ODA File Converter** (opendesign.com → ODA File Converter, free download). Its
+  licence does not allow ShipBrain to include it, so install it once; ShipBrain finds it by itself (PATH, the usual
+  install folders) or from `SHIPBRAIN_ODA` / `~/.shipbrain/oda.txt`. Each DWG is converted once and cached.
+  Without it: save the drawing as DXF in AutoCAD.
+
 ## MYSTRAN: a free Nastran-compatible solver that RUNS the .bdf ShipBrain writes
 
 [MYSTRAN](https://github.com/MystranSolver/MYSTRANSolver) (MIT) is copied whole into `shipbrain/vendor/MYSTRAN`. It solves

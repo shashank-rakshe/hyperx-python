@@ -1476,3 +1476,65 @@ def test_mystran_static_modal_buckling(tmp_path):
     r = solvers.run(str(tmp_path / 'k.bdf'), 'mystran', 'buckling', n_modes=2)
     scr = 4 * math.pi ** 2 * E / (12 * (1 - nu ** 2)) * (t / b) ** 2
     assert abs(r['load_factors'][0] * 10.0 / scr - 1) < 0.03
+
+
+def _rev(path, rev_b):
+    ezdxf = pytest.importorskip('ezdxf')
+    doc = ezdxf.new('R2018')
+    doc.layers.add('PLATE', color=3 if rev_b else 1)
+    blk = doc.blocks.new('STIFF')
+    blk.add_line((0, 0), (0, 100))
+    blk.add_attdef('PROFILE', (5, 50), dxfattribs={'height': 10})
+    msp = doc.modelspace()
+    msp.add_lwpolyline([(0, 0), (4000, 0), (4000, 2000), (0, 2000)], close=True, dxfattribs={'layer': 'PLATE'})
+    msp.add_text('t=14' if rev_b else 't=12', height=40, dxfattribs={'layer': 'PLATE'}).set_placement((2000, 1000))
+    ins = msp.add_blockref('STIFF', (800, 500) if not rev_b else (900, 500))           # moved 100
+    ins.add_auto_attribs({'PROFILE': 'HP200x10'})
+    ins2 = msp.add_blockref('STIFF', (2500, 500))
+    ins2.add_auto_attribs({'PROFILE': 'HP220x10' if rev_b else 'HP200x10'})
+    msp.add_linear_dim(base=(0, -200), p1=(0, 0), p2=(4000 if not rev_b else 3900, 0)).render()
+    h = msp.add_hatch()
+    h.set_pattern_fill('ANSI31' if not rev_b else 'ANSI37', scale=10)
+    h.paths.add_polyline_path([(3000, 1500), (3500, 1500), (3500, 1800), (3000, 1800)], is_closed=True)
+    if not rev_b:
+        msp.add_circle((1500, 1500), 50)                                                # removed in B
+    else:
+        msp.add_line((0, 1000), (4000, 1000))                                           # added in B
+    doc.saveas(path)
+
+
+def test_drawing_compare_numbered_clouds_filters_dwg(tmp_path):
+    ezdxf = pytest.importorskip('ezdxf')
+    from shipbrain import drawdiff, dwg
+    _rev(str(tmp_path / 'deck_A.dxf'), False)
+    _rev(str(tmp_path / 'deck_B.dxf'), True)
+    r = drawdiff.compare_full(str(tmp_path / 'deck_A.dxf'), str(tmp_path / 'deck_B.dxf'), out_base=str(tmp_path / 'cmp'))
+    k = r['by_kind']
+    assert k.get('text changed') == 1 and k.get('attribute changed') == 1 and k.get('block moved') == 1
+    assert k.get('dimension changed') == 1 and k.get('hatch changed') == 1 and k.get('circle removed') == 1
+    assert k.get('line added') == 1 and k.get('layer changed') == 1
+    assert any("'t=12' -> 't=14' (plate thickness)" in c['what'] for c in r['changes'])
+    assert all(c['n'] == i + 1 for i, c in enumerate(r['changes'])) and r['clouds'] and all(c['cloud'] for c in r['changes'] if c['box'])
+    doc = ezdxf.readfile(str(tmp_path / 'cmp_changes.dxf'))
+    assert len(doc.modelspace().query('LWPOLYLINE[layer=="SB_CLOUDS"]')) == len(r['clouds'])
+    assert sum(1 for _ in open(tmp_path / 'cmp_changes.csv')) == len(r['changes']) + 1
+    f = drawdiff.compare_full(str(tmp_path / 'deck_A.dxf'), str(tmp_path / 'deck_B.dxf'), ignore=['text', 'dimensions', 'hatches'])
+    assert 'text changed' not in f['by_kind'] and 'dimension changed' not in f['by_kind'] and 'hatch changed' not in f['by_kind']
+    # DWG through a stand-in ODA File Converter with ODA's command line (input dir, output dir, version, type, recurse, audit)
+    fake = tmp_path / 'ODAFileConverter'
+    fake.write_text('#!/usr/bin/env python3\nimport sys, os, shutil, glob\n'
+                    'src, dst, ver, typ = sys.argv[1:5]\nassert typ == "DXF" and ver.startswith("ACAD")\n'
+                    'for f in glob.glob(os.path.join(src, "*.dwg")):\n'
+                    '    shutil.copy(f, os.path.join(dst, os.path.basename(f)[:-4] + ".dxf"))\n')
+    fake.chmod(0o755)
+    shutil.copy(tmp_path / 'deck_B.dxf', tmp_path / 'deck_B.dwg')                       # (a DXF in disguise for the stand-in)
+    os.environ['SHIPBRAIN_ODA'] = str(fake)
+    try:
+        out = dwg.to_dxf(str(tmp_path / 'deck_B.dwg'))
+        assert out.endswith('deck_B.dxf') and os.path.exists(out)
+        T = agent.Tools(tmp_path)
+        c = T.call('compare_drawings', {'a': 'deck_A.dxf', 'b': 'deck_B.dwg', 'ignore': ['layers']})
+        assert c['files'] == ['compare_deck_A_vs_deck_B_changes.dxf', 'compare_deck_A_vs_deck_B_changes.csv']
+        assert 'layer changed' not in c['semantic']['by_kind'] and 'AutoCAD' in c['plain_english']
+    finally:
+        del os.environ['SHIPBRAIN_ODA']

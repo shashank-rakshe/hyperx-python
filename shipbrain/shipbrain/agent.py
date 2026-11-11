@@ -253,10 +253,15 @@ class Tools:
                       {'type': 'object', 'properties': {'plates': {'type': 'array'}, 'hotspot': {'type': 'array'}, 'size': {'type': 'number'},
                                                          't': {'type': 'number'}, 'loads': {'type': 'array'}, 'solve': {'type': 'boolean'},
                                                          'name': {'type': 'string'}}, 'required': ['plates', 'hotspot']})
-        self.register('compare_drawings', self.compare_drawings, 'Compare two drawings (PDF page, PNG/JPG, DXF): aligned overlay, '
-                      'what was removed (red) / added (green), similarity in %, changed areas.',
+        self.register('compare_drawings', self.compare_drawings, 'Compare two drawings (PDF page, PNG/JPG, DXF, DWG via the free ODA '
+                      'File Converter): overlay, then for vector drawings every change numbered (lines, texts by meaning, blocks + '
+                      'attributes, dimensions, hatches, circles, layers) in revision clouds, written as <a>_vs_<b>_changes.dxf '
+                      '(open in AutoCAD) + .csv. ignore: ["text", "dimensions", "hatches", "blocks", "attributes", "circles", '
+                      '"layers", "lines"]; ignore_layers: names or patterns; tolerance in drawing units.',
                       {'type': 'object', 'properties': {'a': {'type': 'string'}, 'b': {'type': 'string'}, 'page_a': {'type': 'integer'},
-                                                         'page_b': {'type': 'integer'}}, 'required': ['a', 'b']})
+                                                         'page_b': {'type': 'integer'}, 'ignore': {'type': 'array'},
+                                                         'ignore_layers': {'type': 'array'}, 'tolerance': {'type': 'number'}},
+                       'required': ['a', 'b']})
         self.register('compare_mesh_drawing', self.compare_mesh_drawing, 'Check an FE mesh against a drawing (plan view at a height): share of '
                       'mesh lines on drawn lines, coverage, best shift (calibration error), overlay image. box = ship mm window the drawing shows.',
                       {'type': 'object', 'properties': {'mesh': {'type': 'string'}, 'drawing': {'type': 'string'},
@@ -902,17 +907,25 @@ class Tools:
             out['hot_spot'] = fatigue.hotspot_stress(r['frd'], info['readout_points'])
         return out
 
-    def compare_drawings(self, a, b, page_a=0, page_b=0):
+    def compare_drawings(self, a, b, page_a=0, page_b=0, ignore=None, ignore_layers=None, tolerance=None):
         from . import drawings
-        out = os.path.join(self.workdir, f'compare_{os.path.splitext(os.path.basename(a))[0]}_vs_{os.path.splitext(os.path.basename(b))[0]}.png')
-        r = drawings.compare_drawings(self._path(a), self._path(b), out, page_a, page_b)
-        r['overlay'] = os.path.basename(out)
-        try:                                                # vector drawings: also say WHAT changed (lines, styles, numbers)
-            from .drawdiff import compare_vector
-            v = compare_vector(self._path(a), self._path(b), page_a, page_b)
-            if v['lines']['removed'] + v['lines']['added'] + len(v['details']) or (v['texts']['changed'] + v['texts']['added']):
-                r['semantic'] = {k: v[k] for k in ('lines', 'texts', 'details')}
-                r['plain_english'] += ' ' + v['plain_english']
+        from .dwg import drawing_file
+        base = os.path.join(self.workdir, f'compare_{os.path.splitext(os.path.basename(a))[0]}_vs_{os.path.splitext(os.path.basename(b))[0]}')
+        A, B = drawing_file(self._path(a)), drawing_file(self._path(b))          # DWG -> DXF with the free ODA converter
+        r = drawings.compare_drawings(A, B, base + '.png', page_a, page_b)
+        r['overlay'] = os.path.basename(base + '.png')
+        try:                                                # vector drawings: also say WHAT changed, numbered, with clouds
+            from .drawdiff import compare_full
+            ign = [ignore] if isinstance(ignore, str) else ignore
+            ilay = [ignore_layers] if isinstance(ignore_layers, str) else ignore_layers
+            v = compare_full(A, B, page_a, page_b, tol=tolerance, ignore=ign or (), ignore_layers=ilay or (), out_base=base)
+            if v['changes']:
+                r['semantic'] = {k: v[k] for k in ('lines', 'texts', 'by_kind', 'clouds')}
+                r['changes'] = v['changes'][:40]
+                r['files'] = [os.path.basename(f) for f in v['files']]
+                r['plain_english'] += ' ' + v['plain_english'] + (f" Open {os.path.basename(v['files'][0])} in AutoCAD: red = "
+                                                                   'removed, green = added, yellow = changed, magenta clouds numbered as in '
+                                                                   f"{os.path.basename(v['files'][1])}." if v['files'] else '')
         except Exception as ex:
             r['semantic'] = f'not available ({type(ex).__name__}: scanned drawing or unreadable vector content)'
         return r
