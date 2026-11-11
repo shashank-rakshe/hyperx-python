@@ -1,0 +1,53 @@
+# ShipBrain: ParseBench document pages -> training samples, on GitHub's computers (Hugging Face is open there).
+# Used only when the dataset's Hugging Face licence allows training (checked first). Adds parsebench.zip to the
+# release "data-latest"; the Kaggle training run fetches it. Started by a change to
+# shipbrain/training/PARSEBENCH_REQUEST.txt (the assistant does this) or by hand (Actions tab).
+name: shipbrain-parsebench
+on:
+  push:
+    paths: ['shipbrain/training/PARSEBENCH_REQUEST.txt']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: shipbrain-parsebench
+jobs:
+  parsebench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install
+        run: pip -q install parse-bench huggingface_hub pypdfium2 pillow
+      - name: Licence check, download, samples
+        working-directory: shipbrain
+        run: |
+          mkdir -p /tmp/out
+          python - <<'PY' | tee /tmp/out/licence.txt
+          import sys; sys.path.insert(0, 'training')
+          import parsebench_tasks as p
+          lic, ok = p.licence()
+          print(lic, 'OK' if ok else 'NOT-ALLOWED')
+          PY
+          if grep -q " OK" /tmp/out/licence.txt; then
+            mkdir -p /tmp/pb && (cd /tmp/pb && parse-bench download)
+            ls /tmp/pb/data | head
+            python training/parsebench_tasks.py --data /tmp/pb/data --out /tmp/out/parsebench_train.jsonl \
+              --img-dir /tmp/out/parsebench_images 2>&1 | tee /tmp/out/build_log.txt
+          else
+            echo "licence does not allow training: nothing published" | tee /tmp/out/build_log.txt
+          fi
+      - name: Publish parsebench.zip to release data-latest
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: |
+          [ -s /tmp/out/parsebench_train.jsonl ] || { echo "no samples"; cat /tmp/out/build_log.txt; exit 1; }
+          cat > /tmp/out/NOTICE.md <<'EOF'
+          # ParseBench pages (LlamaIndex, https://huggingface.co/datasets/llamaindex/ParseBench)
+          Page pictures rendered from the dataset's PDFs with their human-verified markdown; licence: see licence.txt.
+          EOF
+          cd /tmp/out && zip -qr /tmp/parsebench.zip .
+          gh release view data-latest >/dev/null 2>&1 || gh release create data-latest --prerelease --target "${GITHUB_SHA}" \
+            --title "ShipBrain training data (latest)" --notes "ShipBrain training data"
+          gh release upload data-latest /tmp/parsebench.zip --clobber
+          echo "ParseBench: $(wc -l < /tmp/out/parsebench_train.jsonl) samples, licence $(cat /tmp/out/licence.txt)"

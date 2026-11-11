@@ -158,7 +158,9 @@ if not sh('python training/construct_tasks.py --n 160 --out data/construct_train
 # made on GitHub by .github/workflows/shipbrain-data.yml (release data-latest): fetched here, nothing to attach by hand
 sh(f'curl -sfL -o /tmp/real_drawings.zip https://github.com/{GH_REPO}/releases/download/data-latest/shipbrain-real-drawings.zip '
    '&& unzip -qo /tmp/real_drawings.zip -d data && wc -l data/construct_real_train.jsonl', required=False)
-sh('touch data/parsebench_train.jsonl', required=False)   # ParseBench pages come in the same release (when allowed)
+sh(f'curl -sfL -o /tmp/parsebench.zip https://github.com/{GH_REPO}/releases/download/data-latest/parsebench.zip '
+   '&& unzip -qo /tmp/parsebench.zip -d data || true', required=False)   # ParseBench pages (only when its licence allows)
+sh('touch data/parsebench_train.jsonl', required=False)
 if os.path.exists('data/construct_real_train.jsonl') and os.path.getsize('data/construct_real_train.jsonl') > 0:
     print('real drawing samples: from the GitHub release data-latest', flush=True)
 elif not sh('python training/construct_real.py --out data/construct_real_train.jsonl --img-dir data/construct_real_images'

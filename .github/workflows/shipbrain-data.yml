@@ -34,23 +34,6 @@ jobs:
           mkdir -p /tmp/out
           python training/construct_real.py --data-root /tmp/sbdata --out /tmp/out/construct_real_train.jsonl \
             --img-dir /tmp/out/construct_real_images 2>&1 | tee /tmp/out/build_log.txt
-      - name: ParseBench document pages (only if its Hugging Face licence allows training)
-        working-directory: shipbrain
-        run: |
-          pip -q install parse-bench huggingface_hub || true
-          python - <<'PY' > /tmp/pb_licence.txt
-          import sys; sys.path.insert(0, 'training')
-          import parsebench_tasks as p
-          lic, ok = p.licence()
-          print(lic, 'OK' if ok else 'NOT-ALLOWED')
-          PY
-          cat /tmp/pb_licence.txt
-          if grep -q " OK" /tmp/pb_licence.txt; then
-            mkdir -p /tmp/pb && (cd /tmp/pb && parse-bench download) && \
-            python training/parsebench_tasks.py --data /tmp/pb/data --out /tmp/out/parsebench_train.jsonl \
-              --img-dir /tmp/out/parsebench_images 2>&1 | tee -a /tmp/out/build_log.txt || true
-          fi
-          echo "ParseBench licence: $(cat /tmp/pb_licence.txt)" >> /tmp/out/build_log.txt
       - name: Package (samples + licence notices only, no raw datasets)
         run: |
           cp /tmp/sbdata/manifest.json /tmp/out/manifest.json
@@ -60,7 +43,6 @@ jobs:
           - CubiCasa5K (Kalervo et al.), CC BY-NC 4.0 - https://zenodo.org/record/2613548 - non-commercial use only
           - PIDQA (Gupta et al.), CC0 - https://github.com/mgupta70/PIDQA
           - FloorPlanCAD (Fan et al.), CC BY-NC 4.0 - https://floorplancad.github.io - non-commercial use only
-          - ParseBench (LlamaIndex), https://huggingface.co/datasets/llamaindex/ParseBench - used only when its card licence allows (see build_log.txt)
           Pictures are resized copies; answers come from each dataset's own annotation.
           EOF
           cd /tmp/out && zip -qr /tmp/shipbrain-real-drawings.zip .
