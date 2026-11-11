@@ -1,0 +1,115 @@
+# Private examples / docs kept out of the open-source release
+/_private/
+
+# Python cache
+**/__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+
+# Virtual environment
+.venv
+.python-version
+
+# Build artifacts
+build/
+dist/
+**/*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS specific
+**/.DS_Store
+Thumbs.db
+
+# Mesh cache
+**/.gmsh_cache
+
+# Jupyter
+**/.ipynb_checkpoints
+
+# Output directories
+**/output/
+**/cache/
+**/.tmp
+
+# VTK/VTU files
+**/*.vtk
+**/*.vtu
+**/*.vtp
+**/*.vtr
+
+# Data files
+*.csv
+# ...except material preset tables shipped as package data
+!tensormesh/material/*.csv
+*.npz
+*.npy
+*.msh
+*.json
+*.xdmf
+*.h5
+
+# Documentation build artifacts
+docs/_build/
+
+# Translation compiled artifacts (sphinx-intl build → *.mo, derived from *.po)
+*.mo
+
+# LaTeX build artifacts (from root-level .tex sources)
+/*.aux
+/*.log
+/*.pdf
+/*.synctex.gz
+/*.out
+/*.fls
+/*.fdb_latexmk
+
+# Benchmark outputs (root-level only — does NOT shadow docs/source/_static/benchmark/)
+/benchmark/
+/benchmark/**/*.png
+/benchmark/**/*.pdf
+/benchmark/**/test*
+
+# Examples generated files
+examples/**/*.txt
+examples/**/*.log
+examples/**/*.jpg
+examples/**/*.stats
+examples/**/*.mp4
+examples/**/*.gif
+examples/**/*.png
+examples/**/*.pdf
+examples/**/*.vtu
+examples/**/*.vtk
+examples/**/*.npz
+examples/**/*.npy
+examples/**/*.msh
+examples/**/*.json
+examples/**/*.nc
+examples/**/*.xdmf
+examples/**/*.h5
+!examples/**/*.md
+# committed COMSOL reference arrays for the phononic-crystal examples
+# (small, so the band-structure / transmission comparison reproduces offline)
+!examples/wave/phononic_crystal_2d/comsol_reference_*.npz
+
+# Plan
+TODO.md
+# Experimental
+experimental/
+
+# C++ build
+tensormesh/cpp/**/build/
+tensormesh/cpp/**/*.so
+tensormesh/cpp/**/*.dll
+
+# Profiling
+*massif.*
+**/massif*
+**/*.stats

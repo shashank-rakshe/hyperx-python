@@ -1,0 +1,13 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Usage question
+    url: https://github.com/camlab-ethz/TensorMesh/discussions/categories/q-a
+    about: How do I use TensorMesh for X? Ask on Discussions Q&A — answers are searchable by future users.
+
+  - name: 💡 Idea or proposal
+    url: https://github.com/camlab-ethz/TensorMesh/discussions/categories/ideas-rfcs
+    about: Have an idea for a new feature or API change? Discuss it first on Ideas & RFCs.
+
+  - name: 🗨️ Real-time chat
+    url: https://discord.gg/EC9kbHSnrx
+    about: Quick questions, design chat, or just hanging out — hop into Discord.

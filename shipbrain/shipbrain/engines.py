@@ -23,6 +23,7 @@ ANALYSES = {   # analysis type -> words that point to it
     'heat': r'thermal|temperature|heat|fire|insulation',
     'cad': r'sldprt|solidworks|catpart|catia|inventor|\.ipt\b|\.f3d\b|fusion 360|rhino|\.3dm\b|fcstd|freecad|\.sat\b|iges|\.igs\b|3d model|\bcad\b|step file|solid model|drawing to|make a model|cadquery|mid.?surface|outer surface|piping|pipes?\b',
     'mesh': r'\bmesh|elements?\b|bdf|\.inp|nastran deck|shell model',
+    'topology': r'topology|lightening hole|material layout|where (to put|is) material|lighten|weight saving|optimi[sz]e (the )?(shape|bracket|web|layout)',
     'mooring': r'mooring|anchor (line|chain)|catenary|fairlead|chain grade|\bR3S?\b|\bR4S?\b|power cable|umbilical|riser|lazy.?wave|touchdown',
     'reverse': r'\bstl\b|scan(ned)? (part|mesh)|reverse.?engineer|mesh to (step|cad|solid)|3d.?print(ed)? (part|file)',
     'process': r'process simulat|flowsheet|\bflash\b|distillation|column|vapou?r fraction|heat and mass balance|property package|'
@@ -55,6 +56,9 @@ ENGINES = [
      'paid programs; RhinoInside.NX (no open licence, early beta) links them - ShipBrain gives its download link only'),
     ('cadmpeg (native CAD reader)', {'cad'}, 'runs', 'native_cad(file, op="convert"|"inspect"|"measure"|"diff")', ['@cadmpeg'], 'cadmpeg',
      'opens SolidWorks / CATIA / Inventor / Fusion / Rhino / FreeCAD / ACIS / IGES files and writes STEP (Apache-2.0)'),
+    ('TensorMesh (differentiable FE on PyTorch)', {'topology': 'runs', 'static': 'runs'}, 'runs',
+     'topology(L, H, fixed, load_at, force, volfrac) / tensor_fem(file, fixed, loads)', ['@torch'], 'TensorMesh',
+     'Apache-2.0, ETH Zurich; GPU when present; meshes from ShipBrain\'s own mesher (no Gmsh)'),
     ('CableDyn (mooring lines and cables)', {'mooring'}, 'runs', 'mooring(depth, length, radius, d_mm, grade) / cable_run(deck)',
      ['@cabledyn'], 'CableDyn', 'free FE solver (Apache-2.0): statics and dynamics of mooring lines and power cables, '
                                  'validated against OrcaFlex (0.06-0.6 %) and model tests'),
@@ -116,6 +120,9 @@ def installed(names):
     if names == ['@solidcraft']:
         from .mcp_client import solidcraft_cli
         return solidcraft_cli() is not None
+    if names == ['@torch']:
+        import importlib.util
+        return importlib.util.find_spec('torch') is not None
     if names == ['@cabledyn']:
         from . import cabledyn
         return cabledyn.driver() is not None

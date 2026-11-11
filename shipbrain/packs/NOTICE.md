@@ -112,6 +112,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
 - Author: nahidmubin (https://github.com/nahidmubin)
 
+## TensorMesh
+
+- Source: https://github.com/camlab-ethz/TensorMesh (commit 2d544e8bc7ee)
+- Licence: Apache-2.0
+- Use: ok: permissive licence, keep the attribution
+- https://github.com/camlab-ethz/TensorMesh contributors
+
 ## agent3dify
 
 - Source: https://github.com/neka-nat/agent3dify (commit 258ed96f8ada)

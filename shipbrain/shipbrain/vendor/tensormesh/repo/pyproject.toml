@@ -1,0 +1,89 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tensormesh-fem"
+dynamic = ["version"]
+description = "Differentiable Finite Element Method Library for PyTorch"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Shizheng Wen", email = "shizheng.wen@sam.math.ethz.ch"},
+    {name = "Mingyuan Chi", email = "walker.chi.000@gmail.com"},
+]
+maintainers = [
+    {name = "Shizheng Wen", email = "shizheng.wen@sam.math.ethz.ch"},
+]
+keywords = [
+    "deep-learning",
+    "neural-networks",
+    "AI4S",
+    "ai-for-science",
+    "pytorch",
+    "numerical",
+    "partial-differential-equation",
+    "finite-element-methods",
+    "fem",
+    "gpu",
+    "differentiable-simulation",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "tqdm",
+    "numpy",
+    "scipy",
+    "torch>=2.0.0",
+    "torch-sla>=0.4.0",
+    "meshio",
+    "matplotlib",
+    "psutil",
+    "toml",
+    "gmsh",
+]
+
+[project.optional-dependencies]
+# Solver backends — mirror torch-sla's PyPI-installable extras so a single
+# `pip install "tensormesh-fem[cudss]"` (or [pyamg], or [gpu]) pulls in the
+# right stack in one step. The native strumpack / amgx backends ship as
+# ABI-specific wheels on torch-sla's GitHub Releases (not PyPI) — install
+# those per the torch-sla README.
+cudss = ["torch-sla[cudss]>=0.4.0"]
+pyamg = ["torch-sla[pyamg]>=0.4.0"]
+gpu = ["torch-sla[all]>=0.4.0"]
+example = ["plotly"]
+test = [
+    "pytest",
+    "pytest-cov",
+    "scikit-fem",
+]
+
+[project.urls]
+Homepage = "https://www.tensor-mesh.com/"
+Documentation = "https://docs.tensor-mesh.com/"
+Repository = "https://github.com/camlab-ethz/TensorMesh"
+Issues = "https://github.com/camlab-ethz/TensorMesh/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "tensormesh._version.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["tensormesh*"]
+
+[tool.setuptools.package-data]
+"tensormesh.material" = ["*.csv"]

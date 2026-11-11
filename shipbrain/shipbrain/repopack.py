@@ -869,7 +869,7 @@ def write_notice(out_dir):
                 continue                                   # your own private code: name and path stay out
             src = p['repo'] if str(p['repo']).startswith(('http', 'git@')) else f"local copy of {p['name']} (upstream release)"
             rows.append(f"## {p['name']}\n\n- Source: {src} (commit {p['commit'][:12]})\n- Licence: {p['license']}\n"
-                        f"- Use: {p.get('usage', '')}\n" + ''.join(f'- {a}\n' for a in p['attribution'] if '/' not in a or 'http' in a))
+                        f"- Use: {p.get('usage', '')}\n" + ''.join(f'- {a}\n' for a in p['attribution'] if ('/' not in a or 'http' in a) and 'Free Software Foundation' not in a))
     text = ('# Third-party notices for ShipBrain repo packs\n\n'
             'Each .sbpack holds text chunks (docs and code excerpts) from the repository named below, under its own '
             'licence. Keep this file with the packs. Packs marked PRIVATE ONLY must not be shared or used for training. '

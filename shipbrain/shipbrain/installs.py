@@ -153,6 +153,10 @@ SOFTWARE = {
                          '(needs gfortran, LAPACK, CMake)',
                  'check': lambda: __import__('shipbrain.cabledyn', fromlist=['x']).driver() is not None,
                  'match': r'CableDyn is not installed'},
+    'torch': {'name': 'PyTorch + torch-sla + meshio (free)', 'why': 'for TensorMesh: differentiable finite elements on CPU or GPU '
+              '(topology optimisation, fast solid solves)', 'link': 'https://pytorch.org/get-started/locally/',
+              'steps': {'all': 'pip install torch torch-sla meshio   (GPU: pick the CUDA build on the link)'},
+              'check': _have_mod('torch'), 'match': r'TensorMesh needs PyTorch'},
     'rhino3dm': _pip('rhino3dm', 'to read Rhino .3dm files exactly (McNeel\'s free library): solids, surfaces, meshes, '
                      'curves, layers and blocks', match=r'need rhino3dm'),
     'cadmpeg': {'name': 'cadmpeg (free, Apache-2.0)', 'why': 'to open native CAD files (SolidWorks, CATIA, Inventor, Fusion 360, '

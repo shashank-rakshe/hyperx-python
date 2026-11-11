@@ -269,6 +269,23 @@ ShipBrain runs its own program, pinned to commit `6c775550` (version 0.6.11):
   instead. Its docs and code are the knowledge pack `packs/cadmpeg.sbpack` (7,202 chunks); 240 training conversations
   come from real runs on its public CC0 / NIST sample files (`training/cadmpeg_tasks.py`).
 
+## Differentiable FE and topology optimisation: TensorMesh (Apache-2.0)
+
+[TensorMesh](https://github.com/camlab-ethz/TensorMesh) (CAMLab, ETH Zurich) is copied as written in `vendor/tensormesh`
+(code, examples, tests, docs text; its 64 MB of pictures and videos left out): finite elements on PyTorch with tensorised
+assembly, CPU or GPU, and gradients through the solve. Its Gmsh mesh generators are never used: meshes come from
+ShipBrain's own mesher (`tensorfem.to_mesh` takes any FEModel; standard node order converted with `reorder=True`).
+
+- Tool `topology(L, H, fixed, load_at, force, volfrac)`: 2D topology optimisation with TensorMesh's own SIMP stiffness
+  and MMA optimiser (its `compliance_topology` example, as written) on a ShipBrain quad mesh - bracket shapes, lightening
+  holes in web frames and floors, gussets. Gives a picture and "keeping X % of the material gives Y % of the stiffness".
+  The textbook cantilever case gives the textbook truss layout.
+- Tool `tensor_fem(file, fixed, loads)`: linear-elastic static solve of a solid mesh (tetra / hexa / wedge) on CPU or GPU.
+  Checked on a 2 m steel cantilever: 8.34 / 9.19 / 9.44 mm on 20 / 40 / 80-element meshes against 9.60 mm from beam
+  theory with shear (linear hexahedra converge from the stiff side, as they should).
+- Install: `pip install torch torch-sla meshio` (the chat shows the card when missing). Skill `topology`, pack
+  `packs/TensorMesh.sbpack`, 55 training conversations from real runs (`training/tensormesh_tasks.py`).
+
 ## Mooring lines and dynamic cables: CableDyn (Apache-2.0)
 
 [CableDyn](https://github.com/SMI-Lab-Inha/CableDyn) (J. H. Seo et al., Ocean Engineering 368, 128332, 2026) is copied

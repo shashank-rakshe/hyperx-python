@@ -291,6 +291,19 @@ class Tools:
         self.register('cable_run', self.cable_run, 'Run any CableDyn or MoorDyn v2 deck (mooring lines, dynamic power cables, lazy '
                       'waves, bend stiffeners, waves / current / vessel motion): tensions, angles, maxima over time, static profile.',
                       {'type': 'object', 'properties': {'deck': {'type': 'string'}}, 'required': ['deck']})
+        self.register('topology', self.topology, 'Topology optimisation of a 2D plate region with TensorMesh (differentiable FE on '
+                      'PyTorch, SIMP + MMA): where material carries the load - bracket shapes, web frame / floor lightening '
+                      'holes, gusset layouts. L, H (size), nx, ny (elements), fixed edges [left|right|bottom|top], load_at [x, y], '
+                      'force [Fx, Fy] (total), volfrac (share of material kept, 0.3-0.6), iters. Gives a picture and the stiffness kept.',
+                      {'type': 'object', 'properties': {'L': num, 'H': num, 'nx': num, 'ny': num, 'fixed': {'type': 'array'},
+                                                         'load_at': {'type': 'array'}, 'force': {'type': 'array'}, 'volfrac': num,
+                                                         'iters': num, 'E': num, 'name': {'type': 'string'}}, 'required': ['L', 'H']})
+        self.register('tensor_fem', self.tensor_fem, 'Linear-elastic static solve of a SOLID mesh (.inp/.bdf with tetra / hexa / '
+                      'wedge, e.g. from cad_mesh or fe_edit shell_to_solid) with TensorMesh on PyTorch (GPU when present). '
+                      'fixed: list of selectors like {"x": 0} or {"x": [0, 10], "z": 0}; loads: [{"at": selector, "force": [Fx, Fy, Fz]}] '
+                      '(total force spread over the selected nodes); E, nu.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'fixed': {'type': 'array'}, 'loads': {'type': 'array'},
+                                                         'E': num, 'nu': num}, 'required': ['file', 'fixed', 'loads']})
         self.register('reverse_cad', self.reverse_cad, 'Mesh (STL scan / 3D-print / mesh export) -> STEP AP242 solid with ReverseCAD '
                       '(non-commercial licence): watertight B-Rep, volume, area, centre of mass, inertia, mass for a material, '
                       'recognised holes / ISO threads / fillets / chamfers / slots / cavities, and its own verification of the STEP '
@@ -1127,6 +1140,23 @@ class Tools:
                                  or 'Channels: ' + ', '.join(r['channels'][1:12])) + '.')
         w = os.path.abspath(self.workdir)
         return json.loads(json.dumps(r).replace(w + os.sep, '').replace(w, '.'))
+
+    def topology(self, L, H, nx=None, ny=None, fixed=('left',), load_at=None, force=(0.0, -1000.0), volfrac=0.5, iters=40,
+                 E=206000.0, name='topology'):
+        from . import tensorfem
+        nx = int(nx or max(20, min(120, round(60 * L / max(L, H)))))
+        ny = int(ny or max(10, min(120, round(nx * H / L))))
+        png = re.sub(r'[^A-Za-z0-9_\-]', '_', name)[:40] + '.png'
+        r = tensorfem.topology(L, H, nx, ny, fixed=tuple(fixed), load_at=load_at, force=tuple(force), volfrac=volfrac,
+                               iters=int(iters), E=E, png=self._path(png))
+        r['png'] = png
+        r.pop('density', None)
+        r['history'] = r['history'][::max(1, len(r['history']) // 10)]
+        return r
+
+    def tensor_fem(self, file, fixed, loads, E=206000.0, nu=0.3):
+        from . import tensorfem
+        return tensorfem.solid_static(self._path(file), fixed, loads, E=E, nu=nu)
 
     def reverse_cad(self, file, material=None, heatmap=False):
         from . import reversecad

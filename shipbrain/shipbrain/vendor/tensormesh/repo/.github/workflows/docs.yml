@@ -1,0 +1,55 @@
+name: Deploy Documentation
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'docs/**'
+      - 'tensormesh/**'  # Rebuild docs when code changes (for autodoc)
+      - '.github/workflows/docs.yml'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Install the project itself (for autodoc imports)
+          pip install -e .
+          # Install doc dependencies
+          # We need to be in docs/ dir so -e tensormesh_sphinx_theme works
+          cd docs
+          pip install -r requirements.txt
+
+      - name: Build documentation
+        run: |
+          cd docs
+          # Build BOTH languages: English at _build/html/, Chinese at
+          # _build/html/zh/. The deploy below uses force_orphan, which
+          # replaces the whole gh-pages branch, so EN-only here would wipe
+          # the published /zh/ subtree (404). Keep this as html-all.
+          make html-all
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs/_build/html
+          force_orphan: true
+          cname: docs.tensor-mesh.com
+

@@ -1,0 +1,49 @@
+"""FEM assembly: bilinear forms, linear forms, and boundary integrals.
+
+Three base classes cover the common cases — :class:`ElementAssembler` for
+volume bilinear forms (matrices), :class:`NodeAssembler` for volume linear
+forms (vectors), and :class:`FacetAssembler` for boundary integrals. The
+:mod:`tensormesh.assemble.builtin` module ships ready-made subclasses for
+the most common forms (Laplace, mass, linear elasticity, hyperelasticity,
+J2 plasticity, contact, constant/function loads).
+"""
+
+from .element_assembler import ElementAssembler
+from .mixed_assembler import MixedElementAssembler, Field, BlockLayout
+from .node_assembler import NodeAssembler
+from .facet_assembler import FacetAssembler
+from .facet_bilinear import FacetBilinearAssembler
+from .builtin import (
+    LaplaceElementAssembler,
+    AnisotropicLaplaceElementAssembler,
+    MassElementAssembler,
+    ScaledMassElementAssembler,
+    LinearElasticityElementAssembler,
+    NeoHookeanModel,
+    J2Plasticity,
+    DruckerPragerPlasticity,
+    ContactAssembler,
+    const_node_assembler,
+    func_node_assembler,
+)
+
+__all__ = [
+    "ElementAssembler",
+    "MixedElementAssembler",
+    "Field",
+    "BlockLayout",
+    "NodeAssembler",
+    "FacetAssembler",
+    "FacetBilinearAssembler",
+    "LaplaceElementAssembler",
+    "AnisotropicLaplaceElementAssembler",
+    "MassElementAssembler",
+    "ScaledMassElementAssembler",
+    "LinearElasticityElementAssembler",
+    "NeoHookeanModel",
+    "J2Plasticity",
+    "DruckerPragerPlasticity",
+    "ContactAssembler",
+    "const_node_assembler",
+    "func_node_assembler",
+]

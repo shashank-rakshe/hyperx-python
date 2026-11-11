@@ -1,0 +1,86 @@
+name: 🐛 Bug Report
+description: Report a reproducible bug or unexpected behavior in TensorMesh.
+title: "[BUG] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report! Please fill out the form below.
+
+        **Before submitting:** search [existing issues](https://github.com/camlab-ethz/TensorMesh/issues)
+        and [Discussions](https://github.com/camlab-ethz/TensorMesh/discussions). If this
+        is a usage question rather than a bug, please ask on
+        [Discussions Q&A](https://github.com/camlab-ethz/TensorMesh/discussions/categories/q-a) instead.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear, one-paragraph description of the bug.
+      placeholder: |
+        e.g. "LaplaceElementAssembler.from_mesh(mesh)() returns a SparseMatrix with
+        NaN entries when the mesh is on CUDA and float64."
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproducing example
+      description: A short, self-contained Python snippet that triggers the bug.
+      render: python
+      placeholder: |
+        import torch
+        from tensormesh import Mesh, LaplaceElementAssembler
+        # ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Full traceback / error output
+      description: Paste the full output, not a paraphrase. Leave blank if the bug
+        produces a wrong result rather than an exception.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        Run this and paste the output:
+
+        ```bash
+        python -c "import torch, torch_sla, tensormesh, platform; \
+          print('torch:      ', torch.__version__); \
+          print('torch_sla:  ', torch_sla.__version__); \
+          print('tensormesh: ', tensormesh.__version__); \
+          print('python:     ', platform.python_version()); \
+          print('os:         ', platform.platform()); \
+          print('cuda:       ', torch.version.cuda if torch.cuda.is_available() else 'n/a')"
+        ```
+      render: text
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I confirmed this is a bug, not a usage question.
+          required: true
