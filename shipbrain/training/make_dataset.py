@@ -963,6 +963,107 @@ def make_rules_task(entries):
     return t_rules
 
 
+def _ocx_ok():
+    try:
+        from shipbrain import ocx
+        return bool(ocx.versions()) and ocx.module() is not None
+    except Exception:
+        return False
+
+
+_OCX_ASK = ['What is the OCX syntax of {n}?', 'How do I write ocx:{n} in OCX {v}?', 'Which attributes and children does {n} have in OCX {v}?',
+            'Explain the OCX element {n}', 'Show me an XML example of {n} (OCX {v})', 'Is {n} required to have children in OCX {v}?',
+            'What values can {n} take in OCX {v}?']
+_OCX_FIND = ['bulb profile', 'plate thickness', 'watertight', 'frame table', 'end cut', 'cut-out hole', 'seam', 'material yield',
+             'centre of gravity', 'bracket', 'pillar', 'edge reinforcement', 'nurbs surface', 'compartment', 'unit of measure',
+             'design view', 'coordinate system', 'principal particulars', 'stiffener section', 'flange']
+
+
+def t_ocx_syntax(r, tools):
+    """the OCX library: exact syntax of an element / enumeration of a schema version (all 12 versions)"""
+    if not _ocx_ok():
+        return None
+    from shipbrain import ocx
+    v = ocx.LATEST if r.random() < 0.6 else r.choice(ocx.versions())
+    cat = ocx.catalogue(v)
+    names = [n for n, e in cat.items() if e['kind'] != 'type']
+    n = r.choice(names)
+    ask = r.choice(_OCX_ASK if cat[n]['kind'] == 'enumeration' else _OCX_ASK[:6])
+    args = {'name': n, **({'version': v} if '{v}' in ask or v != ocx.LATEST else {})}
+    out = tools.call('ocx_syntax', args)
+    if 'error' in out:
+        return None
+    ans = out['plain_english']
+    if out.get('example') and len(out['example']) < 1400:
+        ans += '\n\n```xml\n' + out['example'] + '\n```'
+    return [{'role': 'user', 'content': ask.format(n=n, v=v)}, {'role': 'assistant', 'content': tool_block('ocx_syntax', args)},
+            result_msg('ocx_syntax', out), {'role': 'assistant', 'content': ans}]
+
+
+def t_ocx_find(r, tools):
+    """search the OCX library by meaning, or what changed between versions"""
+    if not _ocx_ok():
+        return None
+    from shipbrain import ocx
+    if r.random() < 0.3:
+        vs = ocx.versions()
+        i = r.randrange(0, len(vs) - 1)
+        a, b = vs[i], r.choice(vs[i + 1:])
+        args = {'changes_from': a, 'version': b}
+        out = tools.call('ocx_syntax', args)
+        ask = r.choice([f'What changed in OCX from {a} to {b}?', f'We export OCX {a}; the class wants {b}. What is different?'])
+    else:
+        q = r.choice(_OCX_FIND)
+        args = {'name': q}
+        out = tools.call('ocx_syntax', args)
+        ask = r.choice([f'Which OCX element is used for {q}?', f'In OCX, where do I put the {q}?', f'OCX classes about {q}?'])
+    if 'error' in out:
+        return None
+    return [{'role': 'user', 'content': ask}, {'role': 'assistant', 'content': tool_block('ocx_syntax', args)},
+            result_msg('ocx_syntax', out), {'role': 'assistant', 'content': out['plain_english']}]
+
+
+def _ocx_model(r):
+    L, B = r.choice([3200, 4000, 4800, 6400, 8000]), r.choice([2400, 3200, 4000])
+    n = r.choice([2, 3, 4])
+    ts = [r.choice([8, 10, 11, 12, 14, 16, 18, 20]) for _ in range(n)]
+    grade = r.choice(['A', 'AH32', 'AH36', 'DH36'])
+    sec = r.choice([('HP200x10', {'type': 'LBar', 'H': 200, 'W': 40, 'tw': 10, 'tf': 10}), ('FB150x12', {'type': 'FlatBar', 'H': 150, 't': 12}),
+                    ('L250x90x10', {'type': 'LBar', 'H': 250, 'W': 90, 'tw': 10, 'tf': 12}), ('T400x10', {'type': 'TBar', 'H': 400, 't': 10, 'wf': 150, 'tf': 15})])
+    sp = r.choice([600, 700, 800])
+    z = r.choice([8000, 10000, 12500, 15000])
+    plates = [{'name': f'P{k + 1}', 'thk': ts[k], 'grade': grade, 'contour': [[0, k * B / n], [L, k * B / n], [L, (k + 1) * B / n], [0, (k + 1) * B / n]]}
+              for k in range(n)]
+    stiff = [{'name': f'L{i + 1}', 'sec': sec[0], 'grade': grade, 'trace': [[0, y], [L, y]], 'incl': [0, 0, -1]}
+             for i, y in enumerate(range(sp, B, sp))]
+    kind = r.choice(['DECK', 'BULKHEAD'])
+    cs = {'origin': [0, 0, z], 'uaxis': [1, 0, 0], 'waxis': [0, 0, 1]} if kind == 'DECK' else {'origin': [r.choice([20000, 30000]), 0, 0], 'uaxis': [0, 1, 0], 'waxis': [1, 0, 0]}
+    return {'sections': {sec[0]: dict(sec[1], name=sec[0])}, 'blocks': [{'id': 'B1', 'panels': [{'id': kind + '1', 'name': kind.title() + ' 1', 'function': kind,
+                                                                                             'cs': cs, 'plates': plates, 'stiffeners': stiff}]}]}
+
+
+def t_ocx_rw(r, tools):
+    """structure -> OCX 3.2.0 (official classes, XSD-checked), and reading an OCX model back"""
+    if not _ocx_ok():
+        return None
+    nm = r.choice(['panel', 'deck_block', 'bhd', 'midship_part', 'unit']) + str(r.randint(1, 99))
+    json.dump(_ocx_model(r), open(os.path.join(tools.workdir, nm + '.json'), 'w'))
+    w = tools.call('ocx_write', {'file': nm + '.json'})
+    if 'error' in w or not w.get('valid'):
+        return None
+    if r.random() < 0.5:
+        ask = r.choice([f'Convert {nm}.json to OCX', f'Export {nm}.json as a 3Docx file for class approval', f'Make an OCX file from {nm}.json'])
+        return [{'role': 'user', 'content': ask}, {'role': 'assistant', 'content': tool_block('ocx_write', {'file': nm + '.json'})},
+                result_msg('ocx_write', w), {'role': 'assistant', 'content': w['plain_english']}]
+    tool, ask = r.choice([('ocx_read', f'What is in {nm}.3docx?'), ('ocx_read', f'Summarise the OCX model {nm}.3docx: thicknesses and sections'),
+                          ('ocx_validate', f'Is {nm}.3docx a valid OCX file?'), ('ocx_validate', f'Check {nm}.3docx against the OCX schema')])
+    out = tools.call(tool, {'file': nm + '.3docx'})
+    if 'error' in out:
+        return None
+    return [{'role': 'user', 'content': ask}, {'role': 'assistant', 'content': tool_block(tool, {'file': nm + '.3docx'})},
+            result_msg(tool, out), {'role': 'assistant', 'content': out['plain_english']}]
+
+
 _INSTALL_CASES = [   # (user question, tool, args, the real error text that tool gives when the program is missing, key)
     ('Compare {a}.dwg with {b}.dwg and list the changes', 'compare_drawings', {'a': '{a}.dwg', 'b': '{b}.dwg'},
      'RuntimeError: DWG needs the free ODA File Converter (free download: https://www.opendesign.com/guestfiles/oda_file_converter ).', 'oda'),
@@ -1024,7 +1125,8 @@ TASKS = [('mesh', 30, lambda r, T: t_mesh(r, T)), ('mesh_fix', 6, lambda r, T: t
          ('buckle', 5, t_buckle), ('section', 8, t_section), ('calc', 4, t_calc), ('chat', 3, t_chat), ('plates', 4, t_plates), ('program', 12, t_program), ('cad_bank', 14, t_cad_bank),
          ('fileinfo', 4, t_fileinfo), ('convert', 4, t_convert), ('edit', 5, t_edit), ('clean', 3, t_clean), ('fe_repair', 3, t_fe_repair),
          ('sur_build', 1, t_sur_build), ('units', 5, t_units), ('profile', 2, t_profile), ('add_skill', 2, t_add_skill), ('frame', 5, t_frame), ('code', 2, t_code), ('pid', 3, t_pid), ('sur_predict', 4, t_sur_predict), ('insight', 3, t_insight),
-         ('install', 4, t_install), ('setup', 1, t_setup)]
+         ('install', 4, t_install), ('setup', 1, t_setup),
+         ('ocx_syntax', 6, t_ocx_syntax), ('ocx_find', 3, t_ocx_find), ('ocx_rw', 3, t_ocx_rw)]
 
 
 def main(argv=None):

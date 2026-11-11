@@ -110,6 +110,18 @@ SOFTWARE = {
     'PIL': dict(_pip('pillow', 'to read and draw pictures', mod='PIL')),
     'psutil': _pip('psutil', 'to read CPU / memory of this PC'),
     'numpy': _pip('numpy', 'for all calculations'),
+    'xsdata': _pip('xsdata', 'for OCX ship models: the official OCX classes of every schema version'),
+    'xmlschema': _pip('xmlschema', 'to check OCX files against the official OCX schema (XSD)'),
+    'vcpkg': {'name': 'CMake + vcpkg (free)', 'why': 'to build OCXReader once (OCX -> exact STEP; vcpkg brings OpenCascade)',
+              'link': 'https://learn.microsoft.com/vcpkg/get_started/get-started',
+              'steps': {'windows': 'install Visual Studio Build Tools and CMake (https://cmake.org/download/), then: git clone '
+                                   'https://github.com/microsoft/vcpkg && vcpkg\\bootstrap-vcpkg.bat, set VCPKG_ROOT to that folder',
+                        'linux': 'sudo apt install cmake ninja-build build-essential git, then: git clone https://github.com/microsoft/vcpkg '
+                                 '&& ./vcpkg/bootstrap-vcpkg.sh && export VCPKG_ROOT=$PWD/vcpkg',
+                        'mac': 'brew install cmake ninja, then: git clone https://github.com/microsoft/vcpkg && ./vcpkg/bootstrap-vcpkg.sh '
+                               '&& export VCPKG_ROOT=$PWD/vcpkg'},
+              'then': 'python -c "from shipbrain import ocx; ocx.reader_build()"   (about 1 hour the first time; without it ShipBrain makes STEP itself)',
+              'check': lambda: bool(os.environ.get('VCPKG_ROOT')), 'match': r'vcpkg|CMake is needed to build OCXReader'},
     'scipy': _pip('scipy', 'for solvers and fitting'),
     # free engines the router may name (guided set-up); no paid programs here
     'openfoam': {'name': 'OpenFOAM (free CFD)', 'why': 'for CFD runs (resistance, wind loads, sloshing)',

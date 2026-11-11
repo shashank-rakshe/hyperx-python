@@ -13,6 +13,8 @@ wasmtime        # runs Awatif's frame solver (frame_solve); Apache-2.0
 pillow          # images for drawing comparison
 shapely         # ship drawing reader (shiptools/deckrules_tool), BSD
 lxml            # ship drawing reader XML, BSD
+xsdata          # OCX: the official OCX classes of every schema version (MIT)
+xmlschema       # OCX: validation against the official XSD (MIT)
 rapidocr-onnxruntime  # OCR for scanned drawings (Apache-2.0); optional
 opencv-python-headless  # scanned drawings (Apache-2.0); optional
 # CalculiX (ccx) on PATH: optional, solve_calculix / fatigue solve

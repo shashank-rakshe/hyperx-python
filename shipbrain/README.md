@@ -181,6 +181,35 @@ and never patches it (`DO_NOT_MODIFY.md`); the licence checker now marks such li
   Linux, macOS). The Kaggle run does it by itself and adds STL inputs to the CAD training tasks.
 - Found on the way: `repair_model` failed on trimmed cylinders in real STEP files - fixed.
 
+## OCX (3Docx) ship models: the whole OCX library inside
+
+[OCX](https://3docx.org) is the open XML standard for 3D ship structure models (class approval, yard to class, design to
+production). ShipBrain carries two repos, copied whole and used as written:
+
+- **OCX_Schema** ([OCXStandard/OCX_Schema](https://github.com/OCXStandard/OCX_Schema), Apache-2.0): the official schema
+  of **every version 2.8.6 to 3.2.0 (12 versions)** as XSD and as **Python classes** - every element, type, attribute,
+  child, allowed value and its documentation (554 classes in 3.2.0). The model is trained on it.
+- **OCXReader** ([skfcz/OCXReader](https://github.com/skfcz/OCXReader), LGPL-2.1, C++ / OpenCascade): OCX -> exact STEP.
+  LGPL, so it is copied **unchanged**, built and run **as its own program**, never trained on (`NOT_FOR_TRAINING.md`).
+  Its sample ship models (company / ship names) were left out.
+
+Tools:
+
+| tool | what it does |
+|---|---|
+| `ocx_syntax` | exact syntax of any OCX element / type / enumeration in any version: required attributes, children in order with how many, allowed values, where it is used, which versions have it, an XML example; search by meaning ("bulb", "watertight"); `changes_from` = what changed between two versions |
+| `ocx_read` | any OCX file (2.8.x - 3.2): panels, plates and thickness, stiffeners and sections, brackets, pillars, seams, holes, frame tables, catalogues, plate area and weight; saved as a structure JSON |
+| `ocx_validate` | against the official XSD of its version (exact place of each problem) + every element name against the library |
+| `ocx_write` | structure JSON / OCX / ship XML -> **OCX 3.2.0** built with the official classes, checked against the official XSD |
+| `ocx_to_step` | 3D CAD: OCXReader when built (`python -c "from shipbrain import ocx; ocx.reader_build()"`, needs CMake + vcpkg), else ShipBrain's own plate solids + stiffener beams |
+| `compare_structures`, `structure_to_mesh`, `file_info` | now take `.3docx` directly |
+
+Checked: structure -> OCX 3.2.0 passes the official XSD and reads back member for member identical; four real OCX
+exports from two different CAD systems (2.8.5 / 2.8.6, up to 590,000 elements) read in 0.1-3.3 s with thickness,
+sections and frames right (two exporters write units and references differently - both handled); the XSD check finds
+the real schema deviations in those exports. Not done: OCXReader was not built here (its build fetches OpenCascade
+through vcpkg, about an hour); curved shell panels are flattened onto their best plane for comparing and meshing.
+
 ## Drawing compare like a CAD compare tool (DXF, DWG, PDF)
 
 `compare_drawings` on two revisions of a drawing now gives what a CAD compare tool gives:
@@ -481,7 +510,8 @@ Do **not** commit ship drawings, XMLs, rule texts, `rules_index.json`, generated
 
 Everything ShipBrain needs is free and open source: numpy and scipy (BSD), CadQuery (Apache-2.0) with OpenCascade (LGPL),
 pyNastran (BSD), ezdxf (MIT), pdfplumber (MIT), pypdfium2 (Apache/BSD), Pillow (MIT-CMU), CalculiX (GPL, run as a
-separate program), llama.cpp (MIT) and llamafile (Apache-2.0). Training uses Qwen3 (Apache-2.0), Unsloth (Apache-2.0),
+separate program), llama.cpp (MIT) and llamafile (Apache-2.0), the OCX schema (Apache-2.0), xsdata and xmlschema (MIT),
+OCXReader (LGPL-2.1, unchanged, run as a separate program). Training uses Qwen3 (Apache-2.0), Unsloth (Apache-2.0),
 Transformers and PEFT (Apache-2.0). PyMuPDF (AGPL or paid) was replaced. ANSYS and Abaqus are only targets of the file
 converters and are never needed.
 

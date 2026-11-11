@@ -83,6 +83,14 @@ def file_info(path):
             say.append(f"{name} is a JSON object with the fields {', '.join(list(d)[:10])}.")
         if isinstance(d, dict) and 'plates' in d:
             say.append(f"It looks like a plate-assembly spec with {len(d['plates'])} plates: it can be meshed directly.")
+    elif low.endswith(('.3docx', '.ocx')) or (low.endswith('.xml') and b'ocxXML' in open(path, 'rb').read(3000)):
+        from . import ocx
+        r = ocx.read(path)
+        info.update(kind='OCX ship structure model', **{k: v for k, v in r['summary'].items() if k in (
+            'schema_version', 'panels', 'plates', 'stiffeners', 'brackets', 'pillars', 'seams', 'holes', 'thickness_mm', 'plate_area_m2')})
+        say.append(f"{name} ({_size(size)}) is an OCX ship structure model (open 3D class exchange standard). " + r['plain_english']
+                   + ' I can check it against its schema (ocx_validate), compare it with another model (compare_structures), '
+                     'mesh it (structure_to_mesh) or make STEP (ocx_to_step).')
     elif low.endswith('.xml'):
         import xml.etree.ElementTree as ET
         tags, root = Counter(), None

@@ -211,6 +211,9 @@ def load(path, converters=None):
     """JSON structure file, or XML through a plugin converter xml_to_members(path)"""
     if path.lower().endswith('.json'):
         return json.load(open(path, encoding='utf-8'))
+    if path.lower().endswith(('.3docx', '.ocx')) or (path.lower().endswith('.xml') and b'ocxXML' in open(path, 'rb').read(3000)):
+        from . import ocx                                   # open OCX standard: read directly (any schema version)
+        return ocx.to_members(path)
     for fn in (converters or []):
         return fn(path)
     raise ValueError('reading this XML needs your ship plugin (start the app with --plugin <folder with ship_xml_kit.py>)')

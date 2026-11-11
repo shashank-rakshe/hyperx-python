@@ -325,9 +325,29 @@ class Tools:
                       'stiffener length and plate area found in the other model with the same section / thickness, both ways, and where '
                       'the gaps are - works when members are split differently (drawing-read vs yard model). method "members": '
                       'one-to-one changes between two versions of one model (same / changed / moved / added / removed). '
-                      'Reads structure JSON or ship XML.',
+                      'Reads structure JSON, OCX (.3docx) or ship XML.',
                       {'type': 'object', 'properties': {'a': {'type': 'string'}, 'b': {'type': 'string'}, 'tol': {'type': 'number'},
                                                          'move_tol': {'type': 'number'}}, 'required': ['a', 'b']})
+        self.register('ocx_syntax', self.ocx_syntax, 'OCX (open 3D class exchange, .3docx ship structure standard) library: the exact '
+                      'syntax of any OCX element / type / enumeration in any schema version 2.8.6 ... 3.2.0 (attributes, required '
+                      'children in order, allowed values, where used, which versions have it, XML example). name = an element '
+                      '(Plate, Stiffener, BarSection, FunctionTypeValue ...) or words to search ("bulb", "watertight"). '
+                      'changes_from = an older version: what changed from it to version.',
+                      {'type': 'object', 'properties': {'name': {'type': 'string'}, 'version': {'type': 'string'},
+                                                         'changes_from': {'type': 'string'}}})
+        self.register('ocx_read', self.ocx_read, 'Read an OCX ship model (.3docx, any schema version): panels, plates (thickness), '
+                      'stiffeners (sections), brackets, pillars, seams, holes, frame tables, catalogues; saves it as a structure '
+                      'JSON for compare_structures / structure_to_mesh.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
+        self.register('ocx_validate', self.ocx_validate, 'Check an OCX file against the official schema of its version (XSD) and '
+                      'the OCX library: valid or the list of problems with their place in the file.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
+        self.register('ocx_write', self.ocx_write, 'Write a structure model (structure JSON, OCX or ship XML) as an OCX 3.2.0 '
+                      'file made with the official OCX classes, then check it against the official XSD.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'out': {'type': 'string'},
+                                                         'name': {'type': 'string'}}, 'required': ['file']})
+        self.register('ocx_to_step', self.ocx_to_step, 'OCX model -> STEP 3D CAD (OCXReader when built, else ShipBrain plates + stiffeners).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
         self.register('structure_to_mesh', self.structure_to_mesh, 'Make a global 1D+2D FE mesh from a structure model (structure JSON or '
                       'ship XML through your plugin): plates with thickness and openings -> shells, stiffeners -> beams with their sections. '
                       'Also writes the plates/beams JSON and (if CadQuery is installed) a STEP.',
@@ -977,6 +997,50 @@ class Tools:
         worst = min(out, key=lambda r: r['score'])
         return {'views': out, 'verdict': worst['verdict'] if all(r['verdict'] != 'FAIL' for r in out) else 'FAIL',
                 'overlay': worst['overlay'], 'plain_english': ' '.join(r['plain_english'] for r in out)}
+
+    def ocx_syntax(self, name=None, version=None, changes_from=None):
+        from . import ocx
+        if changes_from:
+            return ocx.changes(changes_from, version or ocx.LATEST)
+        if not name:
+            vs = ocx.versions()
+            return {'versions': vs, 'plain_english': f"OCX schema versions I know: {', '.join(vs)} (newest {vs[-1]}). Ask for any "
+                                                     f"element, e.g. Plate, Stiffener, BarSection."}
+        out = ocx.syntax(name, version)
+        if 'error' in out:
+            hits = ocx.find(name, version)
+            return {'matches': hits, 'plain_english': f"OCX {ocx._resolve(version)} classes for '{name}': "
+                                                      + '; '.join(f"{h['name']} ({h['doc'][:80]})" for h in hits[:8])}
+        return out
+
+    def ocx_read(self, file):
+        from . import ocx
+        r = ocx.read(self._path(file))
+        base = re.sub(r'[^A-Za-z0-9_\-]', '_', os.path.splitext(os.path.basename(file))[0])[:40]
+        out = self._path(base + '_structure.json')
+        json.dump(r['model'], open(out, 'w', encoding='utf-8'))
+        return {'summary': r['summary'], 'structure_json': os.path.basename(out),
+                'plain_english': r['plain_english'] + f' Saved as {os.path.basename(out)} for comparing and meshing.'}
+
+    def ocx_validate(self, file):
+        from . import ocx
+        return ocx.validate(self._path(file))
+
+    def ocx_write(self, file, out=None, name=None):
+        from . import ocx, members
+        model = members.load(self._path(file), self.converters)
+        out = out or os.path.splitext(os.path.basename(file))[0] + '.3docx'
+        res = ocx.write(model, self._path(out), name=name or 'ShipBrain model')
+        v = ocx.validate(self._path(out))
+        res.update(file=os.path.basename(out), valid=v['valid'], problems=v['errors'][:5],
+                   plain_english=f"Wrote {os.path.basename(out)} (OCX {res['version']}): {res['panels']} panels, {res['plates']} plates, "
+                                 f"{res['stiffeners']} stiffeners, {res['sections']} sections, {res['materials']} materials. " + v['plain_english'])
+        return res
+
+    def ocx_to_step(self, file):
+        from . import ocx
+        r = ocx.to_step(self._path(file))
+        return {'step': os.path.basename(r['step']), 'by': r['by'], 'plain_english': f"STEP written: {os.path.basename(r['step'])} (made by {r['by']})."}
 
     def compare_structures(self, a, b, tol=None, move_tol=300.0, method='coverage'):
         """coverage (default): stiffener length / plate area found in the other model - works when the two models split

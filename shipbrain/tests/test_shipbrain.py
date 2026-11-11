@@ -1572,3 +1572,48 @@ def test_missing_software_shows_install_link(tmp_path, monkeypatch):
     assert card[0]['link'] in ev[-1]['content']               # added under the answer
     sc = T.call('setup_check', {})
     assert sc['software'] and all('installed' in x for x in sc['software'])
+
+
+def test_ocx_library_read_write_validate(tmp_path):
+    """OCX: library syntax for every version, structure -> OCX 3.2.0 (official classes) valid against the official XSD,
+    read back member for member the same, compare_structures / file_info / tools on .3docx"""
+    import json
+    pytest.importorskip('xsdata')
+    pytest.importorskip('xmlschema')
+    from shipbrain import agent, ocx, members
+    vs = ocx.versions()
+    assert vs[0] == '2.8.6' and vs[-1] == '3.2.0' and len(vs) >= 12
+    s = ocx.syntax('Plate')
+    assert [k['name'] for k in s['children'] if k['min']] == ['MassProperties', 'NetArea', 'OuterContour', 'PlateMaterial']
+    assert '<ocx:PlateMaterial' in s['example'] and 'Thickness' in s['example']
+    assert 'WaterTight' in str(ocx.syntax('TightnessValue')['values']) or ocx.syntax('TightnessValue')['values']
+    assert ocx.syntax('Plate', '2.8.6')['version'] == '2.8.6'
+    assert 'NoSuchThing' not in str(ocx.find('bulb')) and ocx.find('bulb')[0]['name'] == 'BulbFlat'
+    ch = ocx.changes('2.8.6', '3.2.0')
+    assert ch['added'] and ch['removed'] and ch['changed']
+    model = {'sections': {'HP200x10': {'type': 'LBar', 'H': 200, 'W': 40, 'tw': 10, 'tf': 10, 'name': 'HP200x10'}},
+             'blocks': [{'id': 'B1', 'panels': [{'id': 'D1', 'name': 'Deck', 'function': 'DECK',
+                                                 'cs': {'origin': [0, 0, 10000], 'uaxis': [1, 0, 0], 'waxis': [0, 0, 1]},
+                                                 'plates': [{'name': 'P1', 'thk': 12, 'grade': 'AH36', 'contour': [[0, 0], [4800, 0], [4800, 1600], [0, 1600]]},
+                                                            {'name': 'P2', 'thk': 14, 'grade': 'AH36', 'contour': [[0, 1600], [4800, 1600], [4800, 3200], [0, 3200]]}],
+                                                 'stiffeners': [{'name': f'L{i}', 'sec': 'HP200x10', 'grade': 'AH36', 'trace': [[0, y], [4800, y]],
+                                                                 'incl': [0, 0, -1]} for i, y in enumerate((800, 1600, 2400))]}]}]}
+    (tmp_path / 'deck.json').write_text(json.dumps(model))
+    T = agent.Tools(str(tmp_path))
+    w = T.call('ocx_write', {'file': 'deck.json'})
+    assert w['valid'], w['problems']
+    assert w['plates'] == 2 and w['stiffeners'] == 3
+    r = T.call('ocx_read', {'file': 'deck.3docx'})
+    assert r['summary']['plates'] == 2 and r['summary']['thickness_mm']['max'] == 14
+    assert abs(r['summary']['plate_area_m2'] - 15.36) < 0.01
+    c = members.compare(model, members.load(str(tmp_path / 'deck.3docx')))
+    assert c['plain_english'].startswith('Compared 5 members') and '5 are the same' in c['plain_english']
+    obj = ocx.load(str(tmp_path / 'deck.3docx'))
+    assert obj.vessel.panel[0].composed_of.plate[1].plate_material.thickness.numericvalue == 0.014
+    assert 'OCX ship structure model' in T.call('file_info', {'file': 'deck.3docx'})['plain_english']
+    p = ocx.new('Stiffener')
+    assert p.guidref and p.inclination and p.section_ref is not None
+    bad = tmp_path / 'bad.3docx'
+    bad.write_text((tmp_path / 'deck.3docx').read_text().replace('<ocx:NetArea', '<ocx:NetAreaX').replace('</ocx:NetArea>', '</ocx:NetAreaX>'))
+    v = ocx.validate(str(bad))
+    assert not v['valid'] and v['xsd_checked']

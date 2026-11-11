@@ -61,10 +61,13 @@ MEDIA = re.compile(r'\.(gif|mp4|mov|webm|avi|mkv|png|jpe?g|webp|heic|tiff?|bmp|i
                    r'so|a|o|wasm-unused)$|(^|/)[^/]+\.app/', re.I)
 
 
-def add(url, name=None, skip_media=True):
+def add(url, name=None, skip_media=True, separate_program=False, exclude=()):
     """clone a repo and copy every tracked file into vendor/<name>/repo (MIT / BSD / Apache / ISC / CC0 only).
     skip_media: pictures, videos, archives and app bundles stay out (they teach the model nothing and only add weight);
-    all code, docs text, examples and data files are kept"""
+    all code, docs text, examples and data files are kept.
+    separate_program: also accept LGPL / GPL code, copied UNCHANGED with its licence and only built and run as its own
+    program (never imported into ShipBrain's code, never trained on - NOT_FOR_TRAINING.md). AGPL is never accepted.
+    exclude: path prefixes left out (e.g. sample models that carry ship or company names)"""
     from .repopack import classify_licence
     name = name or re.sub(r'\.git$', '', url.rstrip('/').split('/')[-1])
     tmp = os.path.join(VENDOR, '_clone_' + name)
@@ -72,7 +75,8 @@ def add(url, name=None, skip_media=True):
     subprocess.run(['git', 'clone', '-q', '--depth', '1', url, tmp], check=True)
     lic = next((os.path.join(tmp, f) for f in os.listdir(tmp) if re.match(r'(?i)^(licen[cs]e|copying)', f)), None)
     spdx, kind = classify_licence(open(lic, errors='replace').read()) if lic else ('none', 'unknown')
-    if kind not in ('permissive', 'conditional'):
+    gpl_ok = separate_program and kind == 'copyleft' and not re.search(r'AGPL', spdx, re.I)
+    if kind not in ('permissive', 'conditional') and not gpl_ok:
         shutil.rmtree(tmp, ignore_errors=True)
         raise ValueError(f'{name}: licence {spdx} ({kind}) - only permissive licences are copied into ShipBrain; '
                          'use repopack (search-only knowledge) for it')
@@ -82,6 +86,9 @@ def add(url, name=None, skip_media=True):
     shutil.rmtree(dst, ignore_errors=True)
     skipped = 0
     for f in filter(None, files):
+        if any(f.startswith(x) for x in exclude):
+            skipped += 1
+            continue
         if skip_media and MEDIA.search(f):
             skipped += 1
             continue
@@ -95,9 +102,15 @@ def add(url, name=None, skip_media=True):
             fh.write(f'# Do not modify {name}\n\nIts licence ({spdx}) allows use and sharing of the UNCHANGED code with its notice, but '
                      'adds conditions on modifications (see repo/LICENSE*). ShipBrain uses it as it is: never patch these files; '
                      'fixes go to the author as a pull request.\n')
+    if gpl_ok:
+        with open(os.path.join(VENDOR, name, 'NOT_FOR_TRAINING.md'), 'w') as fh:
+            fh.write(f'# {name}: separate program only\n\nLicence {spdx} (see repo/). ShipBrain copies it unchanged, builds it and runs '
+                     'it as its own program. It is never imported into ShipBrain\'s code, never modified (changes go to its '
+                     'author) and never used as training data.\n')
     with open(os.path.join(VENDOR, name, 'SOURCE.md'), 'w') as fh:
         fh.write(f'# {name} (copied unchanged)\n\nFrom {url}, commit {commit}. Licence: {spdx} (see repo/).\n'
-                 + (f'{skipped} media / binary files (pictures, videos, archives, app bundles) left out.\n' if skipped else ''))
+                 + (f'{skipped} media / binary / excluded files left out'
+                    + (f' (excluded: {", ".join(exclude)})' if exclude else '') + '.\n' if skipped else ''))
     return {'name': name, 'files': len([f for f in files if f]) - skipped, 'media_left_out': skipped, 'licence': spdx, 'commit': commit}
 
 
