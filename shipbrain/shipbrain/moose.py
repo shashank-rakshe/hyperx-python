@@ -63,8 +63,13 @@ def run(inp, timeout=7200, threads=2):
         out['csv'] = os.path.basename(csvf)
         out['postprocessors'] = {k: float(v) for k, v in rows[-1].items()} if rows else {}
     if p.returncode != 0:
-        err = [l for l in log.splitlines() if re.search(r'\*\*\* ERROR|error|Error', l)]
-        raise RuntimeError('MOOSE stopped: ' + ('; '.join(err[-5:]) or log[-1500:]))
+        msg = ''
+        m = re.search(r'\*\*\* ERROR \*\*\*\s*(.*?)(?:\n\s*Stack frames|\n\s*\d+: |\Z)', log, re.S)
+        if m:
+            msg = ' '.join(m.group(1).split())[:800]
+        if not msg:
+            msg = '; '.join(l.strip() for l in log.splitlines() if re.search(r'did not converge|failed|ERROR', l))[-800:]
+        raise RuntimeError('MOOSE stopped: ' + (msg or log[-1500:]))
     return out
 
 
@@ -156,7 +161,7 @@ def plate_input(mesh_file, t, E, nu, q, edges, a, b, out='plate.i', clamped=Fals
   nl_rel_tol = 1e-10
   nl_abs_tol = 1e-10
   dt = 1
-  dtmin = 1
+  dtmin = 0.001
   end_time = 1.
 []
 
@@ -247,6 +252,9 @@ def plate(a, b, t, q, E=206000.0, nu=0.3, clamped=False, n=None, workdir='.', na
            'postprocessors': pp}
     pe = (f"MOOSE (shell elements, {len(quads)} quads) solved the {a:g} x {b:g} plate, t = {t:g}, under {q:g} with "
           f"{'clamped' if clamped else 'simply supported'} edges: largest deflection {w:.4g}.")
+    if w > 0.5 * t:
+        pe += (f" The deflection is {w / t:.1f} times the thickness: membrane action carries part of the load, so a linear "
+               "calculation (and linear theory) overestimates it - run a large-deflection analysis for the real value.")
     if not clamped:
         wn = navier(a, b, t, E, nu, q)
         res['navier'] = wn
