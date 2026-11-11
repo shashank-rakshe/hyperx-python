@@ -181,6 +181,19 @@ and never patches it (`DO_NOT_MODIFY.md`); the licence checker now marks such li
   Linux, macOS). The Kaggle run does it by itself and adds STL inputs to the CAD training tasks.
 - Found on the way: `repair_model` failed on trimmed cylinders in real STEP files - fixed.
 
+## MYSTRAN: a free Nastran-compatible solver that RUNS the .bdf ShipBrain writes
+
+[MYSTRAN](https://github.com/MystranSolver/MYSTRANSolver) (MIT) is copied whole into `shipbrain/vendor/MYSTRAN`. It solves
+static (SOL 101), natural frequencies (SOL 103) and buckling (SOL 105) from the same Nastran `.bdf` files, so the
+Nastran path no longer only "writes the input": `solve(file, solver="mystran", analysis)` runs it.
+
+- Windows: take the ready `mystran.exe` from the MYSTRAN releases (put it on PATH or `remember_solver` once).
+  Linux / macOS / WSL: `python -c "from shipbrain import mystran; mystran.build()"` (gfortran + cmake + ninja, ~10 min).
+- Checked on the same plates as CalculiX: pressure deflection 12.50 mm (CalculiX 12.40), first natural frequency
+  44.06 Hz (hand 44.14, CalculiX 44.24), buckling factor 7.415 (hand 7.447, CalculiX 7.492).
+- Running it for real fixed the never-tested `.f06` reader: MYSTRAN's displacement table layout, its `job.F06` file
+  name, and buckling factors read from the eigenvalue column (Nastran too).
+
 ## Physics lab: OpenPhysicsAI, used as written
 
 [OpenPhysicsAI](https://github.com/molanocortes/OpenPhysicsAI) (Apache-2.0) is copied whole into `shipbrain/vendor/`

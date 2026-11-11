@@ -30,7 +30,8 @@ KNOWN = {
                 [r'C:\MSC.Software\MSC_Nastran\*\bin\nastran*.exe', r'C:\Program Files\MSC.Software\MSC_Nastran\*\bin\nastran*.exe',
                  r'C:\Program Files\Siemens\Simcenter*\NXNASTRAN\bin\nastran*.exe', r'C:\Program Files\Siemens\NX*\NXNASTRAN\bin\nastran*.exe',
                  '/opt/msc/MSC_Nastran/*/bin/nastran', '/usr/local/bin/nastran']),
-    'mystran': (['mystran', 'MYSTRAN.exe', 'mystran.exe'], [r'C:\MYSTRAN\*.exe', '/usr/local/bin/mystran']),
+    'mystran': (['mystran', 'MYSTRAN.exe', 'mystran.exe'], [r'C:\MYSTRAN\*.exe', '/usr/local/bin/mystran',
+                                                            os.path.join(os.path.expanduser('~'), '.cache', 'shipbrain', 'mystran', 'Binaries', 'mystran*')]),
     'ansys': (['ansys241', 'ansys242', 'ansys232', 'ansys231', 'ansys222', 'mapdl'],
               [r'C:\Program Files\ANSYS Inc\v*\ansys\bin\winx64\ANSYS*.exe', r'C:\Program Files\ANSYS Inc\v*\ansys\bin\winx64\MAPDL.exe',
                '/ansys_inc/v*/ansys/bin/ansys*', '/usr/ansys_inc/v*/ansys/bin/ansys*']),
@@ -42,7 +43,7 @@ KNOWN = {
 }
 ANALYSES = {'calculix': ['static', 'modal', 'buckling'], 'nastran': ['static', 'modal', 'buckling'], 'mystran': ['static', 'modal', 'buckling'],
             'ansys': ['static', 'modal', 'buckling'], 'abaqus': ['static', 'modal', 'buckling'], 'openfoam': ['cfd'], 'code_aster': []}
-TESTED = {'calculix'}
+TESTED = {'calculix', 'mystran'}           # mystran: static / modal / buckling checked against CalculiX + hand formulas
 
 
 def find():
@@ -92,29 +93,40 @@ def read_f06(path):
     if fatal:
         out['fatal'] = [f.strip() for f in fatal[:5]]
     dmax = 0.0
-    for blk in re.split(r'D I S P L A C E M E N T   V E C T O R', txt)[1:]:
-        for line in blk.splitlines()[3:]:
+    # Nastran: 'D I S P L A C E M E N T   V E C T O R', rows '<grid> G T1 T2 T3 ...';
+    # MYSTRAN: 'D I S P L A C E M E N T S', rows '<grid> <coord sys> T1 T2 T3 ...'
+    for blk in re.split(r'D I S P L A C E M E N T   V E C T O R|D I S P L A C E M E N T S', txt)[1:]:
+        seen = False
+        for line in blk.splitlines()[1:]:
             p = line.split()
-            if len(p) >= 8 and p[0].isdigit() and p[1] == 'G':
+            if len(p) >= 8 and p[0].isdigit() and (p[1] == 'G' or p[1].isdigit()):
                 try:
                     t = [float(x.replace('D', 'E')) for x in p[2:5]]
                 except ValueError:
                     continue
+                seen = True
                 dmax = max(dmax, (t[0] ** 2 + t[1] ** 2 + t[2] ** 2) ** 0.5)
-            elif line.startswith('1') or 'PAGE' in line and dmax:
+            elif seen and (line.startswith('1') or re.search(r'[A-Z] [A-Z] [A-Z]', line) or 'PAGE' in line):
                 break
     if dmax:
         out['max_displacement'] = round(dmax, 6)
     m = re.search(r'R E A L   E I G E N V A L U E S(.*?)(?:\n1|\Z)', txt, re.S)
     if m:
-        f = []
+        f, ev, started = [], [], False
         for line in m.group(1).splitlines():
             p = line.split()
-            if len(p) >= 7 and p[0].isdigit() and p[1].isdigit():
-                try:
-                    f.append(float(p[4]))                      # MODE, ORDER, EIGENVALUE, RADIANS, CYCLES, ...
+            if len(p) >= 3 and p[0].isdigit() and p[1].isdigit():
+                try:                                           # MODE, ORDER, EIGENVALUE[, RADIANS, CYCLES, ...]
+                    ev.append(float(p[2].replace('D', 'E')))   # buckling: the eigenvalue IS the load factor
+                    if len(p) >= 5:
+                        f.append(float(p[4].replace('D', 'E')))
+                    started = True
                 except ValueError:
                     pass
+            elif started and not line.strip():
+                break                                          # end of the eigenvalue table (MYSTRAN goes on to vectors)
+        if ev:
+            out['eigenvalues'] = ev[:20]
         if f:
             out['eigen_column_cycles'] = f[:20]
     return out
@@ -160,9 +172,8 @@ def run(model_file, solver, analysis='static', n_modes=10, solver_path=None, tim
         open(bdf, 'w').write(txt)
         cmd = [path, os.path.basename(bdf)] + (['scr=yes', 'batch=no'] if solver == 'nastran' else [])
         log, rc = _run(cmd, wd, timeout)
-        f06 = base + '.f06'
-        if not os.path.exists(f06):
-            f06 = next(iter(glob.glob(os.path.join(wd, os.path.basename(base).upper() + '.F06'))), f06)
+        name = os.path.basename(base).lower() + '.f06'              # job.f06, JOB.F06 or job.F06 (MYSTRAN)
+        f06 = next((os.path.join(wd, f) for f in os.listdir(wd) if f.lower() == name), base + '.f06')
         if not os.path.exists(f06):
             raise RuntimeError(f'{solver} wrote no .f06 (exit {rc}): ' + log[-600:])
         r = read_f06(f06)
@@ -219,8 +230,9 @@ def run(model_file, solver, analysis='static', n_modes=10, solver_path=None, tim
         raise ValueError(f'running {solver} is not automated yet; ShipBrain can guide the set-up')
     if 'frequencies_hz' not in r and analysis == 'modal' and 'eigen_column_cycles' in r:
         r['frequencies_hz'] = r.pop('eigen_column_cycles')
-    if 'load_factors' not in r and analysis == 'buckling' and 'eigen_column_cycles' in r:
-        r['load_factors'] = r.pop('eigen_column_cycles')
+    if 'load_factors' not in r and analysis == 'buckling' and r.get('eigenvalues'):
+        r['load_factors'] = r.pop('eigenvalues')
+        r.pop('eigen_column_cycles', None)
     r['plain_english'] = _explain(r)
     return r
 

@@ -33,8 +33,11 @@ ENGINES = [
                                               'validated against handbook values (0.0-0.6 %)'),
     ('ShipBrain fatigue', {'fatigue'}, 'runs', 'fatigue_mesh(..., solve=true)', ['ccx', 'ccx.exe'], None,
      't x t hot-spot model, read-out at 0.5t / 1.5t, extrapolated hot-spot stress (CalculiX underneath)'),
-    ('Nastran (MSC / NX / Simcenter, MYSTRAN)', {'static': 'writes', 'modal': 'writes', 'buckling': 'writes', 'ultimate': 'knowledge'}, 'writes', 'fe_convert(file, to=["bdf"])',
-     ['nastran', 'mystran', 'nx_nastran'], None, 'BDF written by ShipBrain; MYSTRAN is a free Nastran-like solver'),
+    ('MYSTRAN (free Nastran-compatible)', {'static': 'runs', 'modal': 'runs', 'buckling': 'runs'}, 'runs',
+     'solve(file, solver="mystran", analysis)', ['@mystran'], None,
+     'free (MIT) Nastran-style solver for the .bdf ShipBrain writes; checked against CalculiX and hand formulas (0.2-0.8 %)'),
+    ('Nastran (MSC / NX / Simcenter)', {'static': 'writes', 'modal': 'writes', 'buckling': 'writes', 'ultimate': 'knowledge'}, 'writes', 'fe_convert(file, to=["bdf"])',
+     ['nastran', 'nx_nastran'], None, 'BDF written by ShipBrain; needs a Nastran licence'),
     ('ANSYS MAPDL / PyMAPDL', {'static': 'writes', 'modal': 'writes', 'buckling': 'writes', 'ultimate': 'knowledge', 'contact': 'knowledge', 'heat': 'knowledge'}, 'writes',
      'fe_convert(file, to=["mac"]) (+ PyMAPDL script)', ['ansys', 'mapdl', 'ansys241', 'ansys242'], None, 'needs an ANSYS licence'),
     ('Abaqus', {'static': 'writes', 'modal': 'writes', 'buckling': 'writes', 'ultimate': 'knowledge', 'contact': 'knowledge', 'impact': 'knowledge'}, 'writes', 'fe_convert(file, to=["inp"]) (+ Abaqus script)',
@@ -78,6 +81,9 @@ def _caps(caps, default):
 def installed(names):
     if not names:
         return True
+    if names == ['@mystran']:                          # found on PATH, in a usual folder, remembered, or built by ShipBrain
+        from . import solvers
+        return any(x['solver'] == 'mystran' for x in solvers.find())
     if names == ['@openphysics']:                       # built in: compiled once from shipbrain/vendor (Linux / macOS / WSL)
         from . import openphysics
         return openphysics.available() and (openphysics.built() or os.name != 'nt')

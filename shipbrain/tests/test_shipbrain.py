@@ -1444,3 +1444,35 @@ def test_stl_to_step_and_stl_in_the_cad_tools(tmp_path):
     assert r['valid'] and r['faces'] == {'CYLINDER': 6, 'PLANE': 6} and abs(r['volume_mm3'] / part.Volume() - 1) < 1e-6
     rep = T.call('repair_model', {'file': 'scan.stl', 'request': 'remove holes below 20 and fillets below R10'})
     assert rep['summary']['valid'] and rep['summary']['faces_after'] == 6                     # a plain box is left
+
+
+def test_mystran_static_modal_buckling(tmp_path):
+    import math
+    from shipbrain import solvers
+    found = [x for x in solvers.find() if x['solver'] == 'mystran']
+    if not found:
+        pytest.skip('MYSTRAN not installed / built here')
+    E, nu, rho, t = 206000.0, 0.3, 7.85e-9, 10.0
+    a, b = 2000.0, 800.0
+    fx = [{'x': 0, 'dof': '3'}, {'x': a, 'dof': '3'}, {'y': 0, 'dof': '3'}, {'y': b, 'dof': '3'}, {'x': 0, 'y': 0, 'dof': '12'}, {'x': a, 'y': 0, 'dof': '2'}]
+    platemesh.build_plates({'name': 'ss', 'element_size': 50, 'fix': fx, 'loads': [{'plates': ['P'], 'pressure': 0.05}],
+                            'plates': [{'id': 'P', 't': t, 'outline': [[0, 0, 0], [a, 0, 0], [a, b, 0], [0, b, 0]]}]}, str(tmp_path), formats=('bdf',))
+    f11 = math.pi / 2 * (1 / a ** 2 + 1 / b ** 2) * math.sqrt(E * t ** 3 / (12 * (1 - nu ** 2)) / (rho * t))
+    r = solvers.run(str(tmp_path / 'ss.bdf'), 'mystran', 'modal', n_modes=3)
+    assert abs(r['frequencies_hz'][0] / f11 - 1) < 0.01 and len(r['frequencies_hz']) == 3
+    r = solvers.run(str(tmp_path / 'ss.bdf'), 'mystran', 'static')
+    assert 11.5 < r['max_displacement'] < 13.5                                    # Roark ~12.2 mm, CalculiX 12.4 mm
+    b = 1000.0
+    fx = [{'x': 0, 'dof': '3'}, {'x': a, 'dof': '3'}, {'y': 0, 'dof': '3'}, {'y': b, 'dof': '3'}, {'x': 0, 'dof': '1'}, {'x': 0, 'y': 0, 'dof': '2'}]
+    m, _ = platemesh.build_plates({'name': 'k', 'element_size': 50, 'fix': fx,
+                                   'plates': [{'id': 'P', 't': t, 'outline': [[0, 0, 0], [a, 0, 0], [a, b, 0], [0, b, 0]]}]}, str(tmp_path), formats=())
+    fm = FEModel.from_mesh(m)
+    edge = sorted([n for n, x in fm.nodes.items() if abs(x[0] - a) < 1e-6], key=lambda n: fm.nodes[n][1])
+    ys = [fm.nodes[n][1] for n in edge]
+    for i, n in enumerate(edge):
+        trib = ((ys[i + 1] - ys[i]) if i < len(ys) - 1 else 0) / 2 + ((ys[i] - ys[i - 1]) if i > 0 else 0) / 2
+        fm.loads.append({'type': 'force', 'node': n, 'dir': [-1, 0, 0], 'value': 10.0 * t * trib})
+    fm.write(str(tmp_path / 'k.bdf'))
+    r = solvers.run(str(tmp_path / 'k.bdf'), 'mystran', 'buckling', n_modes=2)
+    scr = 4 * math.pi ** 2 * E / (12 * (1 - nu ** 2)) * (t / b) ** 2
+    assert abs(r['load_factors'][0] * 10.0 / scr - 1) < 0.03

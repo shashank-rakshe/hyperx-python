@@ -29,6 +29,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2024 M3dFea (Roy Blows)
 
+## MYSTRANSolver
+
+- Source: https://github.com/MystranSolver/MYSTRANSolver (commit 3a5913a904ee)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2020 drbillcase
+
 ## OpenCourantRP
 
 - Source: https://github.com/CAMLAB-UChile/OpenCourantRP.git (commit cec23cbdd405)

@@ -85,6 +85,8 @@ def add(url, name=None, skip_media=True):
         if skip_media and MEDIA.search(f):
             skipped += 1
             continue
+        if os.path.isdir(os.path.join(tmp, f)):          # a git submodule: another project, fetched by its build when needed
+            continue
         os.makedirs(os.path.dirname(os.path.join(dst, f)), exist_ok=True)
         shutil.copy2(os.path.join(tmp, f), os.path.join(dst, f))
     shutil.rmtree(tmp, ignore_errors=True)
