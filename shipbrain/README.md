@@ -265,6 +265,15 @@ ShipBrain builds its own MCP server once (`python -c "from shipbrain import dwsi
   Eastman) -> summaries, validations, and the drawn P&IDs with their exact tag lists (`training/data/dexpi_*`).
 - Code packs of DWSIM, pyDEXPI and DEXPI Studio are trained on too (copyleft allowed: ShipBrain is open, non-commercial).
 
+## LLM serving simulation (Simthesizer)
+
+[Simthesizer](https://github.com/casys-kaist/simthesizer) (MIT, Rust, HPCA 2027) is copied whole and run as written:
+it simulates an LLM server under many users without a GPU. Tool `serving_sim`: users, requests per second, prompt
+and answer length -> time to first word, tokens/s per user, answer time, total throughput. It ships one measured
+set-up (Llama 3.1 8B on one RTX Pro 6000); other models / GPUs need its own GPU profiling (vLLM). Checked: builds in
+17 s; 20 requests at 0.5/s -> first word 0.03 s, 88 tokens/s per user; 200 at 20/s -> the GPU saturates, first word
+after 9 s (90 %: 17 s). ShipBrain's one-PC planner stays `shipbrain.speed` (CPU / small GPU). Its code is a trained pack.
+
 ## Class society rules (ships and offshore)
 
 ShipBrain answers class rule questions **from the rules themselves**, with society, document, section and page, in

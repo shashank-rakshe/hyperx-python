@@ -1829,3 +1829,16 @@ def test_dexpi_and_dwsim(tmp_path):
         assert r['ok'] and len(r['streams']) == 4 and not r['errors']
         fl = T.call('process_sim', {'action': 'flash', 'compounds': ['Water', 'Methanol'], 'mass_fractions': [0.5, 0.5], 'T_C': 70, 'P_bar': 1})
         assert abs(fl['composition_mol']['Water'] - 0.64) < 0.01      # 50/50 by mass = 64 % water by moles
+
+
+def test_serving_sim(tmp_path):
+    """Simthesizer (copied whole, Rust): more requests per second than the GPU can serve -> the first word waits longer"""
+    import shutil as _sh
+    from shipbrain import serving, agent
+    if not (serving.exe() or _sh.which('cargo')):
+        pytest.skip('Rust not installed')
+    T = agent.Tools(str(tmp_path))
+    low = T.call('serving_sim', {'users': 20, 'rate_per_s': 0.5})
+    high = T.call('serving_sim', {'users': 200, 'rate_per_s': 20})
+    assert low['requests'] == 20 and high['requests'] == 200
+    assert high['ttft_p50_s'] > 10 * low['ttft_p50_s'] and high['total_tokens_s'] > low['total_tokens_s']

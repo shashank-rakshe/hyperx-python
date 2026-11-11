@@ -1,0 +1,3 @@
+interface:
+  display_name: "Task design"
+  short_description: "Define testable simulator behavior and scope"

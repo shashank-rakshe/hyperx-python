@@ -1,0 +1,20 @@
+[engine]
+model = "meta-llama/Llama-3.1-8B"
+tensor_parallel_size = 1
+dtype = "half"
+load_format = "dummy"
+block_size = 16
+max_model_len = 4096
+max_num_batched_tokens = 2048
+max_num_seqs = 32
+gpu_memory_utilization = 0.9
+skip_tokenizer_init = true
+enable_prefix_caching = false
+enable_chunked_prefill = true
+async_scheduling = false
+enforce_eager = true
+generation_config = "vllm"
+
+[engine.attention_config]
+backend = "FLASH_ATTN"
+flash_attn_version = 2

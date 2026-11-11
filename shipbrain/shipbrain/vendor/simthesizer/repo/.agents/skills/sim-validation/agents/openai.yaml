@@ -1,0 +1,3 @@
+interface:
+  display_name: "Simulator validation"
+  short_description: "Assess simulator behavior and diagnose discrepancies"

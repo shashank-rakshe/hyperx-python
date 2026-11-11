@@ -1,0 +1,3 @@
+interface:
+  display_name: "Simulator mapping"
+  short_description: "Map requirements to Simthesizer state and costs"

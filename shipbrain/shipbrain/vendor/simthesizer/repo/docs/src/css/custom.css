@@ -1,0 +1,165 @@
+/*
+ * Simthesizer theme: an instrument panel. Teal is the synthesized signal
+ * (the simulator), amber is the reference trace (the real system). Both brand
+ * colors stay the same in either mode; only small text, where bright amber and
+ * teal would be unreadable on white, uses the darker -ink variants. Dark is the
+ * default; light mode uses Docusaurus's neutral white and grays.
+ */
+
+:root {
+  /* Light (white) */
+  --sz-bg: #ffffff;
+  --sz-surface: #ffffff;
+  --sz-surface-2: #f5f6f7;
+  --sz-border: #ebedf0;
+  --sz-text: #1a1d26;
+  --sz-muted: #5b6272;
+  --sz-signal: #2dd4bf;
+  --sz-signal-soft: rgba(45, 212, 191, 0.14);
+  --sz-signal-ink: #0f766e;
+  --sz-trace: #ffb224;
+  --sz-trace-soft: rgba(255, 178, 36, 0.12);
+  --sz-trace-ink: #b45309;
+  --sz-grid: rgba(26, 29, 38, 0.06);
+
+  --ifm-color-primary: #0f766e;
+  --ifm-color-primary-dark: #0e6a63;
+  --ifm-color-primary-darker: #0d645e;
+  --ifm-color-primary-darkest: #0a534d;
+  --ifm-color-primary-light: #118279;
+  --ifm-color-primary-lighter: #12887f;
+  --ifm-color-primary-lightest: #149990;
+
+  --ifm-background-color: var(--sz-bg);
+  --ifm-background-surface-color: var(--sz-surface);
+  --ifm-font-color-base: var(--sz-text);
+  --ifm-color-emphasis-300: var(--sz-border);
+  --ifm-toc-border-color: var(--sz-border);
+  --ifm-hr-border-color: var(--sz-border);
+
+  --ifm-font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --ifm-heading-font-family: 'Bricolage Grotesque', 'Inter', sans-serif;
+  --ifm-font-family-monospace: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --ifm-heading-font-weight: 700;
+  --ifm-code-font-size: 90%;
+  --ifm-global-radius: 10px;
+  --ifm-navbar-height: 3.75rem;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='dark'] {
+  /* Dark (instrument) */
+  --sz-bg: #0b0d12;
+  --sz-surface: #12151c;
+  --sz-surface-2: #181c25;
+  --sz-border: #252a36;
+  --sz-text: #e6e8ee;
+  --sz-muted: #9aa3b5;
+  --sz-signal-ink: var(--sz-signal);
+  --sz-trace-ink: var(--sz-trace);
+  --sz-grid: rgba(230, 232, 238, 0.045);
+
+  --ifm-color-primary: #2dd4bf;
+  --ifm-color-primary-dark: #26c2ae;
+  --ifm-color-primary-darker: #22b7a4;
+  --ifm-color-primary-darkest: #1c9787;
+  --ifm-color-primary-light: #45dac7;
+  --ifm-color-primary-lighter: #52dccb;
+  --ifm-color-primary-lightest: #77e3d5;
+
+  --ifm-background-color: var(--sz-bg);
+  --ifm-background-surface-color: var(--sz-surface);
+  --ifm-navbar-background-color: rgba(11, 13, 18, 0.82);
+  --ifm-footer-background-color: #07080c;
+  --ifm-code-background: #181c25;
+  --docusaurus-highlighted-code-line-bg: rgba(255, 255, 255, 0.08);
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--sz-bg);
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.02em;
+}
+
+/* Primary buttons are brand teal with dark text in both modes. */
+.button--primary {
+  --ifm-button-background-color: var(--sz-signal);
+  --ifm-button-border-color: var(--sz-signal);
+  color: #0b0d12;
+}
+
+.button--primary:hover {
+  --ifm-button-background-color: #26c2ae;
+  --ifm-button-border-color: #26c2ae;
+  color: #0b0d12;
+}
+
+/* The selected search hit reads like the primary button. */
+:root {
+  --search-local-highlight-color: var(--sz-signal);
+  --search-local-hit-active-color: #0b0d12;
+}
+
+/* Secondary buttons are outlined panels, not filled slabs. */
+.button--secondary {
+  --ifm-button-background-color: var(--sz-surface);
+  --ifm-button-border-color: var(--sz-border);
+  color: var(--sz-text);
+}
+
+.button--secondary:hover {
+  --ifm-button-border-color: var(--sz-signal);
+  color: var(--sz-signal-ink);
+}
+
+.navbar {
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--sz-border);
+  box-shadow: none;
+}
+
+/* The wordmark is the brand; it carries its own S mark. */
+.navbar__logo {
+  height: 1.55rem;
+  margin-right: 1.4rem;
+}
+
+.footer--dark {
+  --ifm-footer-background-color: #07080c;
+  border-top: 1px solid #252a36;
+}
+
+/* Docs pages: tables and code read as panels on the page background. */
+.markdown table {
+  display: table;
+  width: 100%;
+}
+
+.markdown code {
+  border: 1px solid var(--sz-border);
+}
+
+.markdown pre code {
+  border: none;
+}
+
+.theme-doc-sidebar-container {
+  border-right: 1px solid var(--sz-border) !important;
+}
+
+.menu__link--active:not(.menu__link--sublist) {
+  background: var(--sz-signal-soft);
+}
+
+.docusaurus-mermaid-container {
+  text-align: center;
+}

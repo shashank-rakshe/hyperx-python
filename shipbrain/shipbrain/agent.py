@@ -385,6 +385,13 @@ class Tools:
                       {'type': 'object', 'properties': {'action': {'type': 'string', 'enum': ['summary', 'validate', 'tables', 'drawing', 'diff']},
                                                          'file': {'type': 'string'}, 'other': {'type': 'string'}, 'format': {'type': 'string'}},
                        'required': ['action', 'file']})
+        self.register('serving_sim', self.serving_sim, 'How fast an LLM server answers many users at once (Simthesizer, no GPU needed): users, '
+                      'requests per second, prompt and answer length (tokens) -> time to first word, tokens/s per user, answer time, '
+                      'total throughput, for its measured model + GPU set-ups (list them with action "scenarios").',
+                      {'type': 'object', 'properties': {'action': {'type': 'string', 'enum': ['simulate', 'scenarios']},
+                                                         'users': {'type': 'integer'}, 'rate_per_s': {'type': 'number'},
+                                                         'input_tokens': {'type': 'integer'}, 'output_tokens': {'type': 'integer'},
+                                                         'scenario': {'type': 'string'}}})
         self.register('drawing_takeoff', self.drawing_takeoff, 'Construction drawings (electrical / architectural / P&ID) read into '
                       'a CIR file (.cir / .json): quantity takeoff - counts per item with MasterFormat / IFC codes, items to '
                       'review, connections (conductors, home runs, feeders), lengths / areas when a scale is known. '
@@ -1103,6 +1110,13 @@ class Tools:
     def drawing_takeoff(self, file, min_confidence=0.0):
         from . import construct
         return construct.takeoff(self._path(file), min_confidence)
+
+    def serving_sim(self, action='simulate', users=50, rate_per_s=2.0, input_tokens=600, output_tokens=300, scenario=None):
+        from . import serving
+        if action == 'scenarios':
+            sc = serving.scenarios()
+            return {'scenarios': sc, 'plain_english': 'Measured set-ups (GPU--model--workload): ' + ', '.join(sc) + '.'}
+        return serving.simulate(scenario, None, int(users or 50), float(rate_per_s or 2), int(input_tokens or 600), int(output_tokens or 300))
 
     def process_sim(self, action, file=None, compounds=None, mass_fractions=None, T_C=None, P_bar=None, flow_kg_h=1000.0,
                     package='Peng-Robinson (PR)'):

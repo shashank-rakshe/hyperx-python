@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Simthesizer">
+<rect width="64" height="64" rx="15" fill="#0B0D12"/>
+<g transform="translate(32 32) scale(0.7988) translate(-0.00 -0.00)">
+<line x1="10.22" y1="-18.59" x2="14.36" y2="-12.97" stroke="#FFB224" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="0.1 2.9" opacity="0.85"/>
+<line x1="14.36" y1="-8.68" x2="10.22" y2="-3.06" stroke="#FFB224" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="0.1 2.9" opacity="0.85"/>
+<line x1="-9.54" y1="2.14" x2="-14.36" y2="8.68" stroke="#FFB224" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="0.1 2.9" opacity="0.85"/>
+<line x1="-14.36" y1="12.97" x2="-10.22" y2="18.59" stroke="#FFB224" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="0.1 2.9" opacity="0.85"/>
+<line x1="4.17" y1="-21.65" x2="-4.17" y2="-21.65" stroke="#2DD4BF" stroke-width="7.6"/>
+<line x1="-10.22" y1="-18.59" x2="-13.68" y2="-13.89" stroke="#2DD4BF" stroke-width="7.6"/>
+<line x1="-13.68" y1="-7.76" x2="-10.22" y2="-3.06" stroke="#2DD4BF" stroke-width="7.6"/>
+<line x1="-4.17" y1="0.00" x2="4.17" y2="0.00" stroke="#2DD4BF" stroke-width="7.6"/>
+<line x1="10.22" y1="3.06" x2="13.68" y2="7.76" stroke="#2DD4BF" stroke-width="7.6"/>
+<line x1="13.68" y1="13.89" x2="10.22" y2="18.59" stroke="#2DD4BF" stroke-width="7.6"/>
+<line x1="4.17" y1="21.65" x2="-4.17" y2="21.65" stroke="#2DD4BF" stroke-width="7.6"/>
+<circle cx="15.94" cy="-10.83" r="2.66" fill="#FFB224"/>
+<circle cx="-15.94" cy="10.83" r="2.66" fill="#FFB224"/>
+<circle cx="7.97" cy="-21.65" r="3.80" fill="none" stroke="#2DD4BF" stroke-width="4.18"/>
+<circle cx="-7.97" cy="-21.65" r="3.80" fill="none" stroke="#2DD4BF" stroke-width="4.18"/>
+<circle cx="-15.94" cy="-10.83" r="3.80" fill="none" stroke="#2DD4BF" stroke-width="4.18"/>
+<circle cx="-7.97" cy="0.00" r="3.80" fill="none" stroke="#2DD4BF" stroke-width="4.18"/>
+<circle cx="7.97" cy="0.00" r="3.80" fill="none" stroke="#2DD4BF" stroke-width="4.18"/>
+<circle cx="15.94" cy="10.83" r="3.80" fill="none" stroke="#2DD4BF" stroke-width="4.18"/>
+<circle cx="7.97" cy="21.65" r="3.80" fill="none" stroke="#2DD4BF" stroke-width="4.18"/>
+<circle cx="-7.97" cy="21.65" r="3.80" fill="none" stroke="#2DD4BF" stroke-width="4.18"/>
+</g>
+</svg>

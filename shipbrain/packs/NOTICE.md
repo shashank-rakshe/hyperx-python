@@ -212,6 +212,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: GPL-3.0
 - Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
 
+## simthesizer
+
+- Source: https://github.com/casys-kaist/simthesizer.git (commit ebd06db53cfb)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2026 casys-kaist
+
 ## solidcraft
 
 - Source: https://github.com/tangency-labs/solidcraft (code only: brand material - ui-kit, look, theme, branding - left out per LICENSE-BRAND) (commit working-tree)

@@ -1,0 +1,43 @@
+[system]
+kind = "single_instance"
+
+[system.model_runner]
+kind = "ring"
+tp = 1
+link_bw = 1.0 # Unused at TP1.
+link_latency = 0.0
+
+[system.model_runner.compute_sim]
+kind = "table_lookup"
+perf_dir = "../../data/rtx-pro-6000/llama3_1_8b.jsonl"
+
+[system.model_runner.compute_sim.components]
+layernorm = ["input_norm", "post_attention_norm"]
+qkv_projection = ["qkv"]
+o_projection = ["output_projection"]
+ffn1 = ["gate_up"]
+act = ["activation"]
+ffn2 = ["down"]
+final_layernorm = ["final_norm"]
+
+[system.model_runner.network_sim]
+kind = "flow"
+
+[system.scheduler]
+kind = "chunked_prefill"
+block_size = 16
+max_batch = 32
+max_num_batched_tokens = 2048
+device_mem = 101976440832
+device_mem_utilization = 0.9
+enable_prefix_caching = false
+
+[system.model]
+kind = "llama3_1"
+hidden_size = 4096
+intermediate_size = 14336
+max_position_embeddings = 131072
+num_attention_heads = 32
+num_hidden_layers = 32
+num_key_value_heads = 8
+vocab_size = 128256
