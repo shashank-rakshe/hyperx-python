@@ -2,6 +2,7 @@
 numpy
 scipy           # fast Delaunay for the own mesher (pure-Python fallback built in), image comparison
 cadquery        # STEP import (cad_mesh), STEP export (drawing_to_3d), cadquery_build
+rhino3dm       # Rhino .3dm import (McNeel, MIT): exact NURBS, layers, blocks
 pyNastran       # robust Nastran .bdf reading (a built-in reader is used if missing)
 ezdxf           # DXF drawings: drawing_to_3d, compare_drawings, file_info
 pdfplumber      # vector PDF drawings: lines, line styles, words (MIT)

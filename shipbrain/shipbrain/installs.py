@@ -136,6 +136,8 @@ SOFTWARE = {
                                             'Starter", pick the NX and Rhino folders, Start (NX needs its STEP AP242 licence)',
                                  'linux': 'Windows only', 'mac': 'Windows only'},
                        'check': lambda: False, 'match': r'RhinoInside'},
+    'rhino3dm': _pip('rhino3dm', 'to read Rhino .3dm files exactly (McNeel\'s free library): solids, surfaces, meshes, '
+                     'curves, layers and blocks', match=r'need rhino3dm'),
     'cadmpeg': {'name': 'cadmpeg (free, Apache-2.0)', 'why': 'to open native CAD files (SolidWorks, CATIA, Inventor, Fusion 360, '
                 'Rhino, FreeCAD, ACIS, IGES) without the CAD program', 'link': 'https://github.com/cadmpeg/cadmpeg#install',
                 'steps': {'windows': 'PowerShell: powershell -ExecutionPolicy Bypass -c "irm https://github.com/cadmpeg/cadmpeg/'

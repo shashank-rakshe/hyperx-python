@@ -250,8 +250,11 @@ ShipBrain runs its own program, pinned to commit `6c775550` (version 0.6.11):
 | STEP, IGES | full (IGES also written back) |
 | FreeCAD `.FCStd`, Fusion 360 `.f3d` | complete shape with colours |
 | SolidWorks `.sldprt`, CATIA V5 `.CATPart`, Inventor `.ipt`/`.iam`, ACIS `.sat`, Creo View `.pvz` | full solid |
-| Rhino `.3dm`, OpenUSD | geometry, not yet full solids |
-| NX `.prt`, Creo `.prt` | opened and listed only, no geometry yet |
+| Rhino `.3dm` | exact, by ShipBrain's own reader (below); cadmpeg as backup |
+| Siemens NX `.prt` parts | solid geometry (tested on an NX 1980 part: same size, volume within 0.06 % of NIST's STEP) |
+| NX assemblies | component placements only: the parts' geometry is in separate .prt files, upload them too |
+| OpenUSD | geometry, not yet full solids |
+| Creo `.prt` | opened and listed only, no geometry yet |
 
 - Tool `native_cad(file, op)`: `convert` (to STEP, or IGES), `inspect`, `check`, `measure` (volume, area, centroid, mass with
   a density), `diff` (geometry of two files, e.g. a native file against its STEP export). Answers say what STEP could not
@@ -265,6 +268,20 @@ ShipBrain runs its own program, pinned to commit `6c775550` (version 0.6.11):
 - Not copied into this repo: its source is about 80 MB (plus 80 MB of test files); ShipBrain uses its released program
   instead. Its docs and code are the knowledge pack `packs/cadmpeg.sbpack` (7,202 chunks); 240 training conversations
   come from real runs on its public CC0 / NIST sample files (`training/cadmpeg_tasks.py`).
+
+## Rhino and NX import
+
+- **Rhino `.3dm`**: `shipbrain/rhino.py` reads it with McNeel's own open library `rhino3dm` (MIT, `pip install rhino3dm`)
+  and builds exact OpenCascade geometry: every face is its exact NURBS surface (weights kept: circles stay circles)
+  bounded by its edges, faces sewn, closed polysurfaces become solids. Extrusions, surfaces, meshes, curves and block
+  instances (with their placement, nested too) are read; units are converted to mm; layer, name and block are kept per
+  object. Tested on McNeel's rhino3dm test models and on primitives: box, sphere, cylinder exact, extrusion 0.001 %.
+  SubD objects are reported (convert them with ToNURBS in Rhino). Points are listed but kept out of the solid model.
+- **Siemens NX `.prt`** parts: read by cadmpeg (above). An NX assembly holds only component placements: the answer says
+  so and asks for the part files.
+- Both work everywhere: `file_info`, `native_cad(op="convert")`, `cad_mesh`, `surface_extract`, `compare_structures` ...
+- Volumes are measured with OpenCascade's precise rule (`rhino.volume`); its default rule is up to ~1 % off on
+  rational NURBS (cylinders, spheres), which looks like a conversion error but is not.
 
 ## STL -> STEP with features: ReverseCAD (non-commercial licence)
 

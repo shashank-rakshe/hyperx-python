@@ -4,8 +4,9 @@ description: native CAD files (SolidWorks, CATIA, Inventor, Fusion 360, Rhino, F
 when: \.(sldprt|catpart|ipt|iam|f3d|3dm|fcstd|sat|sab|smt|igs|iges|pvz|prt)\b|solidworks|catia|inventor|fusion 360|rhino|freecad|native cad
 ---
 1. native_cad(file, op="inspect") - say in one line what it is (format, version, bodies) and how well cadmpeg reads this
-   format: STEP / IGES / FreeCAD / Fusion fully, SolidWorks / CATIA / Inventor / ACIS as solids, Rhino geometry only,
-   NX and Creo .prt only listed (no geometry yet) - say so plainly instead of guessing.
+   format: STEP / IGES / FreeCAD / Fusion fully, SolidWorks / CATIA / Inventor / ACIS / NX parts as solids, Rhino exactly
+   (own reader: layers and blocks kept), NX assemblies only placements (ask for the part files), Creo .prt only listed
+   (no geometry yet) - say so plainly instead of guessing.
 2. native_cad(file, op="convert") -> STEP. Report the check result and what was not carried over (features / history /
    colours / PMI) from its decode report. If geometry was not transferred, say so and suggest a STEP export from the
    CAD program.

@@ -43,6 +43,12 @@ def file_info(path):
                    + (f"; {len(rep['skipped'])} part(s)/face(s) are not (curved or thick)." if rep['skipped'] else '.'))
         if not info['valid']:
             say.append('The geometry is not valid: run the cleaning step before meshing.')
+    elif low.endswith('.3dm') and __import__('importlib.util').util.find_spec('rhino3dm'):
+        from . import rhino
+        r = rhino.to_step(path, os.path.splitext(path)[0] + '_rhino.step')
+        info.update(native='Rhino model', step=os.path.basename(r['file']), units=r['units'], size_mm=r['size_mm'],
+                    objects=r['objects'][:30])
+        say.append(r['plain_english'])
     elif __import__('shipbrain.cadmpeg', fromlist=['x']).is_native(path):
         from . import cadmpeg
         r = cadmpeg.to_step(path, os.path.splitext(path)[0] + '_cadmpeg.step')

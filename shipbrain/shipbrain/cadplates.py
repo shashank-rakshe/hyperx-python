@@ -121,6 +121,12 @@ def import_cad(path):
         from .brep import stl_to_step
         step, _ = stl_to_step(path)
         return import_cad(step)
+    if low.endswith('.3dm'):                        # Rhino: McNeel's rhino3dm + OpenCascade (exact NURBS), else cadmpeg
+        from . import rhino
+        try:
+            return import_cad(rhino.to_step(path)['file'])
+        except RuntimeError:                         # rhino3dm not installed
+            pass
     from . import cadmpeg
     if cadmpeg.is_native(path):                     # SolidWorks, CATIA, Inventor, Fusion, Rhino, FreeCAD, ACIS, IGES ...
         r = cadmpeg.to_step(path)                   # cadmpeg (Apache-2.0) reads the native file, writes STEP

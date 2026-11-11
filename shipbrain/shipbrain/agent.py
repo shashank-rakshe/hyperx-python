@@ -1031,6 +1031,14 @@ class Tools:
     def _native_cad(self, file, op, to, other, density):
         from . import cadmpeg
         src = self._path(file)
+        if op == 'convert' and src.lower().endswith('.3dm') and not str(to).lower().startswith('ig'):
+            from . import rhino                         # Rhino: exact NURBS with McNeel's rhino3dm, layers and blocks kept
+            try:
+                r = rhino.to_step(src)
+                r['file'] = os.path.relpath(r['file'], self.workdir)
+                return r
+            except RuntimeError:
+                pass                                    # rhino3dm missing: cadmpeg below
         if op == 'convert':
             out = os.path.splitext(src)[0] + ('.igs' if str(to).lower().startswith('ig') else '.step')
             if os.path.abspath(out) == os.path.abspath(src):

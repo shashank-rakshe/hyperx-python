@@ -6,7 +6,9 @@ program, installed once (official installer or `cargo install`, pinned to the co
 Formats it reads (its own support level, see its docs/format-support.md; higher = more of the file is understood):
   STEP L8, IGES L9 (also writes), FreeCAD .FCStd L5, Fusion 360 .f3d L5, SolidWorks .sldprt L3, CATIA V5 .CATPart L3,
   Inventor .ipt/.iam L3, ACIS .sat/.sab L3, Creo View .pvz L3, Rhino .3dm L2, OpenUSD L2, NX .prt L1, Creo .prt L1
-  (L1 = opened and listed, no geometry yet; L3 = full B-rep solid; L5 = every surface kind and colours).
+  (L1 = opened and listed, no geometry yet; L3 = full B-rep solid; L5 = every surface kind and colours). In practice NX
+  parts give their solid (an NX 1980 part matched NIST's STEP); NX assemblies give placements only (parts are separate files).
+  Rhino .3dm goes to ShipBrain's own exact reader (rhino.py) first.
 It never breaks protection: encrypted / licence-locked files are refused (its LEGAL.md).
 
 ShipBrain uses it so that every CAD tool accepts native files: to_step(file) gives a STEP that cadplates / cad_mesh /
@@ -18,7 +20,7 @@ REPO = 'https://github.com/cadmpeg/cadmpeg'
 COMMIT = '6c775550eba5647f4819826a0312feb356adab76'      # version 0.6.11, checked with ShipBrain
 HOME_BIN = os.path.join(os.path.expanduser('~'), '.shipbrain', 'bin')
 NATIVE = {'.sldprt': 'SolidWorks part', '.catpart': 'CATIA V5 part', '.ipt': 'Inventor part', '.iam': 'Inventor assembly',
-          '.f3d': 'Fusion 360 design', '.3dm': 'Rhino model', '.prt': 'NX or Creo part', '.fcstd': 'FreeCAD document',
+          '.f3d': 'Fusion 360 design', '.3dm': 'Rhino model', '.prt': 'NX (or Creo) part', '.fcstd': 'FreeCAD document',
           '.sat': 'ACIS solid', '.sab': 'ACIS solid (binary)', '.smt': 'ShapeManager solid', '.smb': 'ShapeManager solid',
           '.pvz': 'Creo View file', '.usd': 'OpenUSD layer', '.usda': 'OpenUSD layer', '.usdc': 'OpenUSD layer',
           '.igs': 'IGES file', '.iges': 'IGES file', '.step': 'STEP file', '.stp': 'STEP file'}
@@ -149,14 +151,21 @@ def to_step(path, out=None, allow_errors=False):
     code, so, se = _run(args)
     text = (so + '\n' + se).strip()
     if code != 0 or not os.path.exists(out):
-        raise RuntimeError(f'cadmpeg could not convert {os.path.basename(path)}: ' + text[-1500:])
+        reason = [l for l in text.splitlines() if l.strip().startswith(('[blocking/', 'error'))]
+        raise RuntimeError(f'cadmpeg could not convert {os.path.basename(path)}: ' + ('; '.join(reason[:3]) or text[-1500:]))
     depth = re.search(r'depth=(\w+)', text)
     geo = re.search(r'geometry_transferred=(\w+)', text)
     chk = re.search(r'check: (\w+) \((\d+) error\(s\), (\d+) warning\(s\)\)', text)
     kind = NATIVE.get(os.path.splitext(path)[1].lower(), 'CAD file')
     pe = f"Read the {kind} {os.path.basename(path)} with cadmpeg (free, no CAD licence) and wrote {os.path.basename(out)}."
-    if geo and geo.group(1) != 'true':
-        pe += ' Its geometry could NOT be transferred (this format is only partly understood yet): the STEP is empty or partial.'
+    block = [re.sub(r'^\s*\[blocking/\w+\]\s*', '', l) for l in text.splitlines() if l.strip().startswith('[blocking/')]
+    places = re.search(r'native\.nx\.assembly_placements: (\d+)', text)
+    if geo and geo.group(1) != 'true' and re.search(r'assembly \.prt', text):
+        pe += (f" This is an NX ASSEMBLY: it only places {places.group(1) if places else 'its'} components; their geometry is in "
+               "separate part .prt files. Upload those part files and I convert each one (or export the assembly to STEP in NX).")
+    elif geo and geo.group(1) != 'true':
+        pe += (' Its geometry could NOT be transferred (this format is only partly understood yet): the STEP is empty or partial.'
+               + (' Reason: ' + '; '.join(block[:2]) if block else ''))
     if chk:
         pe += f" Check: {chk.group(1)} ({chk.group(2)} errors, {chk.group(3)} warnings)."
     bodies = re.search(r'^\s+bodies: (\d+)', text, re.M)
