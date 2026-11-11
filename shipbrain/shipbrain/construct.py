@@ -113,6 +113,50 @@ def info(path):
     return _call('info', path)
 
 
+WEIGHTS_DIR = os.path.join(os.path.expanduser('~'), '.shipbrain', 'cdai')
+
+_DETECT = r'''
+import json, sys
+sys.path.insert(0, '.')
+import cir
+from backend.detect import UltralyticsDetector
+from engines.takeoff import compute_takeoff
+image, weights, discipline, out, conf = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], float(sys.argv[5])
+ds = UltralyticsDetector({discipline: weights}).detect(open(image, 'rb').read(), discipline, conf=conf)
+cir.save(ds, out)
+t = compute_takeoff(ds)
+print('@@JSON@@' + json.dumps(t.to_dict(), default=str))
+'''
+
+
+def weights(discipline='electrical'):
+    """trained detector weights (training/kaggle/detector_kernel.py): SHIPBRAIN_CDAI_WEIGHTS or ~/.shipbrain/cdai/<discipline>.pt"""
+    for p in (os.environ.get('SHIPBRAIN_CDAI_WEIGHTS'), os.path.join(WEIGHTS_DIR, discipline + '.pt')):
+        if p and os.path.exists(p):
+            return p
+    return None
+
+
+def detect(image, discipline='electrical', conf=0.25, out_cir=None, timeout=900):
+    """drawing picture -> symbols found by its trained detector -> CIR file + takeoff"""
+    w = weights(discipline)
+    if not w:
+        raise RuntimeError(f'no trained {discipline} detector yet: train it once with training/kaggle/detector_kernel.py on a free '
+                           f'Kaggle GPU, then save the .pt as {os.path.join(WEIGHTS_DIR, discipline + ".pt")}')
+    out_cir = out_cir or os.path.splitext(image)[0] + '.cir'
+    r = subprocess.run([_python(), '-c', _DETECT, os.path.abspath(image), w, discipline, os.path.abspath(out_cir), str(conf)],
+                       cwd=ROOT, capture_output=True, text=True, timeout=timeout)
+    for line in r.stdout.splitlines():
+        if line.startswith('@@JSON@@'):
+            t = json.loads(line[8:])
+            t['cir'] = out_cir
+            return t
+    err = (r.stderr or r.stdout).strip()
+    if "No module named 'ultralytics'" in err:
+        raise ModuleNotFoundError("No module named 'ultralytics'")
+    raise RuntimeError('detection failed: ' + err[-800:])
+
+
 def convert_pid2graph(raw_root, out_dir, cap=None, timeout=7200):
     """its PID2Graph converter (GraphML + image -> CIR with symbols, line nodes and connections), run as written"""
     cmd = [_python(), '-m', 'datasets.preparers.graphml_cir', '--raw', os.path.abspath(raw_root), '--out', os.path.abspath(out_dir)]

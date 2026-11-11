@@ -354,6 +354,17 @@ class Tools:
                                                          'name': {'type': 'string'}}, 'required': ['file']})
         self.register('ocx_to_step', self.ocx_to_step, 'OCX model -> STEP 3D CAD (OCXReader when built, else ShipBrain plates + stiffeners).',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
+        self.register('class_rule', self.class_rule, 'Class society rules (ships and offshore). action "longitudinal": IACS UR S11 / S7 hull '
+                      'girder strength from L, B (m), Cb [Ms_hog, Ms_sag kN m, yield MPa, x/L, Z_deck, Z_bottom cm3, I cm4] - wave '
+                      'moments, minimum Z and I, permissible stress, required Z, PASS/FAIL; "k": material factor; "search": the '
+                      'rule texts of IACS / DNV / ABS / BV / LR / ClassNK / KR / CCS ... (query, society) with document, section '
+                      'and page; "societies": which rule books are on this PC and how to get the others.',
+                      {'type': 'object', 'properties': {'action': {'type': 'string', 'enum': ['longitudinal', 'k', 'search', 'societies']},
+                                                         'query': {'type': 'string'}, 'society': {'type': 'string'},
+                                                         'L': {'type': 'number'}, 'B': {'type': 'number'}, 'Cb': {'type': 'number'},
+                                                         'Ms_hog': {'type': 'number'}, 'Ms_sag': {'type': 'number'}, 'yield_mpa': {'type': 'number'},
+                                                         'x': {'type': 'number'}, 'Z_deck': {'type': 'number'}, 'Z_bottom': {'type': 'number'},
+                                                         'I': {'type': 'number'}}, 'required': ['action']})
         self.register('drawing_to_step', self.drawing_to_step, 'A 2D CAD drawing (picture or PDF) of a PART -> 3D STEP with cad3dify\'s '
                       'loop on ShipBrain\'s own model: write CadQuery code from the drawing, run it, render the 3D result, compare '
                       'with the drawing and correct the code (refinements rounds). For machine parts and simple brackets / plates.',
@@ -365,6 +376,10 @@ class Tools:
                       'ConstructDrawingAI engine (non-commercial licence).',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'min_confidence': {'type': 'number'}},
                        'required': ['file']})
+        self.register('drawing_detect', self.drawing_detect, 'Electrical drawing PICTURE (png / jpg / pdf page) -> symbols found by '
+                      'ConstructDrawingAI\'s trained detector -> a CIR file (for drawing_takeoff / drawing_qa) and the takeoff.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'discipline': {'type': 'string'},
+                                                         'min_confidence': {'type': 'number'}}, 'required': ['file']})
         self.register('drawing_qa', self.drawing_qa, 'Ask a question about a construction drawing set (CIR file): counts '
                       '("how many receptacles on E-101"), lists ("list the panels"), sheets, disciplines - answered from the '
                       'data with evidence. action "rfi" drafts RFIs for unclear / low-confidence items.',
@@ -1020,6 +1035,39 @@ class Tools:
         return {'views': out, 'verdict': worst['verdict'] if all(r['verdict'] != 'FAIL' for r in out) else 'FAIL',
                 'overlay': worst['overlay'], 'plain_english': ' '.join(r['plain_english'] for r in out)}
 
+    def class_rule(self, action, query=None, society=None, L=None, B=None, Cb=None, Ms_hog=None, Ms_sag=None, yield_mpa=235, x=0.5,
+                   Z_deck=None, Z_bottom=None, I=None):
+        from . import classrules
+        if action == 'longitudinal':
+            if not (L and B and Cb):
+                return {'error': 'longitudinal needs L, B (m) and Cb'}
+            return classrules.ur_s11(float(L), float(B), float(Cb), Ms_hog, Ms_sag, float(yield_mpa or 235), float(x or 0.5), Z_deck, Z_bottom, I)
+        if action == 'k':
+            k = classrules.k_factor(float(yield_mpa or 235))
+            return {'k': round(k, 3), 'plain_english': f'The material factor k for steel with a minimum yield stress of {float(yield_mpa or 235):g} '
+                                                        f'N/mm2 is {k:.2f} (IACS UR S4); scantling formulas multiply by k or use 235/k.'}
+        packs = [p_ for p_ in (getattr(self.repo_kb, 'packs', None) or []) if str(p_.get('name', '') if isinstance(p_, dict) else p_).startswith('class_rules_')]
+        names = sorted({(p_.get('name') if isinstance(p_, dict) else str(p_)).replace('class_rules_', '') for p_ in packs})
+        how = ('Get the rule books once: python -m shipbrain.classrules download --out <folder> (free rule pages of IACS, DNV, ABS, '
+               'BV, LR, ClassNK, KR, CCS, RINA, IRS, PRS, CRS, TL; some need a free login - save those PDFs into <folder>/<society>), '
+               'then python -m shipbrain.classrules build --pdfs <folder> and restart ShipBrain.')
+        if action == 'societies':
+            allsoc = [s_[0] for s_ in classrules.SOURCES]
+            return {'installed': names, 'known': allsoc, 'plain_english': (f"Rule books on this PC: {', '.join(names)}. " if names else
+                                                                            'No class rule books on this PC yet. ') + how}
+        if not query:
+            return {'error': 'search needs a query'}
+        if not names:
+            return {'results': [], 'plain_english': 'No class rule books are loaded yet, so I cannot quote the rules. ' + how}
+        scope = 'class_rules_' + society if society and society.upper() in [n.upper() for n in names] else 'class_rules_'
+        res = self.knowledge_search(query, 5, scope=scope)
+        hits = res.get('results', [])
+        if not hits:
+            return {'results': [], 'plain_english': f"Nothing about '{query}' found in the {society or 'class'} rules on this PC."}
+        top = hits[0]
+        return {'results': hits, 'plain_english': f"The closest rule text is {top['title']}: " + re.sub(r'\s+', ' ', top['text'])[:600]
+                + ' ...' + (f" Also see: {'; '.join(h['title'] for h in hits[1:4])}." if len(hits) > 1 else '')}
+
     def drawing_to_step(self, file, refinements=2, out=None):
         from . import cad3dify
         llm = getattr(self, 'llm', None)
@@ -1040,6 +1088,22 @@ class Tools:
     def drawing_takeoff(self, file, min_confidence=0.0):
         from . import construct
         return construct.takeoff(self._path(file), min_confidence)
+
+    def drawing_detect(self, file, discipline='electrical', min_confidence=0.25):
+        from . import construct
+        src = self._path(file)
+        if src.lower().endswith('.pdf'):
+            from .drawings import load_image
+            from PIL import Image
+            png = os.path.splitext(src)[0] + '_page1.png'
+            Image.fromarray(load_image(src, 0, dpi=150).clip(0, 255).astype('uint8')).convert('RGB').save(png)
+            src = png
+        t = construct.detect(src, discipline, float(min_confidence))
+        items = '; '.join(f"{ln['item']} {ln['qty']}" for ln in t['lines'][:15])
+        return {'cir': os.path.basename(t['cir']), 'total': t['total_count'], 'lines': t['lines'],
+                'plain_english': f"Found {t['total_count']} symbols on the drawing: {items or 'none'}. "
+                                 + (f"{t['total_needs_review']} of them are uncertain (below confidence 0.5) - please check those. " if t['total_needs_review'] else '')
+                                 + f"Saved as {os.path.basename(t['cir'])}: ask drawing_takeoff or drawing_qa about it."}
 
     def drawing_qa(self, file, question=None, action='qa'):
         from . import construct
@@ -1294,7 +1358,12 @@ Rules:
    You will get back a message starting with TOOL_RESULT. Then answer, or call the next tool.
 4. If a needed value is missing, choose a sensible default, say which one you assumed, and continue.
 5. Finish with a short answer: what was done, key numbers, files written, checks/warnings.
-6. If a tool result has "install", something is not installed: tell the user what to install, why, and give the
+6. Answer every technical question in natural language: explain in sentences what the result means, give the value with
+   units and where it comes from (the formula, the class society rule and section), then the numbers. Never answer with
+   only JSON, code or a bare number unless the user asks for that.
+7. Class rules and their formulas: use class_rule (calculators) or knowledge_search (the rule texts) and cite the rule
+   and section; never quote a class rule from memory.
+8. If a tool result has "install", something is not installed: tell the user what to install, why, and give the
    download link and the steps exactly as written there. Never guess another link.
 
 Tools:
@@ -1312,6 +1381,9 @@ Call a tool with ONLY:
 ```
 then wait for TOOL_RESULT. Missing value: assume a sensible one and say so. End with a short answer: done, key numbers, files, warnings.
 Result with "install": tell the user what to install and give its link and steps exactly as written.
+Every technical answer in natural language: what it means in sentences, the result with units, where it comes from (formula,
+class society rule + section), then the numbers. Never only JSON, code or a bare number unless asked.
+Class rules / formulas: class_rule (calculators) or knowledge_search (rule texts); never quote a rule from memory.
 Tools: {tools}
 """
 

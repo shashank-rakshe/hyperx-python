@@ -1771,3 +1771,35 @@ def test_cad3dify_runs_on_own_model(tmp_path):
         srv.shutdown()
     gen, ref = cad3dify.prompts()
     assert 'cadquery' in gen and '${output_filename}' in gen and 'Corrected code:' in ref('x = 1')
+
+
+def test_class_rules_calculator_and_private_rule_packs(tmp_path):
+    """IACS UR S11 / S7 / S4 by hand, a rule book PDF -> private pack -> class_rule search with section + formula"""
+    from shipbrain import classrules, agent, knowledge, repopack
+    r = classrules.ur_s11(200, 32.2, 0.82)
+    assert abs(r['C'] - 9.75) < 1e-9
+    assert abs(r['Mw_hog_kNm'] - 190 * 9.75 * 200 ** 2 * 32.2 * 0.82e-3) < 1
+    assert abs(r['Z_min_cm3'] - 9.75 * 200 ** 2 * 32.2 * 1.52) < 1 and 'UR S11' in r['plain_english']
+    assert classrules.k_factor(355) == 0.72 and abs(classrules.wave_coefficient(400) - (10.75 - (50 / 150) ** 1.5)) < 1e-9
+    chk = classrules.ur_s11(180, 30, 0.78, Ms_hog=900000, yield_mpa=355, Z_deck=5e6)
+    assert 'FAIL' in chk['checks'][0]
+    pytest.importorskip('reportlab')
+    from reportlab.pdfgen import canvas
+    (tmp_path / 'pdfs' / 'XS').mkdir(parents=True)
+    c = canvas.Canvas(str(tmp_path / 'pdfs' / 'XS' / 'Pt3_hull.pdf'))
+    y = 800
+    for ln in ['3 Plating', 'The thickness of plating shall not be less than:', 't = 0.0158 b sqrt(P / R_eH) mm',
+               'where P is the design pressure in kN/m2.', 'Plating text line one.', '4 Stiffeners', 'The section modulus shall not be less than:',
+               'Z = 1000 P s l^2 / (12 R_eH) cm3', 'where s is the spacing in m.', 'More stiffener text here.']:
+        c.drawString(50, y, ln)
+        y -= 20
+    c.save()
+    made = classrules.build(str(tmp_path / 'pdfs'), str(tmp_path / 'packs'), log=None)
+    assert made and made[0].endswith('class_rules_XS.private.sbpack')
+    p = repopack.read_pack(made[0])
+    assert p['private_only'] and any('Z = 1000' in f for ch in p['chunks'] for f in ch['formulas'])
+    rk = knowledge.Knowledge()
+    repopack.load_packs(str(tmp_path / 'packs'), rk)
+    T = agent.Tools(str(tmp_path), repo_kb=rk)
+    out = T.call('class_rule', {'action': 'search', 'query': 'section modulus of stiffeners', 'society': 'XS'})
+    assert 'Z = 1000' in out['plain_english'] and 'XS' in out['plain_english']

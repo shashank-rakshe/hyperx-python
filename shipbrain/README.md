@@ -226,6 +226,45 @@ builds it, unchanged, against the system OpenCascade 7.6 C++ files: on Linux `su
 2.8.5 / 2.8.6 real models become STEP in 0.4-21 s (up to 430,000 STEP entities). OCXReader reads OCX 2.8.x only; for
 3.x files `ocx_to_step` uses ShipBrain's own solids and says why.
 
+## Class society rules (ships and offshore)
+
+ShipBrain answers class rule questions **from the rules themselves**, with society, document, section and page, in
+plain sentences - never from memory.
+
+- **Calculators** (`class_rule` tool, action `longitudinal` / `k`): IACS UR S11 / S7 / S4 hull girder strength - wave
+  coefficient, wave bending moments (hogging / sagging), minimum section modulus and moment of inertia, permissible
+  bending and shear stress, required section modulus with a still-water moment, PASS / FAIL for your Z and I,
+  material factor k. Checked by hand (L 200 m: C = 9.75, Z_min 19.1 m3). Wave shear forces are left to the rule text
+  (their distribution factors were not reliable enough from memory to code).
+- **Rule books** (`python -m shipbrain.classrules download --out <folder>`): crawls the free rule pages of IACS (CSR,
+  UR, UI, Rec), DNV, ABS, BV, LR, ClassNK, KR, CCS, RINA, IRS, PRS, CRS, TL for their PDF rule books (ships and
+  offshore). Rule books that need a free login: save them into `<folder>/<society>/` by hand. Then
+  `python -m shipbrain.classrules build --pdfs <folder>` cuts them into sections with their formulas into **private**
+  packs (`packs/class_rules_<society>.private.sbpack`, git-ignored: the rules are copyright of each society).
+  `class_rule` action `search` finds the section and quotes the requirement and formula with document, section, page.
+- **Training** (`training/class_rule_tasks.py`, in the Kaggle run): calculator questions for many ship sizes and, for
+  every rule section with a formula, "what is the formula / requirement for ... in <society> rules?" -> search ->
+  the requirement in words + formula + where its symbols are defined + document, section, page. The Kaggle run
+  downloads the free rule books itself (SB_CLASS_RULES=0 to skip) and uses any rule PDFs you attach; **a model trained
+  on them is private** (kept off GitHub, uploaded only to your private Hugging Face repo).
+- The paid rule-check programs (BV Mars, DNV Nauticus Hull, ABS Eagle, ClassNK PrimeShip-Hull, LR RulesCalc, KR
+  SeaTrust-HullScan, CCS Compass) are licensed software of each society and cannot be downloaded or copied.
+- Not tested here: the rule sites are blocked in the build session's network; the crawler, section cutter, private
+  pack, search and training were checked with a rule-style PDF.
+
+## Answers in natural language
+
+Every technical answer explains in sentences what the result means, gives the value with units and where it comes
+from (formula, rule and section), then the numbers - never only JSON or a bare number (system prompt rules 6 - 7;
+every training answer is written that way).
+
+## OpenRouter (cloud models, many free)
+
+`python -m shipbrain --openrouter "qwen/qwen2.5-vl-72b-instruct:free"` with your key in `OPENROUTER_API_KEY`
+(https://openrouter.ai/keys; never on the command line). OpenRouter speaks the same OpenAI API, so every ShipBrain tool,
+cad3dify (`drawing_to_step`) and pictures work the same. `shipbrain.server.openrouter_models(free_only=True, vision=True)`
+lists the free models that take pictures.
+
 ## Part drawing -> STEP with a correct-it loop: cad3dify on ShipBrain's own model
 
 [cad3dify](https://github.com/neka-nat/cad3dify) (MIT) is copied whole and run as written: a 2D CAD drawing picture ->
@@ -264,8 +303,17 @@ P&ID) into one schema, the CIR, and answers from it:
   ConstructDrawingAI's own converter) -> valves / instruments / other symbols / line connections per sheet; and
   **CubiCasa5K** (CC BY-NC: 5,000 real floor plans) -> rooms by type, bedrooms, bathrooms, doors, windows. Up to about
   740 picture samples, answers from the datasets' own annotation.
-- Not used: its trained detectors (no weights published; training them is a separate GPU job), DELP ground truth
-  (given by its authors on request), FloorPlanCAD (manual download), PIDQA (its pictures are in a separate collection).
+- **PIDQA** (CC0: 64,000 questions on P&IDs) is paired with the Dataset-P&ID pictures inside PID2Graph - only after a
+  check: the tags PIDQA lists for a sheet must be read (OCR) on that picture on at least 6 of 10 sheets, else it is
+  skipped. Checked here both ways (right tags: 7 of 10 -> used; blank pictures -> skipped).
+- **FloorPlanCAD** (CC BY-NC): fetched from the links on its page (Google Drive, gdown) and used only if its class-name
+  list is in the download (names are never guessed). Not tested (its host is blocked here).
+- **Symbol detector**: `training/kaggle/detector_kernel.py` - a separate free Kaggle GPU notebook trains its
+  electrical symbol detector with its own code on its own synthetic drawings (YOLO11; dataset export checked here:
+  6 sets -> 22 tiles, 278 boxes). Save the result as `~/.shipbrain/cdai/electrical.pt`; then `drawing_detect` reads
+  electrical drawing pictures -> CIR -> takeoff / Q&A.
+- **DELP** electrical plans: its authors give the annotated set only on request (academic e-mail to the SkeySpot
+  authors); put it into a folder and its own converter reads it.
 
 **Licence: ShipBrain is declared open and non-commercial** (`shipbrain/licence_mode.json`, set on the owner's word:
 "I am not going to use commercial"). That allows non-commercial material (PolyForm Noncommercial, CC BY-NC) and

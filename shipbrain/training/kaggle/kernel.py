@@ -100,13 +100,22 @@ extra = f'--knowledge {rules[0]}' if rules else ''
 PRIVATE_TRAIN = sorted(f for f in glob.glob('/kaggle/input/**/*.jsonl*', recursive=True)
                        if 'eval' not in os.path.basename(f).lower() and '/shipbrain_model' not in f)
 PRIVATE_EVAL = sorted(f for f in glob.glob('/kaggle/input/**/*eval*.jsonl*', recursive=True))
+# ---- class society rules (copyright of each society -> private): download the free rule books here (SB_CLASS_RULES=0 to skip)
+#      + any rule PDFs you attach (a Kaggle dataset with folders <society>/*.pdf, e.g. the ones that need a login)
+if os.environ.get('SB_CLASS_RULES', '1') != '0':
+    sh('python -m shipbrain.classrules download --out /tmp/class_rules_pdfs --max-files 80', required=False)
+    for d in sorted(set(os.path.dirname(os.path.dirname(f)) for f in glob.glob('/kaggle/input/**/*.pdf', recursive=True)
+                        if 'rule' in f.lower())):
+        sh(f'cp -rn "{d}"/* /tmp/class_rules_pdfs/ 2>/dev/null', required=False)
+    sh('python -m shipbrain.classrules build --pdfs /tmp/class_rules_pdfs --out packs', required=False)
 OWN_PACKS = sorted(glob.glob('/kaggle/input/**/*.private.sbpack', recursive=True))
 for f in OWN_PACKS:                      # your own code packs (built with repopack --own): knowledge + training, private model
     shutil.copy(f, 'packs/')
-PRIVATE = bool(rules or PRIVATE_TRAIN or OWN_PACKS)
+CLASS_PACKS = sorted(glob.glob('packs/class_rules_*.private.sbpack'))
+PRIVATE = bool(rules or PRIVATE_TRAIN or OWN_PACKS or CLASS_PACKS)
 if PRIVATE:
     UPLOAD_MODEL = False                 # a model trained on company data is never published (GitHub repo is public)
-    print('private data attached:', rules + PRIVATE_TRAIN + PRIVATE_EVAL + OWN_PACKS, '- the model will NOT be uploaded to GitHub', flush=True)
+    print('private data attached:', rules + PRIVATE_TRAIN + PRIVATE_EVAL + OWN_PACKS + CLASS_PACKS, '- the model will NOT be uploaded to GitHub', flush=True)
 # ---- the one fixed base model (training/base_model.json): every run trains it fresh on ALL the data, so nothing is lost
 try:
     _cfg = json.load(open('training/base_model.json'))
@@ -147,6 +156,9 @@ if not sh('python training/construct_real.py --out data/construct_real_train.jso
 # cad3dify's own drawing -> CadQuery -> render -> correct loop, in its own prompt format, on the verified CAD examples
 if not sh('python training/cad3dify_tasks.py --out data/cad3dify_train.jsonl --img-dir data/cad3dify_images', required=False):
     open('data/cad3dify_train.jsonl', 'w').close()
+# class rules: IACS calculators + every rule section with a formula in the class rule packs (natural-language answers)
+if not sh('python training/class_rule_tasks.py --packs packs --out data/class_rule_train.jsonl', required=False):
+    open('data/class_rule_train.jsonl', 'w').close()
 # public OCX ship models (real CAD exports): fetched here, names removed, learned from; never stored
 if not sh('python training/ocx_samples.py --out data/ocx_train.jsonl --eval-out data/ocx_eval.jsonl', required=False):
     open('data/ocx_train.jsonl', 'w').close()
@@ -171,7 +183,7 @@ report('scoring the base model')
 sh(f'python training/cad_eval.py --local {BASE} --limit 30 --out /kaggle/working/cad_eval_before.json', required=False)
 sh(f'python training/evaluate.py --local {BASE} --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_before.json', required=False)
 report('training the main model')
-sh(f'MAX_LEN=6144 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/synth_pid_train.jsonl data/physics_train.jsonl data/ocx_train.jsonl data/construct_train.jsonl data/construct_real_train.jsonl data/cad3dify_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
+sh(f'MAX_LEN=6144 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/synth_pid_train.jsonl data/physics_train.jsonl data/ocx_train.jsonl data/construct_train.jsonl data/construct_real_train.jsonl data/cad3dify_train.jsonl data/class_rule_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
 report('scoring the trained model')
 sh('python training/cad_eval.py --local /kaggle/working/shipbrain_model/lora --limit 30 --out /kaggle/working/cad_eval_after.json', required=False)
 sh(f'python training/evaluate.py --local /kaggle/working/shipbrain_model/lora --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_after.json', required=False)

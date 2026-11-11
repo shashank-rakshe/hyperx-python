@@ -243,6 +243,24 @@ def _repo_kb(folder):
     return rk
 
 
+OPENROUTER_URL = 'https://openrouter.ai/api'
+
+
+def openrouter_models(free_only=True, vision=None, key=None):
+    """models offered by OpenRouter (optionally only free ones / only ones that take pictures)"""
+    import urllib.request
+    req = urllib.request.Request(OPENROUTER_URL + '/v1/models', headers={'Authorization': 'Bearer ' + key} if key else {})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        data = json.loads(r.read())['data']
+    out = []
+    for m in data:
+        free = m.get('id', '').endswith(':free') or str((m.get('pricing') or {}).get('prompt')) in ('0', '0.0')
+        img = 'image' in str((m.get('architecture') or {}).get('input_modalities') or (m.get('architecture') or {}).get('modality', ''))
+        if (free or not free_only) and (vision is None or img == vision):
+            out.append({'id': m['id'], 'free': free, 'vision': img, 'context': m.get('context_length')})
+    return out
+
+
 def main(argv=None):
     if len(sys.argv) > 1 and sys.argv[1] == '--cq-run':          # child process of cadrun inside the frozen exe
         from . import cadrun
@@ -254,6 +272,10 @@ def main(argv=None):
                     help='OpenAI-compatible server: llama-server :8080, Ollama :11434, LM Studio :1234')
     ap.add_argument('--model-name', default=os.environ.get('SHIPBRAIN_MODEL', 'local'), help='model name for Ollama/LM Studio')
     ap.add_argument('--model', help='.gguf (starts llama-server) or .llamafile (starts itself)')
+    ap.add_argument('--openrouter', metavar='MODEL', help='use a model on OpenRouter (openrouter.ai) instead of a local one, e.g. '
+                                                          '"qwen/qwen2.5-vl-72b-instruct:free"; the key goes in OPENROUTER_API_KEY '
+                                                          '(never on the command line). Free models end in ":free".')
+    ap.add_argument('--api-key-env', default='SHIPBRAIN_API_KEY', help='environment variable holding the server key (if it needs one)')
     ap.add_argument('--mmproj', help='vision projector .gguf (image input)')
     ap.add_argument('--llama-bin', help='path to llama-server')
     ap.add_argument('--threads', type=int, help='CPU threads for the model (default: llama.cpp picks the physical cores)')
@@ -280,6 +302,12 @@ def main(argv=None):
     a = ap.parse_args(argv)
 
     proc = None
+    api_key = os.environ.get(a.api_key_env) or None
+    if a.openrouter:                                       # OpenRouter speaks the same OpenAI API: one URL, one key
+        api_key = os.environ.get('OPENROUTER_API_KEY')
+        if not api_key:
+            sys.exit('Set OPENROUTER_API_KEY (from https://openrouter.ai/keys) before --openrouter. Free models end in ":free".')
+        a.server, a.model_name = OPENROUTER_URL, a.openrouter
     if a.rag_budget:
         agent.RAG_BUDGET_CHARS = a.rag_budget
     from . import chatstate
@@ -304,7 +332,7 @@ def main(argv=None):
             print(f'plugin {p}: {tools.load_plugin(p)} tools')
         except Exception as e:
             print(f'plugin {p} not loaded: {e}')
-    STATE.update(llm=agent.LLM(a.server, a.model_name), tools=tools, lan=a.lan)
+    STATE.update(llm=agent.LLM(a.server, a.model_name, api_key=api_key), tools=tools, lan=a.lan)
     print(f'knowledge: {len(kb)} chunks' + (f' ({len(kb.skipped)} files skipped)' if kb.skipped else '') + f', CAD examples: {len(ex.items)}')
     print(f'model server: {a.server} ({"connected" if STATE["llm"].ok() else "NOT reachable - tools and knowledge search still work"})')
     srv = ThreadingHTTPServer(('0.0.0.0' if a.lan else '127.0.0.1', a.port), H)

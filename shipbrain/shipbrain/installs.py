@@ -113,6 +113,7 @@ SOFTWARE = {
     'langchain': dict(_pip('langchain<1', 'for drawing_to_step (cad3dify runs on LangChain 0.3)', mod='langchain'),
                       link='https://pypi.org/project/langchain/',
                       steps={'all': 'pip install "langchain<1" "langchain-openai<1" "langchain-experimental<1" svglib rlPyCairo loguru'}),
+    'ultralytics': _pip('ultralytics', 'to run the trained drawing symbol detector (drawing_detect; AGPL - fine for open, non-commercial use)'),
     'msgpack': _pip('msgpack', 'for construction drawing sets (CIR files, ConstructDrawingAI)'),
     'pydantic': _pip('pydantic', 'for construction drawing sets (CIR) and P&ID knowledge graphs'),
     'xsdata': _pip('xsdata', 'for OCX ship models: the official OCX classes of every schema version'),
