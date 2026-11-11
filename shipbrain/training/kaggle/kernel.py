@@ -138,7 +138,12 @@ if not sh('python training/synth_pid.py --n 400 --out data/synth_pid_train.jsonl
 # public P&ID drawing sets (real permitted facilities): downloaded here, prepared with pid-to-kg, learned from; never stored
 if not sh('python training/public_pids.py --out data/public_pid_train.jsonl --max-pages 4', required=False):
     open('data/public_pid_train.jsonl', 'w').close()
+# public OCX ship models (real CAD exports): fetched here, names removed, learned from; never stored
+if not sh('python training/ocx_samples.py --out data/ocx_train.jsonl --eval-out data/ocx_eval.jsonl', required=False):
+    open('data/ocx_train.jsonl', 'w').close()
+    open('data/ocx_eval.jsonl', 'w').close()
 sh('cat data/repo_eval.jsonl >> data/eval.jsonl', required=False)
+sh('cat data/ocx_eval.jsonl >> data/eval.jsonl', required=False)
 def _plain(paths):
     out = []
     for f in paths:                                   # .jsonl.gz -> .jsonl next to the data folder
@@ -157,14 +162,14 @@ report('scoring the base model')
 sh(f'python training/cad_eval.py --local {BASE} --limit 30 --out /kaggle/working/cad_eval_before.json', required=False)
 sh(f'python training/evaluate.py --local {BASE} --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_before.json', required=False)
 report('training the main model')
-sh(f'MAX_LEN=6144 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/synth_pid_train.jsonl data/physics_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
+sh(f'MAX_LEN=6144 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/synth_pid_train.jsonl data/physics_train.jsonl data/ocx_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
 report('scoring the trained model')
 sh('python training/cad_eval.py --local /kaggle/working/shipbrain_model/lora --limit 30 --out /kaggle/working/cad_eval_after.json', required=False)
 sh(f'python training/evaluate.py --local /kaggle/working/shipbrain_model/lora --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_after.json', required=False)
 if DRAFT:
     report('training the small draft model')
 if DRAFT:      # same data, 1 epoch: the draft learns the tool format, so the main model accepts more of its guesses
-    sh(f'EPOCHS=1 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/physics_train.jsonl {PRIV} --base {DRAFT} --out /kaggle/working/draft_model --quant q8_0', required=False)
+    sh(f'EPOCHS=1 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/physics_train.jsonl data/ocx_train.jsonl {PRIV} --base {DRAFT} --out /kaggle/working/draft_model --quant q8_0', required=False)
     for f in glob.glob('/kaggle/working/draft_model*/**/*.gguf', recursive=True):
         shutil.move(f, '/kaggle/working/' + os.path.basename(f).replace('shipbrain-', 'shipbrain-draft-'))
     shutil.rmtree('/kaggle/working/draft_model', ignore_errors=True)

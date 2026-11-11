@@ -553,7 +553,13 @@ def validate(path, max_errors=30):
                             if os.path.exists(c) and f'targetNamespace="{UNITSML_NS}"' in open(c, encoding='utf-8', errors='ignore').read(5000)), None)
             cls = xmlschema.XMLSchema11 if 'minVersion="1.1"' in open(xsd, encoding='utf-8', errors='ignore').read(3000) else xmlschema.XMLSchema
             sch = cls(xsd, locations=[(UNITSML_NS, unitsml)] if unitsml else None, allow='local', defuse='always')
-            for er in sch.iter_errors(path):
+            try:
+                import xmlschema.limits as _lim                # real midship models pass a million elements
+                _lim.MAX_XML_ELEMENTS = max(getattr(_lim, 'MAX_XML_ELEMENTS', 0), 50_000_000)
+            except Exception:
+                pass
+            src = xmlschema.XMLResource(path, lazy=True, allow='local', defuse='always') if os.path.getsize(path) > 30e6 else path
+            for er in sch.iter_errors(src):
                 errs.append(re.sub(r'\s+', ' ', str(er.reason or er.message))[:300] + (f' (at {er.path})' if er.path else ''))
                 if len(errs) >= max_errors:
                     break
@@ -576,11 +582,16 @@ def validate(path, max_errors=30):
     how.append(f'every element name checked against the OCX {v} library')
     if unknown:
         errs += [f'unknown element ocx:{n} ({c}x) - not in OCX {v}' for n, c in sorted(unknown.items())[:10]]
+    return _verdict(os.path.basename(path), info['schema_version'], seen, errs, xsd_ran, how, v)
+
+
+def _verdict(fname, schema_version, seen, errs, xsd_ran, how, v):
     ok = not errs
     verdict = (('Valid against the official XSD' if xsd_ran else 'All element names are known OCX elements (full XSD check not run)')
                if ok else f'{len(errs)} problem(s), first: {errs[0]}')
-    pe = f"{os.path.basename(path)}: OCX {info['schema_version'] or '?'} ({seen} elements). {verdict}. Checks: {'; '.join(how)}."
-    return {'valid': ok, 'xsd_checked': xsd_ran, 'errors': errs, 'version': v, 'checks': how, 'plain_english': pe}
+    pe = f"{fname}: OCX {schema_version or '?'} ({seen} elements). {verdict}. Checks: {'; '.join(how)}."
+    return {'valid': ok, 'xsd_checked': xsd_ran, 'errors': errs, 'version': v, 'checks': how, 'elements': seen,
+            'schema_version': schema_version, 'plain_english': pe}
 
 
 # ====================================================================== reading a model (any version) -> ShipBrain structure
@@ -927,6 +938,79 @@ def _area_poly(pts):
     for i in range(len(P)):
         n += np.cross(P[i], P[(i + 1) % len(P)])
     return float(np.linalg.norm(n) / 2)
+
+
+_READ_CACHE = {}
+
+
+def read_cached(path, keep_names=True):
+    key = (os.path.abspath(path), os.path.getmtime(path), keep_names)
+    if key not in _READ_CACHE:
+        if len(_READ_CACHE) > 4:
+            _READ_CACHE.clear()
+        _READ_CACHE[key] = read(path, keep_names)
+    return _READ_CACHE[key]
+
+
+def query(path, name=None, kind=None, function=None, min_thk=None, max_thk=None, limit=15):
+    """members of an OCX model by name (part of it), kind (panel / plate / stiffener / bracket), panel function
+    (DECK, BULKHEAD, SHELL ...) and plate thickness range; each with its data"""
+    r = read_cached(path)
+    rows = []
+    want = (kind or '').lower().rstrip('s')
+    for p in r['model']['blocks'][0]['panels']:
+        if function and function.lower() not in str(p.get('function') or '').lower():
+            continue
+        pn = p.get('name') or p['id']
+        thks = sorted({pl['thk'] for pl in p['plates'] if pl.get('thk')})
+        area = sum(_area_poly([[a, b, 0] for a, b in pl['contour']]) for pl in p['plates']) / 1e6
+        if want in ('', 'panel') and (not name or name.lower() in pn.lower()):
+            rows.append({'kind': 'panel', 'name': pn, 'function': p.get('function'), 'plates': len(p['plates']),
+                         'stiffeners': len(p['stiffeners']), 'brackets': len(p['brackets']), 'thickness_mm': thks,
+                         'plate_area_m2': round(area, 2), 'normal': p['cs']['waxis']})
+        if want in ('', 'plate'):
+            for pl in p['plates']:
+                t = pl.get('thk')
+                if name and name.lower() not in str(pl.get('name')).lower():
+                    continue
+                if (min_thk is not None and (t or 0) < min_thk) or (max_thk is not None and (t or 0) > max_thk):
+                    continue
+                a = _area_poly([[x, y, 0] for x, y in pl['contour']])
+                rows.append({'kind': 'plate', 'name': pl.get('name'), 'panel': pn, 'thickness_mm': t, 'material': pl.get('grade'),
+                             'area_m2': round(a / 1e6, 3), 'weight_kg': round(a * (t or 0) * 7.85e-6, 1)})
+        if want in ('', 'stiffener'):
+            for st in p['stiffeners']:
+                if name and name.lower() not in str(st.get('name')).lower() and name.lower() not in str(st.get('sec')).lower():
+                    continue
+                (x0, y0), (x1, y1) = st['trace'][0], st['trace'][-1]
+                rows.append({'kind': 'stiffener', 'name': st.get('name'), 'panel': pn, 'section': st.get('sec'),
+                             'material': st.get('grade'), 'length_mm': round(math.hypot(x1 - x0, y1 - y0), 1)})
+        if want in ('', 'bracket'):
+            for b in p['brackets']:
+                if name and name.lower() not in str(b.get('name')).lower():
+                    continue
+                rows.append({'kind': 'bracket', 'name': b.get('name'), 'panel': pn, 'thickness_mm': b.get('thk'), 'material': b.get('grade')})
+    if not (name or kind or function or min_thk is not None or max_thk is not None):
+        rows = [x for x in rows if x['kind'] == 'panel']
+    total = len(rows)
+    rows = rows[:limit]
+    what = ' '.join(x for x in (function, kind or 'members', f'named like "{name}"' if name else '',
+                                f'{min_thk:g}-{max_thk:g} mm thick' if min_thk is not None and max_thk is not None else
+                                (f'at least {min_thk:g} mm thick' if min_thk is not None else
+                                 (f'at most {max_thk:g} mm thick' if max_thk is not None else ''))) if x)
+
+    def line(x):
+        if x['kind'] == 'panel':
+            return (f"panel {x['name']} ({x['function'] or '?'}): {x['plates']} plates "
+                    f"{'/'.join(f'{t:g}' for t in x['thickness_mm'])} mm, {x['stiffeners']} stiffeners, {x['plate_area_m2']:g} m2")
+        if x['kind'] == 'plate':
+            return f"plate {x['name']} in {x['panel']}: {x['thickness_mm']:g} mm {x['material'] or ''}, {x['area_m2']:g} m2, {x['weight_kg']:g} kg"
+        if x['kind'] == 'stiffener':
+            return f"stiffener {x['name']} in {x['panel']}: {x['section']}, {x['length_mm']:g} mm long"
+        return f"bracket {x['name']} in {x['panel']}: {x['thickness_mm']} mm"
+    pe = (f'{total} {what} found' + (f' (first {limit} shown)' if total > limit else '') + ': ' + '; '.join(line(x) for x in rows) + '.') \
+        if rows else f'No {what} in this model.'
+    return {'found': total, 'items': rows, 'plain_english': pe}
 
 
 def to_members(path):

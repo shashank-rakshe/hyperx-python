@@ -1617,3 +1617,35 @@ def test_ocx_library_read_write_validate(tmp_path):
     bad.write_text((tmp_path / 'deck.3docx').read_text().replace('<ocx:NetArea', '<ocx:NetAreaX').replace('</ocx:NetArea>', '</ocx:NetAreaX>'))
     v = ocx.validate(str(bad))
     assert not v['valid'] and v['xsd_checked']
+
+
+def test_ocx_training_samples_remove_names(tmp_path):
+    """real-model training: names out of the file and out of every sample (header, vessel, yard, people, class)"""
+    pytest.importorskip('xsdata')
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'training'))
+    import ocx_samples
+    from shipbrain import agent, ocx
+    model = {'sections': {'HP200x10': {'type': 'LBar', 'H': 200, 'W': 40, 'tw': 10, 'tf': 10, 'name': 'HP200x10'}},
+             'blocks': [{'id': 'B1', 'panels': [{'id': 'D1', 'name': 'DECK', 'function': 'DECK',
+                                                 'cs': {'origin': [0, 0, 10000], 'uaxis': [1, 0, 0], 'waxis': [0, 0, 1]},
+                                                 'plates': [{'name': f'P{k}', 'thk': 10 + k, 'grade': 'A',
+                                                             'contour': [[0, 800 * k], [4800, 800 * k], [4800, 800 * (k + 1)], [0, 800 * (k + 1)]]}
+                                                            for k in range(5)],
+                                                 'stiffeners': [{'name': 'L1', 'sec': 'HP200x10', 'grade': 'A', 'trace': [[0, 400], [4800, 400]],
+                                                                 'incl': [0, 0, -1]}]}]}]}
+    src = tmp_path / 'ACMEYARD-H1234_OCX.3docx'
+    ocx.write(model, str(src), name='SEASTAR-H1234/A')
+    txt = src.read_text().replace('author="ShipBrain"', 'author="JOHN SMITH"').replace('organization=""', 'organization="ACMEYARD"')
+    src.write_text(txt)
+    work = tmp_path / 'w'
+    work.mkdir()
+    dst, hidden = ocx_samples.anonymise(str(src), str(work / 'model_1.3docx'), 'model_1')
+    clean = open(dst).read()
+    for name in ('SEASTAR', 'H1234', 'ACMEYARD', 'JOHN SMITH'):
+        assert name not in clean, name
+    assert ocx.read(dst)['summary']['plates'] == 5                   # structure data kept
+    import random
+    rows = ocx_samples.samples_for(agent.Tools(str(work)), 'model_1.3docx', random.Random(1), 12, big=False)
+    assert len(rows) >= 9 and {'ocx_read', 'ocx_query', 'ocx_validate', 'ocx_upgrade', 'ocx_revision'} <= {x['task'] for x in rows}
+    blob = json.dumps(rows)
+    assert not ocx_samples.leaks(blob, hidden) and 'SEASTAR' not in blob and 'ACMEYARD' not in blob

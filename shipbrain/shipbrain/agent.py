@@ -339,6 +339,12 @@ class Tools:
                       'stiffeners (sections), brackets, pillars, seams, holes, frame tables, catalogues; saves it as a structure '
                       'JSON for compare_structures / structure_to_mesh.',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
+        self.register('ocx_query', self.ocx_query, 'Find members in an OCX model: by name (part of it), kind (panel / plate / '
+                      'stiffener / bracket), panel function (DECK, BULKHEAD, SHELL ...) or plate thickness range (mm); each with '
+                      'thickness, material, section, size, weight. No filter = the list of panels.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'name': {'type': 'string'}, 'kind': {'type': 'string'},
+                                                         'function': {'type': 'string'}, 'min_thk': {'type': 'number'},
+                                                         'max_thk': {'type': 'number'}}, 'required': ['file']})
         self.register('ocx_validate', self.ocx_validate, 'Check an OCX file against the official schema of its version (XSD) and '
                       'the OCX library: valid or the list of problems with their place in the file.',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
@@ -1021,6 +1027,10 @@ class Tools:
         json.dump(r['model'], open(out, 'w', encoding='utf-8'))
         return {'summary': r['summary'], 'structure_json': os.path.basename(out),
                 'plain_english': r['plain_english'] + f' Saved as {os.path.basename(out)} for comparing and meshing.'}
+
+    def ocx_query(self, file, name=None, kind=None, function=None, min_thk=None, max_thk=None):
+        from . import ocx
+        return ocx.query(self._path(file), name, kind, function, min_thk, max_thk)
 
     def ocx_validate(self, file):
         from . import ocx

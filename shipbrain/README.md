@@ -202,7 +202,16 @@ Tools:
 | `ocx_validate` | against the official XSD of its version (exact place of each problem) + every element name against the library |
 | `ocx_write` | structure JSON / OCX / ship XML -> **OCX 3.2.0** built with the official classes, checked against the official XSD |
 | `ocx_to_step` | 3D CAD: OCXReader when built (`python -c "from shipbrain import ocx; ocx.reader_build()"`, needs CMake + vcpkg), else ShipBrain's own plate solids + stiffener beams |
+| `ocx_query` | members of a model by name, kind, panel function (DECK, BULKHEAD ...) or plate thickness, with thickness, material, section, size, weight |
 | `compare_structures`, `structure_to_mesh`, `file_info` | now take `.3docx` directly |
+
+**Training on real OCX models** (`training/ocx_samples.py`, run by the Kaggle notebook): 14 public OCX exports (real CAD
+models, schema 2.8.5 / 2.8.6 / 3.0.0, 20 kB to 64 MB, up to 1.16 million elements) are fetched at training time, never
+stored in the repo. Names are removed first: file name, header (author, company, CAD system), vessel name, yard /
+designer / owner, class number and class society; any sample still holding one of them is dropped. They give about 210
+samples from the real tool results: what is in a model, panels / plates / stiffeners by name, function, thickness or
+section, validation against the official XSD, upgrade to OCX 3.2.0, revision compare. Your own OCX files can be added
+with `--src <folder> --rules <your private name list>`.
 
 Checked: structure -> OCX 3.2.0 passes the official XSD and reads back member for member identical; four real OCX
 exports from two different CAD systems (2.8.5 / 2.8.6, up to 590,000 elements) read in 0.1-3.3 s with thickness,
