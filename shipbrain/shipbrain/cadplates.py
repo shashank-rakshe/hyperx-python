@@ -121,7 +121,14 @@ def import_cad(path):
         from .brep import stl_to_step
         step, _ = stl_to_step(path)
         return import_cad(step)
-    raise ValueError('CAD input must be STEP (.step/.stp), BREP or STL')
+    from . import cadmpeg
+    if cadmpeg.is_native(path):                     # SolidWorks, CATIA, Inventor, Fusion, Rhino, FreeCAD, ACIS, IGES ...
+        r = cadmpeg.to_step(path)                   # cadmpeg (Apache-2.0) reads the native file, writes STEP
+        if r.get('geometry_transferred') is False:
+            raise ValueError(r['plain_english'])
+        return import_cad(r['file'])
+    raise ValueError('CAD input must be STEP (.step/.stp), BREP, STL or a native CAD file cadmpeg reads '
+                     '(.sldprt .CATPart .ipt .f3d .3dm .FCStd .sat .igs ...)')
 
 
 def mesh_cad(path, element_size=100.0, default_t=10.0, out_dir='.', name=None, loads=None, fix=None, material=None, clean=True, beams=None):

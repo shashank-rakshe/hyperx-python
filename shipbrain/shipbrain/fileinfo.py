@@ -43,6 +43,16 @@ def file_info(path):
                    + (f"; {len(rep['skipped'])} part(s)/face(s) are not (curved or thick)." if rep['skipped'] else '.'))
         if not info['valid']:
             say.append('The geometry is not valid: run the cleaning step before meshing.')
+    elif __import__('shipbrain.cadmpeg', fromlist=['x']).is_native(path):
+        from . import cadmpeg
+        r = cadmpeg.to_step(path, os.path.splitext(path)[0] + '_cadmpeg.step')
+        info.update(native=cadmpeg.NATIVE[os.path.splitext(low)[1]], step=os.path.basename(r['file']),
+                    geometry_transferred=r['geometry_transferred'])
+        say.append(r['plain_english'])
+        if r['geometry_transferred'] is not False:
+            sub = file_info(r['file'])
+            info['cad'] = {k: sub.get(k) for k in ('solids', 'faces', 'face_types', 'bbox', 'valid')}
+            say.append(sub['plain_english'].replace(os.path.basename(r['file']), 'The model'))
     elif low.endswith('.dxf'):
         import ezdxf
         doc = ezdxf.readfile(path)

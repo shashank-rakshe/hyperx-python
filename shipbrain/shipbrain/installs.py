@@ -128,6 +128,15 @@ SOFTWARE = {
                          'linux': 'sudo apt install dotnet-sdk-10.0', 'mac': 'download the .NET 10 SDK for macOS from the link'},
                'then': 'python -c "from shipbrain import dwsim; dwsim.build()"   (about 5 minutes, once)',
                'check': _have_exe('dotnet', 'dotnet.exe'), 'match': r'\.NET 10 SDK|dotnet not found|DWSIM is not built'},
+    'cadmpeg': {'name': 'cadmpeg (free, Apache-2.0)', 'why': 'to open native CAD files (SolidWorks, CATIA, Inventor, Fusion 360, '
+                'Rhino, FreeCAD, ACIS, IGES) without the CAD program', 'link': 'https://github.com/cadmpeg/cadmpeg#install',
+                'steps': {'windows': 'PowerShell: powershell -ExecutionPolicy Bypass -c "irm https://github.com/cadmpeg/cadmpeg/'
+                                     'releases/latest/download/cadmpeg-installer.ps1 | iex"',
+                          'linux': 'curl --proto =https --tlsv1.2 -LsSf https://github.com/cadmpeg/cadmpeg/releases/latest/download/'
+                                   'cadmpeg-installer.sh | sh', 'mac': 'brew install cadmpeg/tap/cadmpeg'},
+                'then': 'or with Rust installed: python -c "from shipbrain import cadmpeg; cadmpeg.build()"',
+                'check': lambda: __import__('shipbrain.cadmpeg', fromlist=['x']).exe() is not None,
+                'match': r'cadmpeg is not installed'},
     'reverse_cad': {'name': 'ReverseCAD (comes with ShipBrain; needs Node.js)', 'why': 'to turn an STL mesh into a STEP solid '
                     'with its holes, threads and fillets (non-commercial licence)', 'link': 'https://nodejs.org/en/download',
                     'steps': {'windows': 'install Node.js LTS from the link; ShipBrain builds ReverseCAD by itself on first use',

@@ -240,6 +240,32 @@ All outside data is downloaded on Kaggle, which has internet:
    "rules" in its name, attach it to the training notebook too.
 4. Optional: `training/kaggle/detector_kernel.py` in a GPU notebook trains the drawing symbol detector.
 
+## Native CAD files without the CAD program: cadmpeg (Apache-2.0)
+
+[cadmpeg](https://github.com/cadmpeg/cadmpeg) opens native CAD files directly, written clean-room (no vendor SDKs).
+ShipBrain runs its own program, pinned to commit `6c775550` (version 0.6.11):
+
+| Format | how far cadmpeg reads it |
+|---|---|
+| STEP, IGES | full (IGES also written back) |
+| FreeCAD `.FCStd`, Fusion 360 `.f3d` | complete shape with colours |
+| SolidWorks `.sldprt`, CATIA V5 `.CATPart`, Inventor `.ipt`/`.iam`, ACIS `.sat`, Creo View `.pvz` | full solid |
+| Rhino `.3dm`, OpenUSD | geometry, not yet full solids |
+| NX `.prt`, Creo `.prt` | opened and listed only, no geometry yet |
+
+- Tool `native_cad(file, op)`: `convert` (to STEP, or IGES), `inspect`, `check`, `measure` (volume, area, centroid, mass with
+  a density), `diff` (geometry of two files, e.g. a native file against its STEP export). Answers say what STEP could not
+  carry (feature history, appearance details) and when a format gives no geometry yet.
+- Every CAD tool (file_info, cad_mesh, surface_extract, compare ...) now accepts these files directly: they are converted
+  to STEP on the way in.
+- Encrypted or licence-locked files are refused on purpose (its LEGAL.md); ShipBrain never tries to get around that.
+- Install (once): the one-line installer from its [README](https://github.com/cadmpeg/cadmpeg#install), or with Rust
+  `python -c "from shipbrain import cadmpeg; cadmpeg.build()"` (about 30 minutes on 2 cores; uses less memory than the
+  default build). The chat gives the install card when it is missing.
+- Not copied into this repo: its source is about 80 MB (plus 80 MB of test files); ShipBrain uses its released program
+  instead. Its docs and code are the knowledge pack `packs/cadmpeg.sbpack` (7,202 chunks); 240 training conversations
+  come from real runs on its public CC0 / NIST sample files (`training/cadmpeg_tasks.py`).
+
 ## STL -> STEP with features: ReverseCAD (non-commercial licence)
 
 [ReverseCAD](https://github.com/grizlizora/reverse-cad) (PolyForm Noncommercial 1.0.0; used because ShipBrain is declared

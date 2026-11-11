@@ -134,6 +134,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Copyright (c) 2026 ArtCraft Team and the CADCraft contributors
 - Copyright (c) 2014 John Slegers
 
+## cadmpeg
+
+- Source: https://github.com/cadmpeg/cadmpeg (commit 6c775550eba5)
+- Licence: Apache-2.0 + CC-BY-4.0
+- Use: ok: permissive licence, keep the attribution
+- https://github.com/cadmpeg/cadmpeg contributors
+
 ## compact-state-skill
 
 - Source: https://github.com/BrijeshParmar/compact-state-skill (commit bcab3b207338)

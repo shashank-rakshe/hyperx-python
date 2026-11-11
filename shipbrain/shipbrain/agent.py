@@ -258,6 +258,14 @@ class Tools:
                       'stl2step: planes, cylinders, cones, spheres, tori recognised. unit of the STL: mm | cm | m | inch | foot. '
                       '(The CAD tools also accept .stl directly.)',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'unit': {'type': 'string'}}, 'required': ['file']})
+        self.register('native_cad', self.native_cad, 'Native CAD files without the CAD program, with cadmpeg (free): SolidWorks .sldprt, '
+                      'CATIA .CATPart, Inventor .ipt/.iam, Fusion .f3d, Rhino .3dm, FreeCAD .FCStd, ACIS .sat, IGES, NX/Creo .prt '
+                      '(partly). op: convert (to STEP, or to=iges) | inspect (what is inside) | check (errors) | measure (bodies, '
+                      'faces, mass with density kg/m3) | diff (geometry of file vs other). Every other CAD tool also accepts '
+                      'these files directly (they are converted on the way in).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'op': {'type': 'string', 'enum': [
+                          'convert', 'inspect', 'check', 'measure', 'diff']}, 'to': {'type': 'string'}, 'other': {'type': 'string'},
+                          'density': {'type': 'number'}}, 'required': ['file']})
         self.register('reverse_cad', self.reverse_cad, 'Mesh (STL scan / 3D-print / mesh export) -> STEP AP242 solid with ReverseCAD '
                       '(non-commercial licence): watertight B-Rep, volume, area, centre of mass, inertia, mass for a material, '
                       'recognised holes / ISO threads / fillets / chamfers / slots / cavities, and its own verification of the STEP '
@@ -1014,6 +1022,33 @@ class Tools:
                 'plain_english': f"Converted {file} to {out}: {len(s.Solids())} solid(s), {len(s.Faces())} faces ("
                                  + ', '.join(f'{v} {k.lower()}' for k, v in kinds.most_common()) + f"), volume {s.Volume():.0f} mm3, "
                                  f"valid: {'yes' if s.isValid() else 'NO'}."}
+
+    def native_cad(self, file, op='convert', to='step', other=None, density=None):
+        r = self._native_cad(file, op, to, other, density)
+        w = os.path.abspath(self.workdir)                  # results name files as the user sees them, never local folders
+        return json.loads(json.dumps(r).replace(w + os.sep, '').replace(w, '.'))
+
+    def _native_cad(self, file, op, to, other, density):
+        from . import cadmpeg
+        src = self._path(file)
+        if op == 'convert':
+            out = os.path.splitext(src)[0] + ('.igs' if str(to).lower().startswith('ig') else '.step')
+            if os.path.abspath(out) == os.path.abspath(src):
+                out = os.path.splitext(src)[0] + '_cadmpeg' + os.path.splitext(out)[1]
+            r = cadmpeg.to_step(src, out)
+            r['file'] = os.path.relpath(r['file'], self.workdir)
+            return r
+        if op == 'inspect':
+            return cadmpeg.inspect(src)
+        if op == 'check':
+            return cadmpeg.check(src)
+        if op == 'measure':
+            return cadmpeg.measure(src, density=density)
+        if op == 'diff':
+            if not other:
+                raise ValueError('diff needs other=<second file>')
+            return cadmpeg.diff(src, self._path(other))
+        raise ValueError('op: convert | inspect | check | measure | diff')
 
     def reverse_cad(self, file, material=None, heatmap=False):
         from . import reversecad
