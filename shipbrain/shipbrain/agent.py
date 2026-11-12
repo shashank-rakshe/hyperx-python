@@ -316,10 +316,10 @@ class Tools:
         self.register('trace_drawing', self.trace_drawing, 'Scanned drawing (PNG / JPG / TIFF, or a scanned PDF page) -> vectors with '
                       'VTracer: DXF (layer TRACE) + SVG, scan noise removed. scale = drawing units per pixel (optional). Every pen '
                       'stroke becomes its outline (good for a clean vector copy / overlay; for comparing two scans use compare_drawings, '
-                      'which overlays the pictures). mode "centerline" (own thinning code, ideas from AutoTrace) gives ONE line along the middle '
+                      'which overlays the pictures). mode auto (default) picks centerline for thin pen strokes and outline for filled / thick shapes; centerline (own thinning code, ideas from AutoTrace) gives ONE line along the middle '
                       'of each thin stroke instead of an outline: best for thin line drawings, sketches, pipe diagrams.',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'page': {'type': 'integer'}, 'scale': num,
-                                                         'dpi': num, 'mode': {'type': 'string', 'enum': ['outline', 'centerline']}},
+                                                         'dpi': num, 'mode': {'type': 'string', 'enum': ['auto', 'outline', 'centerline']}},
                        'required': ['file']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
@@ -1228,9 +1228,12 @@ class Tools:
                                                                        if pp else ' (no postprocessor CSV: add [Outputs] csv = true)') + '.')
         return r
 
-    def trace_drawing(self, file, page=0, scale=None, dpi=200, mode='outline'):
+    def trace_drawing(self, file, page=0, scale=None, dpi=200, mode='auto'):
         from . import vectorize
-        if str(mode).lower() in ('centerline', 'centreline', 'center', 'centre', 'lines'):
+        mode = str(mode or 'auto').lower()
+        if mode == 'auto':
+            mode = vectorize.suggest_mode(self._path(file), page=int(page), dpi=dpi)
+        if mode in ('centerline', 'centreline', 'center', 'centre', 'lines'):
             r = vectorize.trace_centerline(self._path(file), page=int(page), scale=scale, dpi=dpi)
             r['dxf'] = os.path.basename(r['dxf'])
             return r

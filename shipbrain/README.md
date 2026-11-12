@@ -1030,8 +1030,8 @@ inner radius of the bend, so centre-line radius = fillet + pipe radius. Training
 
 ### Centre-line tracing (idea from AutoTrace)
 
-`trace_drawing` with `mode: "centerline"` turns a thin-line scan or sketch into ONE line along the middle of every pen stroke (DXF
-layer CENTERLINE) instead of the outline of the stroke. Own code (thinning, line walking, simplification); AutoTrace
+`trace_drawing` picks the mode itself (`auto`: thin pen strokes → centre-lines, filled or thick shapes → outlines); with `mode: "centerline"` it turns a thin-line scan or sketch into ONE line along the middle of every pen stroke (DXF
+layer CENTERLINE) instead of the outline of the stroke. Dust and short spurs from rough pen edges are removed. Own code (thinning, line walking, simplification); AutoTrace
 (autotrace/autotrace, LGPL/GPL) is in the knowledge pack as reference. Checked on a drawn box, diagonal and circle: lengths within
 2 % of the true centre-lines; a noisy 3000 x 2000 px sheet with 60 strokes takes about 5 s.
 

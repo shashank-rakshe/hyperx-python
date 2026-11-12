@@ -200,6 +200,36 @@ def _thin(img):
             return im[1:-1, 1:-1].astype(bool)
 
 
+def _despeckle(ink, min_px):
+    """drop ink blobs smaller than min_px pixels (scan dust); 8-connected flood fill"""
+    if min_px <= 1:
+        return ink
+    H, W = ink.shape
+    lab = np.zeros(ink.shape, np.int32)
+    out = ink.copy()
+    ys, xs = np.nonzero(ink)
+    k = 0
+    for y0, x0 in zip(ys, xs):
+        if lab[y0, x0]:
+            continue
+        k += 1
+        stack, comp = [(y0, x0)], []
+        lab[y0, x0] = k
+        while stack:
+            y, x = stack.pop()
+            comp.append((y, x))
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    yy, xx = y + dy, x + dx
+                    if 0 <= yy < H and 0 <= xx < W and ink[yy, xx] and not lab[yy, xx]:
+                        lab[yy, xx] = k
+                        stack.append((yy, xx))
+        if len(comp) < min_px:
+            for y, x in comp:
+                out[y, x] = False
+    return out
+
+
 def _simplify(pts, tol):
     """Douglas-Peucker"""
     if len(pts) < 3:
@@ -215,7 +245,7 @@ def _simplify(pts, tol):
     return _simplify(pts[:i + 1], tol)[:-1] + _simplify(pts[i:], tol)
 
 
-def skeleton_lines(skel, min_len=6, tol=1.2):
+def skeleton_lines(skel, min_len=6, tol=1.2, spur=0):
     """skeleton pixels -> polylines (walk from line ends and junctions; closed loops handled last)"""
     H, W = skel.shape
     ys, xs = np.nonzero(skel)
@@ -255,14 +285,23 @@ def skeleton_lines(skel, min_len=6, tol=1.2):
         for q in nb(p):
             if frozenset((p, q)) not in seen:
                 lines.append(walk(p, q))
+    ends = {}
+    for l in lines:
+        for e in (l[0], l[-1]):
+            ends[e] = ends.get(e, 0) + 1
     out = []
     for l in lines:
-        if len(l) >= min_len or (len(l) >= 2 and l[0] != l[-1] and False):
-            out.append(_simplify(l, tol))
+        free = (ends[l[0]] == 1) + (ends[l[-1]] == 1)         # how many ends hang free
+        n = len(l)
+        if n < min_len and l[0] != l[-1]:
+            continue                                         # dust
+        if free == 1 and n < spur:
+            continue                                         # short spur left by a rough pen edge
+        out.append(_simplify(l, tol))
     return out
 
 
-def trace_centerline(path, out_base=None, page=0, dpi=200, scale=None, threshold=None, min_len=6, tol=1.2):
+def trace_centerline(path, out_base=None, page=0, dpi=200, scale=None, threshold=None, min_len=6, tol=1.2, speckle=8):
     """thin-line drawing -> centre-lines (one line per pen stroke, not an outline) -> DXF layer CENTERLINE"""
     from PIL import Image
     out_base = out_base or os.path.splitext(path)[0] + '_centerline'
@@ -276,7 +315,10 @@ def trace_centerline(path, out_base=None, page=0, dpi=200, scale=None, threshold
     ink = g < threshold
     if ink.mean() > 0.5:                                     # light lines on a dark ground
         ink = ~ink
-    lines = skeleton_lines(_thin(ink), min_len=int(min_len), tol=float(tol))
+    ink = _despeckle(ink, int(speckle))
+    skel = _thin(ink)
+    width = ink.sum() / max(1, skel.sum())                   # average pen width in pixels
+    lines = skeleton_lines(skel, min_len=int(min_len), tol=float(tol), spur=int(round(3 * width)) + 2)
     k = float(scale or 1.0)
     import ezdxf
     doc = ezdxf.new('R2018')
@@ -295,3 +337,24 @@ def trace_centerline(path, out_base=None, page=0, dpi=200, scale=None, threshold
             'plain_english': (f"Centre-line traced {os.path.basename(path)} ({w} x {h} px): {len(lines)} lines, total length {tot:,.0f} ({unit}), "
                               f"written to {os.path.basename(dxf)} (layer CENTERLINE). Each pen stroke became ONE line along its middle "
                               f"(good for thin line drawings; use the outline mode for filled shapes).")}
+
+
+def suggest_mode(path, page=0, dpi=200, thin_px=10):
+    """"centerline" when the ink is thin pen strokes (typical line drawing), "outline" when it has filled areas / thick strokes"""
+    from PIL import Image
+    src = path
+    if path.lower().endswith('.pdf'):
+        import tempfile
+        src = _page_png(path, page, dpi, os.path.join(tempfile.mkdtemp(), 'p.png'))
+    g = np.asarray(Image.open(src).convert('L'), float)
+    lo, hi = np.percentile(g, 2), np.percentile(g, 60)
+    ink = g < ((lo + hi) / 2 if hi - lo > 30 else 128)
+    if ink.mean() > 0.5:
+        ink = ~ink
+    meds = []
+    for a in (ink, ink.T):
+        d = np.diff(np.pad(a, ((0, 0), (1, 1))).astype(np.int8), axis=1)
+        st, en = np.nonzero(d == 1), np.nonzero(d == -1)
+        runs = en[1] - st[1] if len(st[0]) else np.array([0])
+        meds.append(float(np.median(runs)))
+    return 'centerline' if min(meds) <= thin_px else 'outline'
