@@ -321,6 +321,20 @@ class Tools:
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'page': {'type': 'integer'}, 'scale': num,
                                                          'dpi': num, 'mode': {'type': 'string', 'enum': ['auto', 'outline', 'centerline']}},
                        'required': ['file']})
+        self.register('steel_connection', self.steel_connection, 'Steel connection from plain words, own library: end_plate '
+                      '(beam welded to an end plate bolted to the column flange; ext > 0 = extended), fin_plate (shear tab bolted to the '
+                      'beam web), base_plate (column on base plate with 4 anchor bolts, optional ribs, concrete), splice (beam splice with '
+                      'flange and web cover plates). Sections IPE / HEA / HEB or {h,b,tw,tf}; bolt "M20-8.8". Gives a 3D STEP (every plate, '
+                      'bolt, weld a named part), bill of parts and mass, EN 1993-1-8 spacing checks and clash checks. mesh: "shell" '
+                      '(mid-surface quad mesh, bolts as holes with tied rims, CalculiX input; load_kn = end load; solve = run it), '
+                      '"hex" (hexahedral meshes of the thick plates), "both". Geometry and meshes only - not a code resistance check.',
+                      {'type': 'object', 'properties': {
+                          'kind': {'type': 'string', 'enum': ['end_plate', 'fin_plate', 'base_plate', 'splice']},
+                          'beam': {'type': ['string', 'object']}, 'column': {'type': ['string', 'object']}, 'bolt': {'type': 'string'},
+                          'plate_t': num, 'ext': num, 'rows': {'type': 'integer'}, 'cols': {'type': 'integer'}, 'pitch': num, 'gauge': num,
+                          'ribs': {'type': 'boolean'}, 'beam_length': num, 'column_length': num,
+                          'mesh': {'type': 'string', 'enum': ['none', 'shell', 'hex', 'both']}, 'size': num, 'load_kn': num,
+                          'solve': {'type': 'boolean'}, 'name': {'type': 'string'}}, 'required': ['kind']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1241,6 +1255,85 @@ class Tools:
         r['svg'], r['dxf'] = os.path.basename(r['svg']), os.path.basename(r['dxf'])
         return r
 
+    def steel_connection(self, kind, beam=None, column=None, bolt='M20-8.8', plate_t=None, ext=0.0, rows=None, cols=None, pitch=None,
+                         gauge=None, ribs=False, beam_length=None, column_length=None, mesh='none', size=None, load_kn=None,
+                         solve=False, name=None):
+        from . import connections as K
+        import csv
+        kd = K.kind_of(kind)
+        kw = {}
+        if plate_t:
+            kw['tp'] = float(plate_t) if kd in ('end_plate', 'fin_plate', 'base_plate') else None
+        if kd == 'splice':
+            kw = {}
+            if plate_t:
+                kw['tp_f'] = float(plate_t)
+            if rows:
+                kw['rows'] = int(rows)
+        if kd == 'end_plate':
+            kw.update(ext=float(ext or 0), gauge=gauge, rows=None if not rows else [float(r) for r in (rows if isinstance(rows, list) else [])] or None)
+        if kd == 'fin_plate':
+            kw.update(rows=int(rows) if isinstance(rows, (int, float)) and rows else 3, cols=int(cols or 1), pitch=pitch)
+        if kd == 'base_plate':
+            kw.update(ribs=bool(ribs))
+        if beam_length:
+            kw['Lb'] = float(beam_length)
+        if column_length:
+            kw['Lc'] = float(column_length)
+        if kd == 'base_plate' and 'Lb' in kw:
+            kw['Lc'] = kw.pop('Lb')
+        if kd == 'splice' and 'Lc' in kw:
+            kw.pop('Lc')
+        if kd == 'base_plate' and 'Lb' in kw:
+            kw.pop('Lb')
+        kw = {k: v for k, v in kw.items() if v is not None}
+        nm = re.sub(r'[^A-Za-z0-9_\-]', '_', name or kd)[:40]
+        step = os.path.join(self.workdir, nm + '.step')
+        c = K.build(kd, beam=beam, column=column, bolt_spec=bolt, out=step, name=nm, **kw)
+        s = K.summary(c)
+        with open(os.path.join(self.workdir, nm + '_parts.csv'), 'w', newline='') as f:
+            w = csv.DictWriter(f, fieldnames=['part', 'role', 'volume_mm3', 'mass_kg'])
+            w.writeheader()
+            w.writerows(c.table)
+        res = {'kind': kd, 'bolt': c.bolt['name'], 'hole_mm': c.bolt['d0'], 'details': c.info, 'parts': s['parts'], 'parts_by_role': s['parts_by_role'],
+               'steel_mass_kg': s['steel_mass_kg'], 'spacing_warnings': c.warnings, 'clashes': c.clashes,
+               'step': nm + '.step', 'bill_of_parts': nm + '_parts.csv'}
+        sentence = (f"Built {'an' if kd.startswith('end') else 'a'} {kd.replace('_', ' ')} with {c.info.get('bolts', len(c.bolts))} {c.bolt['name']} bolts (holes {c.bolt['d0']:g} mm): "
+                    f"{s['parts']} parts, steel mass {s['steel_mass_kg']:.0f} kg, saved as {nm}.step with every part named. ")
+        sentence += ('Spacing checks (EN 1993-1-8): ' + ('all pass. ' if not c.warnings else '; '.join(c.warnings) + '. ')
+                     + ('No clashes between parts. ' if not c.clashes else 'CLASHES: ' + '; '.join(c.clashes) + '. '))
+        if mesh in ('shell', 'both'):
+            h = float(size or 25)
+            info = K.shell_mesh(c, h, self.workdir, name=nm + '_shell', load_kn=load_kn)
+            res['shell'] = {k: info[k] for k in ('nodes', 'elements', 'quads', 'trias', 'bolts_tied', 'bolts_tied_nearest_node', 'tied_node_pairs', 'loaded_nodes')}
+            res['shell']['file'] = os.path.basename(info['files']['inp'])
+            res['shell']['check'] = info['check'].get('verdict') if isinstance(info['check'], dict) else info['check']
+            sentence += (f"Shell mesh ({h:g} mm): {info['elements']:,} elements, "
+                         + (f"{info['bolts_tied']} bolts tied through their hole rims" if info['bolts_tied'] else
+                            'the anchor bolts hold the base plate in x and y and the concrete supports it in z') + f", written to {res['shell']['file']} (CalculiX). ")
+            if load_kn is None:
+                sentence += 'No load was given, so the input has supports only: tell me the load (kN) to add it. '
+            if solve:
+                r = self.solve_calculix(res['shell']['file'])
+                res['solve'] = {k: r.get(k) for k in ('max_displacement', 'max_von_mises', 'max_disp', 'max_stress') if k in r} or {k: v for k, v in r.items() if k != 'frd'}
+                sentence += f"CalculiX ran: max displacement {r.get('max_displacement_mm')} mm, max von Mises {r.get('max_von_mises_MPa')} MPa (shell nodal maxima, local at the load and bolts). "
+                if load_kn and kd in ('end_plate', 'base_plate'):
+                    ref = K.cantilever_reference(c, load_kn)
+                    res['beam_theory'] = ref
+                    sentence += (f"Beam theory with a perfectly rigid joint gives {ref['tip_deflection_mm']:g} mm at the tip; the model is more flexible "
+                                 f"because the joint rotates (plate and flange bending, bolts), shear deformation and local effects at the load. ")
+        if mesh in ('hex', 'both'):
+            hx = K.hex_meshes(c, self.workdir, size=size)
+            res['hex'] = hx
+            ok = [x for x in hx if 'error' not in x]
+            sentence += (f"Hex meshes: {len(ok)} thick parts meshed ({sum(x['cells'] for x in ok):,} bricks), smallest Jacobian "
+                         f"{min((x['min_scaled_jacobian'] for x in ok), default=0):.2f}; thin I-section walls are not hex-meshed (use the shell mesh for them). ")
+            bad = [x for x in hx if 'error' in x]
+            if bad:
+                sentence += f"{len(bad)} part(s) could not be meshed: " + '; '.join(f"{x['part']}: {x['error']}" for x in bad[:3]) + '. '
+        res['plain_english'] = sentence.strip()
+        return res
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -1845,6 +1938,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'p&id|\bpid\b|dexpi|pumps?, tanks|equipment list|instrument', ('dexpi', 'pid_kg')),
     (r'\.stp\b|\.step\b|\.iges?\b|sldprt|catpart|solidworks|catia|inventor|fusion|rhino|freecad|\.prt\b|native', ('native_cad', 'file_info')),
     (r'\.stl\b|scan(ned)? (part|mesh)|reverse', ('reverse_cad', 'stl_to_step')),
+    (r'connection|joint|end ?plate|fin ?plate|shear tab|base ?plate|anchor bolt|splice|cover plate|moment connection', ('steel_connection', 'bolt')),
     (r'scan|trace|cent(er|re) ?line|vector(ise|ize)|raster|photo of', ('trace_drawing',)),
     (r'compare|revision|rev\b|what changed|difference between', ('compare_drawings', 'compare_structures')),
     (r'quality|jacobian|warpage|skew|aspect|element check', ('fe_quality', 'mesh_check')),

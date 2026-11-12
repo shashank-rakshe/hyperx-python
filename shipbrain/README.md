@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 92/92, wrong replies 0/92.
+replies score 95/95, wrong replies 0/95.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1034,6 +1034,22 @@ inner radius of the bend, so centre-line radius = fillet + pipe radius. Training
 layer CENTERLINE) instead of the outline of the stroke. Dust and short spurs from rough pen edges are removed. Own code (thinning, line walking, simplification); AutoTrace
 (autotrace/autotrace, LGPL/GPL) is in the knowledge pack as reference. Checked on a drawn box, diagonal and circle: lengths within
 2 % of the true centre-lines; a noisy 3000 x 2000 px sheet with 60 strokes takes about 5 s.
+
+### Steel connections from plain words (own library)
+
+`steel_connection` builds a steel joint from words such as "IPE400 beam on a HEB300 column, extended end plate, M20 bolts": **end plate**
+(flush or extended), **fin plate / shear tab**, **base plate** with four anchor bolts (ribs and concrete block optional) and a **bolted
+beam splice**. Sections IPE / HEA / HEB (EN 10365) or h, b, tw, tf; bolts M12-M30, ISO head / nut / washer sizes.
+You get a STEP in which every plate, bolt and weld is a named part, a bill of parts with mass (CSV), EN 1993-1-8 spacing checks (edge and
+pitch distances) and clash checks between parts, and on request meshes:
+- `mesh: "shell"` mid-surface all-quad mesh (own mesher) of plates and I-section walls; every bolt is a hole in the plates it joins and the
+  rim nodes are tied (rigid shank); CalculiX input with supports and an end load (`load_kn`), `solve: true` runs it;
+- `mesh: "hex"` hexahedral meshes of the thick plates (own hex mesher), one input per part.
+Checked: part volumes against the exact section area times length minus the holes (0.02 %), 60 end-plate combinations of section, bolt and
+extension without clash, CalculiX run on the shell model (tip deflection of the end-plate joint 3.4 mm against 0.74 mm for a rigid beam,
+the rest being joint rotation, shear and local load effects). Not done: connection resistance checks (bolt shear and bearing, welds, column web),
+contact between plates, uplift of base plates, section root fillets. IDEA StatiCa's connection library is proprietary and is not used;
+the geometry comes from published standards. Training: `training/connection_tasks.py`.
 
 ## Tests
 

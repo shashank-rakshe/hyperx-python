@@ -28,6 +28,8 @@ def _items():
                              if v not in (None, {}, False)}})
 
     # ------------------------------------------------------------ complete: everything given
+    add('complete', 'Model a column foot for HEB260 with a 35 mm plate and M24 anchors', 'steel_connection', {'kind': 'base_plate'})
+    add('complete', 'I want a bolted joint between two IPE330 beams, cover plates top, bottom and both sides of the web', 'steel_connection', {'kind': 'splice'})
     add('complete', 'Take bracket_layout.png, a thin pencil sketch, and give me single CAD lines along each stroke', 'trace_drawing', {'file': 'bracket_layout.png'})
     add('complete', 'Lay out a 114.3 mm OD pipe with 6 mm wall that runs 2 m aft, climbs 3 m and then goes 1.5 m to port', 'pipe_route', {'od': 114.3})
     add('complete', 'Check a 84 mm R3 studless chain, 700 m long, water depth 120 m, anchor 640 m from the fairlead', 'mooring',
@@ -128,6 +130,7 @@ def _items():
     add('missing', 'I need a hexahedral mesh for my casting', ask=True)
     add('missing', 'Make a drawing of a stiffened deck panel', ask=True)
     add('missing', 'fuel line 30 m3/h ka pressure drop?', ask=True)
+    add('missing', 'Give me the 3D model of a beam to column joint', ask=True)
     add('missing', 'Draw the 3D pipe between the pump and the tank for me', ask=True)
     # ------------------------------------------------------------ multi-step: the right first step
     add('multi', 'I uploaded deck_scan.png (old drawing). Make a vector copy and then compare it with deck_rev2.dxf',
