@@ -129,7 +129,10 @@ class Memory:
                          text=f'Correction (for questions like "{q}"): {comment}')
                 self._save()
                 self._index()
-                return {'id': m['id'], 'note': f'same correction as before - now given {m["count"]} times, used with more weight'}
+                out = {'id': m['id'], 'note': f'same correction as before - now given {m["count"]} times, used with more weight'}
+                if disagrees:
+                    out['check'] = 'the correction has numbers the tool did not compute - the model will check before using it'
+                return out
         r = self.remember(f'Correction (for questions like "{q}"): {comment}', ['correction'] + ([tool] if tool else []), 'feedback')
         for m in self.items:
             if m['id'] == r['id']:
