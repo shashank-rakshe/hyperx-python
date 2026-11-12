@@ -388,6 +388,19 @@ class Tools:
                                                          'od_mm': num, 'schedule': {'type': 'string'}, 't_oper_c': num, 't_amb_c': num,
                                                          'pressure_bar': num, 'water': {'type': 'boolean'}, 'supports': {'type': 'array'},
                                                          'rest_spacing_m': num, 'name': {'type': 'string'}}})
+        self.register('pipe_pulsation', self.pipe_pulsation, 'Piping PULSATION and VIBRATION (OpenPulse, GPL): acoustic natural frequencies of the '
+                      'fluid column (pressure pulsation resonances; the pipe wall flexibility lowers the speed of sound) and structural natural '
+                      'frequencies of the pipe (Timoshenko pipe elements with the fluid mass), checked against pump / compressor excitation '
+                      'frequencies (excitation_hz, margin default 10 %). Route as legs or waypoints in mm (as pipe_route), od_mm, wall_mm, '
+                      'fluid water | seawater | air (or fluid_density + fluid_speed_of_sound), material steel | stainless | copper_nickel, '
+                      'supports [{"at": index, "type": anchor | pinned | rest | x | y | z}] (default anchors at both ends), open_ends = waypoint '
+                      'indexes that open into a tank / vessel / the sea (others are closed). For a reciprocating pump the excitation is '
+                      'rpm / 60 x number of plungers (and its multiples).',
+                      {'type': 'object', 'properties': {'legs': {'type': 'array'}, 'waypoints': {'type': 'array'}, 'od_mm': num, 'wall_mm': num,
+                                                         'fluid': {'type': 'string'}, 'fluid_density': num, 'fluid_speed_of_sound': num,
+                                                         'material': {'type': 'string'}, 'supports': {'type': 'array'}, 'open_ends': {'type': 'array'},
+                                                         'excitation_hz': {'type': 'array'}, 'margin': num, 'modes': {'type': 'integer'},
+                                                         'name': {'type': 'string'}}, 'required': ['od_mm', 'wall_mm']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1441,6 +1454,14 @@ class Tools:
                                   t_amb_c=float(t_amb_c), pressure_bar=float(pressure_bar), water=bool(water), supports=supports,
                                   rest_spacing_m=rest_spacing_m, workdir=self.workdir, name=name)
 
+    def pipe_pulsation(self, od_mm, wall_mm, legs=None, waypoints=None, fluid='water', fluid_density=None, fluid_speed_of_sound=None,
+                       material='steel', supports=None, open_ends=None, excitation_hz=None, margin=0.1, modes=10, name='pulsation'):
+        from . import pulsation
+        return pulsation.analyse(legs=legs, waypoints=waypoints, od_mm=float(od_mm), wall_mm=float(wall_mm), fluid=fluid,
+                                 fluid_density=fluid_density, fluid_speed_of_sound=fluid_speed_of_sound, material=material,
+                                 supports=supports, open_ends=open_ends, excitation_hz=excitation_hz, margin=float(margin),
+                                 modes=int(modes), workdir=self.workdir, name=name)
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -2037,6 +2058,7 @@ EXT_TOOLS = {'.3dm': ('native_cad', 'file_info'), '.sldprt': ('native_cad',), '.
 KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always needs
     (r'chain|mooring|fairlead|anchor|catenary|touch ?down|\bR[345]S?\b|riser|umbilical|power cable|lazy.?wave', ('mooring', 'cable_run')),
     (r'pipe|piping|m3/h|m3/s|gpm|l/s|head loss|pressure (drop|loss)|pump|ballast|bilge|cooling (water|line)|fire main|fuel (oil|line)|lube', ('pipe_flow',)),
+    (r'pulsation|pressure pulse|acoustic (resonance|mode|natural)|pipe vibration|piping vibration|natural frequenc(y|ies) of (the |my |a )?pip|reciprocating (pump|compressor)|plunger pump', ('pipe_pulsation', 'pipe_route')),
     (r'pipe stress|piping stress|stress analysis of (the |a |my )?pip|thermal expansion|expansion loop|anchor (load|force)s?|support loads?|b31\.?[13]|flexibility analysis|nozzle load', ('pipe_stress', 'pipe_route')),
     (r'rout(e|ing)|pipe run|run of pipe|isometric|\bbends?\b|elbow|east|west|north|south|go(es)? up|then up', ('pipe_route', 'pipe_flow')),
     (r'plate|plating|panel|psi|kpa|bar\b|pressure|stress|deflect|head of|thick', ('plate_check', 'plate_buckling', 'moose_plate')),

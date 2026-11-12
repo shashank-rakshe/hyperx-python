@@ -1,0 +1,65 @@
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    pass
+
+
+from copy import deepcopy
+
+from pulse.editor.structures import IBeam
+
+from .structure_options import StructureOptions
+
+
+class IBeamOptions(StructureOptions):
+    structure_type = IBeam
+
+    def get_kwargs(self) -> dict:
+        if self.structure_info is None:
+            return
+
+        parameters = self.structure_info.get("section_parameters")
+        if parameters is None:
+            return
+
+        return dict(
+            height=parameters[0],
+            width_1=parameters[1],
+            width_2=parameters[3],
+            thickness_1=parameters[2],
+            thickness_2=parameters[4],
+            thickness_3=parameters[5],
+            offset_y=parameters[6],
+            offset_z=parameters[7],
+            extra_info=self._get_extra_info(),
+        )
+
+    def configure_structure(self):
+
+        self.cross_section_widget.set_inputs_to_geometry_creator()
+        self.cross_section_widget.hide_all_tabs()
+        self.cross_section_widget.tabWidget_general.setTabVisible(1, True)
+        self.cross_section_widget.tabWidget_beam_section.setTabVisible(3, True)
+        self.cross_section_widget.lineEdit_height_I_section.setFocus()
+        self.cross_section_dialog.load_active_sections("i_beam")
+        self.cross_section_dialog.exec()
+
+        if not self.cross_section_dialog.complete:
+            return
+
+        self.cross_section_dialog.reset()
+        if self.cross_section_widget.get_beam_section_parameters():
+            self.configure_structure()
+            return
+
+        self.structure_info = self.cross_section_widget.beam_section_info.as_dict()
+
+        self.configure_section_of_selected()
+        self.update_permissions()
+
+    def _get_extra_info(self):
+        return dict(
+            structural_element_type="beam_1",
+            cross_section_info=deepcopy(self.structure_info),
+            material_id=self.geometry_designer_widget.current_material_id,
+        )

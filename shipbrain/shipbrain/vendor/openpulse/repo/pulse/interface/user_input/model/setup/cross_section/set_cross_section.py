@@ -1,0 +1,641 @@
+from PySide6.QtWidgets import QTreeWidgetItem
+from PySide6.QtGui import QAction
+from PySide6.QtCore import Qt
+
+from pulse import app
+from pulse.interface.ui_generated.model.setup.cross_section.set_cross_section_ui import SetCrossSection_UI
+from pulse.interface.handler.geometry_handler import GeometryHandler
+from pulse.interface.user_input.model.setup.cross_section.cross_section_widget import CrossSectionWidget
+from pulse.interface.user_input.project.print_message import PrintMessageInput
+from pulse.model.cross_section import CrossSection
+
+from collections import defaultdict
+from enum import IntEnum
+
+
+class AssignmentType(IntEnum):
+    ALL_LINES = 0
+    SELECTED_LINES = 1
+
+
+class TabIndex(IntEnum):
+    PIPE = 0
+    BEAM = 1
+    ACTIVE_SECTIONS = 2
+
+
+class SectionType(IntEnum):
+    CONSTANT = 0
+    VARIABLE = 1
+
+
+window_title = "Error"
+
+
+class SetCrossSectionInput(SetCrossSection_UI):
+    def __init__(
+            self, 
+            pipe_to_beam: bool = False, 
+            beam_to_pipe: bool = False, 
+            lines_to_update_cross_section: list = list(),  
+            *args, 
+            **kwargs,
+            ):
+
+        super().__init__()
+
+        self.pipe_to_beam = pipe_to_beam
+        self.beam_to_pipe = beam_to_pipe
+        self.lines_to_update_cross_section = lines_to_update_cross_section
+
+        app().main_window.set_input_widget(self)
+        self.properties = app().project.model.properties
+        self.preprocessor = app().project.model.preprocessor
+        self.before_run = app().project.get_pre_solution_model_checks()
+
+        self.cross_section_widget = CrossSectionWidget(dialog=self)
+
+        self._config_window()
+        self._initialize()
+        self._define_qt_variables()
+        self._create_connections()
+        self._config_treeWidget()
+        self.selection_callback()
+        self.load_existing_sections()
+        self.initial_condition()
+        self.exec()
+
+    def _config_window(self):
+        self.setWindowFlags(Qt.WindowStaysOnTopHint)
+        self.setWindowModality(Qt.WindowModal)
+        self.setWindowIcon(app().main_window.pulse_icon)
+        self.setWindowTitle("OpenPulse")
+
+    def _initialize(self):
+
+        self.section_id = None
+
+        self.complete = False
+        self.stop = False
+        self.flip = False
+  
+        self.section_data_lines = dict()
+
+    def _define_qt_variables(self):
+        # QAction
+        self.action_all_lines = QAction(self)
+        # self.action_all_lines.setVisible(False)
+        self.action_all_lines.setShortcut("Ctrl+A")
+        self.action_all_lines.triggered.connect(self.select_all_lines_callback)
+        self.addAction(self.action_all_lines)
+
+        # QGridLayout
+        self.grid_layout = self.main_frame.layout()
+        self.grid_layout.setContentsMargins(0,0,0,0)
+        self.main_frame.setLayout(self.grid_layout)
+        self.grid_layout.addWidget(self.cross_section_widget)
+
+        # QPushButton
+        self.pushButton_exit_pipe = self.cross_section_widget.pushButton_exit_pipe
+        self.pushButton_exit_beam = self.cross_section_widget.pushButton_exit_beam
+        self.pushButton_confirm_pipe = self.cross_section_widget.pushButton_confirm_pipe
+        self.pushButton_confirm_beam = self.cross_section_widget.pushButton_confirm_beam
+        self.pushButton_edit_section_data = self.cross_section_widget.pushButton_edit_section_data
+        self.pushButton_load_section_data = self.cross_section_widget.pushButton_load_section_data
+        self.pushButton_plot_pipe_cross_section = self.cross_section_widget.pushButton_plot_pipe_cross_section
+        self.pushButton_plot_beam_cross_section = self.cross_section_widget.pushButton_plot_beam_cross_section
+        self.pushButton_select_standard_section = self.cross_section_widget.pushButton_select_standard_section
+        self.pushButton_select_standard_section_initial = self.cross_section_widget.pushButton_select_standard_section_initial
+        self.pushButton_select_standard_section_final = self.cross_section_widget.pushButton_select_standard_section_final
+        self.pushButton_check_if_section_is_normalized = self.cross_section_widget.pushButton_check_if_section_is_normalized
+
+        # QTabWidget
+        self.tabWidget_general = self.cross_section_widget.tabWidget_general
+        self.tabWidget_pipe_section = self.cross_section_widget.tabWidget_pipe_section
+        self.tabWidget_beam_section = self.cross_section_widget.tabWidget_beam_section
+
+        # QTreeWidget
+        self.treeWidget_lines_info = self.cross_section_widget.treeWidget_lines_info
+
+    def _create_connections(self):
+        #
+        self.comboBox_attribution_type.currentIndexChanged.connect(self.attribution_type_callback)
+        #
+        self.lineEdit_selected_id.editingFinished.connect(self.update_highlights)
+        #
+        self.pushButton_exit_pipe.clicked.connect(self.close)
+        self.pushButton_exit_beam.clicked.connect(self.close)
+        self.pushButton_confirm_pipe.clicked.connect(self.attribute_callback)
+        self.pushButton_confirm_beam.clicked.connect(self.attribute_callback)
+        self.pushButton_edit_section_data.clicked.connect(self.edit_section_data)
+        self.pushButton_load_section_data.clicked.connect(self.load_section_data)
+        #
+        self.tabWidget_general.currentChanged.connect(self.main_tab_callback)
+        self.tabWidget_pipe_section.currentChanged.connect(self.pipe_section_tab_callback)
+        #
+        self.treeWidget_lines_info.itemClicked.connect(self.on_click_item_callback)
+        self.treeWidget_lines_info.itemDoubleClicked.connect(self.double_click_item_callback)
+        #
+        app().main_window.selection_changed.connect(self.selection_callback)
+        #
+        self.attribution_type_callback()
+
+    def pipe_section_tab_callback(self):
+        if self.tabWidget_pipe_section.currentIndex() == SectionType.CONSTANT:
+            return
+
+        selected_lines = app().main_window.list_selected_lines()
+        if len(selected_lines) == 1:
+            self.get_line_elements(selected_lines[0])
+
+        elif len(selected_lines) > 1:
+            self.cross_section_widget.lineEdit_element_id_initial.clear()
+            self.cross_section_widget.lineEdit_element_id_final.clear()
+
+    def selection_callback(self):
+
+        selected_lines = app().main_window.list_selected_lines()
+        if not selected_lines:
+            return
+
+        self.comboBox_attribution_type.blockSignals(True)
+        self.cross_section_widget.reset_all_input_texts()
+        self.comboBox_attribution_type.setCurrentIndex(AssignmentType.SELECTED_LINES)
+        self.comboBox_attribution_type.blockSignals(False)
+
+        if self.check_if_lines_belongs_to_psd(selected_lines):
+            return
+
+        self.write_ids(selected_lines)
+        # self.lineEdit_selected_id.setEnabled(True)
+
+        if len(selected_lines) >= 1:
+            self.load_section_inputs(selected_lines[0])
+
+    def load_section_inputs(self, line_id: int):
+
+        element_type = self.properties._get_property("structural_element_type", line_id=line_id)
+        if element_type is None:
+            return
+
+        section_parameters = self.properties._get_property("section_parameters", line_id=line_id)
+        section_type = self.properties._get_property("section_type_label", line_id=line_id)
+
+        if element_type == "pipe_1":
+            self.tabWidget_general.setCurrentIndex(TabIndex.PIPE)
+            self.update_pipe_section_entries(
+                section_type,
+                section_parameters,
+                )
+
+        elif element_type == "beam_1":
+            self.tabWidget_general.setCurrentIndex(TabIndex.BEAM)
+            section_properties = self.properties._get_property("section_properties", line_id=line_id)
+            self.update_beam_section_entries(
+                section_type,
+                section_parameters,
+                section_properties,
+                )
+
+        if self.tabWidget_general.currentIndex() == TabIndex.PIPE:
+            if self.tabWidget_pipe_section.currentIndex() == SectionType.VARIABLE:
+                self.get_line_elements(line_id)
+
+    def get_line_elements(self, line_id: int):
+        self.tabWidget_pipe_section.setCurrentIndex(1)
+        element_ids = app().project.model.mesh.elements_from_line[line_id]
+        self.cross_section_widget.lineEdit_element_id_initial.setText(str(element_ids[0]))
+        self.cross_section_widget.lineEdit_element_id_final.setText(str(element_ids[-1]))
+
+    def update_pipe_section_entries(self, section_type: str, section_parameters: list):
+
+        if section_type == "pipe":
+
+            self.tabWidget_pipe_section.setCurrentIndex(0)
+
+            outside_diameter = section_parameters[0]
+            thickness = section_parameters[1]
+            offset_y = section_parameters[2]
+            offset_z = section_parameters[3]
+            insulation_thickness = section_parameters[4]
+            insulation_density = section_parameters[5]
+
+            self.cross_section_widget.lineEdit_outside_diameter.setText(str(outside_diameter))
+            self.cross_section_widget.lineEdit_wall_thickness.setText(str(thickness))
+
+            if offset_y:
+                self.cross_section_widget.lineEdit_offset_y.setText(str(offset_y))
+
+            if offset_z:
+                self.cross_section_widget.lineEdit_offset_z.setText(str(offset_z))
+
+            if insulation_density:
+                self.cross_section_widget.lineEdit_insulation_density.setText(str(insulation_density))
+
+            if insulation_thickness:
+                self.cross_section_widget.lineEdit_insulation_thickness.setText(str(insulation_thickness))
+
+        elif section_type == "reducer":
+
+            self.tabWidget_pipe_section.setCurrentIndex(1)
+
+            for index, lineEdit in enumerate(self.cross_section_widget.variable_pipe_entries_line_edits):
+                lineEdit.setText(str(section_parameters[index]))
+
+    def update_beam_section_entries(self, section_type: str, section_parameters: list, section_properties: dict):
+
+        if section_type == 'rectangular_beam':
+            [base, height, base_in, height_in, offset_y, offset_z] = section_parameters
+            self.tabWidget_beam_section.setCurrentIndex(0)
+            self.cross_section_widget.lineEdit_base_rectangular_section.setText(str(base))
+            self.cross_section_widget.lineEdit_height_rectangular_section.setText(str(height))
+            self.cross_section_widget.lineEdit_offsety_rectangular_section.setText(str(offset_y))
+            self.cross_section_widget.lineEdit_offsetz_rectangular_section.setText(str(offset_z))
+            if base_in != 0 and height_in != 0:
+                self.cross_section_widget.lineEdit_wall_thickness_rectangular_section.setText(str(round((base-base_in)/2,4))) 
+
+        elif section_type == 'circular_beam':
+            [outside_diameter_beam, thickness, offset_y, offset_z] = section_parameters
+            self.tabWidget_beam_section.setCurrentIndex(1)
+            self.cross_section_widget.lineEdit_outside_diameter_circular_section.setText(str(outside_diameter_beam))
+            self.cross_section_widget.lineEdit_offsety_circular_section.setText(str(offset_y))
+            self.cross_section_widget.lineEdit_offsetz_circular_section.setText(str(offset_z))
+            if thickness != 0:
+                self.cross_section_widget.lineEdit_wall_thickness_circular_section.setText(str(thickness))
+
+        elif section_type == 'c_beam':
+            [h, w1, t1, w2, t2, tw, offset_y, offset_z] = section_parameters
+            self.tabWidget_beam_section.setCurrentIndex(2)
+            self.cross_section_widget.lineEdit_height_C_section.setText(str(h))
+            self.cross_section_widget.lineEdit_w1_C_section.setText(str(w1))
+            self.cross_section_widget.lineEdit_tw_C_section.setText(str(tw))
+            self.cross_section_widget.lineEdit_w2_C_section.setText(str(w2))
+            self.cross_section_widget.lineEdit_t1_C_section.setText(str(t1))   
+            self.cross_section_widget.lineEdit_t2_C_section.setText(str(t2))
+            self.cross_section_widget.lineEdit_offsety_C_section.setText(str(offset_y))
+            self.cross_section_widget.lineEdit_offsetz_C_section.setText(str(offset_z))             
+
+        elif section_type == 'i_beam':
+            [h, w1, t1, w2, t2, tw, offset_y, offset_z] = section_parameters
+            self.tabWidget_beam_section.setCurrentIndex(3)
+            self.cross_section_widget.lineEdit_height_I_section.setText(str(h))
+            self.cross_section_widget.lineEdit_w1_I_section.setText(str(w1))
+            self.cross_section_widget.lineEdit_tw_I_section.setText(str(tw))
+            self.cross_section_widget.lineEdit_w2_I_section.setText(str(w2))
+            self.cross_section_widget.lineEdit_t1_I_section.setText(str(t1))   
+            self.cross_section_widget.lineEdit_t2_I_section.setText(str(t2))
+            self.cross_section_widget.lineEdit_offsety_I_section.setText(str(offset_y))
+            self.cross_section_widget.lineEdit_offsetz_I_section.setText(str(offset_z))
+
+        elif section_type == 't_beam':
+            [h, w1, t1, tw, offset_y, offset_z] = section_parameters
+            self.tabWidget_beam_section.setCurrentIndex(4)
+            self.cross_section_widget.lineEdit_height_T_section.setText(str(h))
+            self.cross_section_widget.lineEdit_w1_T_section.setText(str(w1))
+            self.cross_section_widget.lineEdit_tw_T_section.setText(str(tw))
+            self.cross_section_widget.lineEdit_t1_T_section.setText(str(t1))
+            self.cross_section_widget.lineEdit_offsety_T_section.setText(str(offset_y))
+            self.cross_section_widget.lineEdit_offsetz_T_section.setText(str(offset_z))
+
+        elif section_type == 'generic_beam':
+            self.tabWidget_beam_section.setCurrentIndex(5)
+            [area, Iyy, Izz, Iyz, _, _, shear_coefficient] = list(section_properties.values())
+            self.cross_section_widget.lineEdit_area.setText(str(area))
+            self.cross_section_widget.lineEdit_Iyy.setText(str(Iyy))
+            self.cross_section_widget.lineEdit_Izz.setText(str(Izz))
+            self.cross_section_widget.lineEdit_Iyz.setText(str(Iyz))
+            self.cross_section_widget.lineEdit_shear_coefficient.setText(str(shear_coefficient))
+
+    def load_existing_sections(self):
+
+        self.treeWidget_lines_info.clear()
+        self.section_data_lines = app().project.loader.get_cross_sections_from_file()
+
+        active_sections = len(self.section_data_lines) > 0
+        self.tabWidget_general.setTabVisible(TabIndex.ACTIVE_SECTIONS, active_sections)
+
+        if not active_sections:
+            return
+
+        for section_id, section_data in self.section_data_lines.items():
+            [element_type, section_parameters, section_type, _] = section_data
+
+            if section_parameters:
+                str_parameters = str(section_parameters)[1:-1]
+                new = QTreeWidgetItem([str(section_id), element_type, section_type, str_parameters])
+                for i in range(4):
+                    new.setTextAlignment(i, Qt.AlignCenter)
+
+                self.treeWidget_lines_info.addTopLevelItem(new)
+
+    def _config_treeWidget(self):
+        #
+        self.pushButton_edit_section_data.setDisabled(True)
+        self.pushButton_load_section_data.setDisabled(True)
+        #
+        for i, width in enumerate([40, 100, 100]):
+            self.treeWidget_lines_info.setColumnWidth(i, width)
+
+    def initial_condition(self):
+
+        if self.pipe_to_beam:
+            self.tabWidget_general.setCurrentIndex(TabIndex.BEAM)
+            self.tabWidget_general.setTabEnabled(TabIndex.PIPE, False)
+
+        if self.beam_to_pipe:
+            self.tabWidget_general.setCurrentIndex(TabIndex.PIPE)
+            self.tabWidget_general.setTabEnabled(TabIndex.BEAM, False)
+
+        if self.lines_to_update_cross_section:
+            self.tabWidget_general.setTabEnabled(TabIndex.ACTIVE_SECTIONS, False)
+            self.comboBox_attribution_type.setCurrentIndex(AssignmentType.SELECTED_LINES)
+            self.write_ids(self.lines_to_update_cross_section)
+
+    def write_ids(self,  selected_ids : list):
+        text = ", ".join([str(i) for i in selected_ids])
+        self.lineEdit_selected_id.setText(text)
+
+    def on_click_item_callback(self, item):
+        self.cross_section_widget.reset_all_input_texts()
+        mapped_section = int(item.text(0)) in self.section_data_lines.keys()
+        self.pushButton_edit_section_data.setEnabled(mapped_section)
+        self.pushButton_load_section_data.setEnabled(mapped_section)
+
+    def double_click_item_callback(self, item):
+        self.on_click_item_callback(item)
+        mapped_section = int(item.text(0)) in self.section_data_lines.keys()
+        if mapped_section:
+            self.edit_section_data()
+
+    def load_section_data(self):
+        seletected_items = self.treeWidget_lines_info.selectedItems()
+        if len(seletected_items) != 1:
+            return
+
+        self.cross_section_widget.reset_all_input_texts()
+
+        section_id = int(seletected_items[0].text(0))
+        [_, _, _, line_ids] = self.section_data_lines[section_id]
+
+        self.load_section_inputs(line_ids[0])
+
+    def edit_section_data(self):
+        seletected_items = self.treeWidget_lines_info.selectedItems()
+        if len(seletected_items) != 1:
+            return
+
+        self.cross_section_widget.reset_all_input_texts()
+
+        section_id = int(seletected_items[0].text(0))
+        [element_type, section_parameters, _, line_ids] = self.section_data_lines[section_id]
+
+        app().main_window.set_selection(lines = line_ids)
+
+        if element_type == "pipe_1":
+            self.tabWidget_general.setCurrentIndex(TabIndex.PIPE)
+            if len(section_parameters) != 10:
+                return
+
+            if len(line_ids) != 1:
+                return
+
+            line_elements = app().project.model.mesh.elements_from_line[line_ids[0]]
+            self.cross_section_widget.lineEdit_element_id_initial.setText(str(line_elements[0]))
+            self.cross_section_widget.lineEdit_element_id_final.setText(str(line_elements[-1]))
+
+        elif element_type == "beam_1":
+            self.tabWidget_general.setCurrentIndex(TabIndex.BEAM)
+
+    def check_if_lines_belongs_to_psd(self, line_ids: list):
+
+        device_related_lines =app().project.loader.get_psd_related_lines()
+
+        for psd_lines in device_related_lines.values():
+            for line_id in line_ids:
+                if line_id in psd_lines:
+                    self.lineEdit_selected_id.clear()
+                    title = "PSD cross-section edition not allowed"
+                    message = "The PSD line sections could not be edited in the cross-section setup interface. "
+                    message += "You must switch to the PSD configuration interface for this specific section editing."
+                    PrintMessageInput([window_title, title, message])
+                    return True
+
+    def select_all_lines_callback(self):
+        self.comboBox_attribution_type.setCurrentIndex(0)
+
+    def update_highlights(self):
+
+        lineEdit = self.lineEdit_selected_id.text()
+        selection_index = self.comboBox_attribution_type.currentIndex()
+        if lineEdit != "":
+
+            if selection_index == 1:
+                _stop, _lines_typed = self.before_run.check_selected_ids(lineEdit, "lines")
+                if _stop:
+                    return
+
+                app().main_window.set_selection(lines = _lines_typed)
+
+    def attribution_type_callback(self):
+
+        all_lines = self.comboBox_attribution_type.currentIndex() == AssignmentType.ALL_LINES
+
+        if all_lines:
+            self.lineEdit_selected_id.setText("All lines")
+        else:
+            # self.selection_callback()
+            self.lineEdit_selected_id.clear()
+
+        self.lineEdit_selected_id.setDisabled(all_lines)
+
+    def main_tab_callback(self):
+        if self.tabWidget_general.currentIndex() == TabIndex.ACTIVE_SECTIONS:
+            self.pushButton_edit_section_data.setDisabled(True)
+            self.pushButton_load_section_data.setDisabled(True)
+            self.comboBox_attribution_type.setDisabled(True)
+            return
+
+        self.comboBox_attribution_type.setDisabled(False)
+
+    def attribute_callback(self):
+
+        if self.comboBox_attribution_type.currentIndex() == AssignmentType.ALL_LINES:
+            line_ids = app().project.model.mesh.lines_from_model
+
+        else:
+            lineEdit = self.lineEdit_selected_id.text()
+            stop, line_ids = self.before_run.check_selected_ids(lineEdit, "lines")
+            if stop:
+                return
+
+        if self.tabWidget_general.currentIndex() == TabIndex.PIPE:
+            self.pipe_section_attribution_callback(line_ids)
+
+        elif self.tabWidget_general.currentIndex() == TabIndex.BEAM:
+            self.beam_section_attribution_callback(line_ids)
+
+    def pipe_section_attribution_callback(self, line_ids: list[int]):
+
+        if self.check_if_lines_belongs_to_psd(line_ids):
+            return
+        
+        if not self.tabWidget_general.currentIndex() == TabIndex.PIPE:
+            return
+
+        self.preprocessor.set_structural_element_type_by_lines(line_ids, "pipe_1")
+        self.preprocessor.set_capped_end_by_lines(line_ids, True)
+        self.preprocessor.add_valve_by_lines(line_ids, None)
+        self.preprocessor.add_expansion_joint_by_lines(line_ids, None)
+        self.preprocessor.set_structural_element_wall_formulation_by_lines(line_ids, "thin_wall")
+        self.preprocessor.set_structural_element_force_offset_by_lines(line_ids, True)
+
+        self.properties._set_line_property("structural_element_type", "pipe_1", line_ids)
+    
+        self.properties._remove_line_property("section_properties", line_ids)
+        self.properties._remove_line_property("wall_formulation", line_ids)
+        self.properties._remove_line_property("force_offset", line_ids)
+        self.properties._remove_line_property("capped_end", line_ids)
+        self.properties._remove_line_property("valve_info", line_ids)
+        self.properties._remove_line_property("expansion_joint_info", line_ids)
+
+        if self.tabWidget_pipe_section.currentIndex() == SectionType.CONSTANT:    
+            if self.cross_section_widget.get_constant_section_pipe_parameters():
+                return               
+
+        elif self.tabWidget_pipe_section.currentIndex() == SectionType.VARIABLE:
+            if self.cross_section_widget.get_variable_section_pipe_parameters():
+                return
+
+        section_info = self.cross_section_widget.pipe_section_info
+        cross_section = CrossSection(pipe_section_info=section_info)
+
+        for line_id in line_ids:
+            center_coords = self.properties._get_property("center_coords", line_id=line_id)
+            corner_coords = self.properties._get_property("corner_coords", line_id=line_id)
+            mid_coords = self.properties._get_property("mid_coords", line_id=line_id)
+
+            if (center_coords, corner_coords, mid_coords).count(None) == 3:
+                # section_label = section_info.get("section_type_label")
+                section_label = section_info.section_type_label
+                self.properties._set_line_property("structure_name", section_label, line_id)
+
+            elif isinstance(mid_coords, list):
+                self.properties._set_line_property("structure_name", "arc_bend", line_id)
+
+            else:
+                self.properties._set_line_property("structure_name", "bend", line_id)
+
+        self.properties._set_multiple_line_properties(section_info.as_dict(), line_ids)
+        self.properties._set_line_property("cross_section", cross_section, line_ids)
+
+        if self.tabWidget_pipe_section.currentIndex() == SectionType.CONSTANT:
+            self.preprocessor.set_cross_section_by_lines(line_ids, cross_section)
+
+        elif self.tabWidget_pipe_section.currentIndex() == SectionType.VARIABLE:
+            self.preprocessor.set_variable_cross_section_by_line(line_ids, section_info.as_dict())
+
+        self.actions_to_finalize()
+
+    def beam_section_attribution_callback(self, line_ids: list[int]):
+
+        if self.check_if_lines_belongs_to_psd(line_ids):
+            return
+
+        if self.tabWidget_general.currentIndex() != TabIndex.BEAM:
+            return
+
+        if self.cross_section_widget.get_beam_section_parameters():
+            return
+
+        self.preprocessor.set_structural_element_type_by_lines(line_ids, "beam_1")
+        self.properties._set_line_property("structural_element_type", "beam_1", line_ids)
+
+        section_info = self.cross_section_widget.beam_section_info
+        cross_section = CrossSection(beam_section_info=section_info)
+
+        self.properties._set_multiple_line_properties(section_info.as_dict(), line_ids)
+        self.properties._set_line_property("cross_section", cross_section, line_ids)
+        self.properties._set_line_property("structure_name", section_info.section_type_label, line_ids)
+
+        self.preprocessor.set_cross_section_by_lines(line_ids, cross_section)
+        self.preprocessor.set_capped_end_by_lines(line_ids, False)
+        self.preprocessor.set_structural_element_wall_formulation_by_lines(line_ids, None)
+        self.preprocessor.set_structural_element_force_offset_by_lines(line_ids, True)
+        self.preprocessor.add_valve_by_lines(line_ids, None)
+        self.preprocessor.add_expansion_joint_by_lines(line_ids, None)
+
+        self.properties._remove_line_property("wall_formulation", line_ids)
+        self.properties._remove_line_property("force_offset", line_ids)
+        self.properties._remove_line_property("capped_end", line_ids)
+        self.properties._remove_line_property("expansion_joint_info", line_ids)
+        self.properties._remove_line_property("valve_info", line_ids)
+
+        self.remove_acoustic_related_data_from_lines(line_ids)
+        self.actions_to_finalize()
+
+    def actions_to_finalize(self):
+
+        import matplotlib.pyplot as plt
+
+        plt.close()
+        self.complete = True
+        app().project.file.write_line_properties_in_file()
+        app().project.file.write_imported_table_data_in_file()
+
+        geometry_handler = GeometryHandler(app().project)
+        geometry_handler.set_length_unit(app().project.model.mesh.length_unit)
+        geometry_handler.process_pipeline()
+
+        app().main_window.update_plots()
+        self.close()
+
+    def remove_acoustic_related_data_from_lines(self, line_ids: list):
+        """
+        """
+        self.properties._remove_line_property("fluid", line_ids)
+        self.properties._remove_line_property("fluid_id", line_ids)
+        self.properties._remove_line_property("acoustic_element_type", line_ids)
+        self.properties._remove_line_property("proportinal_damping", line_ids)
+        self.properties._remove_line_property("volumetric_flow_rate", line_ids)
+
+        aux_e = self.properties.element_properties.copy()
+        aux_n = self.properties.nodal_properties.copy()
+
+        remove_data_from_nodes = defaultdict(list)
+        remove_data_from_elements = defaultdict(list)
+
+        for line_id in line_ids:
+            line_elements = self.preprocessor.mesh.elements_from_line[line_id]
+            for element_id in line_elements:
+                for key in aux_e.items():
+                    for property in ["perforated_plate"]:
+                        if key == (property, element_id):
+                            self.properties._remove_element_property(property, element_id)
+                            remove_data_from_elements[property].append(element_id)
+
+            prop_labels = [
+                "acoustic_pressure", 
+                "volume_velocity", 
+                "specific_impedance", 
+                "radiation_impedance", 
+                "reciprocating_compressor_excitation", 
+                "reciprocating_pump_excitation"
+                ]
+
+            line_nodes = self.preprocessor.mesh.nodes_from_line[line_id]
+            for node_id in line_nodes:
+                for key in aux_n.items():
+                    for property in prop_labels:
+                        if key == (property, node_id):
+                            self.properties._remove_nodal_property(property, node_id)
+                            remove_data_from_nodes[property].append(node_id)
+
+        app().project.file.write_nodal_properties_in_file()
+        app().project.file.write_element_properties_in_file()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Enter or event.key() == Qt.Key_Return:
+            self.attribute_callback()
+
+        elif event.key() == Qt.Key_Escape:
+            self.close()

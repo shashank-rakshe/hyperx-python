@@ -28,6 +28,7 @@ def _items():
                              if v not in (None, {}, False)}})
 
     # ------------------------------------------------------------ complete: everything given
+    add('complete', 'Duplex plunger pump turning 360 rpm feeds a 88.9 x 5.5 mm seawater line going 3 m north and 2 m down into a header; supports at the bends - natural frequency and pulsation check', 'pipe_pulsation', {'od_mm': 88.9})
     add('complete', 'Hot water header NPS 8 schedule 40 runs 10 m west, then 4 m south; fixed points at both ends; 120 C and 6 bar, full of water - check stresses to B31.1', 'pipe_stress', {'t_oper_c': 120})
     add('complete', 'Run the component based finite element analysis for a shear tab: IPE360 beam to a HEB300 column, four M20 8.8 bolts, 150 kN reaction', 'steel_cbfem', {'V': 150})
     add('complete', 'AISC check of a bolted extended end plate moment joint: beam W360X44, column W410X149, plate 300x550x32, four M30 A325 bolts at 140 gauge, 45 mm to the flanges, 6 mm web weld, 100 kN shear and 400 kN column axial, with a 25 mm stiffener', 'connection_check', {})
@@ -134,6 +135,7 @@ def _items():
     add('missing', 'I need a hexahedral mesh for my casting', ask=True)
     add('missing', 'Make a drawing of a stiffened deck panel', ask=True)
     add('missing', 'fuel line 30 m3/h ka pressure drop?', ask=True)
+    add('missing', 'The discharge piping shakes when the pump runs, what is resonating?', ask=True)
     add('missing', 'Will my steam piping crack from heat growth?', ask=True)
     add('missing', 'I want the plastic strain and prying forces in my bolted joint', ask=True)
     add('missing', 'Verify the flexural steel of my concrete footing against the code', ask=True)

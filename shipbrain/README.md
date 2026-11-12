@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 103/103, wrong replies 0/103.
+replies score 105/105, wrong replies 0/105.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1108,6 +1108,18 @@ small numpy-2 compatibility edits and one data typo fixed (A53A modulus at 300 F
 every psi example and V&V input. ShipBrain's own checks (`tests/test_pipestress.py`): cantilever weight reaction and moment exact; fully restrained thermal force
 E A alpha dT exact; an L-bend within 1.3 % of an independent frame model (psi includes shear deformation); rests carry exactly the pipe + water weight and never
 pull. psi's own limits: no bends yet (corners are sharp joints), one material (A53 grade A), B31.1-1967 only, water only. Training: `training/pipestress_tasks.py`.
+
+### Piping pulsation and vibration (OpenPulse)
+
+`pipe_pulsation` runs OpenPulse (GPL-3.0, MOPT / Federal University of Santa Catarina; Python code copied unchanged in `vendor/openpulse`) on a route
+in plain words: acoustic natural frequencies of the fluid column (pressure pulsation; the pipe wall flexibility lowers the speed of sound, Lin &
+Morgan, as OpenPulse does) and structural natural frequencies of the pipe (Timoshenko pipe elements with the fluid mass), checked against pump or
+compressor excitation frequencies (10 % separation by default). OpenPulse meshes with gmsh: ShipBrain does not use gmsh, so its own 1D mesher writes
+OpenPulse's mesh data; OpenPulse's desktop interface (Qt, VTK) is answered by placeholder imports in a separate process (`shipbrain/openpulse_shim.py`).
+Checked (`tests/test_pulsation.py`): closed-closed and open-closed pipe modes n c / 2L, (2n-1) c / 4L (first mode exact, higher within 0.03 %), the
+water speed of sound with the wall correction, a three-leg route equal to one straight column (corners connect), and simply supported pipe bending modes
+within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
+Training: `training/pulsation_tasks.py`.
 
 ## Tests
 

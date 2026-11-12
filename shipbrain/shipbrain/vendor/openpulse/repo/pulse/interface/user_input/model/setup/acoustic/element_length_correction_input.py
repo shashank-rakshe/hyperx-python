@@ -1,0 +1,293 @@
+from collections import defaultdict
+
+import numpy as np
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QTreeWidgetItem
+
+from pulse import app
+from pulse.interface import warning_title
+from pulse.interface.ui_generated.model.setup.acoustic.element_length_correction_input_ui import (
+    ElementLengthCorrectionInput_UI,
+)
+from pulse.interface.user_input.model.setup.elements_input import ElementsInput
+from pulse.interface.user_input.project.get_user_confirmation_input import (
+    GetUserConfirmationInput,
+)
+from pulse.interface.user_input.project.print_message import PrintMessageInput
+
+
+class AcousticElementLengthCorrectionInput(
+    ElementsInput, ElementLengthCorrectionInput_UI
+):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self._initialize()
+        self._create_connections()
+        self._config_widgets()
+        self.load_elements_info()
+        self.selection_callback()
+
+        while self.keep_window_open:
+            self.exec()
+
+    def _initialize(self):
+
+        self.keep_window_open = True
+
+        self.type_label = None
+        self.dkey = None
+        self.log_removal = True
+
+    def _create_connections(self):
+        #
+        self.pushButton_attribute.clicked.connect(self.attribute_callback)
+        self.pushButton_exit.clicked.connect(self.close)
+        self.pushButton_remove.clicked.connect(self.remove_callback)
+        self.pushButton_reset.clicked.connect(self.reset_callback)
+        #
+        self.tabWidget_main.currentChanged.connect(self._tab_event_update)
+        #
+        self.treeWidget_elements_info.itemClicked.connect(self.on_click_item)
+        self.treeWidget_elements_info.itemDoubleClicked.connect(
+            self.on_doubleclick_item
+        )
+        #
+        app().main_window.selection_changed.connect(self.selection_callback)
+
+    def selection_callback(self):
+        selected_elements = app().main_window.list_selected_elements()
+        if selected_elements:
+            # if self.tabWidget_main.currentIndex() == 1:
+            #     return
+            text = ", ".join([str(i) for i in selected_elements])
+            self.lineEdit_element_id.setText(text)
+
+    def _config_widgets(self):
+        #
+        for i, width in enumerate([80, 120, 140]):
+            self.treeWidget_elements_info.setColumnWidth(i, width)
+            self.treeWidget_elements_info.headerItem().setTextAlignment(i, Qt.AlignCenter)
+
+    def _tab_event_update(self):
+
+        index = self.tabWidget_main.currentIndex()
+
+        if index == 0:
+            self.selection_callback()
+
+        elif index == 1:
+            app().main_window.set_selection()
+            self.lineEdit_element_id.clear()
+
+        self.lineEdit_element_id.setDisabled(bool(index))
+        self.pushButton_remove.setDisabled(True)
+
+    def filter_selection(self, correction_type: int, element_ids: list) -> dict:
+
+        node_ids = list()
+        filtered_data = dict()
+
+        for element_id in element_ids:
+            element_attributes = self.preprocessor.elements_attributes.get(element_id)
+
+            first_node = element_attributes.first_node.index
+            if first_node not in node_ids:
+                node_ids.append(first_node)
+
+            last_node = element_attributes.last_node.index
+            if last_node not in node_ids:
+                node_ids.append(last_node)
+
+        for node_id in node_ids:
+            element_ids = self.preprocessor.elements_connected_to_node.get(node_id)
+
+            if correction_type in [1, 2]:
+                if len(element_ids) == 3:
+                    node = app().project.model.preprocessor.nodes[node_id]
+                    coords = list(np.round(node.coordinates, 5))
+                    filtered_data[node_id] = {
+                        "correction_type": correction_type,
+                        "coords": coords,
+                        "element_ids": element_ids,
+                    }
+
+            else:
+                if len(element_ids) == 2:
+                    cross_e0 = self.preprocessor.get_element_cross_section(element_ids[0])
+                    cross_e1 = self.preprocessor.get_element_cross_section(element_ids[1])
+
+                    inside_diam_0 = cross_e0.outer_diameter - 2 * cross_e0.thickness
+                    inside_diam_1 = cross_e1.outer_diameter - 2 * cross_e1.thickness
+
+                    if inside_diam_0 != inside_diam_1:
+                        node = app().project.model.preprocessor.nodes[node_id]
+                        coords = list(np.round(node.coordinates, 5))
+                        filtered_data[node_id] = {
+                            "correction_type": correction_type,
+                            "coords": coords,
+                            "element_ids": element_ids,
+                        }
+
+        if filtered_data:
+            return filtered_data
+
+        else:
+            self.hide()
+            title = "Invalid selection"
+            message = f"The '{self.correction_labels[correction_type]}' has not been detected in "
+            message += (
+                "the selected group of elements. You should to change the elements "
+            )
+            message += "selection and/or modify the correction type to proceed."
+            PrintMessageInput([warning_title, title, message])
+            return dict()
+
+    def attribute_callback(self):
+
+        lineEdit = self.lineEdit_element_id.text()
+        stop, element_ids = self.before_run.check_selected_ids(lineEdit, "elements")
+
+        if stop:
+            return
+
+        index = self.comboBox_element_length_correction_type.currentIndex()
+
+        if index == 0:
+            correction_type = 0
+            self.type_label = "'Expansion'"
+
+        elif index == 1:
+            correction_type = 1
+            self.type_label = "'Side branch'"
+
+        elif index == 2:
+            correction_type = 2
+            self.type_label = "'Loop'"
+
+        filtered_data = self.filter_selection(correction_type, element_ids)
+
+        for selection_data in filtered_data.values():
+            element_ids = selection_data["element_ids"]
+
+            data = {
+                "correction_type": selection_data["correction_type"],
+                "coords": selection_data["coords"],
+            }
+
+            self.preprocessor.set_element_length_correction_by_element(
+                element_ids, data
+            )
+            self.properties._set_element_property(
+                "element_length_correction", data, element_ids
+            )
+
+        self.actions_to_finalize()
+
+    def remove_callback(self):
+
+        if  self.lineEdit_element_id.text() == "":
+            self.hide()
+            title = "Invalid selection"
+            message = "You should to select an item from the list "
+            message += "to proceed with the removal."
+            PrintMessageInput([warning_title, title, message])
+            return
+
+        str_element = self.lineEdit_element_id.text()
+        stop, element_ids = self.before_run.check_selected_ids(str_element, "elements")
+        if stop:
+            return
+        
+        self.preprocessor.set_element_length_correction_by_element(element_ids, None)
+        self.properties._remove_element_property("element_length_correction", element_ids)
+        self.actions_to_finalize()
+
+    def reset_callback(self):
+
+        self.hide()
+
+        title = "Resetting of element length corrections"
+        message = "Would you like to remove all element length corrections from the acoustic model?"
+
+        buttons_config = {"left_button_label" : "No", "right_button_label" : "Yes"}
+        read = GetUserConfirmationInput(title, message, buttons_config=buttons_config)
+
+        if read._cancel:
+            return
+
+        if not read._continue:
+            return
+
+        element_ids = list()
+        for (property, element_id) in self.properties.element_properties.keys():
+            if property == "element_length_correction":
+                element_ids.append(element_id)
+
+        if not element_ids:
+            return
+    
+        self.preprocessor.set_element_length_correction_by_element(element_ids, None)
+        self.properties._reset_element_property("element_length_correction")
+        self.actions_to_finalize()
+
+    def actions_to_finalize(self):
+        app().project.file.write_element_properties_in_file()
+        app().main_window.set_selection()
+        self.load_elements_info()
+        self.lineEdit_element_id.clear()
+
+    def maps_correction_type_to_elements(self):
+
+        keys = [0, 1, 2]
+        labels = ["Expansion", "Side branch", "Loop"]
+        self.correction_labels = dict(zip(keys, labels))
+
+        aux = defaultdict(list)
+        for (property, element_id), data in self.properties.element_properties.items():
+            if property == "element_length_correction":
+                coords = data["coords"]
+                index = data["correction_type"]
+                elc_label = self.correction_labels[index]
+                aux[elc_label, str(coords)].append(element_id)
+
+        group_id = 1
+        self.elements_correction_data = dict()
+        for key, element_ids in aux.items():
+            self.elements_correction_data[group_id] = (element_ids, key[0])
+            group_id += 1
+
+    def load_elements_info(self):
+
+        self.maps_correction_type_to_elements()
+        self.treeWidget_elements_info.clear()
+
+        for group_id, (element_ids, elc_label) in self.elements_correction_data.items():
+            item = QTreeWidgetItem([str(group_id), elc_label, str(element_ids)])
+            for i in range(3):
+                item.setTextAlignment(i, Qt.AlignCenter)
+
+            self.treeWidget_elements_info.addTopLevelItem(item)
+
+        self.update_tabs_visibility()
+
+    def update_tabs_visibility(self):
+
+        self.pushButton_remove.setDisabled(True)
+        for property, _ in self.properties.element_properties.keys():
+            if property == "element_length_correction":
+                # self.tabWidget_main.setCurrentIndex(0)
+                self.tabWidget_main.setTabVisible(1, True)
+                return
+
+        self.tabWidget_main.setTabVisible(1, False)
+
+    def on_click_item(self, item):
+        if item.text(0) != "":
+            self.pushButton_remove.setEnabled(True)
+            group_id = int(item.text(0))
+            (element_ids, _) = self.elements_correction_data[group_id]
+            app().main_window.set_selection(elements=element_ids)
+
+    def on_doubleclick_item(self, item):
+        self.on_click_item(item)

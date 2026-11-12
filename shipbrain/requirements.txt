@@ -22,6 +22,8 @@ pyyaml          # ConstructDrawingAI configuration
 pint            # pipe stress (psi, vendor/psi): its unit system
 tqdm            # pipe stress (psi): progress messages
 jinja2          # pipe stress (psi): report templates
+h5py            # pulsation (OpenPulse, vendor/openpulse): its project files
+ordered-set     # pulsation (OpenPulse)
 langchain<1     # cad3dify (drawing_to_step) with langchain-openai<1, langchain-experimental<1, svglib, rlPyCairo, loguru; MIT
 rapidocr-onnxruntime  # OCR for scanned drawings (Apache-2.0); optional
 opencv-python-headless  # scanned drawings (Apache-2.0); optional
