@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 134/134, wrong replies 0/134.
+replies score 136/136, wrong replies 0/136.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1128,6 +1128,15 @@ The three propeller repositories shared (a MATLAB lifting-line analysis, an Open
 efficiency, cavitation number at 0.7R). Checked (`tests/test_propeller.py`): thrust is zero at J = P/D for non-lifting sections (within 1 %), efficiency stays under the momentum limit, KT and KQ fall
 with J, the result converges with the number of elements, and the operating point obeys eta = T V / (2 pi n Q). Not validated against a real propeller: efficiency is optimistic by about 10 %; constant pitch,
 elliptical chord, no skew, rake or camber distribution; not a design program. Skills `propeller-modelling`, `propeller-analysis`, `propeller-tool-knowledge`.
+
+### Propellers: design and blade geometry (three licensed repositories)
+
+`BladeX` (MIT), `OpenProp` (GPL-3, MATLAB) and `PythonProp` (GPL-3, Python port) are added as packs (`packs/`, rows in `NOTICE.md`). Working tools: `propeller_design` (`propdesign.py`, PythonProp's optimum-circulation
+lifting-line code copied unchanged under `vendor/pythonprop`: design for blades, rpm, diameter, thrust and speed, with or without a duct, then the off-design curve and the radial pitch / chord / camber) and
+`blade_geometry` (`bladex_bridge.py`, BladeX under `vendor/bladex`: surface points of a blade from radial chord, pitch, rake, skew and NACA sections, written as a closed STL by ShipBrain's own writer; BladeX's
+pythonocc and smithers imports are replaced by placeholders because only the geometry is used, IGES export needs pythonocc-core). Checked (`tests/test_propdesign.py`): the designed KT equals T / (rho n^2 D^4)
+within 1 %, efficiency lies under the actuator-disk limit, the curve falls with J, and the STL of a constant NACA 0012 blade is closed with the volume within 3 % of area x span (every triangle faces outwards).
+Limits: lifting-line theory, no cavitation or strength check; the chord and thickness shape are PythonProp's example distributions scaled to the diameter; OpenProp (MATLAB) is not run (pack only). Skill `propeller-design`.
 
 ### Own tools for what the unlicensed repositories do: motions, design blocks, hull dataset
 

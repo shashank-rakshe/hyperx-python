@@ -522,6 +522,13 @@ class Tools:
                       '0.7R for a given shaft immersion. Inputs: blades Z, pitch ratio P/D, expanded area ratio, hub ratio, section drag. Not a design program (constant pitch, elliptical chord, no skew / rake / camber '
                       'distribution): efficiency is optimistic by about 10 %.',
                       {'type': 'object', 'properties': {k: num for k in ('D', 'rpm', 'speed_kn', 'Z', 'pitch_ratio', 'ear', 'hub_ratio', 'cd', 'immersion_m')} | {'name': {'type': 'string'}}, 'required': ['D', 'pitch_ratio']})
+        self.register('propeller_design', self.propeller_design, 'Optimum-circulation propeller design (Epps lifting-line, PythonProp / OpenProp, GPL-3): from blades Z, rpm, diameter, required thrust (N) and ship speed (m/s), with or without a duct, '
+                      'it returns the design KT, KQ, efficiency, torque, power, the radial circulation, the off-design curve KT / KQ / efficiency against J and the blade pitch, chord and camber distribution; '
+                      'blade_stl=true also writes the 3D blade (BladeX sections) as an STL. Use propeller_bem for a quick open-water curve of a given pitch ratio; this tool finds the pitch for a thrust.',
+                      {'type': 'object', 'properties': {k: num for k in ('Z', 'rpm', 'D', 'thrust_N', 'speed_ms', 'hub_d', 'tau')} | {'duct': {'type': 'boolean'}, 'blade_stl': {'type': 'boolean'}, 'name': {'type': 'string'}}, 'required': ['rpm', 'D', 'thrust_N', 'speed_ms']})
+        self.register('blade_geometry', self.blade_geometry, 'Propeller blade 3D geometry with BladeX (MIT): radii, chord lengths, pitch, rake, skew angles (deg) per radius and a NACA 4-digit section (naca, or nacas per radius) -> '
+                      'the suction / pressure surface points and a closed STL (tip and root capped) with its volume; units as given.',
+                      {'type': 'object', 'properties': {k: {'type': 'array', 'items': {'type': 'number'}} for k in ('radii', 'chord_lengths', 'pitch', 'rake', 'skew_angles')} | {'naca': {'type': 'string'}, 'nacas': {'type': 'array'}, 'name': {'type': 'string'}}, 'required': ['radii', 'chord_lengths', 'pitch']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -2057,6 +2064,48 @@ class Tools:
         out['plain_english'] = say
         return out
 
+    def propeller_design(self, rpm, D, thrust_N, speed_ms, Z=4, hub_d=None, duct=False, tau=0.9, blade_stl=False, name='propeller_design'):
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        from . import propdesign as PD
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        r = PD.design(int(Z), float(rpm), float(D), float(thrust_N), float(speed_ms), hub_d=float(hub_d) if hub_d else None, duct=bool(duct), tau=float(tau))
+        pt = r.pop('_pt')
+        g = pt['geometry']
+        r['sections'] = [{'r_over_R': round(float(a), 3), 'c_over_D': round(float(b), 4), 'P_over_D': round(float(c), 4), 't_over_c': round(float(d), 4), 'f_over_c': round(float(e), 4)}
+                         for a, b, c, d, e in list(zip(*[np.ravel(g[k]) for k in ('RG', 'CoD', 'PoD', 't0oc', 'f0oc')]))[::4]]
+        r.pop('geometry_keys', None)
+        fig, ax = plt.subplots(figsize=(7, 4.5))
+        c = r['curve']
+        ax.plot([x['J'] for x in c], [x['KT'] for x in c], 'b-o', ms=3, label='KT'); ax.plot([x['J'] for x in c], [10 * x['KQ'] for x in c], 'r-o', ms=3, label='10 KQ')
+        ax.plot([x['J'] for x in c], [max(x['eta'], 0) for x in c], 'g-o', ms=3, label='efficiency'); ax.axvline(r['design_J'], color='k', ls=':')
+        ax.set_xlabel('J'); ax.grid(alpha=0.3); ax.legend(); ax.set_ylim(0, None); ax.set_title(f"Designed propeller, Z {int(Z)}, {'ducted' if duct else 'open'} (design point dotted)")
+        fig.tight_layout(); fig.savefig(os.path.join(self.workdir, name + '.png'), dpi=120); plt.close(fig)
+        r['files'] = [name + '.png']
+        if blade_stl:
+            from . import bladex_bridge as BB
+            up, dn = PD.blade_from_design(pt)
+            BB.write_stl(up, dn, os.path.join(self.workdir, name + '_blade.stl'), name)
+            r['files'].append(name + '_blade.stl')
+        r['plain_english'] = (f"Designed a {int(Z)}-blade {'ducted ' if duct else ''}propeller of {float(D):g} m at {float(rpm):g} rpm for {float(thrust_N) / 1000:.0f} kN at {float(speed_ms):g} m/s (J = {r['design_J']:.2f}): "
+                              f"KT {r['design_KT']:.3f} (matches the required thrust), KQ {r['design_KQ']:.4f}, efficiency {r['design_efficiency']:.2f} against the ideal {r['actuator_disk_efficiency']:.2f} of an actuator disk, "
+                              f"torque {r['torque_Nm'] / 1000:.1f} kN m, power {r['power_kW']:.0f} kW. Lifting-line design: cavitation, strength and the final section shape still need checks.")
+        for k in ('radius_fraction', 'circulation_G'):
+            r[k] = r[k][::4]
+        return r
+
+    def blade_geometry(self, radii, chord_lengths, pitch, rake=None, skew_angles=None, naca='0012', nacas=None, name='blade'):
+        from . import bladex_bridge as BB
+        n = len(radii)
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        up, dn = BB.blade(radii, chord_lengths, pitch, rake or [0.0] * n, skew_angles or [0.0] * n, naca=str(naca), nacas=nacas)
+        p = BB.write_stl(up, dn, os.path.join(self.workdir, name + '.stl'), name)
+        from . import intake
+        d = intake.describe_stl(p)[0]
+        return {'files': [name + '.stl'], 'sections': n, 'points_per_face': int(up.shape[1]), 'stl': d,
+                'plain_english': f"Blade surface built from {n} radial sections (BladeX): closed STL with {d.get('triangles')} triangles, volume {d.get('volume')} (cubic of the length unit given)."}
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -2681,7 +2730,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'openhcm|hull condition model|\bhcm\b|\.hcm\b', ('openhcm_read', 'structure_to_mesh')),
     (r'roll period|natural period|heave|pitch(ing)? period|seakeeping|ship motions?|resonan|rao\b', ('hull_motions', 'gz_curve')),
     (r'building block|\bdbb\b|weight (estimate|budget)|requirements? .*(shall|should)|shall.*should|centre of gravity of the (ship|vessel|blocks)', ('dbb_blocks', 'ship_hydrostatics')),
-    (r'propeller|screw|open.water (curve|diagram)|\bkt\b|\bkq\b|advance ratio|bollard|thrust coefficient|cavitation number', ('propeller_bem', 'hull_resistance')),
+    (r'propeller|screw|open.water (curve|diagram)|\bkt\b|\bkq\b|advance ratio|bollard|thrust coefficient|cavitation number', ('propeller_bem', 'propeller_design', 'blade_geometry', 'hull_resistance')),
     (r'finite[- ]volume|\bfvm\b|1d (cfd|diffusion|convection|conduction)|\btdma\b|simple algorithm|upwind|central differenc', ('fvm_1d',)),
     (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),
     (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),

@@ -57,6 +57,8 @@ def _items():
     add('complete', 'Sum these blocks for my design: a hold 30x10x5 m with cargo density 0.8, an engine room 12x10x5 m at 0.35 t/m3, steel 40 m3 - and check shall cargo volume 1200 m3', 'dbb_blocks')
     add('complete', 'Open-water curve and the operating point of a 4 m propeller, 4 blades, P/D 1.0, EAR 0.65, at 120 rpm and 16 knots, shaft 5 m under water: thrust, torque, power and cavitation number', 'propeller_bem', {'D': 4.0, 'pitch_ratio': 1.0})
     add('complete', 'KT, KQ and efficiency against J for a 5-blade propeller with pitch ratio 0.9 and EAR 0.8', 'propeller_bem', {'pitch_ratio': 0.9})
+    add('complete', 'Design a 4-blade propeller of 3 m diameter at 300 rpm that gives 200 kN thrust at 6 m/s and write the blade as an STL', 'propeller_design', {'D': 3.0, 'rpm': 300.0, 'thrust_N': 200000.0})
+    add('complete', 'Build the 3D blade surface from radii 0.2, 0.35, 0.5 m, chords 0.25, 0.3, 0.15 m and pitch 0.9 m with NACA 0012 sections', 'blade_geometry', {'radii': [0.2, 0.35, 0.5]})
     add('complete', 'I ran it in STAR-CCM+ and exported star_result.csv - what is the pressure at x = 0.5, y = 0.2, z = 0?', 'probe_result', {'x': 0.5, 'y': 0.2, 'z': 0})
     add('complete', 'Hot water header NPS 8 schedule 40 runs 10 m west, then 4 m south; fixed points at both ends; 120 C and 6 bar, full of water - check stresses to B31.1', 'pipe_stress', {'t_oper_c': 120})
     add('complete', 'Run the component based finite element analysis for a shear tab: IPE360 beam to a HEB300 column, four M20 8.8 bolts, 150 kN reaction', 'steel_cbfem', {'V': 150})

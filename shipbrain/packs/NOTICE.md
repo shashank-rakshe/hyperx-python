@@ -538,3 +538,24 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: Apache-2.0
 - Use: ok: permissive licence, keep the attribution (NOTICE / AUTHORS of the repository)
 - Copyright (c) Bureau Veritas Marine & Offshore and the OpenHCM Consortium
+
+## BladeX
+
+- Source: https://github.com/mathLab/BladeX
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2017-2019 BladeX contributors (mathLab, SISSA)
+
+## OpenProp
+
+- Source: https://github.com/joaoantoniocardoso/OpenProp (commit 521e1c07c81d)
+- Licence: GPL-3.0
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- OpenProp contributors (MIT / Hydrodynamics group), fork by João Antonio Cardoso
+
+## PythonProp
+
+- Source: https://github.com/ianbohannon/PythonProp
+- Licence: GPL-3.0
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- PythonProp contributors, Python port of OpenProp

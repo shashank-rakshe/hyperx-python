@@ -1,0 +1,1 @@
+PythonProp (https://github.com/ianbohannon/PythonProp), GPL-3.0, Python port of OpenProp (MIT/Hydrodynamics group, GPL-3). Files copied unchanged from Python/Examples/Ducted_Prop (design: EppsOptimizer, Geometry, Analyze and their helpers). GUI, report, export and plot scripts are not copied. Run with `shipbrain.propdesign`.
