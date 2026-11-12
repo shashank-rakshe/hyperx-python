@@ -208,6 +208,36 @@ def check_licence(files):
                       f'Use --private-only to build it for your own private use only (never for training or sharing).'}
 
 
+_SRC_EXT = ('.c', '.cc', '.cpp', '.cxx', '.h', '.hh', '.hpp', '.py', '.m', '.java', '.js', '.ts', '.rs', '.go', '.f90', '.f', '.cs')
+
+
+def _header_licence(tree, paths, sample=80, need=5):
+    """a repo without a LICENSE file whose source files each carry the licence notice in their header (the usual GPL / MIT /
+    Apache practice, e.g. OpenWAM: 'This file is part of ... free software: ... GNU General Public License ... version 3').
+    Returns (name, notice text) when at least `need` sampled files carry the same kind of notice and most of the sampled files do."""
+    srcs = [p for p in paths if p.lower().endswith(_SRC_EXT)]
+    if len(srcs) < need:
+        return None
+    step = max(1, len(srcs) // sample)
+    notices, seen = {}, 0
+    for p in srcs[::step][:sample]:
+        try:
+            head = tree.read(p)[:3000].decode('utf-8', 'replace')
+        except Exception:
+            continue
+        seen += 1
+        if re.search(r'(free software|licen[cs]ed? under|permission is hereby granted|redistribute it and/or modify)', head, re.I):
+            spdx, kind = classify_licence(head)
+            if kind != 'unknown':
+                notices.setdefault((spdx, kind), []).append(head)
+    if not notices:
+        return None
+    (spdx, kind), heads = max(notices.items(), key=lambda kv: len(kv[1]))
+    if len(heads) < need or len(heads) < 0.5 * seen:
+        return None
+    return f'@headers: licence notice in the header of {len(heads)} of {seen} sampled source files', heads[0]
+
+
 def _licence_files(paths):
     """root-level licence-like files of a repo listing"""
     return [p for p in paths if '/' not in p and LICENCE_FILE.match(p)]
@@ -727,6 +757,10 @@ def build_pack(src, out_dir, cache_dir=None, private_only=False, max_kb=DEFAULT_
             spdx = _manifest_spdx(tree, set(paths))
             if spdx:
                 lic_files['@spdx:' + spdx] = spdx
+        if not lic_files:
+            hdr = _header_licence(tree, paths)
+            if hdr:
+                lic_files[hdr[0]] = hdr[1]
         lic = check_licence(lic_files)
         root_holders = {_holder(c) for c in lic['attribution']}         # from the LICENSE files only
         for p in ('NOTICE', 'NOTICE.md', 'NOTICE.txt'):                 # Apache NOTICE: keep its copyright lines

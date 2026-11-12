@@ -482,3 +482,17 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: GPL
 - Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
 - Copyright: the OpenPulse authors, see the repository
+
+## OpenWAM
+
+- Source: https://github.com/CMT-UPV/OpenWAM
+- Licence: GPL (3 or later) - stated in the header of every source file; the repository has no separate LICENSE file
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- OpenWAM, CMT-Motores Termicos / Universidad Politecnica Valencia (see the source headers)
+
+## Finite-Volume-Method-for-1D-CFD-Simulations
+
+- Source: https://github.com/iammohith/Finite-Volume-Method-for-1D-CFD-Simulations
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) the repository owner, see its LICENSE

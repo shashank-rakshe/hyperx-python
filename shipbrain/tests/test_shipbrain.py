@@ -713,6 +713,45 @@ def test_repopack_round_trip_and_load(tmp_path, strict_licences):
     assert repopack.load_pack(r['file'], knowledge.Knowledge(), training_only=True) == 0
 
 
+def _header_repo(root, n_with, n_without, notice):
+    """git repo without a LICENSE file: some source files carry a licence notice in their header, some do not"""
+    import subprocess
+    root.mkdir()
+    for i in range(n_with):
+        (root / f'a{i}.cpp').write_text(f'/* {notice} */\n// part {i}\nint f{i}() {{ return {i}; }}\n' + '// code line\n' * 20)
+    for i in range(n_without):
+        (root / f'b{i}.cpp').write_text(f'// plain {i}\nint g{i}() {{ return {i}; }}\n' + '// code line\n' * 20)
+    (root / 'README.md').write_text('# solver\n\nA small solver with enough text to make one searchable chunk of documentation here.\n')
+    for cmd in (['init', '-q'], ['add', '-A'], ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'x']):
+        subprocess.run(['git', *cmd], cwd=root, check=True, capture_output=True)
+    return root
+
+
+@pytest.mark.skipif(not shutil.which('git'), reason='git not installed')
+def test_repopack_licence_from_source_headers(tmp_path, strict_licences):
+    from shipbrain import repopack
+    gpl = ('This file is part of Solver. Solver is free software: you can redistribute it and/or modify it under the terms of the '
+           'GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.')
+    out = tmp_path / 'out'
+    out.mkdir()
+    # no LICENSE file, but the notice is in most source files: that is a licence grant (copyleft here -> follows the owner's switch)
+    ok = _header_repo(tmp_path / 'withhdr', 12, 2, gpl)
+    tree = repopack.open_repo(str(ok), None, lambda *a: None)[0]
+    hdr = repopack._header_licence(tree, [p for p, _ in tree.files()])
+    assert hdr and 'licence notice in the header of 12 of 14' in hdr[0]
+    r = repopack.build_pack(str(ok), str(out), log=lambda *a: None)
+    assert r.get('refused') and 'GPL' in r['reason']                      # strict mode: copyleft refused, but it was RECOGNISED as GPL
+    lic = repopack.check_licence({'@headers: x': gpl})
+    assert lic['license'] == 'GPL' and lic['kind'] == 'copyleft'
+    # one stray mention is not a licence: still refused as having no licence
+    stray = _header_repo(tmp_path / 'stray', 1, 12, gpl)
+    r = repopack.build_pack(str(stray), str(out), log=lambda *a: None)
+    assert r['refused'] and 'No licence file' in r['reason']
+    # most files with a notice but too few files overall
+    few = _header_repo(tmp_path / 'few', 3, 0, gpl)
+    assert repopack.build_pack(str(few), str(out), log=lambda *a: None)['refused']
+
+
 @pytest.mark.skipif(not shutil.which('git'), reason='git not installed')
 def test_repo_tasks_make_valid_samples(tmp_path, strict_licences):
     import re
