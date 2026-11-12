@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 91/91, wrong replies 0/91.
+replies score 92/92, wrong replies 0/92.
 
 ### Understanding users: asking, units, design loops, error recovery
 

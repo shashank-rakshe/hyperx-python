@@ -28,6 +28,7 @@ def _items():
                              if v not in (None, {}, False)}})
 
     # ------------------------------------------------------------ complete: everything given
+    add('complete', 'Take bracket_layout.png, a thin pencil sketch, and give me single CAD lines along each stroke', 'trace_drawing', {'file': 'bracket_layout.png'})
     add('complete', 'Lay out a 114.3 mm OD pipe with 6 mm wall that runs 2 m aft, climbs 3 m and then goes 1.5 m to port', 'pipe_route', {'od': 114.3})
     add('complete', 'Check a 84 mm R3 studless chain, 700 m long, water depth 120 m, anchor 640 m from the fairlead', 'mooring',
         {'depth': 120, 'length': 700, 'radius': 640, 'd_mm': 84})
