@@ -62,7 +62,24 @@ class H(BaseHTTPRequestHandler):
             p = os.path.join(STATE['tools'].workdir, name)
             if not os.path.isfile(p):
                 return self._send(404, {'error': 'not found'})
+            ext = os.path.splitext(name)[1].lower()
+            img = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml'}.get(ext)
+            if img and 'inline' in urllib.parse.parse_qs(u.query):
+                return self._send(200, open(p, 'rb').read(), img)                 # pictures are shown in the chat
             self._send(200, open(p, 'rb').read(), 'application/octet-stream', {'Content-Disposition': f'attachment; filename="{name}"'})
+        elif u.path in ('/api/field', '/api/probe'):
+            q = {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
+            wd = STATE['tools'].workdir
+            try:
+                from . import viz
+                src = os.path.join(wd, os.path.basename(q['file']))
+                frd = os.path.join(wd, os.path.basename(q.get('frd') or os.path.splitext(q['file'])[0] + '.frd'))
+                if u.path == '/api/field':
+                    self._send(200, viz.field_json(src, frd))
+                else:
+                    self._send(200, viz.probe(src, frd, float(q['x']), float(q['y']), float(q['z'])))
+            except Exception as e:
+                self._send(400, {'error': f'{type(e).__name__}: {e}'})
         else:
             self._send(404, {'error': 'not found'})
 

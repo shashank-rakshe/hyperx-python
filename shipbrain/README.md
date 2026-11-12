@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 114/114, wrong replies 0/114.
+replies score 116/116, wrong replies 0/116.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1120,6 +1120,14 @@ Checked (`tests/test_pulsation.py`): closed-closed and open-closed pipe modes n 
 water speed of sound with the wall correction, a three-leg route equal to one straight column (corners connect), and simply supported pipe bending modes
 within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
 Training: `training/pulsation_tasks.py`.
+
+### Results in the chat window
+
+Every picture a tool makes (`files` in its result: png, jpg, svg) is shown in the chat, click to enlarge. A structural result also opens an interactive view in the right
+panel (`/api/field`): the part coloured by von Mises stress or displacement with a colour bar - hover over any place for its value, click to pin it (the nearest node's
+coordinates, stress and displacement vector). For a value at a given place, `probe_result` reads it from a mesh result (mm), an OpenFOAM case (metres) or an Elmer `.vtu` and
+tells how far the node / cell is from the point asked for (`/api/probe` is the same for the page). Checked in `tests/test_probe.py` and in a headless browser run (pictures
+load, hover and pin give the values of the nearest node). Not interactive yet: the flow slices (pictures only; use `probe_result` for their values).
 
 ### 3D flow with OpenFOAM and the flow-to-stress chain
 

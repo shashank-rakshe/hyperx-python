@@ -8,6 +8,7 @@ Tool-call format (same in the training data, so a small fine-tuned model learns 
 The app runs the tool and sends back a message that starts with  TOOL_RESULT <name>:  followed by JSON.
 The model then answers (or calls another tool). Numbers, meshes and files always come from tools, never from the model.
 """
+import numpy as np
 import ast, importlib.util, json, math, operator, os, re, subprocess, sys, textwrap, time, urllib.request
 
 from . import mesh as _mesh, fea as _fea, solver as _solver, platemesh as _pm, meshcheck as _mc
@@ -449,6 +450,10 @@ class Tools:
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'velocity': num, 'fluid': {'type': 'string', 'enum': ['water', 'seawater', 'air', 'oil']},
                                                          'fix': {'type': 'array'}, 'thickness_mm': num, 'element_size': num, 'turbulence': {'type': 'string', 'enum': ['laminar', 'sst']},
                                                          'cell': num, 'name': {'type': 'string'}}, 'required': ['file', 'velocity', 'fix']})
+        self.register('probe_result', self.probe_result, 'READ A RESULT AT A PLACE: the value of a finished analysis at coordinates x, y, z. file = a mesh .inp (structure: displacement and von Mises '
+                      'stress at the nearest node, coordinates in mm), an OpenFOAM case folder (the *_flow folder: velocity and pressure in the nearest cell, metres) or an Elmer .vtu '
+                      '(all fields at the nearest node, metres). Use it when the user asks "what is the stress / pressure / velocity at ...".',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'x': num, 'y': num, 'z': num}, 'required': ['file', 'x', 'y']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1592,6 +1597,8 @@ class Tools:
         if vtu:
             files.append(os.path.basename(viz.export_vtu(src, base + '.vtu', frd=self._path(frd) if frd else None)))
         info['files'] = files
+        if field and frd and src.lower().endswith(('.inp', '.bdf')):
+            info['viewer'] = {'file': os.path.basename(src), 'frd': os.path.basename(self._path(frd))}
         info['plain_english'] = (f"Picture {info['png']}: " + (f"{field.replace('_', ' ')} from {info['min']:.3g} to {info['max']:.3g} {info['units']}"
                                  + (f", drawn deformed x{info['deformation_scale']:g}" if field == 'displacement' else '') if field else f"{info['faces']} faces, view {view}")
                                  + (f". ParaView file {files[-1]}." if vtu else '.'))
@@ -1682,7 +1689,7 @@ class Tools:
             files.append(os.path.basename(png))
         r = {'flow': {k: out[k] for k in ('cells', 'converged', 'iterations', 'drag_n', 'side_force_y_n', 'drag_coefficient', 'max_velocity_m_s', 'pressure_min_pa', 'pressure_max_pa')},
              'force_applied_n': [round(float(x), 4) for x in fsum], 'max_displacement_mm': sol['max_displacement_mm'], 'max_von_mises_MPa': sol['max_von_mises_MPa'],
-             'shell_elements': minfo['elements'], 'files': files}
+             'shell_elements': minfo['elements'], 'files': files, 'viewer': {'file': name + '_fe.inp', 'frd': os.path.basename(sol['frd'])}}
         s = (f"{fluid} at {velocity:g} m/s past {os.path.basename(file)} ({out['cells']:,} flow cells, {turbulence}): drag {out['drag_n']:.4g} N, vertical force "
              f"{out['side_force_y_n']:.3g} N. Those forces ({fsum[0]:.4g}, {fsum[1]:.4g}, {fsum[2]:.3g} N - equal to the flow force) loaded the {minfo['elements']:,}-element shell model: "
              f"max displacement {sol['max_displacement_mm']} mm, max von Mises {sol['max_von_mises_MPa']} MPa (shell nodal maximum). Pictures: {', '.join(files)}.")
@@ -1690,6 +1697,29 @@ class Tools:
             s += ' WARNING: the flow solution did not fully converge: treat the loads as indicative.'
         s += ' The flow sees the part stair-stepped on a coarse grid and the structure is one-way coupled: an engineering estimate, check with a finer grid.'
         r['plain_english'] = s
+        return r
+
+    def probe_result(self, file, x, y, z=0.0):
+        from . import viz, openfoam, elmer
+        src = self._path(file)
+        if os.path.isdir(src):
+            r = openfoam.probe(src, x, y, z)
+            r['plain_english'] = (f"At the cell nearest ({x:g}, {y:g}, {z:g}) m [{r['distance_m']} m away]: velocity {r['speed_m_s']} m/s {r['velocity_m_s']}, pressure {r['pressure_pa']} Pa.")
+        elif src.lower().endswith('.vtu'):
+            v = elmer.read_vtu(src)
+            X = v['points']
+            P = np.array([x, y, z if X.shape[1] > 2 else 0.0])[:X.shape[1]]
+            j = int(np.argmin(np.linalg.norm(X - P, axis=1)))
+            vals = {k: (np.round(a[j], 6).tolist() if np.ndim(a[j]) else round(float(a[j]), 6)) for k, a in v['fields'].items()}
+            r = {'x': float(X[j][0]), 'y': float(X[j][1]), 'fields': vals}
+            r['plain_english'] = f"At the node nearest ({x:g}, {y:g}) m ({X[j][0]:.4g}, {X[j][1]:.4g}): " + ', '.join(f'{k} {val}' for k, val in vals.items() if k in ('velocity', 'pressure', 'displacement', 'vonmises')) + '.'
+        else:
+            frd = os.path.splitext(src)[0] + '.frd'
+            if not os.path.exists(frd):
+                return {'error': 'no result (.frd) next to ' + file + ': run the analysis first'}
+            r = viz.probe(src, frd, x, y, z)
+            r['plain_english'] = (f"At node {r['node']} ({r['x']:.4g}, {r['y']:.4g}, {r['z']:.4g}) mm, {r['distance_mm']} mm from the point you gave: von Mises {r['von_mises_MPa']} MPa, "
+                                  f"displacement {r['displacement_magnitude_mm']} mm {r['displacement_mm']}.")
         return r
 
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
@@ -2300,6 +2330,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'\.stl\b|scan(ned)? (part|mesh)|reverse', ('reverse_cad', 'stl_to_step')),
     (r'\bpicture\b|\bimage\b|visuali[sz]|show (me )?(the )?(stress|result|model|plot)|contour|render|screenshot of (the )?(model|mesh)|plot (the )?(stress|displacement)|paraview|\.vtu', ('show_result',)),
     (r'\bcfd\b|\bfsi\b|fluid.structure|\belmer\b|flow (past|around|over|on)|drag|(water|air|wind|current) (at|of) [0-9.]+ ?m/s|navier|turbulen|k-?omega|pressure distribution|wave load|openfoam|simplefoam', ('elmer_flow', 'openfoam_flow', 'flow_load_stress', 'physics_lab')),
+    (r'(stress|pressure|velocity|displacement|value|temperature)s? (at|in|near|on) (the )?(point|node|location|position|x ?=|\()|at (x|coordinate)|probe|read (the )?(value|result)', ('probe_result',)),
     (r'finite[- ]volume|\bfvm\b|1d (cfd|diffusion|convection|conduction)|\btdma\b|simple algorithm|upwind|central differenc', ('fvm_1d',)),
     (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),
     (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),

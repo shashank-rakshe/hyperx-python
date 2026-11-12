@@ -229,6 +229,9 @@ def build_case(case_dir, velocity=1.0, fluid='water', length=2.0, height=1.0, wi
     info = {'rho': rho, 'nu': nu_, 'U': U, 'cells': len(g['cells']), 'points': g['n_points'], 'two_d': two_d, 'turbulence': turbulence,
             'A_ref': float(A_ref), 'offset': (ox, oy, oz), 'body_faces': len(g['patches'].get('body', [])), 'grid': g}
     _write_files(case_dir, info, turbulence, intensity, side_walls, end_iter, cell)
+    np.save(os.path.join(case_dir, 'sb_centres.npy'), g['cell_centres'])
+    import json
+    json.dump({'rho': rho, 'nu': nu_, 'U': U}, open(os.path.join(case_dir, 'sb_info.json'), 'w'))
     return info
 
 
@@ -433,3 +436,21 @@ def solve(workdir, name, **kw):
     if info['two_d']:
         out['note_2d'] = 'forces are for the depth of one cell (2D case)'
     return out, r, info
+
+
+def probe(case_dir, x, y, z):
+    """velocity and pressure at a place of a finished ShipBrain OpenFOAM case (the cell containing / nearest to (x, y, z) in metres)"""
+    import json
+    c = np.load(os.path.join(case_dir, 'sb_centres.npy'))
+    meta = json.load(open(os.path.join(case_dir, 'sb_info.json')))
+    t = last_time(case_dir)
+    if t is None:
+        raise RuntimeError('this case has no result yet')
+    U = read_field(os.path.join(case_dir, t, 'U'), vec=True)
+    p = read_field(os.path.join(case_dir, t, 'p'))
+    U = np.tile(U, (len(c), 1)) if U.ndim == 1 else U
+    p = np.full(len(c), float(p[0])) if len(p) != len(c) else p
+    d = np.linalg.norm(c - np.array([x, y, z], float), axis=1)
+    j = int(np.argmin(d))
+    return {'x': float(c[j][0]), 'y': float(c[j][1]), 'z': float(c[j][2]), 'distance_m': round(float(d[j]), 4), 'velocity_m_s': [round(float(v), 5) for v in U[j]],
+            'speed_m_s': round(float(np.linalg.norm(U[j])), 5), 'pressure_pa': round(float(p[j] * meta['rho']), 4)}

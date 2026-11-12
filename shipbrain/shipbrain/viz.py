@@ -311,3 +311,26 @@ def render_slice(res, grid, out_png, field='velocity', plane='xy', at=None, titl
     ax.set_title(title or f'{field}, slice {plane} at {"xyz"[ic]} = {(cut[kc] + cut[kc + 1]) / 2:.3g} m')
     fig.tight_layout(); fig.savefig(out_png, dpi=dpi); plt.close(fig)
     return {'png': out_png, 'field': field, 'min': float(fv.min()), 'max': float(fv.max())}
+
+
+# ====================================================================== for the chat window: fields as data, and values at a place
+def field_json(src, frd, max_faces=30000):
+    """the mesh with its result values as plain lists, for the interactive viewer in the chat window"""
+    ids, X, faces, bars, model = load_geometry(src)
+    u, vm = nodal_results(model, ids, X, frd)
+    umag = np.linalg.norm(u, axis=1)
+    if len(faces) > max_faces:
+        raise ValueError(f'{len(faces)} faces: too many to show interactively here (limit {max_faces}) - use the picture')
+    return {'xyz': np.round(X, 4).tolist(), 'faces': [list(map(int, f)) for f in faces], 'ids': [int(i) for i in ids],
+            'fields': {'von_mises': {'values': np.round(vm, 5).tolist(), 'unit': 'MPa'}, 'displacement': {'values': np.round(umag, 6).tolist(), 'unit': 'mm'}},
+            'disp': np.round(u, 6).tolist()}
+
+
+def probe(src, frd, x, y, z, k=1):
+    """displacement and von Mises at the node of the mesh nearest to (x, y, z) (model units, mm); also the distance to it"""
+    ids, X, faces, bars, model = load_geometry(src)
+    u, vm = nodal_results(model, ids, X, frd)
+    d = np.linalg.norm(X - np.array([x, y, z], float), axis=1)
+    j = int(np.argmin(d))
+    return {'node': int(ids[j]), 'x': float(X[j][0]), 'y': float(X[j][1]), 'z': float(X[j][2]), 'distance_mm': round(float(d[j]), 3),
+            'von_mises_MPa': round(float(vm[j]), 5), 'displacement_mm': [round(float(v), 6) for v in u[j]], 'displacement_magnitude_mm': round(float(np.linalg.norm(u[j])), 6)}

@@ -38,6 +38,8 @@ def _items():
     add('complete', 'CFD of a rigid plate 300 mm high in an oil flow of 0.01 m/s: pressure on the front and back faces and the drag', 'elmer_flow')
     add('complete', 'Run OpenFOAM for water at 1.5 m/s past bracket.step, then load the flow forces on the shell model and tell me the stress; fixed at x = 0', 'flow_load_stress')
     add('complete', 'OpenFOAM SST k-omega: seawater at 2 m/s past a plate 0.5 m high, 3D, 0.8 m wide - drag and Cd', 'openfoam_flow')
+    add('complete', 'In the stress result of fls_fe.inp, what is the von Mises stress and displacement at x = 300, y = 0, z = 500 mm?', 'probe_result', {'x': 300, 'y': 0, 'z': 500})
+    add('complete', 'Read me the pressure and velocity in the flow case my_flow at x = 1.2 m, y = 0.2 m, z = 0.025 m', 'probe_result', {'x': 1.2, 'y': 0.2, 'z': 0.025})
     add('complete', 'Hot water header NPS 8 schedule 40 runs 10 m west, then 4 m south; fixed points at both ends; 120 C and 6 bar, full of water - check stresses to B31.1', 'pipe_stress', {'t_oper_c': 120})
     add('complete', 'Run the component based finite element analysis for a shear tab: IPE360 beam to a HEB300 column, four M20 8.8 bolts, 150 kN reaction', 'steel_cbfem', {'V': 150})
     add('complete', 'AISC check of a bolted extended end plate moment joint: beam W360X44, column W410X149, plate 300x550x32, four M30 A325 bolts at 140 gauge, 45 mm to the flanges, 6 mm web weld, 100 kN shear and 400 kN column axial, with a 25 mm stiffener', 'connection_check', {})
