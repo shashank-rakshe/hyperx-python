@@ -240,6 +240,15 @@ All outside data is downloaded on Kaggle, which has internet:
    "rules" in its name, attach it to the training notebook too.
 4. Optional: `training/kaggle/detector_kernel.py` in a GPU notebook trains the drawing symbol detector.
 
+## Kaggle: one pasted cell, and training only on new data
+
+`training/kaggle/PASTE_IN_KAGGLE.md`: a two-line cell downloads `kernel.py` from this repository and runs it; the run fetches code, packs and data itself. **Incremental training** (`training/incremental.py`,
+used by `kernel.py`, `SB_MODE=auto` by default): every sample is identified by a content hash; after an accepted run the hashes and the LoRA adapter are saved to a private Hugging Face repo `<you>/shipbrain-state`
+(needs the Kaggle secret `HF_TOKEN`, write access). The next run fetches them and trains only on samples not yet learned, plus a 10 % replay of old ones (`SB_REPLAY`), at LR 1e-4, from the saved adapter; the scorecard
+before / after and the accept gate then compare against the previous model. `SB_MODE=full` retrains everything; a changed base model or lost state falls back to full. The draft model is not retrained in incremental runs.
+Tested: the sample bookkeeping (`tests/test_incremental.py`: new vs old, replay share, base change, eval files ignored, nothing committed twice). Not tested here (no GPU): continuing the adapter on Kaggle: check the line
+`INCREMENTAL: N new samples` and the loss in the first incremental log. Pure new-data training can forget older skills: that is why the replay is on by default.
+
 ## Native CAD files without the CAD program: cadmpeg (Apache-2.0)
 
 [cadmpeg](https://github.com/cadmpeg/cadmpeg) opens native CAD files directly, written clean-room (no vendor SDKs).
