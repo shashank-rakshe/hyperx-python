@@ -136,6 +136,10 @@ if os.environ.get('SB_CONTINUE') == '1':
         print('continuing from the older model:', BASE, flush=True)
     else:
         print('SB_CONTINUE=1 but no older model attached: training from the base model', flush=True)
+FEEDBACK_FILES = sorted(f for f in glob.glob('/kaggle/input/**/*feedback*.jsonl', recursive=True))
+if FEEDBACK_FILES:                       # the app's exported 👍 / 👎 (private dataset): liked conversations join the training data
+    extra += ' ' + ' '.join(f'--feedback {f}' for f in FEEDBACK_FILES)
+    PRIVATE = True; UPLOAD_MODEL = False  # user feedback is private: the model is never published
 sh(f'python training/make_dataset.py --n {N_TRAIN} --eval-n {N_EVAL} --out data/train.jsonl --eval-out data/eval.jsonl {extra}')
 if not sh('python training/repo_tasks.py --packs packs --out data/repo_train.jsonl --eval-out data/repo_eval.jsonl', required=False):
     open('data/repo_train.jsonl', 'w').close()          # knowledge of shared repos is a bonus, not a blocker
@@ -227,7 +231,7 @@ sh(f'python training/scorecard.py --local {BASE} --out /kaggle/working/scorecard
 report('making DPO preference pairs')
 # tool calls instead of invented numbers, the tool's exact numbers, the caveats kept + your thumbs-down corrections
 # (attach the app's feedback.jsonl in a PRIVATE Kaggle dataset; it is found here by its name)
-FEEDBACK = ' '.join(sorted(f for f in glob.glob('/kaggle/input/**/*feedback*.jsonl', recursive=True)))
+FEEDBACK = ' '.join(FEEDBACK_FILES)
 sh(f"python training/dpo_pairs.py --data 'data/*.jsonl' 'training/data/*.jsonl.gz' --feedback {FEEDBACK} --out data/dpo_pairs.jsonl --max 2000",
    required=False)
 report('training the main model')
@@ -259,6 +263,21 @@ for f in ('scorecard_before.json', 'scorecard_after.json'):        # realistic r
         summary[f] = json.load(open('/kaggle/working/' + f))['summary']
     except Exception:
         pass
+# accept the new model only if it did not get worse (scorecard by category, tool-call evaluation)
+ACCEPTED = True
+if os.path.exists('/kaggle/working/scorecard_before.json') and os.path.exists('/kaggle/working/scorecard_after.json'):
+    cmd = ('python training/accept_gate.py --before /kaggle/working/scorecard_before.json --after /kaggle/working/scorecard_after.json '
+           '--out /kaggle/working/accept.json')
+    if os.path.exists('/kaggle/working/eval_before.json') and os.path.exists('/kaggle/working/eval_after.json'):
+        cmd += ' --eval-before /kaggle/working/eval_before.json --eval-after /kaggle/working/eval_after.json'
+    ACCEPTED = subprocess.run(cmd, shell=True, cwd=os.getcwd()).returncode == 0
+    try:
+        summary['accept'] = json.load(open('/kaggle/working/accept.json'))
+    except Exception:
+        pass
+summary['accepted'] = ACCEPTED
+if not ACCEPTED:
+    UPLOAD_MODEL = False                 # a worse model is not published anywhere; the files stay in this run's Output only
 summary['model_files'] = sorted(os.path.basename(f) for f in glob.glob('/kaggle/working/*.gguf'))
 json.dump(summary, open('/kaggle/working/summary.json', 'w'), indent=1)
 print('SUMMARY', summary, flush=True)
@@ -278,7 +297,9 @@ try:
     token = UserSecretsClient().get_secret('HF_TOKEN')
 except Exception:
     token = None
-if token:
+if token and not ACCEPTED:
+    print('new model NOT uploaded to Hugging Face: the accept gate rejected it (see accept.json)', flush=True)
+elif token:
     from huggingface_hub import HfApi, create_repo
     api = HfApi(token=token)
     repo = api.whoami()['name'] + '/shipbrain-gguf'

@@ -918,6 +918,25 @@ the model then follows the tool's result and asks the user what was missing (a s
 copying a possibly wrong number. Training conversations teach the model to follow such examples (understanding_tasks:
 memory_edges / memory_units / memory_disagrees).
 
+### From 👍 / 👎 to a better model, automatically and safely
+
+```
+python -m shipbrain.feedback retrain --workdir <app work folder> --dataset <kaggle-user>/shipbrain-feedback --scrub-file names.txt
+```
+1. **export**: collects the app's `feedback.jsonl`, drops what cannot teach (a 👎 without a correction, one-turn records),
+   removes duplicates and scrubs private details - e-mail addresses, folder paths with user names, and every name in
+   `names.txt` (ships, hull numbers, companies: none may reach any model or repository).
+2. **upload**: a PRIVATE Kaggle dataset with your own Kaggle login - never GitHub.
+3. **request**: writes `training/TRAIN_REQUEST.json` with the dataset; pushing it starts the Kaggle run
+   (`shipbrain-train` workflow). The run turns liked conversations into training samples and corrections into DPO pairs.
+4. **accept gate** (`training/accept_gate.py`): the new model is accepted only if the scorecard did not get worse -
+   overall within 1 point, no category down more than 5 points, and `missing` (asks) and `no_tool` (never invents) not
+   down at all; the tool-call evaluation within 3 points. A rejected model is neither uploaded to GitHub nor Hugging
+   Face (its files stay in the run's Output); `accept.json` says why. Checked: an overall gain that came with asking
+   less often is rejected.
+Because feedback is private, a run with it never publishes the model. Instant learning (the memory) continues to work
+between retrains.
+
 ### Learning from 👍 / 👎: DPO after the fine-tune
 
 After the normal fine-tune, the Kaggle run does one short DPO step (Direct Preference Optimisation, with Hugging Face
