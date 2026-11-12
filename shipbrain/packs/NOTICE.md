@@ -319,3 +319,10 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2024 TSANG, Hao Fung
+
+## dealii
+
+- Source: https://github.com/dealii/dealii (library source, tutorial steps and documentation; tests and bundled third-party code left out)
+- Licence: LGPL-2.1-or-later, and separately Apache-2.0 with LLVM exception
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- Copyright (C) The deal.II authors (see the AUTHORS file of the repository)
