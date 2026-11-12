@@ -1,6 +1,6 @@
 ---
 name: openhcm-analysis
-description: what to do with an OpenHCM model: quantities, thickness checks, FE model, condition (corrosion) work
+description: OpenHCM quantities: areas, steel mass, stiffener lengths, thickness lists and corrosion margins
 when: openhcm (analysis|check)|hull condition (analysis|assessment)|corrosion (margin|diminution)
 ---
 # OpenHCM analysis

@@ -1,6 +1,6 @@
 ---
 name: uploaded-files
-description: what to do with any file the user uploads in the chat (CAD, mesh, results, PDF, PowerPoint, Word, Excel, DXF, zip of a case, another solver's files)
+description: uploaded files in the chat window: CAD, mesh, results, PDF, PowerPoint, Word, Excel, DXF, zip case, other solver decks
 when: \[uploaded [^\]]+\]|i (uploaded|attached)|attached (file|model)|this file|my file
 ---
 # Uploaded files

@@ -1,6 +1,6 @@
 ---
 name: openhcm-modelling
-description: the OpenHCM ship-structure model: how it describes plates, stiffeners and compartments, and what ShipBrain converts
+description: OpenHCM file structure: contours, stiffener trace lines, flanges, compartments and the ShipBrain conversion
 when: openhcm|hull condition model|\.hcm\b
 ---
 # OpenHCM modelling (openhcm_read)

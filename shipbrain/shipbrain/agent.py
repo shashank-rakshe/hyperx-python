@@ -495,6 +495,18 @@ class Tools:
                       'Fy|Fz|Fx, w1, w2}], plates: [{name, width, height, t, mesh, material, pressure, edges: {left|right|bottom|top: simple|clamped}}]}. Units are yours, kept consistent (N, mm, MPa). Returns '
                       'displacements, reactions, member forces and plate deflection.',
                       {'type': 'object', 'properties': {'model': {'type': 'object'}}, 'required': ['model']})
+        self.register('gz_curve', self.gz_curve, 'Righting-lever (GZ) curve and the IMO intact-stability criteria (IS Code 2.2: areas 0-30, 0-40, 30-40 degrees, GZ at 30 degrees, angle of maximum GZ, GM) of a generated '
+                      'hull (hull_generate parameters, metres) at a given KG and displacement or draft, optional free-surface loss of slack tanks and flooding angle. Level keel, hull up to the deck. '
+                      'Returns the curve, pass / fail per criterion and a picture. Concept-level: a real ship needs the approved stability program with the actual loading conditions and openings.',
+                      {'type': 'object', 'properties': {k: num for k in ('L', 'B', 'D', 'T', 'r_bilge', 'deadrise', 'flare', 'ent', 'run', 'n_ent', 'n_run', 'transom', 'bulb_len', 'bulb_b', 'bulb_h',
+                                                                         'bulb_z', 'vee', 'kg', 'mass_t', 'draft', 'free_surface_m', 'flooding_angle_deg')} | {'name': {'type': 'string'}},
+                       'required': ['L', 'B', 'D', 'T', 'kg']})
+        self.register('stl_stability', self.stl_stability, 'Hydrostatics, GZ curve (trim optimised at every heel angle) and intact-stability criteria of ANY hull given as an STL file in the workspace '
+                      '(from hull_generate, catamaran_hull or an uploaded hull surface; metres, x along the hull, y across, z up, keel at z = 0; scale converts mm) with NavalToolbox (AGPL, Rust, pip install navaltoolbox). '
+                      'Give the draft or the displacement (t), the KG, optionally LCG / TCG; rule = is_code_2008_general (default) | is_code_2008_complete | div222_intact_stability. Returns the hydrostatics, the GZ curve, '
+                      'pass / fail per criterion and a picture.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'kg': num, 'draft': num, 'displacement_t': num, 'lcg': num, 'tcg': num, 'density': num, 'scale': num,
+                                                         'rule': {'type': 'string'}, 'name': {'type': 'string'}}, 'required': ['file', 'kg']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1930,6 +1942,43 @@ class Tools:
         for n, pl in r['plates'].items():
             say.append(f"plate {n}: largest deflection {pl['max_deflection']:.5g} ({pl['elements']} elements).")
         r['plain_english'] = ' '.join(say) + ' Linear elastic; units are the ones you gave.'
+        return r
+
+    def gz_curve(self, kg, mass_t=None, draft=None, free_surface_m=0.0, flooding_angle_deg=None, name='gz', **hp):
+        from . import hullgen as HG, stability as ST
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        p = HG.params(**{k: v for k, v in hp.items() if v is not None})
+        res = ST.gz_curve(p, float(kg), mass_t=float(mass_t) if mass_t else None, draft=float(draft) if draft else None, free_surface_m=float(free_surface_m or 0.0))
+        cr = ST.criteria(res, float(flooding_angle_deg) if flooding_angle_deg else None)
+        png = os.path.join(self.workdir, name + '.png')
+        ST.plot(res, cr, png, f"GZ curve: {p['L']:g} x {p['B']:g} x {p['D']:g} m, KG {float(kg):g} m")
+        table = [{'heel_deg': r['heel_deg'], 'GZ_m': round(r['GZ_m'], 4)} for r in res['curve'] if r['heel_deg'] % 5 == 0]
+        bad = [c['criterion'] for c in cr['criteria'] if not c['pass']]
+        say = (f"At {res['mass_t']:,.0f} t and KG {float(kg):g} m the initial GM is {res['GM_from_slope_m']:.2f} m; GZ peaks at {cr['max_GZ_m']:.2f} m at {cr['angle_of_max_GZ_deg']:g} degrees"
+               + (f", the lee deck edge goes under at {cr['deck_edge_immersion_deg']:g} degrees" if cr['deck_edge_immersion_deg'] is not None else '')
+               + (f" and the curve vanishes at {cr['angle_of_vanishing_stability_deg']:.0f} degrees" if cr['angle_of_vanishing_stability_deg'] else '') + '. '
+               + ('All six IMO intact criteria are met.' if cr['all_pass'] else 'NOT met: ' + '; '.join(bad) + '.')
+               + ' (Level keel, hull to the deck; the criteria need your approved loading conditions, the down-flooding angle and the weather criterion too.)')
+        return {'curve': table, 'GM_m': res['GM_from_slope_m'], 'mass_t': res['mass_t'], **cr, 'files': [name + '.png'], 'plain_english': say}
+
+    def stl_stability(self, file, kg, draft=None, displacement_t=None, lcg=None, tcg=0.0, density=1025.0, scale=1.0, rule='is_code_2008_general', name='stl_gz'):
+        from . import navalbridge as NB
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        if draft is None and displacement_t is None:
+            return {'error': 'give the draft (m) or the displacement (t) of the loading condition'}
+        r = NB.analyse(self._path(file), float(kg), draft=float(draft) if draft is not None else None, displacement_t=float(displacement_t) if displacement_t is not None else None,
+                       lcg=float(lcg) if lcg is not None else None, tcg=float(tcg or 0.0), rho=float(density), rule=rule, scale=float(scale))
+        png = os.path.join(self.workdir, name + '.png')
+        NB.plot(r, png, f'GZ curve - {os.path.basename(file)}')
+        h = r['hydrostatics']
+        gz = r['GZ_m']
+        i = max(range(len(gz)), key=lambda k: gz[k])
+        bad = [c['criterion'] for c in r['criteria'] if c['status'] != 'PASS']
+        r['files'] = [name + '.png']
+        r['plain_english'] = (f"At a draft of {h['draft_m']:.2f} m ({h['displacement_t']:,.0f} t) the hull has KB {h['cob'][2]:.2f} m, BMt {h['BMt_m']:.2f} m and GMt {h['GMt_m']:.2f} m at KG {float(kg):g} m. "
+                              f"GZ peaks at {gz[i]:.2f} m at {r['heels_deg'][i]:g} degrees (trim optimised at each angle). Rule {rule}: "
+                              + ('all criteria pass.' if r['overall_pass'] else 'NOT met - ' + '; '.join(bad) + '.')
+                              + ' Hull as given in the STL: openings, tanks and the approved loading conditions are not in this check, so it is a design check, not class approval.')
         return r
 
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):

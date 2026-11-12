@@ -1,6 +1,6 @@
 ---
 name: pynite-tool-knowledge
-description: what PyNite is and what it can do beyond the tool (capabilities, limits, where the knowledge is)
+description: PyNite library capabilities beyond the ShipBrain tool: P-delta, modal, pushover, springs, shear walls
 when: what is pynite|pynite (can|capabilit|feature)|pyniteFEA
 ---
 # PyNite - tool knowledge

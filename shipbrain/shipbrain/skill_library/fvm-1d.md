@@ -1,6 +1,6 @@
 ---
 name: fvm-1d
-description: 1D finite volume method teaching scripts (diffusion, convection, fin, SIMPLE) - which ones are verified and which are not
+description: 1D finite volume teaching scripts (diffusion, convection, fin, SIMPLE): verified and defective ones
 when: \b(finite[- ]volume|fvm)\b|\b1d (cfd|diffusion|convection)\b|\bupwind scheme\b|\btdma\b|\bsimple algorithm\b
 ---
 The knowledge pack `Finite-Volume-Method-for-1D-CFD-Simulations` (MIT, MATLAB scripts) was run in Octave and checked against exact solutions.

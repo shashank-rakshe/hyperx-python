@@ -1,6 +1,6 @@
 ---
 name: global-hull-fea-analysis
-description: analysing a global hull girder FE model: load cases, checks, stress read-out, what to compare with
+description: global hull girder load cases: hogging, sagging, horizontal bending, shear force, torsion, neutral axis
 when: global (hull|ship) (stress|result)|hull girder (stress|bending|check)|vertical bending moment|midship section modulus
 ---
 # Global hull girder FE - analysis

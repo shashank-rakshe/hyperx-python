@@ -1,6 +1,6 @@
 ---
 name: pynite-modelling
-description: modelling of frames, trusses and plates for PyNite (nodes, members, sections, supports, loads)
+description: PyNite modelling: nodes, members, section data, supports, load cases and combinations
 when: pynite|space frame|portal frame|truss (model|analysis)|continuous beam|plate bending model
 ---
 # Modelling with PyNite (pynite_fea)

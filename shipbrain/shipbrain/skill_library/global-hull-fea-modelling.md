@@ -1,6 +1,6 @@
 ---
 name: global-hull-fea-modelling
-description: modelling a whole-ship (global) hull girder finite-element model: geometry, mesh, supports, loads
+description: global hull girder shell model of a tanker: three-point supports, end moments, equilibrium of loads
 when: global (hull|ship) (fea|fem|analysis|model)|hull girder (fea|model)|whole.ship (fea|model)|cargo hold (fea|model)
 ---
 # Global hull girder FE - modelling

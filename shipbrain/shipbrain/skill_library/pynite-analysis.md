@@ -1,6 +1,6 @@
 ---
 name: pynite-analysis
-description: what a PyNite analysis returns and how to check it (reactions, member forces, deflection, plate deflection)
+description: PyNite solution read-out: reactions, member forces, deflections and hand verification against beam theory
 when: pynite (result|reaction|deflection)|check (the )?reactions|equilibrium check of (the )?frame
 ---
 # Analysis with PyNite (pynite_fea)

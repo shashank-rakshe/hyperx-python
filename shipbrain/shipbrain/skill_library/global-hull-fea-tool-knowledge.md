@@ -1,6 +1,6 @@
 ---
 name: global-hull-fea-tool-knowledge
-description: which ShipBrain tools do the global hull FE steps and what the example repository contains
+description: global hull girder study tool route and the Melozzi tanker repository contents
 when: global (hull|ship) (tool|workflow)|which tool.*(hull girder|global)
 ---
 # Global hull girder FE - tool knowledge

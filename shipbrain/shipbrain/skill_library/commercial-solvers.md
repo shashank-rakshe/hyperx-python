@@ -1,6 +1,6 @@
 ---
 name: commercial-solvers
-description: ANSYS (Mechanical, Fluent), Abaqus, STAR-CCM+ - what ShipBrain can do with them and what it cannot
+description: ANSYS Mechanical, Fluent, Abaqus and STAR-CCM+ licensed solvers: case export, scripts, result tables
 when: fluent|star-?ccm|simcenter|\bansys\b|abaqus|\bmapdl\b|\bodb\b
 ---
 # ANSYS, Abaqus, Fluent, STAR-CCM+ (commercial: the user's own licence)

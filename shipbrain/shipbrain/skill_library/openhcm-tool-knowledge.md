@@ -1,6 +1,6 @@
 ---
 name: openhcm-tool-knowledge
-description: what OpenHCM and its web viewer are, where the details are, and what ShipBrain does not do with it
+description: OpenHCM consortium format, the Bureau Veritas web viewer and the limits of ShipBrain reader
 when: what is openhcm|openhcm (viewer|schema|consortium|standard)
 ---
 # OpenHCM - tool knowledge
