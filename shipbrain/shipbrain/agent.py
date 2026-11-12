@@ -481,18 +481,11 @@ class Tools:
                       {'type': 'object', 'properties': {k: num for k in ('L', 'B', 'D', 'T', 'r_bilge', 'deadrise', 'flare', 'ent', 'run', 'n_ent', 'n_run', 'transom', 'bulb_len', 'bulb_b', 'bulb_h',
                                                                          'bulb_z', 'vee', 'target_cb')} | {'speeds_kn': {'type': 'array'}, 'froude': {'type': 'array'}, 'method': {'type': 'string', 'enum': ['holtrop', 'surrogate']}},
                        'required': ['L', 'B', 'D', 'T']})
-        self.register('hull_flow', self.hull_flow, 'Flow around a ship HULL STL (from hull_generate or uploaded; metres, hullgen frame: x stern->bow, y beam, z up) with OpenFOAM: double-body, steady SST k-omega, the hull '
-                      'below the waterline in an unbounded stream (the waterline is a symmetry plane: NO wave resistance), half hull meshed with snappyHexMesh on ShipBrain\'s own background grid. '
-                      'Returns the viscous resistance split into pressure (form) and friction parts, the Holtrop viscous resistance for comparison, convergence, and pictures (centre-plane velocity '
-                      'and pressure). Coarse and indicative: wall functions, no boundary-layer cells; read the stated accuracy.',
-                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'draft': num, 'speed_kn': num, 'fluid': {'type': 'string', 'enum': ['seawater', 'water']}, 'level': {'type': 'integer'},
-                                                         'name': {'type': 'string'}}, 'required': ['file', 'draft', 'speed_kn']})
-        self.register('gz_curve', self.gz_curve, 'Righting-lever (GZ) curve and the IMO intact-stability criteria (IS Code 2.2: areas 0-30, 0-40, 30-40 degrees, GZ at 30 degrees, angle of maximum GZ, GM) of a generated '
-                      'hull (hull_generate parameters, metres) at a given KG and displacement or draft, optional free-surface loss of slack tanks and flooding angle. Level keel, hull up to the deck. '
-                      'Returns the curve, pass / fail per criterion and a picture. Concept-level: a real ship needs the approved stability program with the actual loading conditions and openings.',
-                      {'type': 'object', 'properties': {k: num for k in ('L', 'B', 'D', 'T', 'r_bilge', 'deadrise', 'flare', 'ent', 'run', 'n_ent', 'n_run', 'transom', 'bulb_len', 'bulb_b', 'bulb_h',
-                                                                         'bulb_z', 'vee', 'kg', 'mass_t', 'draft', 'free_surface_m', 'flooding_angle_deg')} | {'name': {'type': 'string'}},
-                       'required': ['L', 'B', 'D', 'T', 'kg']})
+        self.register('catamaran_hull', self.catamaran_hull, 'Slender CATAMARAN demihull with the FAST-SHIPS hull generator (NTNU, GPL): from L/B, B/T, Tt/T (transom draft over maximum draft) and the displacement volume '
+                      'of one demihull (m3) or its waterline length (m). Returns the demihull STL (metres, keel at z = 0, waterline at z = draft) and, with separation (m between the centre planes), the '
+                      'catamaran STL, plus the generator\'s data; analyse them with stl_stability. Needs numba.',
+                      {'type': 'object', 'properties': {'l_to_b': num, 'b_to_t': num, 'tt_to_t': num, 'volume_m3': num, 'lwl': num, 'separation': num, 'name': {'type': 'string'}},
+                       'required': ['l_to_b', 'b_to_t', 'tt_to_t']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1884,73 +1877,17 @@ class Tools:
             + '. Calm water, bare hull estimate for an ordinary displacement ship (Holtrop is good to roughly +-10-20 % against real ships); shaft power needs the propulsive efficiency, and wind, waves and fouling add to it.')
         return out
 
-    def hull_flow(self, file, draft, speed_kn, fluid='seawater', level=4, name='hull_flow'):
-        from . import shipcfd, viz
+    def catamaran_hull(self, l_to_b, b_to_t, tt_to_t, volume_m3=None, lwl=None, separation=None, name='demihull'):
+        from . import catamaran as CM, intake
         name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
-        out, info = shipcfd.solve_ship(self.workdir, name, self._path(file), float(draft), float(speed_kn), fluid=fluid, level=int(level), end_iter=1500)
-        v = out['speed_m_s']
-        rho = info['rho']
-        cf = 0.075 / (math.log10(v * out['L'] / info['nu']) - 2) ** 2                       # ITTC-57 friction line on the same wetted area
-        rf = 0.5 * rho * v * v * out['wetted_area_m2'] * cf
-        out['ittc57_friction_N'] = rf
-        out['friction_ratio_to_ittc57'] = out['friction_resistance_N'] / rf
-        out['pressure_percent_of_viscous'] = 100 * out['pressure_resistance_N'] / out['Rv_N']
-        files = []
-        try:                                                                                 # centre-plane pictures from the cell centres
-            import numpy as np
-            import matplotlib
-            matplotlib.use('Agg')
-            import matplotlib.pyplot as plt
-            from . import openfoam as OF
-            d = os.path.join(self.workdir, name)
-            pts, faces, own, nei, start, n = shipcfd._read_poly(d)
-            t = OF.last_time(d)
-            p = np.asarray(OF.read_field(os.path.join(d, t, 'p'))) * rho
-            U = np.asarray(OF.read_field(os.path.join(d, t, 'U'), vec=True))
-            cc = np.zeros((len(p), 3)); ws = np.zeros(len(p))
-            for fi, f in enumerate(faces):
-                c, Sf = shipcfd._face_geometry(pts, f)
-                a = np.linalg.norm(Sf)
-                cc[own[fi]] += a * c; ws[own[fi]] += a
-                if fi < len(nei):
-                    cc[nei[fi]] += a * c; ws[nei[fi]] += a
-            cc /= ws[:, None]
-            near = cc[:, 2] < 0.08 * out['L']                                              # the cells next to the centre plane
-            for fld, val, lab in (('velocity', np.linalg.norm(U, axis=1), 'velocity magnitude [m/s]'), ('pressure', p, 'pressure [Pa]')):
-                fig, ax = plt.subplots(figsize=(11, 4.2))
-                sc = ax.scatter(cc[near, 0], cc[near, 1], c=val[near], s=6, cmap='turbo', linewidths=0)
-                ax.set_aspect('equal'); ax.set_xlim(cc[near, 0].min(), cc[near, 0].max()); ax.set_xlabel('x [m]'); ax.set_ylabel('y [m]')
-                ax.set_xlim(info['L'] * 0.4, info['L'] * 3.2); ax.set_ylim(info['L'] * 0.35, cc[near, 1].max() + 1)
-                fig.colorbar(sc, ax=ax, shrink=0.8).set_label(lab); ax.set_title(f'{name}: {fld} near the centre plane (flow to the right, bow first)')
-                fig.tight_layout(); png = os.path.join(self.workdir, f'{name}_{fld}.png'); fig.savefig(png, dpi=120); plt.close(fig)
-                files.append(os.path.basename(png))
-        except Exception as e:
-            files = []
-        out['files'] = files
-        out['plain_english'] = (f"Flow around the hull at {speed_kn:g} knots (Fn {out['Fn']:.2f}), double-body (no waves), {out['cells']:,} cells, {'converged' if out['converged'] else 'NOT converged'} in {out['iterations']} iterations: "
-                                f"viscous resistance {out['Rv_N'] / 1000:,.0f} kN = pressure (form) {out['pressure_resistance_N'] / 1000:,.0f} kN + friction {out['friction_resistance_N'] / 1000:,.0f} kN. "
-                                f"For comparison the ITTC-57 flat-plate friction on the same wetted area ({out['wetted_area_m2']:,.0f} m2) is {rf / 1000:,.0f} kN, so the computed friction is "
-                                f"{100 * out['friction_ratio_to_ittc57']:.0f} % of it (wall functions on a coarse grid with no boundary-layer cells: expect the friction to be low). "
-                                "Wave-making resistance is not in this number. Indicative only - refine with a higher level to see how much it moves."
-                                + (' Pictures: ' + ', '.join(files) + '.' if files else ''))
-        return out
-
-    def gz_curve(self, kg, mass_t=None, draft=None, free_surface_m=0.0, flooding_angle_deg=None, name='gz', **hp):
-        from . import hullgen as HG, stability as ST
-        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
-        p = HG.params(**{k: v for k, v in hp.items() if v is not None})
-        res = ST.gz_curve(p, float(kg), mass_t=float(mass_t) if mass_t else None, draft=float(draft) if draft else None, free_surface_m=float(free_surface_m or 0.0))
-        cr = ST.criteria(res, float(flooding_angle_deg) if flooding_angle_deg else None)
-        png = os.path.join(self.workdir, name + '.png')
-        ST.plot(res, cr, png, f"GZ curve: {p['L']:g} x {p['B']:g} x {p['D']:g} m, KG {float(kg):g} m")
-        table = [{'heel_deg': r['heel_deg'], 'GZ_m': round(r['GZ_m'], 4)} for r in res['curve'] if r['heel_deg'] % 5 == 0]
-        bad = [c['criterion'] for c in cr['criteria'] if not c['pass']]
-        say = (f"At {res['mass_t']:,.0f} t and KG {float(kg):g} m the initial GM is {res['GM_from_slope_m']:.2f} m; GZ peaks at {cr['max_GZ_m']:.2f} m at {cr['angle_of_max_GZ_deg']:g} degrees"
-               + (f", the lee deck edge goes under at {cr['deck_edge_immersion_deg']:g} degrees" if cr['deck_edge_immersion_deg'] is not None else '')
-               + (f" and the curve vanishes at {cr['angle_of_vanishing_stability_deg']:.0f} degrees" if cr['angle_of_vanishing_stability_deg'] else '') + '. '
-               + ('All six IMO intact criteria are met.' if cr['all_pass'] else 'NOT met: ' + '; '.join(bad) + '.')
-               + ' (Level keel, hull to the deck; the criteria need your approved loading conditions, the down-flooding angle and the weather criterion too.)')
-        return {'curve': table, 'GM_m': res['GM_from_slope_m'], 'mass_t': res['mass_t'], **cr, 'files': [name + '.png'], 'plain_english': say}
+        d = CM.demihull(float(l_to_b), float(b_to_t), float(tt_to_t), volume_m3=float(volume_m3) if volume_m3 else None, lwl=float(lwl) if lwl else None)
+        files = [os.path.basename(CM.write_stl(d['points'], d['faces'], os.path.join(self.workdir, name + '.stl')))]
+        say = (f"Demihull: waterline length {d['lwl']:.2f} m, beam {d['b']:.2f} m, draft {d['T']:.3f} m, displacement {d['volume_m3']:.1f} m3 each. STL {files[0]} (metres, keel at z = 0, waterline at z = {d['T']:.3f} m).")
+        if separation:
+            P, F = CM.catamaran(d['points'], d['faces'], float(separation))
+            files.append(os.path.basename(CM.write_stl(P, F, os.path.join(self.workdir, name + '_catamaran.stl'))))
+            say += f" Catamaran with the centre planes {float(separation):g} m apart: {files[-1]} ({2 * d['volume_m3']:.0f} m3). Give it to stl_stability with the draft {d['T']:.3f} m and the KG for hydrostatics and the GZ curve."
+        return {'demihull': {k: d[k] for k in ('lwl', 'b', 'T', 'volume_m3')}, 'files': files, 'plain_english': say}
 
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
@@ -2570,8 +2507,8 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'hydrostatic|stability|metacentr|\bgm\b|\bkb\b|\bkg\b|freeboard|displacement of (the )?(hull|vessel|ship|barge)|draft (of|at|for)|trim and|vessel\.?js|loading condition', ('ship_hydrostatics',)),
     (r'hull (form|shape|design|generat|param)|parametric hull|design (a |the )?hull|block coefficient|\bcb\b|bulb|hull dataset|ship-?d\b|prismatic coeff|waterplane coeff|section area curve', ('hull_generate', 'ship_hydrostatics')),
     (r'resistance of (the |a |my )?(hull|ship|vessel)|(ship|hull) resistance|effective power|holtrop|\bpe\b|propulsion power|power (needed|required) (at|for)|knots?\b.*(power|resistance)|(power|resistance).*knots?\b', ('hull_resistance', 'hull_generate')),
-    (r'(flow|cfd|openfoam|viscous|form) (around|past|over|on|of) (the |my |a )?(hull|ship|stl)|hull (cfd|flow)|run openfoam on (the )?(hull|stl)|viscous resistance|form (drag|resistance)', ('hull_flow', 'hull_resistance', 'openfoam_flow')),
-    (r'\bgz\b|righting (lever|arm)|stability (curve|criteria)|imo (intact|stability)|is code|angle of (vanishing|maximum)|dynamic stability|area under (the )?gz|capsiz', ('gz_curve', 'ship_hydrostatics')),
+    (r'\bgz\b|righting (lever|arm)|stability (curve|criteria)|imo (intact|stability)|is code|angle of (vanishing|maximum)|dynamic stability|area under (the )?gz|capsiz', ('gz_curve', 'stl_stability', 'ship_hydrostatics')),
+    (r'catamaran|demihull|slender hull|fast ?ships|twin.?hull|multi.?hull', ('catamaran_hull', 'stl_stability')),
     (r'finite[- ]volume|\bfvm\b|1d (cfd|diffusion|convection|conduction)|\btdma\b|simple algorithm|upwind|central differenc', ('fvm_1d',)),
     (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),
     (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),

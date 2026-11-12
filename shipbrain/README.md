@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 126/126, wrong replies 0/126.
+replies score 128/128, wrong replies 0/128.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1120,6 +1120,21 @@ Checked (`tests/test_pulsation.py`): closed-closed and open-closed pipe modes n 
 water speed of sound with the wall correction, a three-leg route equal to one straight column (corners connect), and simply supported pipe bending modes
 within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
 Training: `training/pulsation_tasks.py`.
+
+### Any hull STL: stability with NavalToolbox, catamarans with FAST-SHIPS
+
+`stl_stability` runs NavalToolbox (AGPL-3.0, Rust, `pip install navaltoolbox`; its criteria scripts are copied in `vendor/navaltoolbox/rules`) on a hull STL: hydrostatics, the GZ curve with the trim
+optimised at every heel angle, and an intact criteria set (IS Code 2008, DIV 222). `catamaran_hull` generates slender catamaran demihulls with the FAST-SHIPS hull generator (NTNU, GPL-3.0, copied unchanged in
+`vendor/fastships`; needs numba), mirrors the generator's half mesh into a closed STL, and can place two at a separation. Knowledge packs `navaltoolbox` and `fastships_hull_generator`.
+
+Cross-checks (`tests/test_navalbridge.py`, `tests/test_catamaran.py`): on the generated hull NavalToolbox equals the generator's own waterplane area and LCB (1 %), KB (2 %), volume (2 %, STL discretisation)
+and the own GZ integration (within 0.04 m); on a FAST-SHIPS demihull it reproduces the generator's displacement (100.0 m3) and LWL, and the catamaran's BMt equals the parallel-axis estimate (12 %). Two of the
+library's scripts (hsc_2000_monohull_intact, is_code_2008_passenger) do not compile in its own engine (0.9.3): the tool refuses them. Not covered: tanks and loading conditions through the chat, down-flooding
+openings, wind heeling silhouettes (the library has them; not wired in).
+
+**Hull flow (OpenFOAM on a hull STL) is NOT offered.** `shipcfd.py` (double-body, own background grid + snappyHexMesh, force bookkeeping) runs and converges, but it failed its benchmark: a cube face-on
+gave Cd 0.63 against about 1.05 in the literature, and the hull results moved by a factor of 2 between refinement levels (pressure drag 277 -> 206 -> 154 kN at levels 3 -> 4 with a second-order scheme), with
+the friction 30 % under the flat-plate value. A cell-by-cell (voxel) version was dropped earlier because stair steps gave 6 times the drag. Until the cube comes out right the tool stays unregistered.
 
 ### GZ curve and the IMO intact criteria
 

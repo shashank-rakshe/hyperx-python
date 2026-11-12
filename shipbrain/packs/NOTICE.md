@@ -510,3 +510,17 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: LGPL-2.1
 - Use: COPYLEFT: knowledge + training allowed by the owner (shipbrain/licence_mode.json); ShipBrain and models trained with it stay open under the same terms
 - Copyright (c) FreeCAD Ship workbench authors (Jose Luis Cercos-Pita and contributors)
+
+## navaltoolbox
+
+- Source: https://github.com/NavalToolbox/navaltoolbox-lib
+- Licence: AGPL-3.0
+- Use: COPYLEFT: knowledge + training allowed by the owner (shipbrain/licence_mode.json); ShipBrain and models trained with it stay open under the same terms
+- Copyright (c) the NavalToolbox authors
+
+## fastships_hull_generator
+
+- Source: https://github.com/NTNU-IMT/fastships_hull_generator
+- Licence: GPL-3.0
+- Use: COPYLEFT: knowledge + training allowed by the owner (shipbrain/licence_mode.json); ShipBrain and models trained with it stay open under the same terms
+- Copyright (c) 2023 NTNU, John Martin Kleven Godo

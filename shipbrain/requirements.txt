@@ -14,7 +14,9 @@ liteparse       # document reading: PDF -> text / markdown with layout and table
 lxml            # ship drawing reader XML, BSD
 meshio
 msgpack         # construction drawing sets (CIR, ConstructDrawingAI - non-commercial licence)
+navaltoolbox
 networkx        # pid-to-kg graph queries, BSD
+numba
 numpy
 opencv-python-headless  # scanned drawings (Apache-2.0); optional
 openpyxl
