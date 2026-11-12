@@ -454,3 +454,10 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: Apache-2.0
 - Use: ok: permissive licence, keep the attribution
 - https://github.com/evanfaler/steelpy contributors
+
+## xc
+
+- Source: https://github.com/xcfem/xc (library source, Python modules, verification examples and documentation, full copy)
+- Licence: GPL-3.0
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- Copyright (C) xc authors (Luis C. Pérez Tato and contributors), see the repository
