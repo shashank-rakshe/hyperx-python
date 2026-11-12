@@ -1,0 +1,57 @@
+from .base import Component
+from processpi.units import *
+
+class Cis2Methylcyclohexanol(Component):
+    """
+    Represents the properties and constants for cis2Methylcyclohexanol(C7H14O).
+
+    This class provides a comprehensive set of physical and thermodynamic properties
+    for cis2Methylcyclohexanol, which are essential for various process engineering calculations.
+    These properties are stored as class attributes and are available for use by other
+    calculation modules within the ProcessPI library.
+
+    **Properties:**
+    - `name`: The common name of the compound.
+    - `formula`: The chemical formula.
+    - `molecular_weight`: The molar mass in g/mol.
+    - `_critical_temperature`: The critical temperature, above which a substance
+      cannot exist as a liquid, regardless of pressure.
+    - `_critical_pressure`: The critical pressure, the vapor pressure at the
+      critical temperature.
+    - `_critical_volume`: The critical volume per kmole.
+    - `_critical_zc`: The critical compressibility factor.
+    - `_critical_acentric_factor`: The acentric factor, a measure of the
+      non-sphericity of the molecule.
+    - `_density_constants`: Constants for calculating density as a function of temperature.
+    - `_specific_heat_constants`: Constants for calculating specific heat capacity as a
+      function of temperature.
+    - `_viscosity_constants`: Constants for calculating viscosity as a function of
+      temperature.
+    - `_thermal_conductivity_constants`: Constants for calculating thermal conductivity
+      as a function of temperature.
+    - `_vapor_pressure_constants`: Constants for calculating vapor pressure as a
+      function of temperature using the Antoine equation or similar models.
+    - `_enthalpy_constants`: Constants for calculating enthalpy as a function of temperature.
+    """
+    name = "cis2Methylcyclohexanol"
+    formula = "C7H14O"
+    molecular_weight = 114.185
+    # Heat exchanger data, read by Component.hx_data() and httype()
+    _hx_family = "organic"
+    _hx_liquid_type = "organic"
+    _hx_fouling_key = "hydrocarbons"
+    _hx_corrosion_key = "hydrocarbon"
+
+    # Critical properties
+    _critical_temperature = Temperature(614.0, "K")
+    _critical_pressure = Pressure(3.79, "MPa")
+    _critical_volume = Volume(0.374, "m3")
+    _critical_zc = 0.278
+    _critical_acentric_factor = 0.6805
+
+    _density_constants = [0.70973, 0.26544, 614.0, 0.26016]
+    _specific_heat_constants = [118600, 447.07, 0.0, 0.0, 0.0]
+    _viscosity_constants = [-6.6904, 3150.5, -1.392, 0.0, 0.0]
+    _thermal_conductivity_constants = [0.21839, -0.00025776, 0.0, 0.0, 0.0]
+    _vapor_pressure_constants = [125.1, -10288, -15.157, 1.09e-05, 2.0]
+    _enthalpy_constants = [7.8011e-7, 0.4172, 0.0, 0.0, 0.0]

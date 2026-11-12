@@ -1,0 +1,520 @@
+from __future__ import annotations
+
+import math
+
+from typing import Any, Dict
+
+from ...units import Area, HeatFlow, HeatTransferCoefficient, Length, Pressure, Velocity
+from .base import HeatExchanger
+
+
+class DoublePipeHX(HeatExchanger):
+
+    def _velocity_targets(self) -> dict[str, float]:
+        return {
+            "tube_min": float(self.specs.get("tube_velocity_min", 0.5)),
+            "tube_max": float(self.specs.get("tube_velocity_max", 2.5)),
+            "annulus_min": float(self.specs.get("annulus_velocity_min", 0.3)),
+            "annulus_max": float(self.specs.get("annulus_velocity_max", 2.0)),
+        }
+
+    def _compute_parallel_paths(self, tube_velocity: float, annulus_velocity: float) -> int:
+        limits = self._velocity_targets()
+        n_tube = max(1, math.ceil(tube_velocity / max(limits["tube_max"], 1e-6)))
+        n_annulus = max(1, math.ceil(annulus_velocity / max(limits["annulus_max"], 1e-6)))
+        return max(n_tube, n_annulus)
+
+    # ==========================================================
+    # DESIGN MODE
+    # ==========================================================
+
+    def design(self) -> Dict[str, Any]:
+
+        hot = self._stream_props(self.hot_in)
+        cold = self._stream_props(self.cold_in)
+
+        # ======================================================
+        # OUTLET TEMPERATURES
+        # ======================================================
+
+        # A supplied outlet is used as given; one built without a temperature
+        # carries its component's 25 C default, which used to be taken as the
+        # outlet, so the balance decides it instead.
+        th_spec = self._explicit_stream_temperature(self.hot_out)
+        tc_spec = self._explicit_stream_temperature(self.cold_out)
+
+        def balance():
+            q = self.heat_duty(hot, cold)
+            th = th_spec if th_spec is not None else hot["t_k"] - q / (hot["m_dot"] * hot["cp"])
+            tc = tc_spec if tc_spec is not None else cold["t_k"] + q / (cold["m_dot"] * cold["cp"])
+            return q, th, tc
+
+        # Physical properties at each side's mean temperature. The balance
+        # depends on cp, so the two are iterated from the inlet properties
+        # until the outlets settle.
+        q, th_out, tc_out = balance()
+        for _ in range(10):
+            self._evaluate_props_at_mean_temperature(hot, cold, th_out, tc_out)
+            q, th_new, tc_new = balance()
+            settled = abs(th_new - th_out) < 0.01 and abs(tc_new - tc_out) < 0.01
+            th_out, tc_out = th_new, tc_new
+            if settled:
+                break
+
+        # ======================================================
+        # LMTD
+        # ======================================================
+
+        lmtd = self.lmtd(
+            hot["t_k"],
+            th_out,
+            cold["t_k"],
+            tc_out,
+        )
+
+        # ======================================================
+        # U
+        # ======================================================
+
+        # The double-pipe design has no film-coefficient model, so U is never
+        # iterated: specified_U or assumed_U is the design U, else 350 W/m2K.
+        # An assumed_U is therefore used as given, and the results say so.
+        u_basis = self._u_basis(default="default")
+        u_specified = self._user_u("specified_U")
+        u_assumed = u_specified if u_specified is not None else self._user_u("assumed_U")
+        if u_assumed is None:
+            u_assumed = 350.0
+        u_warnings: list[str] = []
+        if u_basis == "assumed":
+            u_warnings.append(
+                "[U_BASIS_WARNING] The double-pipe design does not calculate U from "
+                "film coefficients, so assumed_U is not iterated; the area is sized "
+                "at it as given"
+            )
+
+        # ======================================================
+        # AREA
+        # ======================================================
+
+        area_required = self.area(
+            q,
+            u_assumed,
+            lmtd,
+        )
+
+        area = float(
+            self.specs.get(
+                "area",
+                area_required,
+            )
+        )
+
+        # ======================================================
+        # GEOMETRY
+        # ======================================================
+
+        tube_od = float(
+            self.specs.get(
+                "tube_od",
+                0.0254,
+            )
+        )
+
+        tube_id = float(
+            self.specs.get(
+                "tube_id",
+                0.021,
+            )
+        )
+
+        tube_length = float(
+            self.specs.get(
+                "tube_length",
+                6.0,
+            )
+        )
+
+        annulus_diameter = float(
+            self.specs.get(
+                "annulus_diameter",
+                0.05,
+            )
+        )
+
+        # ======================================================
+        # VELOCITIES
+        # ======================================================
+
+        tube_area = (
+            math.pi
+            * tube_id**2
+            / 4.0
+        )
+
+        annulus_area = (
+            math.pi
+            * (
+                annulus_diameter**2
+                - tube_od**2
+            )
+            / 4.0
+        )
+
+        tube_velocity_single = (
+            cold["m_dot"]
+            / (
+                cold["density"]
+                * tube_area
+            )
+        )
+
+        annulus_velocity_single = (
+            hot["m_dot"]
+            / (
+                hot["density"]
+                * annulus_area
+            )
+        )
+
+        parallel_paths = self._compute_parallel_paths(tube_velocity_single, annulus_velocity_single)
+        tube_velocity = tube_velocity_single / parallel_paths
+        annulus_velocity = annulus_velocity_single / parallel_paths
+
+        # ======================================================
+        # PRESSURE DROP
+        # ======================================================
+
+        friction_factor_tube = float(self.specs.get("tube_friction_factor", 0.02))
+        friction_factor_annulus = float(self.specs.get("annulus_friction_factor", 0.03))
+        tube_dp = friction_factor_tube * (tube_length / max(tube_id, 1e-6)) * (cold["density"] * tube_velocity**2 / 2.0)
+
+        hydraulic_diameter = max(annulus_diameter - tube_od, 1e-6)
+        annulus_dp = friction_factor_annulus * (tube_length / hydraulic_diameter) * (hot["density"] * annulus_velocity**2 / 2.0)
+
+        # ======================================================
+        # RESULTS
+        # ======================================================
+
+        return {
+            "hx_type": "double_pipe",
+            "method": "basic",
+            "Q": HeatFlow(q / 1000.0, "kW"),
+            "property_basis": self._property_basis(hot, cold),
+            "Area": Area(area, "m2"),
+            "U_assumed": HeatTransferCoefficient(u_assumed, "W/m2K"),
+            "u_basis": u_basis,
+            "U_specified": HeatTransferCoefficient(u_specified, "W/m2K") if u_specified is not None else None,
+            "U_initial": HeatTransferCoefficient(u_assumed, "W/m2K"),
+            "U_clean": HeatTransferCoefficient(u_assumed, "W/m2K"),
+            "U_dirty": HeatTransferCoefficient(u_assumed, "W/m2K"),
+            "U_calculated": HeatTransferCoefficient(u_assumed, "W/m2K"),
+            "LMTD": lmtd,
+            "tube_count": parallel_paths,
+            "parallel_paths": parallel_paths,
+            "tube_od": Length(tube_od, "m"),
+            "tube_id": Length(tube_id, "m"),
+            "tube_length": Length(tube_length, "m"),
+            "shell_diameter": Length(annulus_diameter, "m"),
+            "tube_velocity": Velocity(tube_velocity, "m/s"),
+            "shell_velocity": Velocity(annulus_velocity, "m/s"),
+            "tube_dp": Pressure(tube_dp, "Pa"),
+            "shell_dp": Pressure(annulus_dp, "Pa"),
+            "iterations": 1,
+            "status": "OK",
+            "warnings": [*u_warnings, *self._double_pipe_warnings(tube_velocity, annulus_velocity)],
+        }
+
+    def _double_pipe_warnings(self, tube_velocity: float, annulus_velocity: float) -> list[str]:
+        limits = self._velocity_targets()
+        warnings: list[str] = []
+        if tube_velocity < limits["tube_min"]:
+            warnings.append("[HYDRAULIC_WARNING] Tube velocity below recommended range for double-pipe exchanger")
+        elif tube_velocity > limits["tube_max"]:
+            warnings.append("[HYDRAULIC_WARNING] Tube velocity above recommended range for double-pipe exchanger")
+        if annulus_velocity < limits["annulus_min"]:
+            warnings.append("[HYDRAULIC_WARNING] Annulus velocity below recommended range for double-pipe exchanger")
+        elif annulus_velocity > limits["annulus_max"]:
+            warnings.append("[HYDRAULIC_WARNING] Annulus velocity above recommended range for double-pipe exchanger")
+        return warnings
+
+    # ==========================================================
+    # RATE MODE
+    # ==========================================================
+
+    def rate(self) -> Dict[str, Any]:
+
+        hot = self._stream_props(self.hot_in)
+        cold = self._stream_props(self.cold_in)
+
+        # ======================================================
+        # GEOMETRY
+        # ======================================================
+
+        tube_od = float(
+            self.specs["tube_od"]
+        )
+
+        tube_id = float(
+            self.specs["tube_id"]
+        )
+
+        tube_length = float(
+            self.specs["tube_length"]
+        )
+
+        annulus_diameter = float(
+            self.specs["annulus_diameter"]
+        )
+
+        area = float(
+            self.specs["area"]
+        )
+
+        # ======================================================
+        # FLOW AREAS
+        # ======================================================
+
+        tube_area = (
+            math.pi
+            * tube_id**2
+            / 4.0
+        )
+
+        annulus_area = (
+            math.pi
+            * (
+                annulus_diameter**2
+                - tube_od**2
+            )
+            / 4.0
+        )
+
+        # ======================================================
+        # VELOCITIES
+        # ======================================================
+
+        tube_velocity_single = (
+            cold["m_dot"]
+            / (
+                cold["density"]
+                * tube_area
+            )
+        )
+
+        annulus_velocity_single = (
+            hot["m_dot"]
+            / (
+                hot["density"]
+                * annulus_area
+            )
+        )
+        parallel_paths = int(self.specs.get("parallel_paths", self._compute_parallel_paths(tube_velocity_single, annulus_velocity_single)))
+        tube_velocity = tube_velocity_single / parallel_paths
+        annulus_velocity = annulus_velocity_single / parallel_paths
+
+        # ======================================================
+        # HEAT TRANSFER COEFFICIENTS
+        # ======================================================
+
+        re_tube = (
+            cold["density"]
+            * tube_velocity
+            * tube_id
+            / cold["viscosity"]
+        )
+
+        pr_tube = (
+            cold["cp"]
+            * cold["viscosity"]
+            / cold["k"]
+        )
+
+        nu_tube = (
+            0.023
+            * re_tube**0.8
+            * pr_tube**0.4
+        )
+
+        h_tube = (
+            nu_tube
+            * cold["k"]
+            / tube_id
+        )
+
+        hydraulic_diameter = (
+            annulus_diameter
+            - tube_od
+        )
+
+        re_annulus = (
+            hot["density"]
+            * annulus_velocity
+            * hydraulic_diameter
+            / hot["viscosity"]
+        )
+
+        pr_annulus = (
+            hot["cp"]
+            * hot["viscosity"]
+            / hot["k"]
+        )
+
+        nu_annulus = (
+            0.023
+            * re_annulus**0.8
+            * pr_annulus**0.4
+        )
+
+        h_annulus = (
+            nu_annulus
+            * hot["k"]
+            / hydraulic_diameter
+        )
+
+        # ======================================================
+        # OVERALL U
+        # ======================================================
+
+        r_total = (
+            (1 / h_tube)
+            + (1 / h_annulus)
+        )
+
+        u_dirty = 1.0 / r_total
+
+        # A specified_U or assumed_U has no part in the rating; say so rather
+        # than drop it silently.
+        u_warnings = [
+            f"[U_BASIS_WARNING] Double-pipe rating calculates U from the film "
+            f"coefficients; {key} is not used"
+            for key in ("specified_U", "assumed_U")
+            if self.specs.get(key) is not None
+        ]
+
+        # ======================================================
+        # UA
+        # ======================================================
+
+        UA = (
+            u_dirty
+            * area
+        )
+
+        # ======================================================
+        # NTU
+        # ======================================================
+
+        Ch = (
+            hot["m_dot"]
+            * hot["cp"]
+        )
+
+        Cc = (
+            cold["m_dot"]
+            * cold["cp"]
+        )
+
+        Cmin = min(Ch, Cc)
+
+        Cmax = max(Ch, Cc)
+
+        Cr = Cmin / Cmax
+
+        NTU = UA / Cmin
+
+        effectiveness = (
+            1.0
+            - math.exp(
+                -NTU * (1 - Cr)
+            )
+        ) / (
+            1.0
+            - Cr
+            * math.exp(
+                -NTU * (1 - Cr)
+            )
+        )
+
+        # ======================================================
+        # DUTY
+        # ======================================================
+
+        q_max = (
+            Cmin
+            * (
+                hot["t_k"]
+                - cold["t_k"]
+            )
+        )
+
+        q_actual = (
+            effectiveness
+            * q_max
+        )
+
+        # ======================================================
+        # OUTLET TEMPERATURES
+        # ======================================================
+
+        th_out = (
+            hot["t_k"]
+            - q_actual / Ch
+        )
+
+        tc_out = (
+            cold["t_k"]
+            + q_actual / Cc
+        )
+
+        # ======================================================
+        # PRESSURE DROP
+        # ======================================================
+
+        friction_factor_tube = float(self.specs.get("tube_friction_factor", 0.02))
+        friction_factor_annulus = float(self.specs.get("annulus_friction_factor", 0.03))
+        tube_dp = friction_factor_tube * (tube_length / max(tube_id, 1e-6)) * (cold["density"] * tube_velocity**2 / 2.0)
+        annulus_dp = friction_factor_annulus * (tube_length / max(hydraulic_diameter, 1e-6)) * (hot["density"] * annulus_velocity**2 / 2.0)
+
+        # ======================================================
+        # DEBUG
+        # ======================================================
+
+
+
+
+
+
+
+
+
+        # ======================================================
+        # RESULTS
+        # ======================================================
+
+        return {
+            "hx_type": "double_pipe",
+            "method": "basic",
+            "Q": HeatFlow(q_actual / 1000.0, "kW"),
+            "property_basis": self._property_basis(hot, cold),
+            "Area": Area(area, "m2"),
+            "U_assumed": HeatTransferCoefficient(u_dirty, "W/m2K"),
+            "U_calculated": HeatTransferCoefficient(u_dirty, "W/m2K"),
+            # Rating takes U from the film coefficients of the given geometry.
+            "u_basis": "calculated",
+            "LMTD": None,
+            "tube_count": parallel_paths,
+            "parallel_paths": parallel_paths,
+            "tube_od": Length(tube_od, "m"),
+            "tube_id": Length(tube_id, "m"),
+            "tube_length": Length(tube_length, "m"),
+            "shell_diameter": Length(annulus_diameter, "m"),
+            "tube_velocity": Velocity(tube_velocity, "m/s"),
+            "shell_velocity": Velocity(annulus_velocity, "m/s"),
+            "tube_dp": Pressure(tube_dp, "Pa"),
+            "shell_dp": Pressure(annulus_dp, "Pa"),
+            "iterations": 1,
+            "status": "OK",
+            "warnings": [*u_warnings, *self._double_pipe_warnings(tube_velocity, annulus_velocity)],
+            "NTU": NTU,
+            "effectiveness": effectiveness,
+        }

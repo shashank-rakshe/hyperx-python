@@ -186,6 +186,8 @@ sh('zcat training/data/cabledyn_train.jsonl.gz > data/cabledyn_train.jsonl || to
 sh('zcat training/data/tensormesh_train.jsonl.gz > data/tensormesh_train.jsonl || touch data/tensormesh_train.jsonl', required=False)
 # VTracer scanned-drawing tracing (MIT): real runs, kept in the repo
 sh('zcat training/data/vtracer_train.jsonl.gz > data/vtracer_train.jsonl || touch data/vtracer_train.jsonl', required=False)
+# ProcessPi pipe hydraulics (MIT): real runs, kept in the repo
+sh('zcat training/data/pipeflow_train.jsonl.gz > data/pipeflow_train.jsonl || touch data/pipeflow_train.jsonl', required=False)
 # MOOSE plate checks made on GitHub in the official MOOSE image (release moose-latest)
 sh(f'curl -sSfL -o /tmp/moose_train.jsonl.gz https://github.com/{GH_REPO}/releases/download/moose-latest/moose_train.jsonl.gz'
    ' && zcat /tmp/moose_train.jsonl.gz > data/moose_train.jsonl || touch data/moose_train.jsonl', required=False)
@@ -225,7 +227,7 @@ FEEDBACK = ' '.join(sorted(f for f in glob.glob('/kaggle/input/**/*feedback*.jso
 sh(f"python training/dpo_pairs.py --data 'data/*.jsonl' 'training/data/*.jsonl.gz' --feedback {FEEDBACK} --out data/dpo_pairs.jsonl --max 2000",
    required=False)
 report('training the main model')
-sh(f'MAX_LEN=6144 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/synth_pid_train.jsonl data/physics_train.jsonl data/ocx_train.jsonl data/construct_train.jsonl data/construct_real_train.jsonl data/cad3dify_train.jsonl data/class_rule_train.jsonl data/dexpi_train.jsonl data/dwsim_train.jsonl data/reversecad_train.jsonl data/cadmpeg_train.jsonl data/rhino_train.jsonl data/nx_train.jsonl data/cabledyn_train.jsonl data/tensormesh_train.jsonl data/vtracer_train.jsonl data/moose_train.jsonl data/parsebench_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
+sh(f'MAX_LEN=6144 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/synth_pid_train.jsonl data/physics_train.jsonl data/ocx_train.jsonl data/construct_train.jsonl data/construct_real_train.jsonl data/cad3dify_train.jsonl data/class_rule_train.jsonl data/dexpi_train.jsonl data/dwsim_train.jsonl data/reversecad_train.jsonl data/cadmpeg_train.jsonl data/rhino_train.jsonl data/nx_train.jsonl data/cabledyn_train.jsonl data/tensormesh_train.jsonl data/vtracer_train.jsonl data/pipeflow_train.jsonl data/moose_train.jsonl data/parsebench_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
 report('scoring the trained model')
 sh('python training/cad_eval.py --local /kaggle/working/shipbrain_model/lora --limit 30 --out /kaggle/working/cad_eval_after.json', required=False)
 sh(f'python training/evaluate.py --local /kaggle/working/shipbrain_model/lora --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_after.json', required=False)

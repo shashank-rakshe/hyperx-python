@@ -319,6 +319,17 @@ class Tools:
                       'which overlays the pictures).',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'page': {'type': 'integer'}, 'scale': num,
                                                          'dpi': num}, 'required': ['file']})
+        self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
+                      'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
+                      'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
+                      'branches: parallel pipes at the end [[{d_mm, length_m, fittings}], ...]; fluid seawater | fresh water | mgo | '
+                      'hfo | lube oil | hydraulic oil, or density + viscosity_cst; pump_efficiency. Fitting types: '
+                      'standard_elbow_90_deg, standard_elbow_45_deg, long_radius_90_deg, gate_valve, globe_valve, ball_valve, '
+                      'angle_valve, swing_check_valve, lift_check_valve, plug_valve_straightway, standard_tee_through_flow, '
+                      'standard_tee_through_branch, entrance_sharp, entrance_rounded, exit, sudden_expansion, sudden_contraction.',
+                      {'type': 'object', 'properties': {'flow_m3h': num, 'segments': {'type': 'array'}, 'branches': {'type': 'array'},
+                                                         'fluid': {'type': 'string'}, 'density': num, 'viscosity_cst': num,
+                                                         'pump_efficiency': num}, 'required': ['flow_m3h', 'segments']})
         self.register('reverse_cad', self.reverse_cad, 'Mesh (STL scan / 3D-print / mesh export) -> STEP AP242 solid with ReverseCAD '
                       '(non-commercial licence): watertight B-Rep, volume, area, centre of mass, inertia, mass for a material, '
                       'recognised holes / ISO threads / fillets / chamfers / slots / cavities, and its own verification of the STEP '
@@ -1192,6 +1203,11 @@ class Tools:
         r = vectorize.trace(self._path(file), page=int(page), scale=scale, dpi=dpi)
         r['svg'], r['dxf'] = os.path.basename(r['svg']), os.path.basename(r['dxf'])
         return r
+
+    def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
+        from . import pipeflow
+        return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
+                             pump_efficiency=pump_efficiency, branches=branches)
 
     def reverse_cad(self, file, material=None, heatmap=False):
         from . import reversecad

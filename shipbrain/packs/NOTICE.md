@@ -96,6 +96,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - https://github.com/run-llama/ParseBench.git contributors
 
+## ProcessPi
+
+- Source: https://github.com/varma666/ProcessPi (commit c817afd2c661)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2025 Raviteja Varma Nadimpalli
+
 ## ShipSpace-GA
 
 - Source: https://github.com/kodendaal/ShipSpace-GA (commit 78405b9521ce)

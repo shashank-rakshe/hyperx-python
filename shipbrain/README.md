@@ -269,6 +269,26 @@ ShipBrain runs its own program, pinned to commit `6c775550` (version 0.6.11):
   instead. Its docs and code are the knowledge pack `packs/cadmpeg.sbpack` (7,202 chunks); 240 training conversations
   come from real runs on its public CC0 / NIST sample files (`training/cadmpeg_tasks.py`).
 
+## Ship piping hydraulics: ProcessPi (MIT)
+
+[ProcessPi](https://github.com/varma666/ProcessPi)'s `processpi` package is copied as written in `vendor/processpi` (its
+committed virtual environment with .exe files is left out). Tool `pipe_flow(flow_m3h, segments, fluid, branches)`:
+seawater cooling, ballast, bilge, fire main, fuel, lube oil and fresh water lines - Darcy-Weisbach with Colebrook-White
+(64/Re when laminar), valve and bend losses from its K and Le/D tables, elevation, parallel branches; pressure drop,
+head, velocity per pipe, pump power (hydraulic and shaft), and a warning above common velocity limits.
+
+Checked by hand: a single pipe matches Darcy-Weisbach / Colebrook to 0.1 Pa, elevation is exactly rho g h, a globe valve
+exactly K = 10, laminar oil exactly 64/Re, two equal parallel branches split the flow equally. Two things found and
+handled while checking:
+- ProcessPi's `Water` ignores a density override (an "overridden" oil was computed with water's density, giving a 10 %
+  low friction factor in laminar flow), and it has no seawater or marine fuels: ShipBrain passes its own fluids with
+  fixed properties (seawater ITTC 20 C, fresh water, MGO, HFO 380, lube oil, hydraulic oil - or the user's density and
+  viscosity; fuel oil viscosity changes strongly with temperature).
+- Fittings placed at a network node are skipped by ProcessPi (by design): ShipBrain puts them on their pipe.
+
+Not included (said in the answers): pump curves, NPSH / cavitation, water hammer, two-phase flow, fouling margins.
+Skill `pipe-hydraulics`, pack `packs/ProcessPi.sbpack`, 60 training conversations from real runs, tests.
+
 ## Scanned drawings -> vectors: VTracer (MIT)
 
 [VTracer](https://github.com/visioncortex/vtracer) (visioncortex; built for high-resolution scans of historic blueprints)
