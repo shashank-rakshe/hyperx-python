@@ -43,3 +43,35 @@ def test_tool_selector_recall_and_prompt():
     assert tot > 1000 and hit / tot > 0.97                   # the needed tool is shown in full almost always
     full, small = agent.system_prompt(T), agent.system_prompt(T, question='84 mm R3 chain in 120 m water')
     assert len(small) < 0.5 * len(full) and 'mooring(' in small and 'Other tools' in small and 'pipe_flow' in small
+
+
+def test_correction_memory_worked_example_and_check(tmp_path):
+    from shipbrain.memory import Memory
+    M = Memory(str(tmp_path))
+    conv = [{'role': 'user', 'content': 'Check an 84 mm R3 chain, 700 m, 120 m depth, anchor 640 m'},
+            {'role': 'assistant', 'content': '```tool\n{"name": "mooring", "args": {"depth": 120}}\n```'},
+            {'role': 'user', 'content': 'TOOL_RESULT mooring: {"utilisation": 0.08}'},
+            {'role': 'assistant', 'content': 'Utilisation 0.8 - NOT OK.'}]
+    a = M.answer_feedback(conv, False, 'Utilisation is 0.08, so it is OK.')['memory']
+    conv[0]['content'] = 'Check an 84 mm R3 chain, 700 m long, 120 m depth, anchor at 640 m'
+    b = M.answer_feedback(conv, False, 'Read the utilisation 0.08 from the result.')['memory']
+    assert b['id'] == a['id'] and 'given 2 times' in b['note']                 # repeated -> stronger, not a duplicate
+    m = M.list()[0]
+    assert m['kind'] == 'correction' and m['tool'] == 'mooring' and not m['disagrees_with_tool']
+    bad = M.answer_feedback(conv[:3] + [{'role': 'assistant', 'content': 'ok'}], False, 'It should be 0.5.')['memory']
+    assert 'check' in bad                                                        # numbers the tool never computed
+
+
+def test_correction_shown_as_worked_example(tmp_path):
+    import tempfile
+    from shipbrain import agent, knowledge
+    from shipbrain.memory import Memory
+    M = Memory(str(tmp_path))
+    M.answer_feedback([{'role': 'user', 'content': 'Plate 2800 x 800 x 12 at 0.05 MPa'},
+                       {'role': 'assistant', 'content': '```tool\n{"name": "plate_check", "args": {}}\n```'},
+                       {'role': 'user', 'content': 'TOOL_RESULT plate_check: {"sigma_max_MPa": 153}'},
+                       {'role': 'assistant', 'content': 'Simply supported: 153 MPa'}], False, 'Use clamped edges for our deck plating.')
+    T = agent.Tools(tempfile.mkdtemp(), knowledge.load(None))
+    T.memory = M
+    ctx, used = agent.retrieve(T, 'Plate 2800 x 800 x 12 at 0.05 MPa - stress?')
+    assert any(u.startswith('memory:') for u in used) and 'Use clamped edges' in ctx and 'Do it this way now' in ctx

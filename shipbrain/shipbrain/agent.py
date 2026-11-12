@@ -1969,7 +1969,15 @@ def retrieve(tools, question, k=3, min_score=3.0, budget=None):
             cands.append((_skill_ctx(x), 'skill:' + x['name'], 700))
     if tools.memory is not None:
         for m in tools.memory.recall(question, 2):
-            cands.append((f"[memory {m['id']}] (taught by the user) {m['text']}", 'memory:' + m['id'], 300))
+            if m.get('kind') == 'correction':                  # a worked example from a thumbs-down with a correction
+                t = (f"[memory {m['id']}] Earlier a similar request (\"{m.get('question', '')[:160]}\") was answered wrongly"
+                     + (f" (\"{m['wrong'][:160]}\")" if m.get('wrong') else '') + f"; the user corrected it: {m['correction']}"
+                     + (f" (corrected {m['count']} times)" if m.get('count', 1) > 1 else '')
+                     + (". NOTE: this correction does not match what the tool computed then - follow the tool's result "
+                        "and ask the user if it matters." if m.get('disagrees_with_tool') else '. Do it this way now.'))
+                cands.append((t, 'memory:' + m['id'], 500))
+            else:
+                cands.append((f"[memory {m['id']}] (taught by the user) {m['text']}", 'memory:' + m['id'], 300))
     cad = CAD_WORDS.search(question) and not re.search(r'\bmesh', question, re.I)
     if tools.examples is not None and cad:
         for e in tools.examples.search(question, 1):

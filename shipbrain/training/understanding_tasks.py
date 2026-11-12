@@ -305,7 +305,49 @@ def main(argv=None):
                 A('9.8 is not a standard ISO 898-1 class for this size - the usual ones are 8.8, 10.9 and 12.9. I take 8.8 (the most common); '
                   'tell me if it is 10.9.\n' + tb('bolt', a2)), rm('bolt', res), A(res['plain_english'])]
 
-    gens = [(ask_plate, 6), (ask_mooring, 4), (ask_pipe, 5), (ask_bolt, 3), (assume_bolt, 3), (assume_pipe, 3), (messy_plate, 7),
+    # ------------------------------------------------------------------ memory: follow a user's earlier correction
+    def mem_ctx(q_old, wrong, corr, count=1, disagrees=False):
+        return (f'[memory m{r.randint(1, 40)}] Earlier a similar request ("{q_old}") was answered wrongly ("{wrong}"); the user '
+                f'corrected it: {corr}' + (f' (corrected {count} times)' if count > 1 else '')
+                + ('. NOTE: this correction does not match what the tool computed then - follow the tool\'s result and ask the '
+                   'user if it matters.' if disagrees else '. Do it this way now.'))
+
+    def memory_edges():
+        A_, B_, t, q = r.choice([2400, 2800]), r.choice([700, 800]), r.choice([10, 12]), r.choice([0.05, 0.08])
+        ctx = mem_ctx(f'Plate {A_ + 400} x {B_} x {t} at {q} MPa', 'I took simply supported edges',
+                      'our deck plating is welded to the stiffeners - use clamped edges', r.choice([1, 2, 3]))
+        args = {'a': A_, 'b': B_, 't': t, 'q': q, 'boundary': 'clamped'}
+        res = run('plate_check', args)
+        if 'error' in res:
+            return None
+        from shipbrain import agent as ag
+        msgs = ag.attach_context([U(f'Plate field {A_} x {B_}, {t} mm, {q} MPa - stress?')], ctx)
+        return msgs + [A(tb('plate_check', args)), rm('plate_check', res),
+                       A(plate_answer(args, res) + ' (Clamped edges, as you corrected me before.)')]
+
+    def memory_units():
+        Q, d, L = r.choice([60, 100, 150]), r.choice([100, 125, 150]), r.choice([30, 40])
+        ctx = mem_ctx(f'Pressure drop {Q + 20} m3/h in {d} mm pipe', 'answered in kPa only', 'always give pressure drop in bar and m head')
+        args = {'flow_m3h': Q, 'segments': [{'d_mm': d, 'length_m': L}], 'fluid': 'seawater'}
+        res = run('pipe_flow', args)
+        from shipbrain import agent as ag
+        msgs = ag.attach_context([U(f'{Q} m3/h seawater through {L} m of {d} mm - pressure drop?')], ctx)
+        return msgs + [A(tb('pipe_flow', args)), rm('pipe_flow', res), A(res['plain_english'])]
+
+    def memory_disagrees():
+        Q, d, L = r.choice([80, 120]), r.choice([100, 125]), r.choice([30, 50])
+        args = {'flow_m3h': Q, 'segments': [{'d_mm': d, 'length_m': L}], 'fluid': 'seawater'}
+        res = run('pipe_flow', args)
+        claimed = round(res['pressure_drop_bar'] * r.choice([2.0, 2.5, 3.0]), 2)
+        ctx = mem_ctx(f'{Q} m3/h in {d} mm pipe, {L} m', f"{res['pressure_drop_bar']:.2f} bar", f'it should be {claimed} bar', disagrees=True)
+        from shipbrain import agent as ag
+        msgs = ag.attach_context([U(f'Pressure drop for {Q} m3/h seawater, {d} mm pipe, {L} m?')], ctx)
+        return msgs + [A(tb('pipe_flow', args)), rm('pipe_flow', res),
+                       A(res['plain_english'] + f" Earlier you told me {claimed} bar for a line like this. The calculation for the pipe "
+                         f"itself gives {res['pressure_drop_bar']:.2f} bar; the difference may be a strainer, cooler or valves that "
+                         "were not in the description. Which items are in the line? I add them and run it again.")]
+
+    gens = [(memory_edges, 3), (memory_units, 2), (memory_disagrees, 3), (ask_plate, 6), (ask_mooring, 4), (ask_pipe, 5), (ask_bolt, 3), (assume_bolt, 3), (assume_pipe, 3), (messy_plate, 7),
             (messy_pipe, 6), (messy_mooring, 3), (design_pipe, 5), (design_plate, 5), (design_mooring, 3), (recover_fitting, 4),
             (recover_short_line, 3), (recover_grade, 2)]
     pool = [g for g, w in gens for _ in range(w)]

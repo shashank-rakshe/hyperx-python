@@ -96,6 +96,46 @@ class Memory:
             f.write(json.dumps(rec) + '\n')
         out = {'logged': True}
         if not good and comment.strip():
-            q = next((m['content'] for m in reversed(messages) if m['role'] == 'user'), '')[:200]
-            out['memory'] = self.remember(f'Correction (for questions like "{q}"): {comment.strip()}', ['correction'], 'feedback')
+            out['memory'] = self.correction(messages, comment.strip())
         return out
+
+    def correction(self, messages, comment):
+        """a thumbs-down with a correction -> a worked example used for similar questions right away:
+        the question, the wrong answer, the correction, the tool involved; repeated corrections of the same kind gain weight;
+        a correction whose numbers are not among the tool's numbers is marked, so the model checks before following it"""
+        import re
+        users = [m['content'] for m in messages if m['role'] == 'user' and isinstance(m['content'], str)
+                 and not m['content'].startswith('TOOL_RESULT')]
+        q = (users[0] if users else '')[:240]
+        wrong = next((m['content'] for m in reversed(messages) if m['role'] == 'assistant' and isinstance(m['content'], str)
+                      and '```tool' not in m['content']), '')[:300]
+        tools_used = [re.search(r'"name"\s*:\s*"(\w+)"', m['content']).group(1) for m in messages
+                      if m['role'] == 'assistant' and isinstance(m['content'], str) and re.search(r'"name"\s*:\s*"(\w+)"', m['content'])]
+        results = ' '.join(m['content'] for m in messages if m['role'] == 'user' and isinstance(m['content'], str)
+                           and m['content'].startswith('TOOL_RESULT'))
+        num = lambda t: [float(x.replace(',', '')) for x in re.findall(r'(?<![\w.])-?\d[\d,]*\.?\d*', t)]
+        cn, tn = num(comment), num(results)
+        disagrees = bool(results) and bool(cn) and not all(any(abs(c - t) <= 0.02 * max(abs(c), 1e-9) for t in tn) for c in cn)
+        tool = tools_used[-1] if tools_used else None
+        words = lambda t: set(re.findall(r'[a-z0-9.]+', t.lower()))
+        qw = words(q)
+        for m in self.items:                                   # the same kind of correction again -> stronger, latest wording
+            mw = words(m.get('question', ''))
+            same = bool(qw and mw) and len(qw & mw) / len(qw | mw) >= 0.6
+            if not m.get('deleted') and m.get('kind') == 'correction' and m.get('tool') == tool and same:
+                m['likes'] = m.get('likes', 0) + 1
+                m['count'] = m.get('count', 1) + 1
+                m.update(correction=comment, wrong=wrong or m.get('wrong'), disagrees_with_tool=disagrees,
+                         text=f'Correction (for questions like "{q}"): {comment}')
+                self._save()
+                self._index()
+                return {'id': m['id'], 'note': f'same correction as before - now given {m["count"]} times, used with more weight'}
+        r = self.remember(f'Correction (for questions like "{q}"): {comment}', ['correction'] + ([tool] if tool else []), 'feedback')
+        for m in self.items:
+            if m['id'] == r['id']:
+                m.update(kind='correction', question=q, wrong=wrong, correction=comment, tool=tool, count=1,
+                         disagrees_with_tool=disagrees)
+        self._save()
+        if disagrees:
+            r['check'] = 'the correction has numbers the tool did not compute - the model will check before using it'
+        return r

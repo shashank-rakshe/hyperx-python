@@ -908,6 +908,16 @@ every training conversation (and the DPO pairs, the scorecard and the evaluation
 uses. The prompt also says: a missing KEY input -> ask; a missing secondary value -> assume and say so; a tool error ->
 fix and retry or ask.
 
+### Instant learning from a correction (no retraining)
+
+A 👎 with a written correction becomes, at once, a worked example in the memory: the original question, the wrong answer,
+the correction and the tool involved. For a similar question it is given to the model as "Earlier a similar request ...
+was answered wrongly ...; the user corrected it: ... Do it this way now." The same correction given again raises its
+weight ("corrected 3 times") instead of adding a duplicate. A correction with numbers the tool never computed is marked:
+the model then follows the tool's result and asks the user what was missing (a strainer, a cooler ...), instead of
+copying a possibly wrong number. Training conversations teach the model to follow such examples (understanding_tasks:
+memory_edges / memory_units / memory_disagrees).
+
 ### Learning from 👍 / 👎: DPO after the fine-tune
 
 After the normal fine-tune, the Kaggle run does one short DPO step (Direct Preference Optimisation, with Hugging Face
