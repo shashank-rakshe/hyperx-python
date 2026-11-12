@@ -423,6 +423,16 @@ class Tools:
                       'optional ParaView file (.vtu). Run the analysis first (solve_calculix / analysis_run) for a field.',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'frd': {'type': 'string'}, 'field': {'type': 'string', 'enum': ['von_mises', 'displacement']},
                                                          'view': {'type': 'string'}, 'scale': num, 'vtu': {'type': 'boolean'}}, 'required': ['file']})
+        self.register('elmer_flow', self.elmer_flow, 'CFD and FLUID-STRUCTURE INTERACTION with Elmer FEM (free, GPL; needs Elmer installed): a plate standing in a channel '
+                      'with water / seawater / air / oil flowing past (2D, metres): laminar flow or SST k-omega turbulence, rigid plate or ELASTIC plate (two-way FSI: the flow '
+                      'bends the plate, the bent plate changes the flow). Returns drag, pressure on the front and back of the plate, velocities, and for an elastic plate '
+                      'the deflection and von Mises stress, and writes pictures (velocity, pressure, displacement, stress) and a ParaView .vtu. Mesh made by ShipBrain (no gmsh). '
+                      'Lengths in metres, velocity m/s. A steady laminar solution only exists at low Reynolds numbers; the answer says whether it converged.',
+                      {'type': 'object', 'properties': {'velocity': num, 'fluid': {'type': 'string', 'enum': ['water', 'seawater', 'air', 'oil']},
+                                                         'length': num, 'height': num, 'plate_x': num, 'plate_t': num, 'plate_h': num, 'plate': {'type': 'string', 'enum': ['rigid', 'elastic']},
+                                                         'material': {'type': 'string', 'enum': ['steel', 'aluminium', 'rubber', 'plastic']}, 'E_pa': num, 'poisson': num,
+                                                         'turbulence': {'type': 'string', 'enum': ['laminar', 'sst']}, 'cell': num, 'name': {'type': 'string'}},
+                       'required': ['velocity']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1571,6 +1581,36 @@ class Tools:
                                  + (f". ParaView file {files[-1]}." if vtu else '.'))
         return info
 
+    def elmer_flow(self, velocity, fluid='water', length=2.0, height=1.0, plate_x=0.5, plate_t=0.02, plate_h=0.4, plate='rigid', material='steel',
+                   E_pa=None, poisson=0.3, turbulence='laminar', cell=0.02, name='flow'):
+        from . import elmer, viz
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        kw = dict(length=float(length), height=float(height), plate_x=float(plate_x), plate_t=float(plate_t), plate_h=float(plate_h), velocity=float(velocity),
+                  fluid=fluid, cell=float(cell), plate=plate, turbulence=turbulence)
+        if plate == 'elastic':
+            E, nu, rho = elmer.MATERIALS[material]
+            kw['structure'] = (float(E_pa) if E_pa else E, float(poisson) if E_pa else nu, rho)
+        r = elmer.solve_plate(self.workdir, name, **kw)
+        vtu = os.path.join(self.workdir, r['vtu'])
+        files = [r['vtu']]
+        fields = ['velocity', 'pressure'] + (['displacement', 'vonmises'] if plate == 'elastic' else [])
+        for f in fields:
+            png = os.path.join(self.workdir, f'{name}_{f}.png')
+            viz.render_flow(vtu, png, field=f, scale=(None if f in ('velocity', 'pressure') else 'auto') if plate == 'elastic' else None)
+            files.append(os.path.basename(png))
+        r['files'] = files
+        s = (f"{fluid} at {velocity:g} m/s past a {'flexible ' + material if plate == 'elastic' else 'rigid'} plate {plate_h:g} m high (Reynolds number "
+             f"{r['reynolds_plate_height']:.3g}, {turbulence}): pressure {r['pressure_front_avg_pa']:.4g} Pa on the front face and {r['pressure_back_avg_pa']:.4g} Pa on the back, "
+             f"pressure drag {r['pressure_drag_n_per_m']:.4g} N per metre of plate width (Cd {r['drag_coefficient_pressure']}), highest velocity {r['max_velocity_m_s']:.4g} m/s.")
+        if plate == 'elastic':
+            s += (f" The plate bends {r['plate_tip_displacement_m'] * 1000:.4g} mm at the tip; highest von Mises stress {r.get('plate_max_von_mises_pa', 0) / 1e6:.4g} MPa"
+                  f" (coupling converged in {r['fsi_iterations']} iterations).")
+        if r.get('converged') is False:
+            s += (f" WARNING: the steady solution did not converge (last change {r['last_relative_change']:.2g}): treat the numbers as indicative; "
+                  "at this Reynolds number the real flow is unsteady (vortex shedding) and needs a transient run.")
+        r['plain_english'] = s + ' Pictures: ' + ', '.join(files[1:]) + '.'
+        return r
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -2178,6 +2218,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'\.stp\b|\.step\b|\.iges?\b|sldprt|catpart|solidworks|catia|inventor|fusion|rhino|freecad|\.prt\b|native', ('native_cad', 'file_info')),
     (r'\.stl\b|scan(ned)? (part|mesh)|reverse', ('reverse_cad', 'stl_to_step')),
     (r'\bpicture\b|\bimage\b|visuali[sz]|show (me )?(the )?(stress|result|model|plot)|contour|render|screenshot of (the )?(model|mesh)|plot (the )?(stress|displacement)|paraview|\.vtu', ('show_result',)),
+    (r'\bcfd\b|\bfsi\b|fluid.structure|\belmer\b|flow (past|around|over|on)|drag|(water|air|wind|current) (at|of) [0-9.]+ ?m/s|navier|turbulen|k-?omega|pressure distribution|wave load', ('elmer_flow', 'physics_lab')),
     (r'finite[- ]volume|\bfvm\b|1d (cfd|diffusion|convection|conduction)|\btdma\b|simple algorithm|upwind|central differenc', ('fvm_1d',)),
     (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),
     (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),

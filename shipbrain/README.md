@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 110/110, wrong replies 0/110.
+replies score 112/112, wrong replies 0/112.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1120,6 +1120,19 @@ Checked (`tests/test_pulsation.py`): closed-closed and open-closed pipe modes n 
 water speed of sound with the wall correction, a three-leg route equal to one straight column (corners connect), and simply supported pipe bending modes
 within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
 Training: `training/pulsation_tasks.py`.
+
+### Flow and fluid-structure interaction (Elmer FEM)
+
+`elmer_flow` runs Elmer FEM (GPL-2+, CSC) on a plate standing in a 2D channel: water / seawater / air / oil, laminar or SST k-omega, a rigid plate or a flexible plate
+(two-way FSI: Elmer's fluid solver, elasticity solver and mesh update coupled through its FSI boundary). ShipBrain makes everything around Elmer with its own code
+(`elmer.py`): the block-structured mesh with a conforming fluid-structure interface (no gmsh, no ElmerGrid) in Elmer's mesh format, the solver input, the VTU reader, and the
+pictures (`viz.render_flow`: velocity, pressure, displacement, stress). Elmer was built from its sources and run here.
+
+Checked (`tests/test_elmer.py`, skipped when ElmerSolver is not installed): channel flow gives the exact parabolic profile (umax = 1.5 x mean within 1 %) and
+dp/dx = -12 mu U / H2 within 4 %; the FSI coupling is linear (Young's modulus x 10 gives 1/9.97 of the deflection) and a bending plate carries the same pressure drag as the
+rigid one (within 2 %). NOT validated against measurements: the drag coefficient of the plate and the SST k-omega runs (they run, but a steady RANS solution of a bluff plate
+may not converge - the tool reports `converged` and warns). Not covered: 3D flow around a STEP part, free surface and waves, hull seakeeping, SST with FSI.
+Training: `training/elmer_tasks.py`. Install Elmer (free): https://www.elmerfem.org (ElmerSolver on the PATH or ELMER_HOME).
 
 ### Pictures of models and results (`show_result`)
 

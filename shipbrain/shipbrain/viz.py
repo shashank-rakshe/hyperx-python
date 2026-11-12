@@ -215,3 +215,56 @@ def export_vtu(src, out, frd=None):
     w += ['</Piece>', '</UnstructuredGrid>', '</VTKFile>']
     open(out, 'w').write('\n'.join(w))
     return out
+
+
+# ====================================================================== flow results (Elmer VTU)
+FLOW_FIELDS = {'velocity': 'velocity magnitude [m/s]', 'pressure': 'pressure [Pa]', 'displacement': 'displacement [m]', 'vonmises': 'von Mises stress [Pa]'}
+
+
+def render_flow(vtu, out_png, field='velocity', scale=None, arrows=True, title=None, size=(11, 5.5), dpi=130, cmap='turbo'):
+    """2D Elmer result (VTU) as a colour plot; the structure of an FSI case is drawn deformed (scale = exaggeration, default 1; 'auto' = 10 % of the
+    plate height). Returns the value range."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.collections import PolyCollection
+    from .elmer import read_vtu
+    v = read_vtu(vtu)
+    X, fl = v['points'][:, :2], v['fields']
+    if field not in FLOW_FIELDS or field not in fl:
+        raise ValueError(f"field must be one of {[f for f in FLOW_FIELDS if f in fl]}")
+    val = fl[field]
+    val = np.linalg.norm(val[:, :2], axis=1) if val.ndim == 2 else val
+    conn, off, typ = v['connectivity'], v['offsets'], v['types']
+    cells, start = [], 0
+    for o, t in zip(off, typ):
+        if t in (5, 9):
+            cells.append(conn[start:o])
+        start = o
+    d = fl.get('displacement')
+    Xd = X.copy()
+    sc = 1.0
+    if d is not None and np.abs(d).max() > 0:
+        if scale == 'auto' or scale is None and False:
+            sc = 0.1 * float(np.ptp(X[:, 1])) / float(np.abs(d).max()) * 0.4
+        elif scale is not None:
+            sc = float(scale)
+        Xd = X + d[:, :2] * sc
+    lo, hi = float(val.min()), float(val.max())
+    norm = plt.Normalize(lo, hi if hi > lo else lo + 1e-12)
+    polys = [Xd[c] for c in cells]
+    fv = np.array([val[c].mean() for c in cells])
+    fig, ax = plt.subplots(figsize=size)
+    pc = PolyCollection(polys, array=fv, cmap=cmap, norm=norm, edgecolors='none')
+    ax.add_collection(pc)
+    if arrows and 'velocity' in fl:
+        step = max(1, len(Xd) // 400)
+        ax.quiver(Xd[::step, 0], Xd[::step, 1], fl['velocity'][::step, 0], fl['velocity'][::step, 1], color='k', width=0.0012, alpha=0.6)
+    ax.set_xlim(Xd[:, 0].min(), Xd[:, 0].max()); ax.set_ylim(Xd[:, 1].min(), Xd[:, 1].max())
+    ax.set_aspect('equal')
+    ax.set_xlabel('x [m]'); ax.set_ylabel('y [m]')
+    cb = fig.colorbar(pc, ax=ax, shrink=0.8)
+    cb.set_label(FLOW_FIELDS[field])
+    ax.set_title(title or os.path.basename(vtu) + ' - ' + field)
+    fig.tight_layout(); fig.savefig(out_png, dpi=dpi); plt.close(fig)
+    return {'png': out_png, 'field': field, 'min': lo, 'max': hi, 'deformation_scale': sc}

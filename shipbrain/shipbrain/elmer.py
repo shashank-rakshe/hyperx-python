@@ -213,13 +213,16 @@ def channel_plate(length=2.0, height=1.0, plate_x=0.5, plate_t=0.02, plate_h=0.4
     nup = max(4, int(round(plate_x / (cell * 2.5))))
     ndn = max(6, int(round((length - plate_x - plate_t) / (cell * 2.5))))
     xs = axis_from_segments([(0.0,), (plate_x, nup, 1 / 8.0), (plate_x + plate_t, max(3, int(round(plate_t / cx)))), (length, ndn, 8.0)])
-    nh = max(6, int(round(plate_h / cell)))
-    nr = max(6, int(round((height - plate_h) / (cell * 2.0))))
-    ys = axis_from_segments([(0.0,), (plate_h, nh), (height, nr, 6.0)])
+    if plate_h > 0:
+        nh = max(6, int(round(plate_h / cell)))
+        nr = max(6, int(round((height - plate_h) / (cell * 2.0))))
+        ys = axis_from_segments([(0.0,), (plate_h, nh), (height, nr, 6.0)])
+    else:                                                            # no plate: a plain channel
+        ys = axis_from_segments([(0.0,), (height, max(8, int(round(height / cell))))])
     x0, x1 = plate_x, plate_x + plate_t
 
     def body(x, y):
-        inside = x0 < x < x1 and y < plate_h
+        inside = plate_h > 0 and x0 < x < x1 and y < plate_h
         return (2 if plate == 'elastic' else 0) if inside else 1
     m = Mesh([xs, ys], body)
     eps = 1e-9 * max(length, height)
@@ -239,7 +242,7 @@ def channel_plate(length=2.0, height=1.0, plate_x=0.5, plate_t=0.02, plate_h=0.4
                 return 3                                          # bottom wall
             if ax == 1 and abs(y - height) < eps:
                 return 4                                          # top wall
-            return 5                                              # wall of the rigid plate
+            return 5 if ax == 0 else 7                            # wall of the rigid plate: sides (5) and top (7)
         return None
     mesh = m.build(tag)
     mdir = os.path.join(workdir, name)
@@ -247,12 +250,16 @@ def channel_plate(length=2.0, height=1.0, plate_x=0.5, plate_t=0.02, plate_h=0.4
     info = {'mesh_dir': name, 'nodes': int(len(mesh['nodes'])), 'cells': len(mesh['elements']), 'rho': rho, 'mu': mu,
             'reynolds_plate_height': rho * velocity * plate_h / mu, 'reynolds_channel_height': rho * velocity * height / mu}
     sif = os.path.join(workdir, name + '.sif')
-    open(sif, 'w').write(_sif(name, rho, mu, velocity, plate, structure, turbulence, steady, dt, steps, height))
+    if turbulence not in ('laminar', 'sst'):
+        raise ValueError("turbulence must be 'laminar' or 'sst'")
+    if turbulence == 'sst' and plate == 'elastic':
+        raise ValueError('SST turbulence with a flexible plate (FSI) is not set up: use a rigid plate or laminar flow')
+    open(sif, 'w').write(_sif(name, rho, mu, velocity, plate, structure, turbulence, steady, dt, steps, height, wall_dist=0.5 * cell))
     info['sif'] = os.path.basename(sif)
     return info
 
 
-def _sif(name, rho, mu, U, plate, structure, turbulence, steady, dt, steps, H):
+def _sif(name, rho, mu, U, plate, structure, turbulence, steady, dt, steps, H, wall_dist=0.01):
     E, nu, rhos = MATERIALS[structure] if isinstance(structure, str) else structure
     fsi = plate == 'elastic'
     trans = not steady
@@ -263,42 +270,126 @@ def _sif(name, rho, mu, U, plate, structure, turbulence, steady, dt, steps, H):
     if trans:
         a(f'  Simulation Type = Transient\n  Timestepping Method = BDF\n  BDF Order = 2\n  Timestep Sizes = {dt}\n  Timestep Intervals = {steps}\n  Steady State Max Iterations = {20 if fsi else 1}')
     else:
-        a(f'  Simulation Type = Steady State\n  Steady State Max Iterations = {60 if fsi else 40}\n  Steady State Min Iterations = 1')
+        a(f'  Simulation Type = Steady State\n  Steady State Max Iterations = {60 if fsi else (200 if turbulence == 'sst' else 40)}\n  Steady State Min Iterations = 1')
     a('  Output Intervals = 0\nEnd\n')
     a('Body 1\n  Name = "Fluid"\n  Equation = 1\n  Material = 1\n  Initial Condition = 1\nEnd')
     if fsi:
         a('Body 2\n  Name = "Plate"\n  Equation = 2\n  Material = 2\n  Initial Condition = 1\nEnd')
-    a(f'\nInitial Condition 1\n  Velocity 1 = {U}\n  Velocity 2 = 0\n  Pressure = 0\n' + ('  Displacement 1 = 0\n  Displacement 2 = 0\n' if fsi else '') + 'End\n')
+    a(f'\nInitial Condition 1\n  Velocity 1 = {U}\n  Velocity 2 = 0\n  Pressure = 0\n' + ('  Displacement 1 = 0\n  Displacement 2 = 0\n' if fsi else '')
+      + (f'  Kinetic Energy = {1.5 * (0.05 * U) ** 2}\n  Kinetic Dissipation = {1.5 * (0.05 * U) ** 2 / (10.0 * mu / rho)}\n' if turbulence == 'sst' else '') + 'End\n')
     a(f'Material 1\n  Name = "Fluid"\n  Density = {rho}\n  Viscosity = {mu}\n' + ('  Viscosity Model = sst k-omega\n' if turbulence == 'sst' else '') + 'End')
     if fsi:
         a(f'Material 2\n  Name = "Plate"\n  Density = {rhos}\n  Youngs Modulus = {E}\n  Poisson Ratio = {nu}\nEnd')
-    n = 1
-    ns = None
+    sst = turbulence == 'sst'
+    n = 2 if sst else 1
+    if sst:
+        a('\nSolver 1\n  Equation = Distance\n  Procedure = "DistanceSolve" "DistanceSolver1"\n  Variable = "Wall Distance"\n  Exec Solver = Before all\nEnd')
     a(f'\nSolver {n}\n  Equation = Navier-Stokes\n  Stabilization Method = Stabilized\n  Calculate Loads = Logical True\n'
-      '  Linear System Solver = Direct\n  Linear System Direct Method = UMFPACK\n'
-      f'  Nonlinear System Max Iterations = {1 if (fsi or trans) else 30}\n  Nonlinear System Convergence Tolerance = 1.0e-6\n'
-      '  Nonlinear System Newton After Iterations = 3\n  Nonlinear System Newton After Tolerance = 1.0e-3\n  Nonlinear System Relaxation Factor = 1.0\n'
-      '  Steady State Convergence Tolerance = 1.0e-6\nEnd')
-    act = [1]
+      + ('' if sst else '  Linear System Solver = Direct\n  Linear System Direct Method = UMFPACK\n') +
+      f'  Nonlinear System Max Iterations = {1 if (fsi or trans or sst) else 30}\n  Nonlinear System Convergence Tolerance = 1.0e-6\n'
+      + ('  Nonlinear System Newton After Iterations = 10\n  Nonlinear System Newton After Tolerance = 1.0e-2\n  Nonlinear System Relaxation Factor = 0.5\n'
+         if sst else '  Nonlinear System Newton After Iterations = 3\n  Nonlinear System Newton After Tolerance = 1.0e-3\n  Nonlinear System Relaxation Factor = 1.0\n')
+      + ('  Linear System Solver = Iterative\n  Linear System Iterative Method = BiCGStabL\n  Linear System Preconditioning = ILU1\n  Linear System Max Iterations = 1000\n'
+         '  Linear System Convergence Tolerance = 1.0e-7\n' if sst else '')
+      + '  Steady State Convergence Tolerance = 1.0e-5\nEnd')
+    if sst:
+        a('\nSolver 3\n  Equation = SST K-Omega\n  Procedure = "SSTKomega" "SSTKomega"\n  Variable = "ko[Kinetic Energy:1 Kinetic Dissipation:1]"\n'
+          '  Linear System Solver = Iterative\n  Linear System Iterative Method = BiCGStabL\n  Linear System Preconditioning = ILU1\n'
+          '  Linear System Max Iterations = 1000\n  Linear System Convergence Tolerance = 1.0e-7\n  Nonlinear System Max Iterations = 5\n'
+          '  Nonlinear System Convergence Tolerance = 1.0e-3\n  Nonlinear System Relaxation Factor = 0.75\n  Steady State Relaxation Factor = 0.75\n'
+          '  Steady State Convergence Tolerance = 1.0e-5\nEnd')
     if fsi:
         a('\nSolver 2\n  Equation = Elasticity Solver\n  Variable = Displacement\n  Variable DOFs = 2\n  Procedure = File "ElasticSolve" "ElasticSolver"\n'
           '  Linear System Solver = Direct\n  Linear System Direct Method = UMFPACK\n  Calculate Stresses = Logical True\n'
           '  Nonlinear System Max Iterations = 1\n  Steady State Convergence Tolerance = 1.0e-6\nEnd')
         a('\nSolver 3\n  Equation = Mesh Update\n  Linear System Solver = Direct\n  Linear System Direct Method = UMFPACK\n  Steady State Convergence Tolerance = 1.0e-6\nEnd')
-    nout = 4 if fsi else 2
+    nout = 4 if fsi else (4 if sst else 2)
     a(f'\nSolver {nout}\n  Exec Solver = After Saving\n  Equation = ResultOutput\n  Procedure = "ResultOutputSolve" "ResultOutputSolver"\n  Output File Name = {name}\n'
       '  Output Format = String vtu\n  Ascii Output = Logical True\n  Vtu Format = Logical True\n  Save Geometry Ids = Logical False\nEnd')
-    a('\nEquation 1\n  Active Solvers(' + ('2' if fsi else '1') + ') = ' + ('1 3' if fsi else '1') + '\nEnd')
+    a('\nEquation 1\n  Active Solvers(' + ('2' if fsi else '3' if sst else '1') + ') = ' + ('1 3' if fsi else '1 2 3' if sst else '1') + '\nEnd')
     if fsi:
         a('Equation 2\n  Active Solvers(1) = 2\n  Plane Stress = Logical True\nEnd')
-    a(f'\nBoundary Condition 1\n  Name = "Inlet"\n  Target Boundaries(1) = 1\n  Velocity 1 = {U}\n  Velocity 2 = 0\n' + ('  Mesh Update 1 = 0\n  Mesh Update 2 = 0\n' if fsi else '') + 'End')
-    a('Boundary Condition 2\n  Name = "Outlet"\n  Target Boundaries(1) = 2\n  Pressure = 0\n' + ('  Mesh Update 1 = 0\n  Mesh Update 2 = 0\n' if fsi else '') + 'End')
-    a('Boundary Condition 3\n  Name = "Bottom"\n  Target Boundaries(1) = 3\n  Velocity 1 = 0\n  Velocity 2 = 0\n' + ('  Mesh Update 1 = 0\n  Mesh Update 2 = 0\n' if fsi else '') + 'End')
-    a('Boundary Condition 4\n  Name = "Top"\n  Target Boundaries(1) = 4\n  Velocity 1 = 0\n  Velocity 2 = 0\n' + ('  Mesh Update 1 = 0\n  Mesh Update 2 = 0\n' if fsi else '') + 'End')
+    mu_ = mu
+    k_in = 1.5 * (0.05 * U) ** 2
+    om_in = k_in / (10.0 * mu_ / rho)
+    mu_up = ('  Mesh Update 1 = 0\n  Mesh Update 2 = 0\n' if fsi else '')
+    a(f'\nBoundary Condition 1\n  Name = "Inlet"\n  Target Boundaries(1) = 1\n  Velocity 1 = {U}\n  Velocity 2 = 0\n' + mu_up
+      + (f'  Kinetic Energy = {k_in}\n  Kinetic Dissipation = {om_in}\n' if sst else '') + 'End')
+    a('Boundary Condition 2\n  Name = "Outlet"\n  Target Boundaries(1) = 2\n  Pressure = 0\n' + mu_up + 'End')
+    wl = f'  Wall Law = True\n  Wall Distance = Real {wall_dist}\n  Boundary Layer Thickness = {wall_dist}\n'
+    a('Boundary Condition 3\n  Name = "Bottom"\n  Target Boundaries(1) = 3\n' + (wl + '  Velocity 2 = 0\n' if sst else '  Velocity 1 = 0\n  Velocity 2 = 0\n') + mu_up + 'End')
+    a('Boundary Condition 4\n  Name = "Top"\n  Target Boundaries(1) = 4\n' + (wl + '  Velocity 2 = 0\n' if sst else '  Velocity 1 = 0\n  Velocity 2 = 0\n') + mu_up + 'End')
     if fsi:
         a('Boundary Condition 5\n  Name = "Interface"\n  Target Boundaries(1) = 5\n  FSI BC = Logical True\n  Mesh Update 1 = Equals Displacement 1\n'
-          '  Mesh Update 2 = Equals Displacement 2\n  Velocity 1 = Equals Mesh Velocity 1\n  Velocity 2 = Equals Mesh Velocity 2\nEnd')
+          '  Mesh Update 2 = Equals Displacement 2\n' + ('  Velocity 1 = Equals Mesh Velocity 1\n  Velocity 2 = Equals Mesh Velocity 2\nEnd' if trans else '  Velocity 1 = 0\n  Velocity 2 = 0\nEnd'))
         a('Boundary Condition 6\n  Name = "Clamp"\n  Target Boundaries(1) = 6\n  Displacement 1 = 0\n  Displacement 2 = 0\nEnd')
+    elif sst:
+        a('Boundary Condition 5\n  Name = "Plate sides"\n  Target Boundaries(1) = 5\n' + wl + '  Velocity 1 = 0\nEnd')
+        a('Boundary Condition 6\n  Name = "Plate top"\n  Target Boundaries(1) = 7\n' + wl + '  Velocity 2 = 0\nEnd')
     else:
-        a('Boundary Condition 5\n  Name = "Plate wall"\n  Target Boundaries(1) = 5\n  Velocity 1 = 0\n  Velocity 2 = 0\nEnd')
+        a('Boundary Condition 5\n  Name = "Plate wall"\n  Target Boundaries(2) = 5 7\n  Velocity 1 = 0\n  Velocity 2 = 0\nEnd')
     return '\n'.join(L) + '\n'
+
+
+def vtu_file(workdir, name):
+    import glob
+    c = sorted(glob.glob(os.path.join(workdir, name, name + '*.vtu')) + glob.glob(os.path.join(workdir, name + '*.vtu')))
+    if not c:
+        raise RuntimeError('Elmer wrote no result file (.vtu)')
+    return c[-1]
+
+
+def solve_plate(workdir='.', name='case', **kw):
+    """channel_plate(...) + ElmerSolver + a summary of the numbers: drag, pressure on the plate faces, velocity, (FSI) plate deflection and stress"""
+    info = channel_plate(name=name, workdir=workdir, **kw)
+    log = run(os.path.join(workdir, info['sif']), workdir)
+    vtu = vtu_file(workdir, name)
+    v = read_vtu(vtu)
+    X, f = v['points'], v['fields']
+    U = float(kw.get('velocity', 1.0))
+    h, t, x0 = float(kw.get('plate_h', 0.4)), float(kw.get('plate_t', 0.02)), float(kw.get('plate_x', 0.5))
+    fsi = kw.get('plate', 'rigid') == 'elastic'
+    d = f.get('displacement')
+    Xo = X.copy()
+    if d is not None:
+        Xo[:, :2] = X[:, :2] - d[:, :2]
+    eps = 1e-7
+    vel = f['velocity']
+    speed = np.linalg.norm(vel[:, :2], axis=1)
+    out = {'vtu': os.path.relpath(vtu, workdir), 'log': 'elmer.log', 'mesh_nodes': info['nodes'], 'cells': info['cells'], 'fluid': info['rho'],
+           'reynolds_plate_height': round(info['reynolds_plate_height'], 1), 'max_velocity_m_s': round(float(speed.max()), 5),
+           'inlet_velocity_m_s': U}
+    if h > 0:
+        front = (abs(Xo[:, 0] - x0) < eps) & (Xo[:, 1] > eps) & (Xo[:, 1] <= h + eps)
+        back = (abs(Xo[:, 0] - (x0 + t)) < eps) & (Xo[:, 1] > eps) & (Xo[:, 1] <= h + eps)
+        p = f['pressure']
+        out['pressure_front_avg_pa'] = round(float(p[front].mean()), 6)
+        out['pressure_back_avg_pa'] = round(float(p[back].mean()), 6)
+        out['pressure_front_max_pa'] = round(float(p[front].max()), 6)
+        ys = np.sort(np.unique(np.round(Xo[front, 1], 9)))
+        out['pressure_profile'] = {'y_m': [round(float(y), 5) for y in ys[::max(1, len(ys) // 12)]],
+                                   'front_pa': [round(float(p[front][np.argmin(abs(Xo[front, 1] - y))]), 5) for y in ys[::max(1, len(ys) // 12)]],
+                                   'back_pa': [round(float(p[back][np.argmin(abs(Xo[back, 1] - y))]), 5) for y in ys[::max(1, len(ys) // 12)]]}
+        # force on the plate per metre of depth from the pressure difference (the pressure drag), integrated along the faces
+        def integ(mask):
+            o = np.argsort(Xo[mask, 1])
+            return float(np.trapezoid(p[mask][o], Xo[mask, 1][o]))
+        out['pressure_drag_n_per_m'] = round(integ(front) - integ(back), 6)
+        dyn = 0.5 * info['rho'] * U * U
+        out['drag_coefficient_pressure'] = round(out['pressure_drag_n_per_m'] / (dyn * h), 4) if dyn > 0 else None
+    if fsi and d is not None:
+        dm = np.linalg.norm(d[:, :2], axis=1)
+        top = (abs(Xo[:, 1] - h) < eps) & (Xo[:, 0] >= x0 - eps) & (Xo[:, 0] <= x0 + t + eps)
+        out['plate_tip_displacement_m'] = round(float(d[top, 0].mean()), 9)
+        out['plate_max_displacement_m'] = round(float(dm.max()), 9)
+        if 'vonmises' in f:
+            pl = (Xo[:, 0] >= x0 - eps) & (Xo[:, 0] <= x0 + t + eps) & (Xo[:, 1] <= h + eps)
+            out['plate_max_von_mises_pa'] = round(float(f['vonmises'][pl].max()), 4)
+        m = re.findall(r'SS \(ITER=\s*(\d+)\)', log)
+        out['fsi_iterations'] = int(m[-1]) if m else None
+    m = re.findall(r'SS \(ITER=\s*(\d+)\) \(NRM,RELC\): \(\s*\S+\s+(\S+)\s*\) :: navier-stokes', log)
+    if m:
+        out['iterations'] = int(m[-1][0])
+        out['last_relative_change'] = float(m[-1][1].replace('D', 'E'))
+        out['converged'] = out['last_relative_change'] < 1e-4 or kw.get('steady', True) is False
+    return out

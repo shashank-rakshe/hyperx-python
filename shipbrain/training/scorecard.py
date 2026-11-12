@@ -34,6 +34,8 @@ def _items():
     add('complete', 'Which wall thickness and OD does NPS 12 schedule 40 pipe have in the ASME B36.10 table?', 'standard_part')
     add('complete', 'Slab 40 mm thick, k 2.1, internal heat 3e5 W/m3, faces held at 30 and 60 C: run a 1D finite volume solution with 16 cells and compare with the exact one', 'fvm_1d')
     add('complete', 'Finite volume check of a 1D convection diffusion problem, u 0.3 m/s, gamma 0.2, 25 cells, central scheme', 'fvm_1d')
+    add('complete', 'Seawater at 0.8 m/s flows past a flexible rubber plate 500 mm high and 50 mm thick, clamped at its foot in a 1.2 m deep channel - fluid structure coupling, show me stress and deflection', 'elmer_flow')
+    add('complete', 'CFD of a rigid plate 300 mm high in an oil flow of 0.01 m/s: pressure on the front and back faces and the drag', 'elmer_flow')
     add('complete', 'Hot water header NPS 8 schedule 40 runs 10 m west, then 4 m south; fixed points at both ends; 120 C and 6 bar, full of water - check stresses to B31.1', 'pipe_stress', {'t_oper_c': 120})
     add('complete', 'Run the component based finite element analysis for a shear tab: IPE360 beam to a HEB300 column, four M20 8.8 bolts, 150 kN reaction', 'steel_cbfem', {'V': 150})
     add('complete', 'AISC check of a bolted extended end plate moment joint: beam W360X44, column W410X149, plate 300x550x32, four M30 A325 bolts at 140 gauge, 45 mm to the flanges, 6 mm web weld, 100 kN shear and 400 kN column axial, with a 25 mm stiffener', 'connection_check', {})
