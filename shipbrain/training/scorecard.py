@@ -28,6 +28,7 @@ def _items():
                              if v not in (None, {}, False)}})
 
     # ------------------------------------------------------------ complete: everything given
+    add('complete', 'Lug plate with 6 bolts, 2 columns of 3, gauge 90 and pitch 80, M20 class 10.9, 150 kN carried 220 mm off the bolt centre - are the bolts alright?', 'bolt_group', {'d': 20})
     add('complete', 'Model a column foot for HEB260 with a 35 mm plate and M24 anchors', 'steel_connection', {'kind': 'base_plate'})
     add('complete', 'I want a bolted joint between two IPE330 beams, cover plates top, bottom and both sides of the web', 'steel_connection', {'kind': 'splice'})
     add('complete', 'Take bracket_layout.png, a thin pencil sketch, and give me single CAD lines along each stroke', 'trace_drawing', {'file': 'bracket_layout.png'})

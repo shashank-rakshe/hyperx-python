@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 95/95, wrong replies 0/95.
+replies score 96/96, wrong replies 0/96.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1050,6 +1050,17 @@ extension without clash, CalculiX run on the shell model (tip deflection of the 
 the rest being joint rotation, shear and local load effects). Not done: connection resistance checks (bolt shear and bearing, welds, column web),
 contact between plates, uplift of base plates, section root fillets. IDEA StatiCa's connection library is proprietary and is not used;
 the geometry comes from published standards. Training: `training/connection_tasks.py`.
+
+### Bolt groups under eccentric load (EZbolt)
+
+`bolt_group` checks a group of bolts loaded in its plane (brackets, fin plates, lugs): the elastic method and the AISC instant centre of
+rotation method (Brandt's iteration), for any layout, any load direction and any eccentricity. EZbolt (MIT, Robert Wang) is copied as written
+in `vendor/ezbolt`; ShipBrain converts kN / mm to its kip / inch and back. Bolt resistance: give it per bolt, or the size and class for
+the EN 1993-1-8 shear value per shear plane (M20 8.8: 94.1 kN). Checked: a concentric load shares equally; 4 bolts at 3 in pitch with
+4 in eccentricity gives C = 2.365 (ICR more than the elastic method); the same answer from a torsion value or from an eccentricity.
+Bolt shear only: no bearing, tear-out, block shear or plate rupture. Training: `training/boltgroup_tasks.py`.
+Knowledge packs added with it: osoconn, steelpy, ezbolt, bolt (Go), Bolt-Calculation-Tool, BOLTS_archive (parts library, GPL), BAT (GPL),
+ideastatica-public (IDEA StatiCa's public API client and samples, MIT; the program itself is not included).
 
 ## Tests
 

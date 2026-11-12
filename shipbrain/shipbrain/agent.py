@@ -335,6 +335,15 @@ class Tools:
                           'ribs': {'type': 'boolean'}, 'beam_length': num, 'column_length': num,
                           'mesh': {'type': 'string', 'enum': ['none', 'shell', 'hex', 'both']}, 'size': num, 'load_kn': num,
                           'solve': {'type': 'boolean'}, 'name': {'type': 'string'}}, 'required': ['kind']})
+        self.register('bolt_group', self.bolt_group, 'Bolt GROUP loaded in its plane (shear + torsion; eccentric loads on a bracket, '
+                      'fin plate, lug) with EZbolt: elastic method and the AISC instant centre of rotation (ICR) method, any layout / load '
+                      'direction / eccentricity. Bolts: list [[x,y],...] mm or grid {width,height,nx,ny}. Forces kN, mm; vx, vy at the centroid '
+                      'of the group, ex / ey = offset of the force from the centroid (mm) or torsion directly (kN.mm). Bolt resistance: '
+                      'capacity_kn per bolt, or d (mm) and cls (8.8) for EN 1993-1-8 shear per plane. Bolt shear only (no bearing / block shear). '
+                      'For one bolt with preload / fatigue use the bolt tool.',
+                      {'type': 'object', 'properties': {'bolts': {'type': 'array'}, 'grid': {'type': 'object'}, 'vx': num, 'vy': num, 'torsion': num,
+                                                         'ex': num, 'ey': num, 'capacity_kn': num, 'd': num, 'cls': {'type': 'string'},
+                                                         'shear_planes': {'type': 'integer'}}})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1334,6 +1343,11 @@ class Tools:
         res['plain_english'] = sentence.strip()
         return res
 
+    def bolt_group(self, bolts=None, grid=None, vx=0.0, vy=0.0, torsion=0.0, ex=0.0, ey=0.0, capacity_kn=None, d=None, cls=None, shear_planes=1):
+        from . import bolt_group as BG
+        return BG.solve(Vx=float(vx), Vy=float(vy), torsion=float(torsion), capacity_kn=capacity_kn, bolts=bolts, grid=grid, d=d, cls=cls,
+                        shear_planes=int(shear_planes), ex=float(ex), ey=float(ey))
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -1938,7 +1952,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'p&id|\bpid\b|dexpi|pumps?, tanks|equipment list|instrument', ('dexpi', 'pid_kg')),
     (r'\.stp\b|\.step\b|\.iges?\b|sldprt|catpart|solidworks|catia|inventor|fusion|rhino|freecad|\.prt\b|native', ('native_cad', 'file_info')),
     (r'\.stl\b|scan(ned)? (part|mesh)|reverse', ('reverse_cad', 'stl_to_step')),
-    (r'connection|joint|end ?plate|fin ?plate|shear tab|base ?plate|anchor bolt|splice|cover plate|moment connection', ('steel_connection', 'bolt')),
+    (r'bolt group|bolt pattern|eccentric|bracket|lug|connection|joint|end ?plate|fin ?plate|shear tab|base ?plate|anchor bolt|splice|cover plate|moment connection', ('steel_connection', 'bolt', 'bolt_group')),
     (r'scan|trace|cent(er|re) ?line|vector(ise|ize)|raster|photo of', ('trace_drawing',)),
     (r'compare|revision|rev\b|what changed|difference between', ('compare_drawings', 'compare_structures')),
     (r'quality|jacobian|warpage|skew|aspect|element check', ('fe_quality', 'mesh_check')),

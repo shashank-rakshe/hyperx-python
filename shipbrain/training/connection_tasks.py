@@ -127,11 +127,11 @@ def main(argv=None):
     def resistance():
         q = r.choice(['Is this end plate connection strong enough for 200 kNm?', 'Check the bolt resistance and weld strength of the fin plate',
                       'Does the base plate pass the Eurocode check?'])
-        return [U(q), A('I cannot do a full code resistance check (bolt shear and bearing, weld strength, column web panel) - ShipBrain builds the '
+        return [U(q), A('I cannot do a full code resistance check (bolt bearing, weld strength, column web panel, plate bending) - ShipBrain builds the '
                         'connection, checks the bolt spacing and clashes, meshes it and can run a finite element model for a load you give me. '
-                        'If you give the section sizes, the connection kind and the load (kN at the beam end), I run that FE model and report '
-                        'displacement and stress; for a single bolt I can check preload and fatigue with the bolt tool. A full resistance check '
-                        'needs a code program or hand calculation by an engineer.')]
+                        'For the bolts I can do more: the bolt_group tool checks a bolt group under shear and eccentric load (elastic and AISC instant-centre '
+                        'methods, bolt shear only), and the bolt tool checks one bolt for preload and fatigue. Give me the bolt layout, size and class, and the load with its '
+                        'eccentricity and I run that. A full resistance check of the whole joint needs a code program or an engineer.')]
 
     gens = [(end_plate, 8), (fin, 6), (base, 6), (splice, 4), (shell_run, 5), (hex_run, 2), (warn_fix, 2), (ask, 2), (resistance, 2)]
     pool = [g for g, w in gens for _ in range(w)]

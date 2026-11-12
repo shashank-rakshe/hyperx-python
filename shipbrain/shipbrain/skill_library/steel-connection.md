@@ -13,7 +13,7 @@ spacing checks (edge 1.2 d0 ... 4t + 40, pitch 2.2 d0); clash checks between par
 - mesh "hex": hexahedral meshes of the thick plates (end plate, base plate, ribs, cover plates), one input per part.
 
 Say plainly: this is geometry, checks and meshes. It does NOT check the connection resistance (bolt shear, bearing, weld strength,
-column web panel, ...): for that use the `bolt` tool for single bolts and a code check or the user's own program. Contact between
+column web panel, ...): for the bolts use `bolt_group` (bolt group under shear and eccentric load, elastic and AISC instant-centre methods, bolt shear only) and `bolt` (one bolt: preload, fatigue); for the rest a code check or the user's own program. Contact between
 plates is not modelled (bolts tie the plates; the base plate is supported in z by the concrete, with no uplift contact). Rolled section
 root fillets are not modelled. A fin plate connection is nearly a pin: its FE deflection is much larger than a rigid-joint beam theory value.
 IDEA StatiCa's connection library is proprietary and is NOT used.

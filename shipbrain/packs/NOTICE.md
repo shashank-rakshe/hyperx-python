@@ -398,3 +398,59 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2024 TSANG, Hao Fung
+
+## BAT
+
+- Source: https://github.com/misams/BAT (commit 6f39c08201bb)
+- Licence: GPL
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- https://github.com/misams/BAT contributors
+
+## BOLTS_archive
+
+- Source: https://github.com/boltsparts/BOLTS_archive (commit 05a2acd1f777)
+- Licence: GPL
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- https://github.com/boltsparts/BOLTS_archive contributors
+
+## Bolt-Calculation-Tool
+
+- Source: https://github.com/arda-pecel/Bolt-Calculation-Tool (commit 42d8719676b9)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2025 arda-pecel
+
+## bolt
+
+- Source: https://github.com/Konstantin8105/bolt (commit 1c3dd6f76a3f)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2017 Konstantin
+
+## ezbolt
+
+- Source: https://github.com/wcfrobert/ezbolt (commit 0ced23ffa353)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2023 Robert Wang
+
+## ideastatica-public
+
+- Source: https://github.com/idea-statica/ideastatica-public (commit fe6953ef1e63)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2021 IDEA StatiCa
+
+## osoconn
+
+- Source: https://github.com/roshnnoronha/osoconn (commit 07d90173565a)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2025 roshnnoronha
+
+## steelpy
+
+- Source: https://github.com/evanfaler/steelpy (commit 060dcd913a67)
+- Licence: Apache-2.0
+- Use: ok: permissive licence, keep the attribution
+- https://github.com/evanfaler/steelpy contributors
