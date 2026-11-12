@@ -153,7 +153,7 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 
 ## cadcore
 
-- Source: local copy of cadcore (upstream release) (commit working-tree)
+- Source: https://github.com/YATSKOVSKYI/cadcore (commit 4c7c358bc1f9)
 - Licence: MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2025-2026 Dmytro Yatskovskyi
