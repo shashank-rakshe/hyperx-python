@@ -1,3 +1,8 @@
+---
+name: steel-connection
+description: steel connection 3D model, checks and meshes from plain words: end plate, fin plate, base plate, splice
+when: (end|fin|base) ?plate|shear tab|beam splice|steel (connection|joint)|bolted joint.*(beam|column)
+---
 # Steel connections from plain words (steel_connection)
 
 When the user describes a steel joint (end plate, fin plate / shear tab, base plate, beam splice), call `steel_connection`.

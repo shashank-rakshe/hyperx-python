@@ -1,3 +1,8 @@
+---
+name: pipe-stress
+description: pipe flexibility analysis to ASME B31.1 with psi - sustained and expansion code checks, support and anchor loads, movements
+when: pipe stress|piping stress|b31\.?[13]|thermal expansion of (the |a |my )?pip|expansion loop|anchor (load|force)s?
+---
 # Pipe stress analysis (pipe_stress)
 
 For "pipe stress", "B31.1 check", "thermal expansion", "do I need an expansion loop", "anchor / support loads", call `pipe_stress`.

@@ -1,3 +1,8 @@
+---
+name: cbfem
+description: component-based finite element analysis of a steel connection: plate plasticity, bolt forces, prying, capacity factor
+when: cbfem|component.based|connection (fe|finite element|capacity)|plastic strain.*(bolt|plate|joint)|prying
+---
 # CBFEM of steel connections (steel_cbfem)
 
 When the user wants a finite element analysis of a steel connection (plate yielding, bolt forces, prying, "CBFEM", "like IDEA StatiCa"), call

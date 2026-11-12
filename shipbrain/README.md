@@ -1121,6 +1121,18 @@ water speed of sound with the wall correction, a three-leg route equal to one st
 within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
 Training: `training/pulsation_tasks.py`.
 
+### Frame-field hex meshes (AlgoHex)
+
+`hex_mesh_algohex` gives a part to AlgoHex (AGPL-3.0, cgg-bern, "Locally Meshable Frame Fields", ACM TOG 2023): ShipBrain makes the tetrahedral
+input from its own hex mesher (each hex split into 6 tets - conforming and checked for positive volume), AlgoHex turns it into a frame-field hex mesh,
+and ShipBrain reads AlgoHex's OpenVolumeMesh output (hexes put into C3D8 order with positive volume), checks it (inverted cells, scaled Jacobian,
+volume against the exact one) and writes CalculiX input. AlgoHex is not built in the cloud sandbox: two of its libraries (CoMISo, libHexEx) are hosted
+on RWTH Aachen's GitLab, which the sandbox cannot reach, and ShipBrain does not fetch them elsewhere. So `.github/workflows/shipbrain-algohex.yml` builds
+it from its sources on GitHub's computers, runs it on its own demo and on ShipBrain parts, and publishes the checked meshes as the release `algohex-latest`;
+on the user's computer ShipBrain runs the user's own AlgoHex build or container image. Checked here (`tests/test_algohex.py`): the tet split conserves volume
+and is conforming, hex meshes written with randomly oriented faces come back in C3D8 order with the same quality, AlgoHex's demo tet mesh reads with the right
+volume, a STEP part gives a valid tet input.
+
 ## Tests
 
 ```bash

@@ -401,6 +401,12 @@ class Tools:
                                                          'material': {'type': 'string'}, 'supports': {'type': 'array'}, 'open_ends': {'type': 'array'},
                                                          'excitation_hz': {'type': 'array'}, 'margin': num, 'modes': {'type': 'integer'},
                                                          'name': {'type': 'string'}}, 'required': ['od_mm', 'wall_mm']})
+        self.register('hex_mesh_algohex', self.hex_mesh_algohex, 'Frame-field HEXAHEDRAL mesh with AlgoHex (AGPL, cgg-bern; "Locally Meshable Frame '
+                      'Fields"): better shaped hexes than the voxel hex_mesh on curved parts, aligned with the surface and sharp edges. ShipBrain '
+                      'makes the tetrahedral input from its own mesher (file .step / .stl, size mm), runs AlgoHex where it is installed (the '
+                      'user\'s build or the "algohex" container image) and checks the result (hexes, inverted cells, scaled Jacobian, volume) '
+                      'and writes a CalculiX .inp. If AlgoHex is not installed it says how to install it; use hex_mesh meanwhile.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'size': num}, 'required': ['file', 'size']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1462,6 +1468,21 @@ class Tools:
                                  supports=supports, open_ends=open_ends, excitation_hz=excitation_hz, margin=float(margin),
                                  modes=int(modes), workdir=self.workdir, name=name)
 
+    def hex_mesh_algohex(self, file, size):
+        from . import algohex as AH
+        src = self._path(file)
+        base = os.path.splitext(src)[0]
+        prep = AH.prepare(src, float(size), base + '_tets.vtk')
+        out = AH.run(prep['tet_file'], base + '_algohex.ovm')
+        rep = AH.report(out, exact_volume=prep.get('exact_volume'))
+        inp = AH.to_inp(out, base + '_algohex.inp')
+        rep.update({'input_tets': prep['tets'], 'inp': os.path.basename(inp), 'tet_file': os.path.basename(prep['tet_file'])})
+        rep['plain_english'] = (f"AlgoHex turned {prep['tets']:,} tetrahedra into {rep.get('hexahedra', 0):,} hexahedra "
+                                f"(smallest scaled Jacobian {rep.get('min_scaled_jacobian', 0):.2f}, {rep.get('inverted', 0)} inverted"
+                                + (f", volume {rep['volume_error_percent']:+.2f} % against the exact" if 'volume_error_percent' in rep else '')
+                                + f") and ShipBrain wrote {rep['inp']} (CalculiX C3D8).")
+        return rep
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -2068,6 +2089,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'p&id|\bpid\b|dexpi|pumps?, tanks|equipment list|instrument', ('dexpi', 'pid_kg')),
     (r'\.stp\b|\.step\b|\.iges?\b|sldprt|catpart|solidworks|catia|inventor|fusion|rhino|freecad|\.prt\b|native', ('native_cad', 'file_info')),
     (r'\.stl\b|scan(ned)? (part|mesh)|reverse', ('reverse_cad', 'stl_to_step')),
+    (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),
     (r'\bxc\b|xcfem|reinforced concrete|rebar|eurocode ?[23]|\bEC[23]\b|\bEHE\b|ACI ?318|fibre? section|code check|limit state|interaction diagram|construction phase', ('xc_run', 'knowledge_search')),
     (r'cbfem|component.based|plastic strain|connection (capacity|resistance)|bolt(s)? (tension|prying)|prying|t-?stub', ('steel_cbfem', 'steel_connection')),
     (r'aisc|clip angle|gusset|brace|bracing|interaction ratio|resistance|strong enough|passes?|bolt group|bolt pattern|eccentric|bracket|lug|connection|joint|end ?plate|fin ?plate|shear tab|base ?plate|anchor bolt|splice|cover plate|moment connection', ('steel_connection', 'bolt', 'bolt_group', 'connection_check')),

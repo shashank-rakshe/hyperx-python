@@ -1,3 +1,8 @@
+---
+name: xc-assessment
+description: reinforced concrete and steel member code checks with XC (Eurocode 2 / 3, ACI 318, AISC 360, EHE)
+when: reinforced concrete|rebar|eurocode ?[23]|\bEC[23]\b|\bEHE\b|ACI ?318|interaction diagram|punching shear|fibre? section
+---
 # Code assessments with XC (xc_run)
 
 For concrete or steel MEMBER checks against a design code (reinforced concrete: Eurocode 2, ACI 318, EHE, SIA 262; steel: Eurocode 3,

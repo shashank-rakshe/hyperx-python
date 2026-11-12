@@ -163,6 +163,13 @@ SOFTWARE = {
                                '(all modules, program moose-opt; ShipBrain runs it by itself). Or the conda / source build from '
                                'the link (Windows: inside WSL2).'},
               'check': lambda: __import__('shipbrain.moose', fromlist=['x']).exe() is not None, 'match': r'MOOSE is not installed'},
+    'algohex': {'name': 'AlgoHex (free frame-field hex mesher, AGPL)', 'why': 'to make frame-field hexahedral meshes (hex_mesh_algohex)',
+                'link': 'https://github.com/cgg-bern/AlgoHex',
+                'steps': {'all': 'build it: git clone https://github.com/cgg-bern/AlgoHex && cd AlgoHex && git submodule update --init && '
+                                 'mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make HexMeshing (needs IPOPT, Bonmin, SuiteSparse: '
+                                 'sudo apt install coinor-libipopt-dev coinor-libbonmin-dev libsuitesparse-dev) and put Build/bin on the PATH; '
+                                 'or the container: podman build -t algohex . in the AlgoHex folder (needs a lot of memory)'},
+                'check': lambda: __import__('shipbrain.algohex', fromlist=['x']).exe() is not None, 'match': r'AlgoHex is not installed'},
     'xcfem': {'name': 'XC (free structural FE and code checking)', 'why': 'to run reinforced concrete and steel code checks and non-linear '
                     'models written for XC', 'link': 'https://github.com/xcfem/xc',
               'steps': {'all': 'easiest: install Docker (https://docs.docker.com/get-docker/), then: docker pull engthiago/xcfem   '

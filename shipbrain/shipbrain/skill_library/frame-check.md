@@ -1,7 +1,7 @@
 ---
 name: frame-check
 description: frame, beam, column, portal, truss or pipe support check - forces, stresses, deflection, load combinations
-when: \b(frame|portal|truss|cantilever|beam|column|pipe ?rack|pipe support)s?\b
+when: \b(frame(?!-?field)|portal|truss|cantilever|beam|column|pipe ?rack|pipe support)s?\b
 ---
 1. Build nodes (mm) and members with their sections (pipe [OD, t] | rect | I [h, b, tw, tf] | box | A, Iy, Iz, J).
 2. Supports: fixed / pinned / roller (or a dof list). Loads per case: G (dead, add self_weight), Q (live), W (wind).

@@ -1,3 +1,8 @@
+---
+name: pipe-pulsation
+description: piping pulsation and vibration: acoustic and structural natural frequencies against pump excitation (OpenPulse)
+when: pulsation|acoustic (resonance|mode)|pipe vibration|piping vibration|natural frequenc\w* of (the |my |a )?pip|reciprocating (pump|compressor)|plunger pump
+---
 # Piping pulsation and vibration (pipe_pulsation)
 
 For "pulsation", "acoustic resonance", "pipe vibration", "natural frequency of the pipe", reciprocating pump or compressor lines, call

@@ -1,3 +1,8 @@
+---
+name: connection-check
+description: AISC 360 joint resistance with Osoconn - clip angles, extended end-plate moment joints, brace gussets
+when: aisc ?360|clip angle|gusset (plate )?(connection|check)|brace connection|moment end ?plate (check|design)
+---
 # Connection resistance checks to AISC 360 (connection_check)
 
 For "is this connection OK / strong enough / does it pass" on four connection types, call `connection_check` (Osoconn, MIT, compiled once):
