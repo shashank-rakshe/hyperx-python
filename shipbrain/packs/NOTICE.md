@@ -131,6 +131,13 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2026 k-tanaka
 
+## autotrace
+
+- Source: https://github.com/autotrace/autotrace (commit 73aa7a877432)
+- Licence: LGPL
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- https://github.com/autotrace/autotrace contributors
+
 ## awatif
 
 - Source: https://github.com/madil4/awatif (commit c962730396ba)
@@ -179,6 +186,78 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2026 Brijesh Parmar
+
+## dealii
+
+- Source: https://github.com/dealii/dealii (commit master (shal)
+- Licence: LGPL + Apache-2.0
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- d
+- e
+- a
+- l
+- .
+- I
+- I
+-  
+- a
+- u
+- t
+- h
+- o
+- r
+- s
+- ;
+-  
+- L
+- G
+- P
+- L
+- -
+- 2
+- .
+- 1
+- -
+- o
+- r
+- -
+- l
+- a
+- t
+- e
+- r
+-  
+-  
+- A
+- p
+- a
+- c
+- h
+- e
+- -
+- 2
+- .
+- 0
+-  
+- w
+- i
+- t
+- h
+-  
+- L
+- L
+- V
+- M
+-  
+- e
+- x
+- c
+- e
+- p
+- t
+- i
+- o
+- n
 
 ## diff3d
 
@@ -319,10 +398,3 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2024 TSANG, Hao Fung
-
-## dealii
-
-- Source: https://github.com/dealii/dealii (library source, tutorial steps and documentation; tests and bundled third-party code left out)
-- Licence: LGPL-2.1-or-later, and separately Apache-2.0 with LLVM exception
-- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
-- Copyright (C) The deal.II authors (see the AUTHORS file of the repository)
