@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 132/132, wrong replies 0/132.
+replies score 134/134, wrong replies 0/134.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1120,6 +1120,14 @@ Checked (`tests/test_pulsation.py`): closed-closed and open-closed pipe modes n 
 water speed of sound with the wall correction, a three-leg route equal to one straight column (corners connect), and simply supported pipe bending modes
 within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
 Training: `training/pulsation_tasks.py`.
+
+### Propellers: own blade-element-momentum tool (three unlicensed propeller repositories)
+
+The three propeller repositories shared (a MATLAB lifting-line analysis, an OpenFOAM propeller template, an OpenFOAM / STAR-CCM+ propeller study) have no licence: private packs only, rows added to
+`docs/LICENCE_REQUESTS.md`. `propeller_bem` (`propeller.py`) is ShipBrain's own blade-element-momentum code: KT, KQ and eta0 against J, an operating point (thrust, torque, power, actuator-disk ideal
+efficiency, cavitation number at 0.7R). Checked (`tests/test_propeller.py`): thrust is zero at J = P/D for non-lifting sections (within 1 %), efficiency stays under the momentum limit, KT and KQ fall
+with J, the result converges with the number of elements, and the operating point obeys eta = T V / (2 pi n Q). Not validated against a real propeller: efficiency is optimistic by about 10 %; constant pitch,
+elliptical chord, no skew, rake or camber distribution; not a design program. Skills `propeller-modelling`, `propeller-analysis`, `propeller-tool-knowledge`.
 
 ### Own tools for what the unlicensed repositories do: motions, design blocks, hull dataset
 

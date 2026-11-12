@@ -10,6 +10,9 @@ licence). Each is covered only by a private knowledge pack on the owner's own co
 | https://github.com/shiplab/dbb | Design Building Block editor (blocks, hulls, hydrostatics, GZ, resistance, seakeeping) | knowledge pack, seakeeping and requirement checks |
 | https://github.com/vsislab/ShipStructure | Ship landmark detection and recognition from images | knowledge pack (image tools) |
 | https://github.com/davidemelozzi/Global-Ship-Hull-Structural-Analysis-Based-on-the-Finite-Element-Method | ANSYS command files for a global tanker hull model and a report | knowledge pack, worked example for the global hull skills |
+| https://github.com/Ultravis66/marine-propeller-simulation | OpenFOAM (MRF) and STAR-CCM+ simulation of a 0.72 m marine propeller, with the STEP / STL geometry | knowledge pack, propeller CFD set-up |
+| https://github.com/Andre-AH/OpenFOAM-propeller-simulation-template | OpenFOAM case template for a general propeller (pimpleFoam, AMI) | knowledge pack, case template for an OpenFOAM propeller tool |
+| https://github.com/EirikSoevik/propeller-analysis | MATLAB propeller analysis: momentum theory, lifting line, cavitation | knowledge pack, compare with the own propeller_bem |
 
 ## Text to post as an issue
 

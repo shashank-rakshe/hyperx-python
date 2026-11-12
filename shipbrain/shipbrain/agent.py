@@ -517,6 +517,11 @@ class Tools:
                       'summed to weight and centre of gravity per block and group, linked to requirements {name, metric weight|volume|area|total_weight|length|beam|height, direction at_least|at_most, shall, '
                       'should, blocks | group} with red (shall not met) / green / orange (beyond the should) status; returns the weights list that ship_hydrostatics and gz_curve take.',
                       {'type': 'object', 'properties': {'blocks': {'type': 'array'}, 'requirements': {'type': 'array'}, 'hull': {'type': 'object'}}, 'required': ['blocks']})
+        self.register('propeller_bem', self.propeller_bem, 'Open-water performance of a screw propeller by blade-element-momentum theory (ShipBrain\'s own teaching-level code): thrust and torque coefficients KT, KQ '
+                      'and efficiency against the advance ratio J, and at an operating point (diameter, rpm, speed in knots) the thrust, torque, power, actuator-disk ideal efficiency and the cavitation number at '
+                      '0.7R for a given shaft immersion. Inputs: blades Z, pitch ratio P/D, expanded area ratio, hub ratio, section drag. Not a design program (constant pitch, elliptical chord, no skew / rake / camber '
+                      'distribution): efficiency is optimistic by about 10 %.',
+                      {'type': 'object', 'properties': {k: num for k in ('D', 'rpm', 'speed_kn', 'Z', 'pitch_ratio', 'ear', 'hub_ratio', 'cd', 'immersion_m')} | {'name': {'type': 'string'}}, 'required': ['D', 'pitch_ratio']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -2024,6 +2029,34 @@ class Tools:
                               + 'The weights list can go straight into ship_hydrostatics or gz_curve (mass and centre of gravity of every block).')
         return r
 
+    def propeller_bem(self, D, pitch_ratio, rpm=None, speed_kn=None, Z=4, ear=0.6, hub_ratio=0.2, cd=0.03, immersion_m=None, name='propeller'):
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        from . import propeller as PR
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        kw = dict(Z=int(Z), pitch_ratio=float(pitch_ratio), ear=float(ear), hub_ratio=float(hub_ratio), cd=float(cd))
+        Js = [round(0.1 * k, 2) for k in range(0, int(float(pitch_ratio) * 10) + 3)]
+        rows = [PR.bem(J, **kw) for J in Js]
+        fig, ax = plt.subplots(figsize=(7, 4.5))
+        ax.plot(Js, [r['KT'] for r in rows], 'b-o', ms=3, label='KT')
+        ax.plot(Js, [10 * r['KQ'] for r in rows], 'r-o', ms=3, label='10 KQ')
+        ax.plot(Js, [r['eta0'] for r in rows], 'g-o', ms=3, label='eta0')
+        ax.set_xlabel('J = V / (n D)'); ax.grid(alpha=0.3); ax.legend(); ax.set_ylim(0, None); ax.set_title(f'Open-water curve, Z {int(Z)}, P/D {float(pitch_ratio):g}, EAR {float(ear):g} (BEM)')
+        fig.tight_layout(); png = os.path.join(self.workdir, name + '.png'); fig.savefig(png, dpi=120); plt.close(fig)
+        out = {'open_water': [{k: round(v, 4) for k, v in r.items()} for r in rows], 'files': [name + '.png']}
+        best = max(rows, key=lambda r: r['eta0'])
+        say = (f"Open-water curve (blade-element-momentum, teaching level): KT(0) {rows[0]['KT']:.3f}, KT falls to zero at J = {float(pitch_ratio):g}; best efficiency eta0 {best['eta0']:.2f} at J = {best['J']:g} "
+               "(optimistic by about 10 % against real propellers).")
+        if rpm and speed_kn:
+            op = PR.performance(float(D), float(rpm), float(speed_kn), immersion_m=float(immersion_m) if immersion_m is not None else None, **kw)
+            out['operating_point'] = {k: (round(v, 4) if isinstance(v, float) else v) for k, v in op.items() if k != 'actuator_disk'}
+            say += (f" At {float(rpm):g} rpm and {float(speed_kn):g} knots (J = {op['J']:.2f}): thrust {op['thrust_kN']:.0f} kN, torque {op['torque_kNm']:.0f} kN m, power {op['power_kW']:.0f} kW, open-water efficiency {op['eta0']:.2f}"
+                    + (f", ideal (actuator disk) efficiency {op['actuator_disk']['ideal_efficiency']:.2f}" if 'actuator_disk' in op else '')
+                    + (f". Cavitation number at 0.7R {op['cavitation_number_07R']:.2f} (low values, below about 0.5, mean cavitation is likely: check with a cavitation tunnel or the class)" if 'cavitation_number_07R' in op else '') + '.')
+        out['plain_english'] = say
+        return out
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -2648,6 +2681,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'openhcm|hull condition model|\bhcm\b|\.hcm\b', ('openhcm_read', 'structure_to_mesh')),
     (r'roll period|natural period|heave|pitch(ing)? period|seakeeping|ship motions?|resonan|rao\b', ('hull_motions', 'gz_curve')),
     (r'building block|\bdbb\b|weight (estimate|budget)|requirements? .*(shall|should)|shall.*should|centre of gravity of the (ship|vessel|blocks)', ('dbb_blocks', 'ship_hydrostatics')),
+    (r'propeller|screw|open.water (curve|diagram)|\bkt\b|\bkq\b|advance ratio|bollard|thrust coefficient|cavitation number', ('propeller_bem', 'hull_resistance')),
     (r'finite[- ]volume|\bfvm\b|1d (cfd|diffusion|convection|conduction)|\btdma\b|simple algorithm|upwind|central differenc', ('fvm_1d',)),
     (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),
     (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),
