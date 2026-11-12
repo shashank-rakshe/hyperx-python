@@ -12,6 +12,9 @@ Samples may carry pictures: {"messages": [...], "images": ["page.png", ...]} -> 
 Export: shipbrain-q4_k_m.gguf + shipbrain-mmproj-f16.gguf (the image part; llama.cpp loads both as one model).
 
 Env: EPOCHS, LR, MAX_LEN, LORA_R override the defaults.
+DPO (after the fine-tune, before the export): preference pairs from training/dpo_pairs.py in DPO_DATA
+(default data/dpo_pairs.jsonl; DPO=0 skips it; DPO_BETA 0.1, DPO_LR 5e-6, DPO_EPOCHS 1). If the step fails for any
+reason the fine-tuned model is kept and exported as usual.
 """
 import argparse, json, os
 
@@ -64,6 +67,67 @@ def _export_vision(model, proc, out, quant):
     _sh.rmtree(merged, ignore_errors=True)
 
 
+def make_config(cls, **kw):
+    """a TRL / transformers config that works across versions: renamed settings are translated (warmup_ratio ->
+    warmup_steps as a ratio, max_seq_length -> max_length) and settings this version does not know are left out"""
+    import inspect
+    names = set(inspect.signature(cls.__init__).parameters)
+    if 'warmup_ratio' in kw and 'warmup_ratio' not in names and 'warmup_steps' in names:
+        kw['warmup_steps'] = kw.pop('warmup_ratio')          # transformers 5: a float below 1 is a ratio of the steps
+    if 'max_seq_length' in kw and 'max_seq_length' not in names and 'max_length' in names:
+        kw['max_length'] = kw.pop('max_seq_length')
+    dropped = sorted(k for k in kw if k not in names)
+    for k in dropped:
+        kw.pop(k)
+    if dropped:
+        print(f'{cls.__name__}: not in this version, left out:', dropped)
+    return cls(**kw)
+
+
+def run_dpo(model, proc, vision, path, max_len, out):
+    """DPO after the fine-tune (TRL DPOTrainer; the LoRA model with its adapters switched off is the reference, so no
+    second copy of the model is loaded). Pairs: training/dpo_pairs.py. Small learning rate, one epoch: it only nudges
+    the model towards the chosen turns (tool calls, the tool's exact numbers, the caveats, the users' corrections)."""
+    from datasets import Dataset
+    from trl import DPOTrainer, DPOConfig
+    try:
+        from unsloth import PatchDPOTrainer
+        PatchDPOTrainer()
+    except Exception:
+        pass
+    tok = getattr(proc, 'tokenizer', proc)                 # vision models: the text part of the processor
+    rows = []
+    for line in open(path, encoding='utf-8'):
+        d = json.loads(line)
+        msgs = [{'role': m['role'], 'content': m['content'] if isinstance(m['content'], str) else json.dumps(m['content'])}
+                for m in d['prompt']]
+        prompt = tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
+        end = tok.eos_token or ''
+        rows.append({'prompt': prompt, 'chosen': d['chosen'] + end, 'rejected': d['rejected'] + end})
+    limit = max_len * 3.2
+    rows = [x for x in rows if len(x['prompt']) + max(len(x['chosen']), len(x['rejected'])) < limit]
+    print(len(rows), 'DPO pairs')
+    if not rows:
+        return
+    if vision:
+        from unsloth import FastVisionModel
+        FastVisionModel.for_training(model)
+    kw = dict(beta=float(os.environ.get('DPO_BETA', 0.1)), learning_rate=float(os.environ.get('DPO_LR', 5e-6)),
+              num_train_epochs=float(os.environ.get('DPO_EPOCHS', 1)), per_device_train_batch_size=1,
+              gradient_accumulation_steps=8, warmup_ratio=0.1, lr_scheduler_type='linear', optim='adamw_8bit',
+              logging_steps=10, seed=0, output_dir=out + '/dpo_ckpt', save_strategy='no', report_to='none')
+    import torch
+    if not torch.cuda.is_available():                      # CPU (tests): no bf16
+        kw.update(use_cpu=True, bf16=False, fp16=False, optim='adamw_torch')
+    cfg = make_config(DPOConfig, max_length=max_len, max_prompt_length=max_len - 768, **kw)
+    try:
+        t = DPOTrainer(model=model, ref_model=None, args=cfg, train_dataset=Dataset.from_list(rows), processing_class=tok)
+    except TypeError:                                      # older TRL: tokenizer=
+        t = DPOTrainer(model=model, ref_model=None, args=cfg, train_dataset=Dataset.from_list(rows), tokenizer=tok)
+    t.train()
+    print('DPO done:', {k: round(v, 4) for k, v in (t.state.log_history[-1] or {}).items() if isinstance(v, float)})
+
+
 def main():
     import sys
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -87,6 +151,10 @@ def main():
             continue
         for line in open(path, encoding='utf-8'):
             d = json.loads(line)
+            if 'good' in d and not d['good']:              # the app's thumbs-down records: never imitate them (DPO uses them)
+                continue
+            if 'chosen' in d and 'rejected' in d:          # preference pairs belong to the DPO step, not here
+                continue
             d['_root'] = os.path.dirname(os.path.abspath(path))
             data.append(d)
     with_images = sum(1 for d in data if d.get('images'))
@@ -96,10 +164,7 @@ def main():
                save_strategy='epoch', report_to='none')
 
     def sft_config(**kw):
-        try:
-            return SFTConfig(max_seq_length=max_len, **cfg, **kw)
-        except TypeError:                                  # newer TRL: max_length
-            return SFTConfig(max_length=max_len, **cfg, **kw)
+        return make_config(SFTConfig, max_seq_length=max_len, **cfg, **kw)
 
     if vision:
         from unsloth import FastVisionModel
@@ -138,6 +203,15 @@ def main():
         trainer = SFTTrainer(model=model, tokenizer=tok, train_dataset=Dataset.from_list(rows), args=sft_config(dataset_text_field='text'))
         trainer = train_on_responses_only(trainer, instruction_part='<|im_start|>user\n', response_part='<|im_start|>assistant\n')
     trainer.train()
+
+    dpo = os.environ.get('DPO_DATA', 'data/dpo_pairs.jsonl')
+    if os.environ.get('DPO', '1') != '0' and os.path.exists(dpo) and os.path.getsize(dpo):
+        try:                                               # never lose the fine-tune because of this optional step
+            run_dpo(model, proc if vision else tok, vision, dpo, max_len, a.out)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f'DPO step skipped ({type(e).__name__}: {e}); the fine-tuned model is kept as it is')
 
     model.save_pretrained(a.out + '/lora')
     proc.save_pretrained(a.out + '/lora')

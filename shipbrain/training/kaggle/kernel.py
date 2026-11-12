@@ -218,6 +218,12 @@ for f in _plain(PRIVATE_EVAL):
 report('scoring the base model')
 sh(f'python training/cad_eval.py --local {BASE} --limit 30 --out /kaggle/working/cad_eval_before.json', required=False)
 sh(f'python training/evaluate.py --local {BASE} --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_before.json', required=False)
+report('making DPO preference pairs')
+# tool calls instead of invented numbers, the tool's exact numbers, the caveats kept + your thumbs-down corrections
+# (attach the app's feedback.jsonl in a PRIVATE Kaggle dataset; it is found here by its name)
+FEEDBACK = ' '.join(sorted(f for f in glob.glob('/kaggle/input/**/*feedback*.jsonl', recursive=True)))
+sh(f"python training/dpo_pairs.py --data 'data/*.jsonl' 'training/data/*.jsonl.gz' --feedback {FEEDBACK} --out data/dpo_pairs.jsonl --max 2000",
+   required=False)
 report('training the main model')
 sh(f'MAX_LEN=6144 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/synth_pid_train.jsonl data/physics_train.jsonl data/ocx_train.jsonl data/construct_train.jsonl data/construct_real_train.jsonl data/cad3dify_train.jsonl data/class_rule_train.jsonl data/dexpi_train.jsonl data/dwsim_train.jsonl data/reversecad_train.jsonl data/cadmpeg_train.jsonl data/rhino_train.jsonl data/nx_train.jsonl data/cabledyn_train.jsonl data/tensormesh_train.jsonl data/vtracer_train.jsonl data/moose_train.jsonl data/parsebench_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
 report('scoring the trained model')
@@ -226,7 +232,7 @@ sh(f'python training/evaluate.py --local /kaggle/working/shipbrain_model/lora --
 if DRAFT:
     report('training the small draft model')
 if DRAFT:      # same data, 1 epoch: the draft learns the tool format, so the main model accepts more of its guesses
-    sh(f'EPOCHS=1 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/physics_train.jsonl data/ocx_train.jsonl {PRIV} --base {DRAFT} --out /kaggle/working/draft_model --quant q8_0', required=False)
+    sh(f'DPO=0 EPOCHS=1 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/physics_train.jsonl data/ocx_train.jsonl {PRIV} --base {DRAFT} --out /kaggle/working/draft_model --quant q8_0', required=False)
     for f in glob.glob('/kaggle/working/draft_model*/**/*.gguf', recursive=True):
         shutil.move(f, '/kaggle/working/' + os.path.basename(f).replace('shipbrain-', 'shipbrain-draft-'))
     shutil.rmtree('/kaggle/working/draft_model', ignore_errors=True)
