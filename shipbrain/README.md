@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 108/108, wrong replies 0/108.
+replies score 110/110, wrong replies 0/110.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1120,6 +1120,16 @@ Checked (`tests/test_pulsation.py`): closed-closed and open-closed pipe modes n 
 water speed of sound with the wall correction, a three-leg route equal to one straight column (corners connect), and simply supported pipe bending modes
 within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
 Training: `training/pulsation_tasks.py`.
+
+### 1D finite volume cases (Finite-Volume-Method-for-1D-CFD-Simulations)
+
+`fvm_1d` runs the repo's own MATLAB/Octave scripts (MIT, Mohith Sai Gorla; copied unchanged in `vendor/fvm1d/repo`) in Octave: steady conduction,
+conduction with a uniform source, convection-diffusion with the central scheme, and the 1D SIMPLE duct step. ShipBrain only replaces the input lines in a
+copy, cuts the plot lines, runs it, and compares with the exact solution (largest error returned). Needs Octave (free). The fin script (ae(1) never set) and the
+upwind script (unfinished) are not offered: see skill `fvm-1d`. Teaching-size 1D problems only.
+
+Checked (`tests/test_fvm1d.py`): conduction exact; heat-generation error equals q dx2 / 8k at 5, 10, 20, 40 cells (second order); convection-diffusion error
+falls 4x per halving of the cell; SIMPLE keeps the mass flow equal at all sections; the original scripts are never edited. Training: `training/fvm_tasks.py`.
 
 ### Standard parts (BOLTS)
 

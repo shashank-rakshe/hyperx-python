@@ -413,6 +413,11 @@ class Tools:
                       'bearings. query in words ("hex bolt ISO 4017 M20 length 60", "IPE 300"); size and length optional. Without a size it lists the '
                       'matching standards and their size ranges.',
                       {'type': 'object', 'properties': {'query': {'type': 'string'}, 'size': {'type': 'string'}, 'length': num}, 'required': ['query']})
+        self.register('fvm_1d', self.fvm_1d, 'Small 1D finite volume cases by running the scripts of the Finite-Volume-Method-for-1D-CFD-Simulations repo in '
+                      'Octave (needs Octave): case diffusion (steady conduction, k, A, l, n, Ta, Tb), heat_generation (conduction with a uniform source q), '
+                      'convection_diffusion (central scheme: rho, u, K, L, n, phi_a, phi_b) or simple (1D duct pressure correction: rho, A). Returns the nodal '
+                      'values and, where an exact solution exists, the exact values and the largest error. Teaching-size 1D problems only - not a 3D CFD solver.',
+                      {'type': 'object', 'properties': {'case': {'type': 'string'}, 'params': {'type': 'object'}}, 'required': ['case']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1529,6 +1534,17 @@ class Tools:
                                    f"{out['properties']['mass_kg_per_m']:g} kg/m." if 'properties' in out else ''))
         return out
 
+    def fvm_1d(self, case, params=None):
+        from . import fvm1d
+        r = fvm1d.run(case, workdir=self.workdir, **(params or {}))
+        if case == 'simple':
+            r['plain_english'] = (f"1D duct, pressure-correction step: velocity {r['velocity_m_s']} m/s, mass flow {r['mass_flow_kg_s']} kg/s - the same at every "
+                                  "section, so continuity holds (n = 4 and the initial guess are fixed in the repo script).")
+        else:
+            r['plain_english'] = (f"{case.replace('_', ' ')} with {r['nodes']} cells of {r['cell_size_m'] * 1000:g} mm: largest difference from the exact solution "
+                                  f"{r['max_error']:g}. Values at the cell centres and both ends: {r['values']}.")
+        return r
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -2135,6 +2151,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'p&id|\bpid\b|dexpi|pumps?, tanks|equipment list|instrument', ('dexpi', 'pid_kg')),
     (r'\.stp\b|\.step\b|\.iges?\b|sldprt|catpart|solidworks|catia|inventor|fusion|rhino|freecad|\.prt\b|native', ('native_cad', 'file_info')),
     (r'\.stl\b|scan(ned)? (part|mesh)|reverse', ('reverse_cad', 'stl_to_step')),
+    (r'finite[- ]volume|\bfvm\b|1d (cfd|diffusion|convection|conduction)|\btdma\b|simple algorithm|upwind|central differenc', ('fvm_1d',)),
     (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),
     (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),
     (r'\bxc\b|xcfem|reinforced concrete|rebar|eurocode ?[23]|\bEC[23]\b|\bEHE\b|ACI ?318|fibre? section|code check|limit state|interaction diagram|construction phase', ('xc_run', 'knowledge_search')),
