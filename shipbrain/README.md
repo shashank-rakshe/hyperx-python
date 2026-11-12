@@ -880,6 +880,19 @@ DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (ask
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
 replies score 83/83, wrong replies 0/83.
 
+### Understanding users: asking, units, design loops, error recovery
+
+`training/understanding_tasks.py` -> `training/data/understanding_train.jsonl.gz` (400 conversations, every tool result a
+real run, wording different from the scorecard - checked: no scorecard request appears in any training file):
+- **ask**: a key input missing -> one specific question -> the user's answer -> tool -> answer
+- **assume**: only a secondary input missing -> run with a stated assumption (friction 0.12, seawater ...)
+- **messy**: ft / in / fractions / psi / bar / kPa / m of head / gpm / l/s / m3/s -> mm, MPa, m3/h, and the answer says how
+  the units were read
+- **design**: loops that change the design until it passes (pipe bore until <= 3 m/s, plate thickness until utilisation
+  <= 1, mooring length until no anchor uplift) - several tool calls, each explained
+- **recover**: a tool error (unknown fitting name, impossible mooring geometry, non-standard bolt class) -> read it ->
+  fix and run again, or explain what the user must decide
+
 ### Learning from 👍 / 👎: DPO after the fine-tune
 
 After the normal fine-tune, the Kaggle run does one short DPO step (Direct Preference Optimisation, with Hugging Face
