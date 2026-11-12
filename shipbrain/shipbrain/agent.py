@@ -351,6 +351,13 @@ class Tools:
                       'zero-length and duplicate entities, gaps in outlines, 3D leftovers, dimension text typed over the measured value, '
                       'stray entities. (drawing_check reads the arithmetic written on a drawing.)',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
+        self.register('pipe_route', self.pipe_route, 'A pipe route from plain words -> 3D pipe solid (STEP, exact circular bends) + length, net rise, '
+                      'bends, mass and the input for pipe_flow. legs [{"dir": east|west|north|south|up|down|+x|-y.., "length": mm}] from start [x,y,z] '
+                      '(or waypoints [[x,y,z],..]); od, wall (mm; wall omitted = solid rod); bend "LR" (1.5 x OD, default) | "SR" (1.0 x OD) | radius mm. '
+                      'Checked against an independent kernel and the analytic volume.',
+                      {'type': 'object', 'properties': {'legs': {'type': 'array'}, 'waypoints': {'type': 'array'}, 'od': num, 'wall': num,
+                                                         'bend': {'type': ['string', 'number']}, 'start': {'type': 'array'},
+                                                         'name': {'type': 'string'}}, 'required': ['od']})
         self.register('reverse_cad', self.reverse_cad, 'Mesh (STL scan / 3D-print / mesh export) -> STEP AP242 solid with ReverseCAD '
                       '(non-commercial licence): watertight B-Rep, volume, area, centre of mass, inertia, mass for a material, '
                       'recognised holes / ISO threads / fillets / chamfers / slots / cavities, and its own verification of the STEP '
@@ -1251,6 +1258,14 @@ class Tools:
         from . import dxfdraw
         return dxfdraw.check(self._path(file))
 
+    def pipe_route(self, od, legs=None, waypoints=None, wall=None, bend='LR', start=(0.0, 0.0, 0.0), name='pipe_route'):
+        from . import piperoute
+        name = re.sub(r'[^A-Za-z0-9_\-]', '_', str(name or 'pipe_route'))[:40]
+        out = os.path.join(self.workdir, name + '.step')
+        r = piperoute.route(legs=legs, waypoints=waypoints, od=float(od), wall=float(wall) if wall else None, bend=bend, start=start, out=out)
+        r['file'] = os.path.basename(out)
+        return r
+
     def reverse_cad(self, file, material=None, heatmap=False):
         from . import reversecad
         src = self._path(file)
@@ -1813,6 +1828,7 @@ EXT_TOOLS = {'.3dm': ('native_cad', 'file_info'), '.sldprt': ('native_cad',), '.
 KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always needs
     (r'chain|mooring|fairlead|anchor|catenary|touch ?down|\bR[345]S?\b|riser|umbilical|power cable|lazy.?wave', ('mooring', 'cable_run')),
     (r'pipe|piping|m3/h|m3/s|gpm|l/s|head loss|pressure (drop|loss)|pump|ballast|bilge|cooling (water|line)|fire main|fuel (oil|line)|lube', ('pipe_flow',)),
+    (r'rout(e|ing)|pipe run|run of pipe|isometric|\bbends?\b|elbow|east|west|north|south|go(es)? up|then up', ('pipe_route', 'pipe_flow')),
     (r'plate|plating|panel|psi|kpa|bar\b|pressure|stress|deflect|head of|thick', ('plate_check', 'plate_buckling', 'moose_plate')),
     (r'stiffen|stiffner|profile|\bfb ?\d|\bhp ?\d|t-?bar|l-?bar|angle|section modulus|longitudinal', ('stiffener_check', 'section_props')),
     (r'bolt|torque|preload|\bm\d{1,2}\b|unc|unf|8\.8|10\.9|12\.9|thread', ('bolt',)),

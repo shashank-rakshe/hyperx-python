@@ -28,6 +28,7 @@ def _items():
                              if v not in (None, {}, False)}})
 
     # ------------------------------------------------------------ complete: everything given
+    add('complete', 'Lay out a 114.3 mm OD pipe with 6 mm wall that runs 2 m aft, climbs 3 m and then goes 1.5 m to port', 'pipe_route', {'od': 114.3})
     add('complete', 'Check a 84 mm R3 studless chain, 700 m long, water depth 120 m, anchor 640 m from the fairlead', 'mooring',
         {'depth': 120, 'length': 700, 'radius': 640, 'd_mm': 84})
     add('complete', 'Mooring line: 76 mm R4 chain, 900 m, 200 m depth, anchor radius 820 m. Fairlead tension?', 'mooring',
@@ -126,6 +127,7 @@ def _items():
     add('missing', 'I need a hexahedral mesh for my casting', ask=True)
     add('missing', 'Make a drawing of a stiffened deck panel', ask=True)
     add('missing', 'fuel line 30 m3/h ka pressure drop?', ask=True)
+    add('missing', 'Draw the 3D pipe between the pump and the tank for me', ask=True)
     # ------------------------------------------------------------ multi-step: the right first step
     add('multi', 'I uploaded deck_scan.png (old drawing). Make a vector copy and then compare it with deck_rev2.dxf',
         'trace_drawing', {'file': 'deck_scan.png'})

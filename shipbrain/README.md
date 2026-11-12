@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 89/89, wrong replies 0/89.
+replies score 91/91, wrong replies 0/91.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1018,6 +1018,15 @@ REJECTED next answer:
 
 **Your own models as private training data:** `python training/private_samples.py run --workdir <folder> --files a.stp b.stp` runs the pipe and surface tools on your real files once; `python training/private_samples.py make --runs runs.jsonl` turns the results into chat samples. Upload the `.jsonl` as a PRIVATE Kaggle dataset; never commit it.
 **Your own code:** `python -m shipbrain.repopack build --repo <your code folder> --out packs --own` makes a `.private.sbpack` (git ignores it) that is searched at run time and may train your private model.
+
+### Pipe routes from plain words
+
+Say "168 mm pipe, 3 m east, 1.5 m up, then 2 m north" and the `pipe_route` tool builds the 3D pipe (STEP) with exact circular bends
+(long radius 1.5 x OD by default, short radius or a radius in mm on request) and gives the centre-line length, net rise, mass and a
+ready `pipe_flow_input` so the next step (pressure drop, pump head) is one more tool call. A leg too short for its bends is explained
+in plain words. Built on CadQuery / OpenCascade; checked against the analytic volume and an independent Rust kernel
+(cadcore, MIT): the same route gave the same volume (17,501,172.7 mm3). Finding from that check: cadcore's fillet radius is the
+inner radius of the bend, so centre-line radius = fillet + pipe radius. Training: `training/piperoute_tasks.py`.
 
 ## Tests
 
