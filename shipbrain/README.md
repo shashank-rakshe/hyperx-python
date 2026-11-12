@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 105/105, wrong replies 0/105.
+replies score 108/108, wrong replies 0/108.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1120,6 +1120,18 @@ Checked (`tests/test_pulsation.py`): closed-closed and open-closed pipe modes n 
 water speed of sound with the wall correction, a three-leg route equal to one straight column (corners connect), and simply supported pipe bending modes
 within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
 Training: `training/pulsation_tasks.py`.
+
+### Standard parts (BOLTS)
+
+`standard_part` looks up dimensions in the BOLTS library tables (https://github.com/boltsparts/BOLTS_archive; parser GPL-3, data LGPL 2.1+, copied
+unchanged in `vendor/bolts`): hexagon bolts and screws (ISO 4017/4014/4762, DIN 933/931/912 ...), nuts, washers, rolled sections (IPE, HEA, HEB, HEM,
+angles, channels, hollow sections), ASME B36.10 pipe, flanges, bearings - 78 part classes. Words in, one table row out (mm; ASME tables are in inches and get
+*_mm values); I-sections also get area, second moments and mass from the table dimensions. A size not in the table is refused with the range, never
+invented. Strength and capacity are not in these tables.
+
+Checked (`tests/test_parts.py`): all 25 sections in `connections.SECTIONS` are identical to the BOLTS tables (h, b, tw, tf); bolt across-flats and head
+height equal `connections.BOLTS` (M22: ISO 272 gives 32 mm, the old table has the DIN value 34); IPE300 area 5381 mm2 and Iy 8356 cm4 within 0.5 % of the
+catalogue; NPS 4 schedule 40 = 114.3 x 6.02 mm. Training: `training/parts_tasks.py`.
 
 ### Frame-field hex meshes (AlgoHex)
 

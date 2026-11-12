@@ -407,6 +407,12 @@ class Tools:
                       'user\'s build or the "algohex" container image) and checks the result (hexes, inverted cells, scaled Jacobian, volume) '
                       'and writes a CalculiX .inp. If AlgoHex is not installed it says how to install it; use hex_mesh meanwhile.',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'size': num}, 'required': ['file', 'size']})
+        self.register('standard_part', self.standard_part, 'Dimensions of standard parts straight from the BOLTS library tables (no guessing): '
+                      'bolts and screws (ISO 4017/4014/4762, DIN 933/931/912 ...), nuts, washers, rolled steel sections (IPE, HEA, HEB, HEM, angles, '
+                      'channels, hollow sections; with area and moments of inertia for I-sections), pipes (ASME B36.10, DIN 11850), flanges (EN 1092), '
+                      'bearings. query in words ("hex bolt ISO 4017 M20 length 60", "IPE 300"); size and length optional. Without a size it lists the '
+                      'matching standards and their size ranges.',
+                      {'type': 'object', 'properties': {'query': {'type': 'string'}, 'size': {'type': 'string'}, 'length': num}, 'required': ['query']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1485,6 +1491,44 @@ class Tools:
                                    "repair or remesh those cells before running an analysis; the other cells are fine." if rep.get('inverted') else ''))
         return rep
 
+    def standard_part(self, query, size=None, length=None):
+        from . import parts
+        q = str(query)
+        hits = parts.find(q)
+        if not hits:
+            return {'error': 'no standard part in the BOLTS tables matches "' + q + '"; try the standard (ISO 4017, DIN 933, IPE, EN 1092) or a name (hex nut, plain washer)'}
+        top = hits[0]
+        toks = re.split(r'[\s,;]+', q)
+        norm = lambda x: re.sub(r'[^a-z0-9.]', '', str(x).lower())
+        cls = next(e for e in parts.index() if e['id'] == top['class'])
+        if size is None:
+            names = {norm(k): k for k in cls['keys']}
+            cand = toks + [a + b for a, b in zip(toks, toks[1:])]
+            size = next((names[norm(t)] for t in cand if norm(t) in names), None)
+        if length is None:
+            m = re.search(r'(?:length|long|l\s*=|x)\s*(\d+(?:\.\d+)?)', q.lower())
+            length = float(m.group(1)) if m else None
+        if size is None:
+            m = re.search(r'\b(M\d+(?:\.\d+)?)\b', q, re.I) if cls['keys'] and cls['keys'][0].startswith('M') else None
+            if m:
+                return {'error': f"{m.group(1)} is not in the table of {top['class']}; its sizes run from {cls['keys'][0]} to {cls['keys'][-1]}"}
+            return {'matches': hits, 'plain_english': 'Matching standard parts: ' + '; '.join(
+                f"{h['name'] or h['class']} ({', '.join(h['standards'][:2]) or h['class']}) sizes {h['sizes']}" for h in hits[:5])
+                    + '. Tell me the size (for example M20 or IPE300) to get the dimensions.'}
+        kw = {'l': length} if length is not None and 'l' in cls['free'] else {}
+        try:
+            row = parts.get(top['class'], size, **kw)
+        except (KeyError, ValueError) as e:
+            return {'error': str(e).strip('\'"')}
+        out = dict(row)
+        if all(k in row for k in ('h', 'b', 'tw', 'tf', 'r')):
+            out['properties'] = parts.section_properties(row)
+        dims = ', '.join(f'{k} {v:g}' for k, v in row.items() if isinstance(v, (int, float)))
+        out['plain_english'] = (f"{top['name'] or top['class']} {', '.join(row['standards'][:2])} {size}: {dims} {'(inches in the standard, mm added as *_mm)' if 'inch' in row['units'] else 'mm'} (BOLTS table)."
+                                + (f" Area {out['properties']['A_mm2']:g} mm2, Iy {out['properties']['Iy_mm4']:.4g} mm4, Wel,y {out['properties']['Wel_y_mm3']:g} mm3, "
+                                   f"{out['properties']['mass_kg_per_m']:g} kg/m." if 'properties' in out else ''))
+        return out
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -2091,6 +2135,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'p&id|\bpid\b|dexpi|pumps?, tanks|equipment list|instrument', ('dexpi', 'pid_kg')),
     (r'\.stp\b|\.step\b|\.iges?\b|sldprt|catpart|solidworks|catia|inventor|fusion|rhino|freecad|\.prt\b|native', ('native_cad', 'file_info')),
     (r'\.stl\b|scan(ned)? (part|mesh)|reverse', ('reverse_cad', 'stl_to_step')),
+    (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),
     (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),
     (r'\bxc\b|xcfem|reinforced concrete|rebar|eurocode ?[23]|\bEC[23]\b|\bEHE\b|ACI ?318|fibre? section|code check|limit state|interaction diagram|construction phase', ('xc_run', 'knowledge_search')),
     (r'cbfem|component.based|plastic strain|connection (capacity|resistance)|bolt(s)? (tension|prying)|prying|t-?stub', ('steel_cbfem', 'steel_connection')),

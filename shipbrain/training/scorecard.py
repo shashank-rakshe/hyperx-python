@@ -29,6 +29,9 @@ def _items():
 
     # ------------------------------------------------------------ complete: everything given
     add('complete', 'Duplex plunger pump turning 360 rpm feeds a 88.9 x 5.5 mm seawater line going 3 m north and 2 m down into a header; supports at the bends - natural frequency and pulsation check', 'pipe_pulsation', {'od_mm': 88.9})
+    add('complete', 'Need the flange width, web thickness and root radius for a HEA 260 rolled section from the standard tables', 'standard_part')
+    add('complete', 'Across-flats and head height of a hexagon screw to ISO 4014, size M27, 90 mm long - from the standard, not memory', 'standard_part')
+    add('complete', 'Which wall thickness and OD does NPS 12 schedule 40 pipe have in the ASME B36.10 table?', 'standard_part')
     add('complete', 'Hot water header NPS 8 schedule 40 runs 10 m west, then 4 m south; fixed points at both ends; 120 C and 6 bar, full of water - check stresses to B31.1', 'pipe_stress', {'t_oper_c': 120})
     add('complete', 'Run the component based finite element analysis for a shear tab: IPE360 beam to a HEB300 column, four M20 8.8 bolts, 150 kN reaction', 'steel_cbfem', {'V': 150})
     add('complete', 'AISC check of a bolted extended end plate moment joint: beam W360X44, column W410X149, plate 300x550x32, four M30 A325 bolts at 140 gauge, 45 mm to the flanges, 6 mm web weld, 100 kN shear and 400 kN column axial, with a 25 mm stiffener', 'connection_check', {})

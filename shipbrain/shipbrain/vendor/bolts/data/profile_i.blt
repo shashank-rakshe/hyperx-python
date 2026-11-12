@@ -1,0 +1,460 @@
+# ****************************************************************************
+# BOLTS - Open Library of Technical Specifications
+# Copyright (C) 2016 Bernd Hahnebach <bernd@bimstatik.org>
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+# ****************************************************************************
+
+author: Bernd Hahnebach <bernd@bimstatik.org>
+blt-version: 0.4
+description: Various hotrolled I profiles
+id: profile_i
+license: LGPL 2.1+ <http://www.gnu.org/licenses/lgpl-2.1>
+name: Profiles I
+classes:
+- id: ibeam_bluescope
+  names:
+    description: BlueScope profile, metric Australian Lysaght i-beam profile
+    labeling: '%(type)s, l=%(l)s'
+    name: BlueScope i-beam profile
+  notes: http://en.wikipedia.org/wiki/I-beam
+  parameters:
+    defaults:
+      l: 1000
+      type: 100UC15
+    description:
+      b: flange width
+      h: beam height
+      l: beam length
+      r: fillet radius
+      tf: flange thickness
+      tw: web thickness
+      type: beam type
+    free: [type, l]
+    tables:
+      columns:  [h, b, tf, tw, r]
+      data: !include profile_i/ibeam_bluescope.yaml
+      index: type
+    types:
+      b: Length (mm)
+      h: Length (mm)
+      l: Length (mm)
+      r: Length (mm)
+      tf: Length (mm)
+      tw: Length (mm)
+      type: Table Index
+  source: https://cdn.dcs.bluescope.com.au/download/the-lysaght-referee-35th-edition#page=249
+  standards:
+    body: None
+    description: BlueScope profile, metric Australia Lysaght i-beam profile
+    group: Company BlueScope
+    labeling: BlueScope %(type)s, l=%(l)s
+    standard: BlueScope i-beam
+- id: ibeam_hea
+  names:
+    description: HEA profile, metric european standard i-beam profile
+    labeling: '%(type)s, l=%(l)s'
+    name: HEA Profile
+  notes: http://en.wikipedia.org/wiki/I-beam, also specified in EN53-62
+  parameters:
+    defaults:
+      l: 1000
+      type: HEA200
+    description:
+      b: flange width
+      h: beam height
+      l: beam length
+      r: fillet radius
+      tf: flange thickness
+      tw: web thickness
+      type: beam type
+    free: [type, l]
+    tables:
+      columns:  [h, b, tw, tf, r]
+      data: !include profile_i/ibeam_hea.yaml
+      index: type
+    types:
+      b: Length (mm)
+      h: Length (mm)
+      l: Length (mm)
+      r: Length (mm)
+      tf: Length (mm)
+      tw: Length (mm)
+      type: Table Index
+  source: http://www.bauforumstahl.de/Querschnittswerte
+  standards:
+    body: DIN
+    description: HEA profile, metric european standard i-beam profile
+    group: DIN 1025
+    labeling: DIN1025-3 %(type)s, l=%(l)s
+    standard: DIN 1025-3
+- id: ibeam_heaa
+  names:
+    description: HEAA profile, metric european i-beam profile
+    labeling: '%(type)s, l=%(l)s'
+    name: HEAA Profile
+  notes: http://en.wikipedia.org/wiki/I-beam
+  parameters:
+    defaults:
+      l: 1000
+      type: HEAA200
+    description:
+      b: flange width
+      h: beam height
+      l: beam length
+      r: fillet radius
+      tf: flange thickness
+      tw: web thickness
+      type: beam type
+    free: [type, l]
+    tables:
+      columns:  [h, b, tw, tf, r]
+      data: !include profile_i/ibeam_heaa.yaml
+      index: type
+    types:
+      b: Length (mm)
+      h: Length (mm)
+      l: Length (mm)
+      r: Length (mm)
+      tf: Length (mm)
+      tw: Length (mm)
+      type: Table Index
+  source: http://www.bauforumstahl.de/Querschnittswerte
+- id: ibeam_heb
+  names:
+    description: HEB profile, metric european standard i-beam profile
+    labeling: '%(type)s, l=%(l)s'
+    name: HEB Profile
+  notes: http://en.wikipedia.org/wiki/I-beam, also specified in EN53-62
+  parameters:
+    defaults:
+      l: 1000
+      type: HEB200
+    description:
+      b: flange width
+      h: beam height
+      l: beam length
+      r: fillet radius
+      tf: flange thickness
+      tw: web thickness
+      type: beam type
+    free: [type, l]
+    tables:
+      columns:  [h, b, tw, tf, r]
+      data: !include profile_i/ibeam_heb.yaml
+      index: type
+    types:
+      b: Length (mm)
+      h: Length (mm)
+      l: Length (mm)
+      r: Length (mm)
+      tf: Length (mm)
+      tw: Length (mm)
+      type: Table Index
+  source: http://www.bauforumstahl.de/Querschnittswerte
+  standards:
+    body: DIN
+    description: HEB profile, metric european standard i-beam profile
+    group: DIN 1025
+    labeling: DIN1025-2 %(type)s, l=%(l)s
+    standard: DIN 1025-2
+- id: ibeam_hem
+  names:
+    description: HEM profile, metric european standard i-beam profile
+    labeling: '%(type)s, l=%(l)s'
+    name: HEM Profile
+  notes: http://en.wikipedia.org/wiki/I-beam, also specified in EN53-62
+  parameters:
+    defaults:
+      l: 1000
+      type: HEM200
+    description:
+      b: flange width
+      h: beam height
+      l: beam length
+      r: fillet radius
+      tf: flange thickness
+      tw: web thickness
+      type: beam type
+    free: [type, l]
+    tables:
+      columns:  [h, b, tw, tf, r]
+      data: !include profile_i/ibeam_hem.yaml
+      index: type
+    types:
+      b: Length (mm)
+      h: Length (mm)
+      l: Length (mm)
+      r: Length (mm)
+      tf: Length (mm)
+      tw: Length (mm)
+      type: Table Index
+  source: http://www.bauforumstahl.de/Querschnittswerte
+  standards:
+    body: DIN
+    description: HEM profile, metric european standard i-beam profile
+    group: DIN 1025
+    labeling: DIN1025-4 %(type)s, l=%(l)s
+    standard: DIN 1025-4
+- id: ibeam_ipe
+  names:
+    description: IPE profile, metric european standard i-beam profile
+    labeling: '%(type)s, l=%(l)s'
+    name: IPE Profile
+  notes: http://en.wikipedia.org/wiki/I-beam
+  parameters:
+    defaults:
+      l: 1000
+      type: IPE200
+    description:
+      b: flange width
+      h: beam height
+      l: beam length
+      r: fillet radius
+      tf: flange thickness
+      tw: web thickness
+      type: beam type
+    free: [type, l]
+    tables:
+      columns:
+      columns:  [h, b, tw, tf, r]
+      data: !include profile_i/ibeam_ipe.yaml
+      index: type
+    types:
+      b: Length (mm)
+      h: Length (mm)
+      l: Length (mm)
+      r: Length (mm)
+      tf: Length (mm)
+      tw: Length (mm)
+      type: Table Index
+  source: http://www.bauforumstahl.de/Querschnittswerte
+  standards:
+  - body: DIN
+    description: IPE profile, metric european standard i-beam profile
+    group: DIN 1025
+    labeling: DIN1025-5 %(type)s, l=%(l)s
+    standard: DIN 1025-5
+  - body: EN
+    description: IPE profile, metric european standard i-beam profile
+    labeling: EN 19-57 %(type)s, l=%(l)s
+    standard: EN 19-57
+- id: ibeam_ipe750
+  names:
+    description: IPE 750 profile, metric european i-beam profile
+    labeling: '%(type)s, l=%(l)s'
+    name: IPE 750 Profile
+  notes: http://en.wikipedia.org/wiki/I-beam
+  parameters:
+    defaults:
+      l: 1000
+      type: IPE750x137
+    description:
+      b: flange width
+      h: beam height
+      l: beam length
+      r: fillet radius
+      tf: flange thickness
+      tw: web thickness
+      type: beam type
+    free: [type, l]
+    tables:
+      columns: [h, b, tw, tf, r]
+      data: !include profile_i/ibeam_ipe750.yaml
+      index: type
+    types:
+      b: Length (mm)
+      h: Length (mm)
+      l: Length (mm)
+      r: Length (mm)
+      tf: Length (mm)
+      tw: Length (mm)
+      type: Table Index
+  source: http://www.bauforumstahl.de/Querschnittswerte
+- id: ibeam_ipea
+  names:
+    description: IPEa profile, metric european i-beam profile
+    labeling: '%(type)s, l=%(l)s'
+    name: IPEa Profile
+  notes: http://en.wikipedia.org/wiki/I-beam
+  parameters:
+    defaults:
+      l: 1000
+      type: IPEa200
+    description:
+      b: flange width
+      h: beam height
+      l: beam length
+      r: fillet radius
+      tf: flange thickness
+      tw: web thickness
+      type: beam type
+    free: [type, l]
+    tables:
+      columns:  [h, b, tw, tf, r]
+      data: !include profile_i/ibeam_ipea.yaml
+      index: type
+    types:
+      b: Length (mm)
+      h: Length (mm)
+      l: Length (mm)
+      r: Length (mm)
+      tf: Length (mm)
+      tw: Length (mm)
+      type: Table Index
+  source: http://www.bauforumstahl.de/Querschnittswerte
+- id: ibeam_ipeo
+  names:
+    description: IPEo profile, metric european i-beam profile
+    labeling: '%(type)s, l=%(l)s'
+    name: IPEo Profile
+  notes: http://en.wikipedia.org/wiki/I-beam
+  parameters:
+    defaults:
+      l: 1000
+      type: IPEo200
+    description:
+      b: flange width
+      h: beam height
+      l: beam length
+      r: fillet radius
+      tf: flange thickness
+      tw: web thickness
+      type: beam type
+    free: [type, l]
+    tables:
+      columns:  [h, b, tw, tf, r]
+      data: !include profile_i/ibeam_ipeo.yaml
+      index: type
+    types:
+      b: Length (mm)
+      h: Length (mm)
+      l: Length (mm)
+      r: Length (mm)
+      tf: Length (mm)
+      tw: Length (mm)
+      type: Table Index
+  source: http://www.bauforumstahl.de/Querschnittswerte
+- id: ibeam_iper
+  names:
+    description: IPEr profile, metric european i-beam profile
+    labeling: '%(type)s, l=%(l)s'
+    name: IPEr Profile
+  notes: http://en.wikipedia.org/wiki/I-beam
+  parameters:
+    defaults:
+      l: 1000
+      type: IPEr200
+    description:
+      b: flange width
+      h: beam height
+      l: beam length
+      r: fillet radius
+      tf: flange thickness
+      tw: web thickness
+      type: beam type
+    free: [type, l]
+    tables:
+      columns:  [h, b, tw, tf, r]
+      data: !include profile_i/ibeam_iper.yaml
+      index: type
+    types:
+      b: Length (mm)
+      h: Length (mm)
+      l: Length (mm)
+      r: Length (mm)
+      tf: Length (mm)
+      tw: Length (mm)
+      type: Table Index
+  source: http://www.bauforumstahl.de/Querschnittswerte
+- id: ibeam_ipev
+  names:
+    description: IPEv profile, metric european i-beam profile
+    labeling: '%(type)s, l=%(l)s'
+    name: IPEv Profile
+  notes: http://en.wikipedia.org/wiki/I-beam
+  parameters:
+    defaults:
+      l: 1000
+      type: IPEv400
+    description:
+      b: flange width
+      h: beam height
+      l: beam length
+      r: fillet radius
+      tf: flange thickness
+      tw: web thickness
+      type: beam type
+    free: [type, l]
+    tables:
+      columns:  [h, b, tw, tf, r]
+      data: !include profile_i/ibeam_ipev.yaml
+      index: type
+    types:
+      b: Length (mm)
+      h: Length (mm)
+      l: Length (mm)
+      r: Length (mm)
+      tf: Length (mm)
+      tw: Length (mm)
+      type: Table Index
+  source: http://www.bauforumstahl.de/Querschnittswerte
+- id: ibeam_inp
+  names:
+    description: INP Profile
+    labeling: '%(type)s, l=%(l)s'
+    name: INP Profile
+  parameters:
+    defaults:
+      l: 1000
+      type: IPN100
+    description:
+      b: flange width
+      f: inner flange unfilleted length
+      g: outer flange unfilleted length
+      h: beam height
+      hw: straight web height
+      l: beam length
+      r1: outer fillet radius
+      r2: inner fillet radius
+      tf: flange thickness
+      tw: web thickness
+      type: beam type
+    free: [type, l]
+    tables:
+      columns:  [b, h, tw, tf, r1, r2, hw, f, g]
+      data: !include profile_i/ibeam_inp.yaml
+      index: type
+    types:
+      b: Length (mm)
+      f: Length (mm)
+      g: Length (mm)
+      h: Length (mm)
+      hw: Length (mm)
+      l: Length (mm)
+      r1: Length (mm)
+      r2: Length (mm)
+      tf: Length (mm)
+      tw: Length (mm)
+      type: Table Index
+  source: http://b2bmetal.eu/i-sections-inp-specification and own calculations (see
+    misc/constraints_inp.py)
+  standards:
+    body: DIN
+    description: IPN profile, metric european standard i-beam profile (also called
+      INP)
+    group: DIN 1025
+    labeling: DIN1025-1 %(type)s, l=%(l)s
+    standard: DIN 1025-1
