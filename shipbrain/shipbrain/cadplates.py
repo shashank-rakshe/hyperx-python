@@ -69,26 +69,39 @@ def shape_to_plates(shape, h=100.0, default_t=10.0, max_ratio=0.25):
         if not faces:
             rep['skipped'].append(f'solid {si + 1}: no planar faces')
             continue
-        f1 = max(faces, key=lambda f: f.Area())
-        n1 = np.array(f1.normalAt().toTuple())
-        c1 = np.array(f1.Center().toTuple())
-        best = None
-        for f2 in faces:
-            n2 = np.array(f2.normalAt().toTuple())
-            if f2 is f1 or n1 @ n2 > -0.999:
+        biggest = max(f.Area() for f in faces)
+        used = set()
+        found = 0
+        # every pair of opposite parallel faces is one slab: a bent / folded plate (one solid, several slabs) gives one plate per slab
+        for f1 in sorted(faces, key=lambda f: -f.Area()):
+            if f1.hashCode() in used or f1.Area() < 0.2 * biggest:
                 continue
-            d = abs((np.array(f2.Center().toTuple()) - c1) @ n1)
-            if abs(f2.Area() - f1.Area()) < 0.2 * f1.Area() and d > 1e-6 and (best is None or d < best):
-                best = d
-        if best is None or best > max_ratio * math.sqrt(f1.Area()):
+            n1 = np.array(f1.normalAt().toTuple())
+            c1 = np.array(f1.Center().toTuple())
+            best, bf = None, None
+            for f2 in faces:
+                if f2.hashCode() in used or f2 is f1:
+                    continue
+                n2 = np.array(f2.normalAt().toTuple())
+                if n1 @ n2 > -0.999:
+                    continue
+                d = abs((np.array(f2.Center().toTuple()) - c1) @ n1)
+                if abs(f2.Area() - f1.Area()) < 0.2 * f1.Area() and d > 1e-6 and (best is None or d < best):
+                    best, bf = d, f2
+            if best is None or best > max_ratio * math.sqrt(f1.Area()):
+                continue
+            used.add(f1.hashCode())
+            used.add(bf.hashCode())
+            loops = [[p - n1 * best / 2 for p in L] for L in _face_loops(f1, h)]
+            k += 1
+            found += 1
+            plates.append({'id': f'S{k}', 'group': f'S{k}', 't': round(best, 3), 'outline': [p.tolist() for p in loops[0]],
+                           'holes': [[p.tolist() for p in L] for L in loops[1:]]})
+        if not found:
             bb = s.BoundingBox()
             rep['skipped'].append(f'solid {si + 1}: not plate-like ({bb.xlen:.0f} x {bb.ylen:.0f} x {bb.zlen:.0f} mm)')
             continue
-        loops = [[p - n1 * best / 2 for p in L] for L in _face_loops(f1, h)]
-        k += 1
-        plates.append({'id': f'S{k}', 'group': f'S{k}', 't': round(best, 3), 'outline': [p.tolist() for p in loops[0]],
-                       'holes': [[p.tolist() for p in L] for L in loops[1:]]})
-        rep['solids_to_plates'] += 1
+        rep['solids_to_plates'] += found
     # loose faces (sheet bodies / shells not in a solid)
     in_solid = set()
     for s in solids:
