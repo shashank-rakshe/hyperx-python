@@ -79,6 +79,13 @@ class H(BaseHTTPRequestHandler):
                 self._send(200, {'file': os.path.basename(q['file']), 'plain_english': r.get('plain_english', ''), 'readable': r.get('readable', True)})
             except Exception as e:
                 self._send(400, {'error': f'{type(e).__name__}: {e}'})
+        elif u.path == '/api/slice':
+            q = {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
+            try:
+                from . import viz
+                self._send(200, viz.slice_json(os.path.join(STATE['tools'].workdir, os.path.basename(q['file'])), q.get('plane', 'xy'), float(q['at']) if q.get('at') else None))
+            except Exception as e:
+                self._send(400, {'error': f'{type(e).__name__}: {e}'})
         elif u.path in ('/api/field', '/api/probe'):
             q = {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
             wd = STATE['tools'].workdir

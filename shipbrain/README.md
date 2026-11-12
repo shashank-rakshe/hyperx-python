@@ -1146,7 +1146,7 @@ Every picture a tool makes (`files` in its result: png, jpg, svg) is shown in th
 panel (`/api/field`): the part coloured by von Mises stress or displacement with a colour bar - hover over any place for its value, click to pin it (the nearest node's
 coordinates, stress and displacement vector). For a value at a given place, `probe_result` reads it from a mesh result (mm), an OpenFOAM case (metres) or an Elmer `.vtu` and
 tells how far the node / cell is from the point asked for (`/api/probe` is the same for the page). Checked in `tests/test_probe.py` and in a headless browser run (pictures
-load, hover and pin give the values of the nearest node). Not interactive yet: the flow slices (pictures only; use `probe_result` for their values).
+load, hover and pin give the values of the nearest node). Flow results are interactive too: an OpenFOAM case (a slice through the 3D grid, `/api/slice`) or an Elmer `.vtu` opens in the same panel - hover for velocity, pressure (and plate stress and displacement for FSI), click to pin.
 
 ### 3D flow with OpenFOAM and the flow-to-stress chain
 

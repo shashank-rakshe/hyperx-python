@@ -1637,6 +1637,7 @@ class Tools:
             viz.render_flow(vtu, png, field=f, scale=(None if f in ('velocity', 'pressure') else 'auto') if plate == 'elastic' else None)
             files.append(os.path.basename(png))
         r['files'] = files
+        r['viewer'] = {'kind': 'slice', 'file': r['vtu']}
         s = (f"{fluid} at {velocity:g} m/s past a {'flexible ' + material if plate == 'elastic' else 'rigid'} plate {plate_h:g} m high (Reynolds number "
              f"{r['reynolds_plate_height']:.3g}, {turbulence}): pressure {r['pressure_front_avg_pa']:.4g} Pa on the front face and {r['pressure_back_avg_pa']:.4g} Pa on the back, "
              f"pressure drag {r['pressure_drag_n_per_m']:.4g} N per metre of plate width (Cd {r['drag_coefficient_pressure']}), highest velocity {r['max_velocity_m_s']:.4g} m/s.")
@@ -1665,6 +1666,7 @@ class Tools:
             viz.render_slice(res, info['grid'], png, field=f)
             files.append(os.path.basename(png))
         out['files'] = files
+        out['viewer'] = {'kind': 'slice', 'file': name}
         s = (f"{fluid} at {velocity:g} m/s past the {'part ' + os.path.basename(body_file) if body_file else 'plate'} ({'2D' if out['two_d'] else '3D'}, {out['cells']:,} cells, "
              f"{turbulence}): drag {out['drag_n']:.4g} N (Cd {out['drag_coefficient']} on the {out['frontal_area_m2']:g} m2 frontal area), side force {out['side_force_y_n']:.3g} N up, "
              f"pressure from {out['pressure_min_pa']:.4g} to {out['pressure_max_pa']:.4g} Pa, highest velocity {out['max_velocity_m_s']:.4g} m/s.")
@@ -1704,7 +1706,7 @@ class Tools:
             files.append(os.path.basename(png))
         r = {'flow': {k: out[k] for k in ('cells', 'converged', 'iterations', 'drag_n', 'side_force_y_n', 'drag_coefficient', 'max_velocity_m_s', 'pressure_min_pa', 'pressure_max_pa')},
              'force_applied_n': [round(float(x), 4) for x in fsum], 'max_displacement_mm': sol['max_displacement_mm'], 'max_von_mises_MPa': sol['max_von_mises_MPa'],
-             'shell_elements': minfo['elements'], 'files': files, 'viewer': {'file': name + '_fe.inp', 'frd': os.path.basename(sol['frd'])}}
+             'shell_elements': minfo['elements'], 'files': files, 'viewer': {'file': name + '_fe.inp', 'frd': os.path.basename(sol['frd'])}, 'flow_viewer': {'kind': 'slice', 'file': name + '_flow'}}
         s = (f"{fluid} at {velocity:g} m/s past {os.path.basename(file)} ({out['cells']:,} flow cells, {turbulence}): drag {out['drag_n']:.4g} N, vertical force "
              f"{out['side_force_y_n']:.3g} N. Those forces ({fsum[0]:.4g}, {fsum[1]:.4g}, {fsum[2]:.3g} N - equal to the flow force) loaded the {minfo['elements']:,}-element shell model: "
              f"max displacement {sol['max_displacement_mm']} mm, max von Mises {sol['max_von_mises_MPa']} MPa (shell nodal maximum). Pictures: {', '.join(files)}.")

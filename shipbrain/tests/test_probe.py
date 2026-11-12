@@ -55,3 +55,16 @@ def test_openfoam_probe(tmp_path):
     j = int(np.argmin(np.linalg.norm(res['centres'] - np.array([0.3, 0.2, 0.025]), axis=1)))
     assert r['pressure_pa'] == pytest.approx(res['p_cells'][j], rel=1e-3) and r['speed_m_s'] == pytest.approx(np.linalg.norm(res['U_cells'][j]), rel=1e-3)
     assert r['pressure_pa'] > 0                                                                      # in front of the plate the pressure is above the outlet
+
+
+@pytest.mark.skipif(not O.installed(), reason='OpenFOAM not installed')
+def test_flow_slice_data_for_the_chat_view(tmp_path):
+    from shipbrain import viz
+    out, res, info = O.solve(str(tmp_path), 'f', velocity=0.01, fluid='oil', length=2.0, height=1.0, plate_x=0.5, plate_t=0.04, plate_h=0.4, cell=0.05)
+    j = viz.slice_json(str(tmp_path / 'f'))
+    assert j['axes'] == 'xy' and len(j['rects']) == len(j['fields']['pressure']['values']) == len(j['vec'])
+    # the value in the cell under a point equals what probe_result reads there
+    i = 100
+    x0, y0, x1, y1 = j['rects'][i]
+    p = O.probe(str(tmp_path / 'f'), (x0 + x1) / 2, (y0 + y1) / 2, j['at'])
+    assert p['pressure_pa'] == pytest.approx(j['fields']['pressure']['values'][i], rel=1e-3, abs=1e-6)

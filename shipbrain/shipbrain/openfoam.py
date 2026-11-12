@@ -231,6 +231,7 @@ def build_case(case_dir, velocity=1.0, fluid='water', length=2.0, height=1.0, wi
             'A_ref': float(A_ref), 'offset': (ox, oy, oz), 'body_faces': len(g['patches'].get('body', [])), 'grid': g}
     _write_files(case_dir, info, turbulence, intensity, side_walls, end_iter, cell)
     np.save(os.path.join(case_dir, 'sb_centres.npy'), g['cell_centres'])
+    np.savez(os.path.join(case_dir, 'sb_grid.npz'), cells=np.array(g['cells'], int), ax0=g['axes'][0], ax1=g['axes'][1], ax2=g['axes'][2])
     import json
     json.dump({'rho': rho, 'nu': nu_, 'U': U}, open(os.path.join(case_dir, 'sb_info.json'), 'w'))
     return info

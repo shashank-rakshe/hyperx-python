@@ -334,3 +334,57 @@ def probe(src, frd, x, y, z, k=1):
     j = int(np.argmin(d))
     return {'node': int(ids[j]), 'x': float(X[j][0]), 'y': float(X[j][1]), 'z': float(X[j][2]), 'distance_mm': round(float(d[j]), 3),
             'von_mises_MPa': round(float(vm[j]), 5), 'displacement_mm': [round(float(v), 6) for v in u[j]], 'displacement_magnitude_mm': round(float(np.linalg.norm(u[j])), 6)}
+
+
+def slice_json(src, plane='xy', at=None):
+    """a flow result as polygons with values for the interactive view in the chat window: an OpenFOAM case folder made by ShipBrain (a slice through the 3D grid) or an Elmer .vtu (2D)"""
+    if os.path.isdir(src):
+        from . import openfoam
+        g = np.load(os.path.join(src, 'sb_grid.npz'))
+        axes = [g['ax0'], g['ax1'], g['ax2']]
+        cells = [tuple(c) for c in g['cells']]
+        t = openfoam.last_time(src)
+        U = openfoam.read_field(os.path.join(src, t, 'U'), vec=True)
+        p = openfoam.read_field(os.path.join(src, t, 'p'))
+        import json
+        rho = json.load(open(os.path.join(src, 'sb_info.json')))['rho']
+        U = np.tile(U, (len(cells), 1)) if U.ndim == 1 else U
+        p = (np.full(len(cells), float(p[0])) if len(p) != len(cells) else p) * rho
+        ia, ib, ic = (0, 1, 2) if plane == 'xy' else (0, 2, 1)
+        cut = axes[ic]
+        if at is None:
+            at = 0.5 * (cut[0] + cut[-1]) if plane == 'xy' else cut[0] + 0.1 * (cut[-1] - cut[0])
+        kc = int(np.clip(np.searchsorted(cut, at) - 1, 0, len(cut) - 2))
+        rects, vel, spd, pr, ctr = [], [], [], [], []
+        for n, c in enumerate(cells):
+            if c[ic] != kc:
+                continue
+            a0, a1, b0, b1 = axes[ia][c[ia]], axes[ia][c[ia] + 1], axes[ib][c[ib]], axes[ib][c[ib] + 1]
+            rects.append([a0, b0, a1, b1])
+            vel.append([float(U[n][ia]), float(U[n][ib])])
+            spd.append(float(np.linalg.norm(U[n])))
+            pr.append(float(p[n]))
+        return {'kind': 'slice', 'plane': plane, 'at': float((cut[kc] + cut[kc + 1]) / 2), 'axes': 'xyz'[ia] + 'xyz'[ib], 'rects': np.round(rects, 5).tolist(),
+                'fields': {'velocity': {'values': np.round(spd, 6).tolist(), 'unit': 'm/s'}, 'pressure': {'values': np.round(pr, 4).tolist(), 'unit': 'Pa'}}, 'vec': np.round(vel, 5).tolist()}
+    from .elmer import read_vtu
+    v = read_vtu(src)
+    X, fl = v['points'][:, :2], v['fields']
+    d = fl.get('displacement')
+    Xd = X + d[:, :2] if d is not None else X
+    conn, off, typ = v['connectivity'], v['offsets'], v['types']
+    polys, start = [], 0
+    for o, t in zip(off, typ):
+        if t in (5, 9):
+            polys.append(conn[start:o])
+        start = o
+    sp = np.linalg.norm(fl['velocity'][:, :2], axis=1)
+    pr = fl['pressure']
+    out = {'kind': 'polys', 'axes': 'xy', 'polys': [np.round(Xd[c], 5).tolist() for c in polys],
+           'fields': {'velocity': {'values': [float(sp[c].mean()) for c in polys], 'unit': 'm/s'}, 'pressure': {'values': [float(pr[c].mean()) for c in polys], 'unit': 'Pa'}},
+           'vec': [[float(fl['velocity'][c, 0].mean()), float(fl['velocity'][c, 1].mean())] for c in polys]}
+    if 'vonmises' in fl:
+        out['fields']['vonmises'] = {'values': [float(fl['vonmises'][c].mean()) for c in polys], 'unit': 'Pa'}
+    if d is not None:
+        dm = np.linalg.norm(d[:, :2], axis=1)
+        out['fields']['displacement'] = {'values': [float(dm[c].mean()) for c in polys], 'unit': 'm'}
+    return out

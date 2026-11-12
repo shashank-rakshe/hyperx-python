@@ -148,7 +148,7 @@ function view(m){
       (s.result&&s.result.plain_english?'<div class="b"><p>'+esc(s.result.plain_english)+'</p></div>':'')+
       (s.result&&s.result.overlay?pic(s.result.overlay):'')+
       (s.result&&Array.isArray(s.result.files)?'<div class="gal">'+s.result.files.filter(f=>/\.(png|jpe?g|svg)$/i.test(f)).map(pic).join('')+'</div>':'')+
-      (s.result&&s.result.viewer?'<div class="b"><button class="btn" onclick=\'loadField('+JSON.stringify(s.result.viewer).replace(/'/g,"&#39;")+')\'>Open the interactive result view (hover any place for its value)</button></div>':'');
+      [s.result&&s.result.viewer,s.result&&s.result.flow_viewer].filter(Boolean).map(v=>'<div class="b"><button class="btn" onclick=\'loadViewer('+JSON.stringify(v).replace(/'/g,"&#39;")+')\'>'+(v.kind==='slice'?'Open the interactive flow view (hover any place for velocity and pressure)':'Open the interactive stress view (hover any place for its value)')+'</button></div>').join('');
     else if(s.kind==='error')h+='<div class="err">'+esc(s.text)+'</div>';
     else if(s.kind==='install')h+=instCard(s);
     else if(s.kind==='ctx')h+='<div class="ctx">📚 used: '+s.sources.map(esc).join(', ')+'</div>'});
@@ -179,7 +179,7 @@ async function send(){
         else if(ev.type==='context'){a.steps.push({kind:'ctx',sources:ev.sources})}
         else if(ev.type==='tool_result'){const t=a.steps.filter(s=>s.kind==='tool').pop();if(t&&!t.result)t.result=ev.result;else a.steps.push({kind:'tool',name:ev.name,args:{},result:ev.result});
           if(ev.mesh){drawMesh(ev.mesh);$('right').classList.remove('hide')}
-          if(ev.result&&ev.result.viewer)loadField(ev.result.viewer);loadFiles()}
+          if(ev.result&&(ev.result.flow_viewer||ev.result.viewer))loadViewer(ev.result.flow_viewer||ev.result.viewer);loadFiles()}
         else if(ev.type==='done'){a.content=ev.content||a.steps.filter(s=>s.kind==='text').map(s=>s.text).join('\n')}
         else if(ev.type==='error'){a.steps.push({kind:'error',text:ev.message})}
         else if(ev.type==='install'){a.steps.push(Object.assign({},ev,{kind:'install'}))}
@@ -216,16 +216,43 @@ inp.addEventListener('input',autosize);inp.addEventListener('keydown',e=>{if(e.k
 // ---------------- 3D wireframe viewer
 let M=null,rx=0.9,rz=0.6,zoom=1;const cv=$('cv'),cx=cv.getContext('2d');
 function resize(){const r=cv.getBoundingClientRect();cv.width=r.width*devicePixelRatio;cv.height=r.height*devicePixelRatio;paint()}
-function drawMesh(m){FD=null;$('fld').style.display='none';document.querySelector('.legend').style.display='flex';M=m;const xs=m.xyz;let lo=[1e18,1e18,1e18],hi=[-1e18,-1e18,-1e18];xs.forEach(p=>p.forEach((v,i)=>{lo[i]=Math.min(lo[i],v);hi[i]=Math.max(hi[i],v)}));
+function drawMesh(m){SL=null;FD=null;$('fld').style.display='none';document.querySelector('.legend').style.display='flex';M=m;const xs=m.xyz;let lo=[1e18,1e18,1e18],hi=[-1e18,-1e18,-1e18];xs.forEach(p=>p.forEach((v,i)=>{lo[i]=Math.min(lo[i],v);hi[i]=Math.max(hi[i],v)}));
   M.c=lo.map((v,i)=>(v+hi[i])/2);M.s=Math.max(...hi.map((v,i)=>v-lo[i]))||1;zoom=1;setTimeout(resize,30)}
 // ---------------- result viewer: the mesh coloured by a result, value under the pointer
 let FD=null,fname='von_mises',pin=null,PN=null;
 function turbo(t){t=Math.max(0,Math.min(1,t));const r=34.61+t*(1172.33+t*(-10793.56+t*(33300.12+t*(-38394.49+t*14825.05))));
   const g=23.31+t*(557.33+t*(1225.33+t*(-3574.96+t*(1073.77+t*707.56))));const b=27.2+t*(3211.1+t*(-15327.97+t*(27814+t*(-22569.18+t*6838.66))));
   return 'rgb('+[r,g,b].map(v=>Math.max(0,Math.min(255,Math.round(v)))).join(',')+')'}
+let SL=null,slpin=null,SLB=null;
+function loadViewer(v){return v.kind==='slice'?loadSlice(v):loadField(v)}
+function setFields(list){$('fsel').innerHTML=list.map(([k,t])=>'<option value="'+k+'">'+t+'</option>').join('');fname=list[0][0]}
+async function loadSlice(v){const j=await (await fetch('/api/slice?file='+encodeURIComponent(v.file)+(v.plane?'&plane='+v.plane:'')+(v.at!=null?'&at='+v.at:''))).json();
+  if(j.error){alert(j.error);return}
+  const rs=j.rects||j.polys.map(pl=>[Math.min(...pl.map(q=>q[0])),Math.min(...pl.map(q=>q[1])),Math.max(...pl.map(q=>q[0])),Math.max(...pl.map(q=>q[1]))]);
+  j.bb=[Math.min(...rs.map(r=>r[0])),Math.min(...rs.map(r=>r[1])),Math.max(...rs.map(r=>r[2])),Math.max(...rs.map(r=>r[3]))];j.bbs=rs;
+  SL=j;FD=null;M=null;slpin=null;
+  const names={velocity:'velocity',pressure:'pressure',vonmises:'von Mises stress (plate)',displacement:'displacement (plate)'};
+  setFields(Object.keys(j.fields).map(k=>[k,names[k]||k]));
+  $('fld').style.display='block';document.querySelector('.legend').style.display='none';$('right').classList.remove('hide');setTimeout(resize,30)}
+function slmap(W,H){const b=SL.bb,m=40*devicePixelRatio,k=Math.min((W-2*m)/(b[2]-b[0]),(H-2*m)/(b[3]-b[1]));return {k,x0:(W-k*(b[2]-b[0]))/2-k*b[0],y0:(H+k*(b[3]-b[1]))/2+k*b[1]}}
+function paintSlice(){const W=cv.width,H=cv.height,f=SL.fields[fname],V=f.values;let lo=Math.min(...V),hi=Math.max(...V);if(hi<=lo)hi=lo+1e-12;const t=slmap(W,H);
+  const X=x=>t.x0+x*t.k,Y=y=>t.y0-y*t.k;
+  SL.bbs.forEach((r,i)=>{cx.fillStyle=turbo((V[i]-lo)/(hi-lo));
+    if(SL.rects){cx.fillRect(X(r[0]),Y(r[3]),(r[2]-r[0])*t.k+1,(r[3]-r[1])*t.k+1)}
+    else{cx.beginPath();SL.polys[i].forEach((q,j)=>j?cx.lineTo(X(q[0]),Y(q[1])):cx.moveTo(X(q[0]),Y(q[1])));cx.closePath();cx.fill()}});
+  const bw=14*devicePixelRatio,bh=Math.min(160*devicePixelRatio,H*0.5),x0=W-bw-34*devicePixelRatio,y0=12*devicePixelRatio;
+  for(let i=0;i<bh;i++){cx.fillStyle=turbo(1-i/bh);cx.fillRect(x0,y0+i,bw,1.5)}
+  cx.fillStyle=getComputedStyle(document.body).color;cx.font=(11*devicePixelRatio)+'px system-ui';
+  cx.fillText(hi.toPrecision(3)+' '+f.unit,x0-30*devicePixelRatio,y0-3*devicePixelRatio);cx.fillText(lo.toPrecision(3),x0+bw+3*devicePixelRatio,y0+bh);
+  if(slpin!==null){const r=SL.bbs[slpin];cx.strokeStyle='#000';cx.lineWidth=2;cx.strokeRect(X(r[0]),Y(r[3]),(r[2]-r[0])*t.k,(r[3]-r[1])*t.k)}}
+function slcell(ev){const r=cv.getBoundingClientRect(),W=cv.width,H=cv.height,t=slmap(W,H),px=(ev.clientX-r.left)*devicePixelRatio,py=(ev.clientY-r.top)*devicePixelRatio,x=(px-t.x0)/t.k,y=(t.y0-py)/t.k;
+  for(let i=0;i<SL.bbs.length;i++){const b=SL.bbs[i];if(x>=b[0]&&x<=b[2]&&y>=b[1]&&y<=b[3])return {i,x,y}}return null}
+function slread(c){if(!c)return;const i=c.i,F=SL.fields,vec=SL.vec[i],a=SL.axes;
+  $('readout').innerHTML='at ('+a[0]+' = '+c.x.toPrecision(4)+', '+a[1]+' = '+c.y.toPrecision(4)+') m<br>'+Object.keys(F).map(k=>'<b>'+k+' '+F[k].values[i].toPrecision(4)+' '+F[k].unit+'</b>').join(' · ')+
+    '<br>velocity vector ['+vec.map(v=>v.toPrecision(3)).join(', ')+'] m/s'}
 async function loadField(v){const j=await (await fetch('/api/field?file='+encodeURIComponent(v.file)+'&frd='+encodeURIComponent(v.frd||''))).json();
   if(j.error){alert(j.error);return}
-  let lo=[1e18,1e18,1e18],hi=[-1e18,-1e18,-1e18];j.xyz.forEach(p=>p.forEach((x,i)=>{lo[i]=Math.min(lo[i],x);hi[i]=Math.max(hi[i],x)}));
+  setFields([['von_mises','von Mises stress'],['displacement','displacement']]);SL=null;let lo=[1e18,1e18,1e18],hi=[-1e18,-1e18,-1e18];j.xyz.forEach(p=>p.forEach((x,i)=>{lo[i]=Math.min(lo[i],x);hi[i]=Math.max(hi[i],x)}));
   j.c=lo.map((x,i)=>(x+hi[i])/2);j.s=Math.max(...hi.map((x,i)=>x-lo[i]))||1;FD=j;M=null;pin=null;zoom=1;
   $('fld').style.display='block';document.querySelector('.legend').style.display='none';$('right').classList.remove('hide');setTimeout(resize,30)}
 function paintField(){const W=cv.width,H=cv.height,f=FD.fields[fname],V=f.values;let lo=Math.min(...V),hi=Math.max(...V);if(hi<=lo)hi=lo+1e-12;
@@ -245,7 +272,7 @@ function readout(n){if(n===null)return;const p=FD.xyz[n],d=FD.disp[n];
     FD.fields.displacement.values[n].toPrecision(4)+' mm</b> ['+d.map(v=>v.toPrecision(3)).join(', ')+']'}
 function nearest(ev){if(!PN)return null;const r=cv.getBoundingClientRect(),mx=(ev.clientX-r.left)*devicePixelRatio,my=(ev.clientY-r.top)*devicePixelRatio;let b=null,bd=1e18;
   PN.forEach((q,i)=>{const d=(q[0]-mx)**2+(q[1]-my)**2;if(d<bd){bd=d;b=i}});return bd<(30*devicePixelRatio)**2?b:null}
-function paint(){const W=cv.width,H=cv.height;cx.clearRect(0,0,W,H);if(FD&&!M){paintField();return}if(!M)return;
+function paint(){const W=cv.width,H=cv.height;cx.clearRect(0,0,W,H);if(SL&&!FD&&!M){paintSlice();return}if(FD&&!M){paintField();return}if(!M)return;
   const st=getComputedStyle(document.documentElement),col=[st.getPropertyValue('--plate'),st.getPropertyValue('--stiff'),st.getPropertyValue('--frame')];
   const k=0.8*Math.min(W,H)/M.s*zoom,cz=Math.cos(rz),sz=Math.sin(rz),cxr=Math.cos(rx),sxr=Math.sin(rx);
   const P=M.xyz.map(p=>{const x=p[0]-M.c[0],y=p[1]-M.c[1],z=p[2]-M.c[2];const x1=x*cz-y*sz,y1=x*sz+y*cz;return [W/2+x1*k,H/2-(y1*cxr-z*sxr)*k*-1]});
@@ -253,8 +280,8 @@ function paint(){const W=cv.width,H=cv.height;cx.clearRect(0,0,W,H);if(FD&&!M){p
   for(let g=0;g<3;g++){cx.strokeStyle=col[g];cx.globalAlpha=g?0.95:0.55;cx.beginPath();
     M.edges.forEach(e=>{if(e[2]!==g)return;const a=P[e[0]],b=P[e[1]];cx.moveTo(a[0],a[1]);cx.lineTo(b[0],b[1])});cx.stroke()}cx.globalAlpha=1}
 let drag=null;cv.onpointerdown=e=>{drag=[e.clientX,e.clientY];cv.setPointerCapture(e.pointerId)};cv.onpointerup=()=>drag=null;
-cv.onpointermove=e=>{if(!drag){if(FD&&!M){const n=nearest(e);if(n!==null)readout(n)}return}rz+=(e.clientX-drag[0])*0.01;rx+=(e.clientY-drag[1])*0.01;drag=[e.clientX,e.clientY];paint()};
-cv.onclick=e=>{if(FD&&!M){const n=nearest(e);if(n!==null){pin=n;readout(n);paint()}}};
+cv.onpointermove=e=>{if(!drag){if(SL&&!FD&&!M){slread(slcell(e));return}if(FD&&!M){const n=nearest(e);if(n!==null)readout(n)}return}if(SL&&!FD&&!M)return;rz+=(e.clientX-drag[0])*0.01;rx+=(e.clientY-drag[1])*0.01;drag=[e.clientX,e.clientY];paint()};
+cv.onclick=e=>{if(SL&&!FD&&!M){const c=slcell(e);if(c){slpin=c.i;slread(c);paint()}return}if(FD&&!M){const n=nearest(e);if(n!==null){pin=n;readout(n);paint()}}};
 cv.onwheel=e=>{e.preventDefault();zoom*=e.deltaY<0?1.15:1/1.15;paint()};window.onresize=resize;
 render();status();loadFiles();setInterval(status,15000);
 </script>
