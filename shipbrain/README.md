@@ -871,6 +871,15 @@ sizes, Roark / stiffener / buckling / section checks, rule retrieval (with your 
 GitHub Release asset (up to 2 GB per file) or to a Hugging Face model repo. Do not train on company data if you intend to
 publish the model: a model fine-tuned with your rule index can repeat it.
 
+### Scorecard: does the model understand users and drive the tools well?
+
+`training/scorecard.py` / `training/scorecard.jsonl`: realistic requests written by hand (not by the training-data
+generators), scored before and after every Kaggle training (`scorecard_before.json` / `scorecard_after.json`, and in
+`summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
+DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
+**multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
+replies score 83/83, wrong replies 0/83.
+
 ### Learning from 👍 / 👎: DPO after the fine-tune
 
 After the normal fine-tune, the Kaggle run does one short DPO step (Direct Preference Optimisation, with Hugging Face

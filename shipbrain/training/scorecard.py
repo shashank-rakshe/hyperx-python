@@ -1,0 +1,246 @@
+"""
+ShipBrain scorecard: realistic user requests, written by hand and NOT made by the training-data generators, to measure
+whether the model understands what a user needs and drives the tools well - before and after training.
+
+Categories:
+  complete   all inputs given -> the right tool with the right key inputs
+  messy      inputs in mixed units / shipyard shorthand / Hinglish / typos -> converted into the tool's units (mm, MPa, m3/h)
+  missing    a key input is missing -> ask (a question, no tool call, no invented numbers)
+  multi      a job of several steps -> the right FIRST step
+  no_tool    a question of knowledge -> answer or search, without inventing numbers or calling a calculation tool
+
+    python training/scorecard.py --write training/scorecard.jsonl            # (re)write the item file
+    python training/scorecard.py --server http://127.0.0.1:8080 --out card.json
+    python training/scorecard.py --local /kaggle/working/shipbrain_model/lora --out card_after.json
+"""
+import argparse, json, os, re, sys, time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(HERE))
+
+
+def _items():
+    I = []
+
+    def add(cat, user, tool=None, args=None, tol=0.03, ask=False, no_tool=False):
+        I.append({'id': f'{cat}-{len(I) + 1:03d}', 'category': cat, 'user': user,
+                  'expect': {k: v for k, v in dict(tool=tool, args=args or {}, tol=tol, ask=ask, no_tool=no_tool).items()
+                             if v not in (None, {}, False)}})
+
+    # ------------------------------------------------------------ complete: everything given
+    add('complete', 'Check a 84 mm R3 studless chain, 700 m long, water depth 120 m, anchor 640 m from the fairlead', 'mooring',
+        {'depth': 120, 'length': 700, 'radius': 640, 'd_mm': 84})
+    add('complete', 'Mooring line: 76 mm R4 chain, 900 m, 200 m depth, anchor radius 820 m. Fairlead tension?', 'mooring',
+        {'depth': 200, 'length': 900, 'radius': 820, 'd_mm': 76})
+    add('complete', 'Plate 2400 x 800 x 12 mm under 0.05 MPa, clamped edges: stress and deflection by hand formula', 'plate_check',
+        {'a': 2400, 'b': 800, 't': 12, 'q': 0.05})
+    add('complete', 'Roark check: panel 3000 x 700, t 10, pressure 0.08 MPa, simply supported', 'plate_check',
+        {'a': 3000, 'b': 700, 't': 10, 'q': 0.08})
+    add('complete', 'Buckling stress of a 2800 x 800 x 14 plate field in compression along the long side, yield 355', 'plate_buckling',
+        {'a': 2800, 'b': 800, 't': 14})
+    add('complete', 'Section modulus of a flat bar 200 x 12 with 600 mm of 10 mm plating attached', 'section_props',
+        {'profile.type': 'FlatBar', 'profile.h': 200, 'profile.t': 12, 't_plate': 10, 'b_eff': 600})
+    add('complete', 'Stiffener check: HP 220x11, span 2400, spacing 700, plate 12 mm, pressure 0.06 MPa', 'stiffener_check',
+        {'span': 2400, 'spacing': 700, 't_plate': 12, 'q': 0.06, 'profile.type': 'HP', 'profile.h': 220, 'profile.t': 11})
+    add('complete', 'Tightening torque for an M20 8.8 bolt, thread friction 0.12', 'bolt', {'d': 20, 'cls': '8.8', 'mu_G': 0.12})
+    add('complete', 'M16 class 10.9 bolt with 20 kN axial working load, load factor 0.2 - is it OK?', 'bolt',
+        {'d': 16, 'cls': '10.9', 'F_A': 20000, 'Phi': 0.2})
+    add('complete', 'Pressure drop for 120 m3/h seawater in 40 m of 125 mm bore pipe with 6 elbows', 'pipe_flow',
+        {'flow_m3h': 120, 'segments.0.d_mm': 125, 'segments.0.length_m': 40, 'fluid': 'seawater'})
+    add('complete', 'Ballast line 300 m3/h, 60 m of 200 mm bore rising 5 m: pump head?', 'pipe_flow',
+        {'flow_m3h': 300, 'segments.0.d_mm': 200, 'segments.0.length_m': 60, 'segments.0.rise_m': 5})
+    add('complete', 'MOOSE shell model of a 2000 x 800 x 12 mm plate at 0.1 MPa, simply supported', 'moose_plate',
+        {'a': 2000, 'b': 800, 't': 12, 'q': 0.1})
+    add('complete', 'Topology optimisation: bracket 500 x 400 mm welded on the left edge, 20 kN down at the bottom right corner, keep 40 %',
+        'topology', {'L': 500, 'H': 400, 'volfrac': 0.4})
+    add('complete', 'Convert my_bracket.sldprt to STEP', 'native_cad', {'file': 'my_bracket.sldprt'})
+    add('complete', 'Open deck_block.3dm and tell me the solids and layers', ['native_cad', 'file_info'], {'file': 'deck_block.3dm'})
+    add('complete', 'Trace the scanned drawing old_midship.png into DXF', 'trace_drawing', {'file': 'old_midship.png'})
+    add('complete', 'Compare rev_A.dxf and rev_B.dxf and list what changed', 'compare_drawings', {'a': 'rev_A.dxf', 'b': 'rev_B.dxf'})
+    add('complete', 'Element quality report for hold_model.bdf (Jacobian, warpage, aspect)', 'fe_quality', {'file': 'hold_model.bdf'})
+    add('complete', 'Convert hold_model.bdf to Abaqus inp', 'fe_convert', {'file': 'hold_model.bdf'})
+    add('complete', 'Make a STEP solid from the 3D scan impeller.stl and list its holes', ['reverse_cad', 'stl_to_step'], {'file': 'impeller.stl'})
+    add('complete', 'Mesh the CAD model foundation.step with 50 mm elements', 'cad_mesh', {'file': 'foundation.step', 'element_size': 50})
+    add('complete', 'What is in the file midship.bdf?', ['file_info', 'fe_quality', 'mesh_check'], {'file': 'midship.bdf'})
+    add('complete', 'Hull girder check to IACS UR S11: L 180 m, B 30 m, Cb 0.8', 'class_rule', {'action': 'longitudinal', 'L': 180, 'B': 30, 'Cb': 0.8})
+    add('complete', 'Find the DNV rule text on minimum bilge pipe diameter', 'class_rule', {'action': 'search', 'society': 'DNV'})
+    add('complete', 'Build a stiffened deck panel 4800 x 3200 x 12 with FB 150x12 at 800 mm', 'panel_mesh',
+        {'length': 4800, 'width': 3200, 'thickness': 12})
+    add('complete', 'Repair pump_casing.step for FEA: remove holes under 10 mm and fillets under 5 mm', 'repair_model',
+        {'file': 'pump_casing.step', 'holes_below': 10, 'fillets_below': 5})
+    add('complete', 'Hot spot fatigue model of the bracket toe in bracket_assy.step', ['fatigue_mesh', 'file_info'])
+    add('complete', 'Calculate 2 * pi * 0.35 * 1450 / 60', 'calc')
+    add('complete', 'Lube oil line 20 m3/h, 30 m of 65 mm pipe, 4 bends, one globe valve - pressure loss?', 'pipe_flow',
+        {'flow_m3h': 20, 'segments.0.d_mm': 65, 'segments.0.length_m': 30, 'fluid': 'lube oil'})
+    add('complete', 'Mooring with 1 m/s current: 102 mm R3S chain, 1100 m line, 250 m depth, anchor 1000 m', 'mooring',
+        {'depth': 250, 'length': 1100, 'radius': 1000, 'd_mm': 102, 'current': 1.0})
+    # ------------------------------------------------------------ messy: units, shorthand, Hinglish, typos
+    add('messy', 'plate 8 ft x 2.5 ft, 1/2 inch thick, 7 psi pressure - stress?', 'plate_check',
+        {'a': 2438.4, 'b': 762, 't': 12.7, 'q': 0.0483}, tol=0.03)
+    add('messy', 'Plate field 2.4 m x 0.8 m, 12 mm, tank head 6 m of seawater', 'plate_check',
+        {'a': 2400, 'b': 800, 't': 12, 'q': 0.0603}, tol=0.05)
+    add('messy', '2400x800x12 plate, 1.5 bar pressure, check karo', 'plate_check', {'a': 2400, 'b': 800, 't': 12, 'q': 0.15})
+    add('messy', 'Bolt M24 grade 8.8, torque kitna lagega? friction 0.14', 'bolt', {'d': 24, 'cls': '8.8', 'mu_G': 0.14})
+    add('messy', 'half inch UNC grade 5 bolt preload?', 'bolt', {'d': '1/2', 'cls': '5'})
+    add('messy', 'chain 3 inch R3, depth 100 m, 650 m long, anchor 580 m', 'mooring', {'d_mm': 76.2, 'depth': 100, 'length': 650, 'radius': 580}, tol=0.02)
+    add('messy', 'Anchor chain 84mm R3 in 400 ft water, 2200 ft line, anchor 2000 ft out', 'mooring',
+        {'d_mm': 84, 'depth': 121.92, 'length': 670.56, 'radius': 609.6}, tol=0.02)
+    add('messy', 'SW cooling 0.033 m3/s through DN125 x 40 m', 'pipe_flow', {'flow_m3h': 118.8, 'segments.0.d_mm': 125, 'segments.0.length_m': 40}, tol=0.05)
+    add('messy', 'ballast pump 500 gpm, 8 inch pipe 50 m long. head loss?', 'pipe_flow', {'flow_m3h': 113.6, 'segments.0.d_mm': 203.2, 'segments.0.length_m': 50}, tol=0.05)
+    add('messy', 'FW line 10 m3/hr, 2" pipe 25 m', 'pipe_flow', {'flow_m3h': 10, 'segments.0.d_mm': 50.8, 'segments.0.length_m': 25, 'fluid': 'fresh water'}, tol=0.05)
+    add('messy', 'Stiffner FB150x12 span 2.4m spacing 600 plate 10 pressure 0.05 MPa', 'stiffener_check',
+        {'span': 2400, 'spacing': 600, 't_plate': 10, 'q': 0.05, 'profile.type': 'FlatBar', 'profile.h': 150, 'profile.t': 12})
+    add('messy', 'L 200x90x10/14 with 12mm plate b_eff 700 - I and Z?', 'section_props', {'profile.h': 200, 't_plate': 12, 'b_eff': 700})
+    add('messy', 'T-bar web 300x12 flange 120x15, plate 14 x 750: section props', 'section_props',
+        {'profile.type': 'TBar', 'profile.h': 300, 'profile.t': 12, 'profile.bf': 120, 'profile.tf': 15, 't_plate': 14, 'b_eff': 750})
+    add('messy', 'convert 4500 lbf.ft to kN.m', 'convert_units')
+    add('messy', 'plate 2400 by 800 thk 12 under 0,05 MPa', 'plate_check', {'a': 2400, 'b': 800, 't': 12, 'q': 0.05})
+    add('messy', 'MOOSE: 2.8m x 0.8m x 14mm, 2 bar, clamped all round', 'moose_plate', {'a': 2800, 'b': 800, 't': 14, 'q': 0.2})
+    add('messy', 'Is 32 m3/h of MGO OK in a 1.5 inch line, 15 m?', 'pipe_flow', {'flow_m3h': 32, 'segments.0.d_mm': 38.1, 'segments.0.length_m': 15, 'fluid': 'mgo'}, tol=0.05)
+    add('messy', 'Bracket 0.5 m x 0.4 m left edge welded 2 t load at tip, 40% material', 'topology', {'L': 500, 'H': 400, 'volfrac': 0.4})
+    add('messy', 'bilge line 50 m3/h, 100NB pipe 30 m, 2 nrv + 4 bends', 'pipe_flow', {'flow_m3h': 50, 'segments.0.d_mm': 100, 'segments.0.length_m': 30}, tol=0.05)
+    add('messy', 'plate 2400x800x12 load 50 kPa', 'plate_check', {'a': 2400, 'b': 800, 't': 12, 'q': 0.05})
+    add('messy', 'M30 10.9 bolt preload with hydraulic tensioner', 'bolt', {'d': 30, 'cls': '10.9'})
+    add('messy', 'Ek plate hai 3m x 0.75m, 11 mm, 8 m head - deflection batao', 'plate_check', {'a': 3000, 'b': 750, 't': 11, 'q': 0.0804}, tol=0.05)
+    # ------------------------------------------------------------ missing: must ask
+    add('missing', 'Check my anchor chain', ask=True)
+    add('missing', 'What is the pressure drop in my ballast line?', ask=True)
+    add('missing', 'Is my plate strong enough?', ask=True)
+    add('missing', 'Tightening torque for my bolt?', ask=True)
+    add('missing', 'Check the deck stiffener', ask=True)
+    add('missing', 'What pump do I need for the cooling water?', ask=True)
+    add('missing', 'Mooring line 84 mm R3 in 120 m water - fairlead tension?', ask=True)
+    add('missing', 'Plate 2400 x 800 under 0.05 MPa - stress?', ask=True)
+    add('missing', 'Convert the drawing to DXF', ask=True)
+    add('missing', 'Compare the two revisions', ask=True)
+    add('missing', 'Optimise my bracket shape', ask=True)
+    add('missing', 'Run a MOOSE plate check at 0.1 MPa', ask=True)
+    add('missing', 'Check the hull girder strength', ask=True)
+    add('missing', 'Mesh it with 100 mm elements', ask=True)
+    add('missing', 'fuel line 30 m3/h ka pressure drop?', ask=True)
+    # ------------------------------------------------------------ multi-step: the right first step
+    add('multi', 'I uploaded deck_scan.png (old drawing). Make a vector copy and then compare it with deck_rev2.dxf',
+        'trace_drawing', {'file': 'deck_scan.png'})
+    add('multi', 'Take foundation.sldprt, convert it, mesh it with 40 mm elements and check the element quality',
+        'native_cad', {'file': 'foundation.sldprt'})
+    add('multi', 'Read hatch_cover.step, remove small holes below 8 mm, then mesh for FEA', ['file_info', 'repair_model'])
+    add('multi', 'Check hold_model.bdf for quality problems and fix the duplicate nodes', ['fe_quality', 'mesh_check'], {'file': 'hold_model.bdf'})
+    add('multi', 'Here is my scan part.stl - make a STEP and mesh it', ['reverse_cad', 'stl_to_step', 'file_info'], {'file': 'part.stl'})
+    add('multi', 'Design the seawater cooling line for 120 m3/h: size the pipe and find the pump power. Route is 50 m with 8 bends.',
+        'pipe_flow', {'flow_m3h': 120})
+    add('multi', 'Convert block.3dm to STEP and then mesh the plates with 100 mm', 'native_cad', {'file': 'block.3dm'})
+    add('multi', 'Check the plate 2400x800x12 at 0.05 MPa by hand and then with MOOSE shells', ['plate_check', 'moose_plate'],
+        {'a': 2400, 'b': 800, 't': 12, 'q': 0.05})
+    # ------------------------------------------------------------ no_tool: knowledge, no invented numbers
+    add('no_tool', 'What is the difference between a web frame and an ordinary frame?', ['knowledge_search', None], no_tool=True)
+    add('no_tool', 'Why do we use studless chain for offshore moorings?', ['knowledge_search', None], no_tool=True)
+    add('no_tool', 'What does Jacobian ratio mean in a mesh quality check?', ['knowledge_search', None], no_tool=True)
+    add('no_tool', 'Explain hot spot stress in simple words', ['knowledge_search', None], no_tool=True)
+    add('no_tool', 'When is a pipe flow laminar?', ['knowledge_search', None], no_tool=True)
+    add('no_tool', 'What is a lightening hole?', ['knowledge_search', None], no_tool=True)
+    add('no_tool', 'Hi, what can you do?', [None], no_tool=True)
+    add('no_tool', 'What is the difference between R3 and R4 chain grades?', ['knowledge_search', None], no_tool=True)
+    return I
+
+
+def _flat(d, p=''):
+    out = {}
+    if isinstance(d, dict):
+        for k, v in d.items():
+            out.update(_flat(v, f'{p}.{k}' if p else str(k)))
+    elif isinstance(d, list):
+        for i, v in enumerate(d):
+            out.update(_flat(v, f'{p}.{i}' if p else str(i)))
+    else:
+        out[p] = d
+    return out
+
+
+ASK_WORDS = re.compile(r'\?|\b(please (give|tell|send|provide|share|upload)|which|what is the|could you|can you (give|tell|share)|need (the|to know))\b', re.I)
+
+
+def score(item, reply):
+    from shipbrain import agent
+    e = item['expect']
+    call = agent.parse_tool_call(reply)
+    want = e.get('tool')
+    wants = want if isinstance(want, list) else [want]
+    out = {'id': item['id'], 'category': item['category'], 'got_tool': call['name'] if call else None}
+    if e.get('ask'):
+        out['ok'] = call is None and bool(ASK_WORDS.search(reply))
+        return out
+    if e.get('no_tool'):
+        calc = call and call['name'] not in [w for w in wants if w]
+        out['ok'] = not calc and len(reply.strip()) > 10
+        return out
+    out['tool_ok'] = bool(call) and call['name'] in wants
+    out['args_ok'] = False
+    if out['tool_ok']:
+        got = _flat(call.get('args') or {})
+        bad = []
+        for k, v in (e.get('args') or {}).items():
+            g = got.get(k)
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                try:
+                    if abs(float(g) - v) > max(1e-9, e.get('tol', 0.03) * abs(v)):
+                        bad.append(k)
+                except (TypeError, ValueError):
+                    bad.append(k)
+            elif str(v).lower() not in str(g).lower():
+                bad.append(k)
+        out['args_ok'] = not bad
+        out['bad_args'] = bad
+    out['ok'] = out['tool_ok'] and out['args_ok']
+    return out
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--write')
+    ap.add_argument('--items', default=os.path.join(HERE, 'scorecard.jsonl'))
+    ap.add_argument('--server', default='http://127.0.0.1:8080')
+    ap.add_argument('--model', default='local')
+    ap.add_argument('--local')
+    ap.add_argument('--out', default='scorecard_result.json')
+    ap.add_argument('--limit', type=int, default=0)
+    a = ap.parse_args(argv)
+    if a.write:
+        with open(a.write, 'w', encoding='utf-8') as f:
+            for it in _items():
+                f.write(json.dumps(it) + '\n')
+        print(a.write, len(_items()), 'items')
+        return
+    sys.path.insert(0, HERE)
+    from shipbrain import agent, knowledge
+    from evaluate import LocalModel
+    llm = LocalModel(a.local) if a.local else agent.LLM(a.server, a.model, temperature=0.0, max_tokens=500)
+    import tempfile
+    sysmsg = {'role': 'system', 'content': agent.system_prompt(agent.Tools(tempfile.mkdtemp(), knowledge.load(None)))}
+    items = [json.loads(l) for l in open(a.items, encoding='utf-8')]
+    items = items[:a.limit] if a.limit else items
+    res, t0 = [], time.time()
+    for k, it in enumerate(items):
+        try:
+            reply = ''.join(llm.stream([sysmsg, {'role': 'user', 'content': it['user']}]))
+        except Exception as e:
+            reply = f'ERROR {e}'
+        r = score(it, reply)
+        r['reply'] = reply[:400]
+        res.append(r)
+        print(f'{k + 1}/{len(items)} {time.time() - t0:.0f}s', end='\r')
+    cats = {}
+    for r in res:
+        c = cats.setdefault(r['category'], {'n': 0, 'ok': 0})
+        c['n'] += 1
+        c['ok'] += bool(r['ok'])
+    summary = {c: f"{v['ok']}/{v['n']} ({100 * v['ok'] / v['n']:.0f} %)" for c, v in sorted(cats.items())}
+    allok = sum(v['ok'] for v in cats.values())
+    summary['ALL'] = f"{allok}/{len(res)} ({100 * allok / max(1, len(res)):.0f} %)"
+    json.dump({'summary': summary, 'items': res}, open(a.out, 'w'), indent=1)
+    print()
+    for k, v in summary.items():
+        print(f'{k:10s} {v}')
+
+
+if __name__ == '__main__':
+    main()
