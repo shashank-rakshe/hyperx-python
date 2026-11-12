@@ -127,6 +127,7 @@ try:
     print('base model:', BASE, '| draft:', DRAFT, flush=True)
 except Exception as e:
     print('(base_model.json not read:', e, ')', flush=True)
+BASE_ID = BASE                           # the real base model name (BASE may become an adapter folder below)
 # ---- continue from an older ShipBrain model: attach that run's output (Add Input -> Notebook Output) and start with
 #      SB_CONTINUE=1 python k.py   (default: train fresh from the base model on ALL data - recommended, nothing is forgotten)
 if os.environ.get('SB_CONTINUE') == '1':
@@ -237,11 +238,45 @@ def _plain(paths):
             open(dst, 'w').write(gzip.open(f, 'rt').read())
             out.append(dst)
         else:
-            out.append(f)
+            dst = 'data/priv_' + os.path.basename(f)            # private files join data/ so the incremental plan sees them too
+            shutil.copy(f, dst)
+            out.append(dst)
     return out
 PRIV = ' '.join(_plain(PRIVATE_TRAIN))
 for f in _plain(PRIVATE_EVAL):
     sh(f'cat {f} >> data/eval.jsonl', required=False)
+# ---- INCREMENTAL training: SB_MODE=auto (default) trains only on data the saved model has not seen yet (+ a small replay), continuing from its
+#      saved LoRA adapter; falls back to full training when there is no saved state or the base model changed. SB_MODE=full: everything from scratch.
+#      SB_MODE=new: like auto but stop with an error instead of falling back to full. SB_REPLAY=0.1 is the share of old samples mixed in (0 = only new).
+MODE = os.environ.get('SB_MODE', 'auto')
+REPLAY = os.environ.get('SB_REPLAY', '0.1')
+INCREMENTAL = False
+STATE = '/kaggle/working/state'
+if MODE != 'full':
+    sh(f'python training/incremental.py fetch --dest {STATE}', required=False)
+    if os.path.exists(f'{STATE}/lora/adapter_config.json') and os.path.exists(f'{STATE}/manifest.json.gz'):
+        r = subprocess.run(f'python training/incremental.py plan --state {STATE}/manifest.json.gz --base "{BASE_ID}" --replay {REPLAY}',
+                           shell=True, capture_output=True, text=True)
+        print(r.stdout, r.stderr, flush=True)
+        try:
+            PLAN = json.loads(r.stdout.strip().splitlines()[-1])
+        except Exception:
+            PLAN = {'mode': 'full', 'why': 'could not read the plan'}
+        if PLAN.get('mode') == 'incremental':
+            if PLAN['new'] == 0:
+                report('nothing new to train', {'plan': PLAN})
+                raise SystemExit('NOTHING NEW: every sample was learned before. Add data (repos, tasks, packs) and run again, or SB_MODE=full to retrain everything.')
+            INCREMENTAL = True
+            BASE = f'{STATE}/lora'                                  # continue from the saved adapter
+            os.environ.setdefault('LR', '1e-4')                     # gentler: new data should add, not overwrite
+            print(f"INCREMENTAL: {PLAN['new']} new samples + {PLAN['replayed']} replayed old ones ({PLAN['old']} already learned); continuing from the saved model", flush=True)
+            report('incremental training', {'plan': PLAN})
+        else:
+            print('full training:', PLAN.get('why'), flush=True)
+    elif MODE == 'new':
+        raise SystemExit('SB_MODE=new but no saved model state found (Kaggle secret HF_TOKEN + one earlier finished run, or attach the dataset shipbrain_state)')
+    else:
+        print('no saved model state: full training on all data (this run saves the state for the next one)', flush=True)
 report('scoring the base model')
 sh(f'python training/cad_eval.py --local {BASE} --limit 30 --out /kaggle/working/cad_eval_before.json', required=False)
 sh(f'python training/evaluate.py --local {BASE} --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_before.json', required=False)
@@ -259,9 +294,9 @@ report('scoring the trained model')
 sh('python training/cad_eval.py --local /kaggle/working/shipbrain_model/lora --limit 30 --out /kaggle/working/cad_eval_after.json', required=False)
 sh(f'python training/evaluate.py --local /kaggle/working/shipbrain_model/lora --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_after.json', required=False)
 sh('python training/scorecard.py --local /kaggle/working/shipbrain_model/lora --out /kaggle/working/scorecard_after.json', required=False)
-if DRAFT:
+if DRAFT and not INCREMENTAL:
     report('training the small draft model')
-if DRAFT:      # same data, 1 epoch: the draft learns the tool format, so the main model accepts more of its guesses
+if DRAFT and not INCREMENTAL:      # same data, 1 epoch (skipped in incremental runs: it would see only the new data; the earlier draft file stays valid): the draft learns the tool format, so the main model accepts more of its guesses
     sh(f'DPO=0 EPOCHS=1 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/physics_train.jsonl data/ocx_train.jsonl {PRIV} --base {DRAFT} --out /kaggle/working/draft_model --quant q8_0', required=False)
     for f in glob.glob('/kaggle/working/draft_model*/**/*.gguf', recursive=True):
         shutil.move(f, '/kaggle/working/' + os.path.basename(f).replace('shipbrain-', 'shipbrain-draft-'))
@@ -295,6 +330,22 @@ if os.path.exists('/kaggle/working/scorecard_before.json') and os.path.exists('/
     except Exception:
         pass
 summary['accepted'] = ACCEPTED
+summary['incremental'] = INCREMENTAL
+if ACCEPTED:
+    # remember what this model learned + keep its adapter for the next run (private Hugging Face repo <you>/shipbrain-state)
+    try:
+        src_data = 'data_full/*.jsonl' if INCREMENTAL else 'data/*.jsonl'
+        os.makedirs(STATE, exist_ok=True)
+        if not INCREMENTAL and os.path.exists(f'{STATE}/manifest.json.gz'):
+            os.remove(f'{STATE}/manifest.json.gz')              # full run: start the record again (a changed base model makes the old record wrong)
+        sh(f'python training/incremental.py commit --data "{src_data}" "data/*_train.jsonl" "data/train.jsonl" --state {STATE}/manifest.json.gz --base "{BASE_ID}" --run {RUN_ID}', required=False)
+        shutil.rmtree(f'{STATE}/lora', ignore_errors=True)
+        shutil.copytree('/kaggle/working/shipbrain_model/lora', f'{STATE}/lora')
+        sh(f'python training/incremental.py push --src {STATE}', required=False)
+    except Exception as e:
+        print('(could not save the model state for the next incremental run:', e, ')', flush=True)
+elif not ACCEPTED:
+    print('the new model was rejected by the accept gate: the saved state is NOT updated, so the next run trains on the same new data again', flush=True)
 if not ACCEPTED:
     UPLOAD_MODEL = False                 # a worse model is not published anywhere; the files stay in this run's Output only
 summary['model_files'] = sorted(os.path.basename(f) for f in glob.glob('/kaggle/working/*.gguf'))
