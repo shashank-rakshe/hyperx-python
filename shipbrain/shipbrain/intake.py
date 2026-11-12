@@ -168,6 +168,13 @@ def describe_xlsx(path):
 
 
 def describe_csv(path):
+    from . import tabfield
+    try:
+        d = tabfield.describe(path)
+        return d, (f"Result table with {d['points']:,} points (x, y, z) and fields {', '.join(d['fields'][:10])} - an export from a CFD / FE program. "
+                   "probe_result reads the value at any place, show_result draws a field.")
+    except Exception:
+        pass
     raw = open(path, encoding='utf-8', errors='replace').read(400000)
     dia = csv.Sniffer().sniff(raw[:4096], delimiters=',;\t') if raw else csv.excel
     rows = list(csv.reader(io.StringIO(raw), dia))

@@ -11,7 +11,9 @@ only what is really there; the user picks one; run() writes the right input, run
   mystran     .bdf                         mystran job.bdf                                  .f06
   ansys       .mac (+ result export)       ANSYSxxx -b -i job.mac -o job.out                 job_result.txt
   abaqus      .inp (+ extract script)      abaqus job=job interactive; abaqus python x.py   job_result.json
-  openfoam    (case folder)                found and reported; case set-up is guided for now
+  openfoam    (case folder)                openfoam_flow runs it (tested)
+  fluent      mesh .msh + PyFluent script  found and reported; cfd_export writes the case (not run here: licence)
+  starccm     mesh .msh + Java macro       found and reported; cfd_export writes the case (not run here: licence)
 
 Only CalculiX could be tested where ShipBrain was built. The other adapters follow each solver's documented batch
 interface; test them once on your workstation (python -m shipbrain.solvers --check).
@@ -39,10 +41,13 @@ KNOWN = {
                                     '/var/DassaultSystemes/SIMULIA/Commands/abaqus']),
     'openfoam': (['simpleFoam', 'interFoam', 'blockMesh'], [r'C:\Program Files\blueCFD-Core-*\OpenFOAM-*\platforms\*\bin\simpleFoam.exe',
                                                           '/opt/openfoam*/platforms/*/bin/simpleFoam', '/usr/lib/openfoam/openfoam*/platforms/*/bin/simpleFoam']),
+    'fluent': (['fluent', 'fluent.exe'], [r'C:\Program Files\ANSYS Inc\v*\fluent\ntbin\win64\fluent.exe', '/ansys_inc/v*/fluent/bin/fluent', '/usr/ansys_inc/v*/fluent/bin/fluent']),
+    'starccm': (['starccm+', 'starccm+.exe'], [r'C:\Program Files\Siemens\*\STAR-CCM+*\star\bin\starccm+.exe', '/opt/Siemens/*/STAR-CCM+*/star/bin/starccm+',
+                                           '/opt/Siemens/Simcenter*/STAR-CCM+*/star/bin/starccm+']),
     'code_aster': (['run_aster', 'as_run'], [r'C:\Code_Aster\*\bin\run_aster*', '/opt/aster/bin/as_run']),
 }
 ANALYSES = {'calculix': ['static', 'modal', 'buckling'], 'nastran': ['static', 'modal', 'buckling'], 'mystran': ['static', 'modal', 'buckling'],
-            'ansys': ['static', 'modal', 'buckling'], 'abaqus': ['static', 'modal', 'buckling'], 'openfoam': ['cfd'], 'code_aster': []}
+            'ansys': ['static', 'modal', 'buckling'], 'abaqus': ['static', 'modal', 'buckling'], 'openfoam': ['cfd'], 'fluent': ['cfd'], 'starccm': ['cfd'], 'code_aster': []}
 TESTED = {'calculix', 'mystran'}           # mystran: static / modal / buckling checked against CalculiX + hand formulas
 
 

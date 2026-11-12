@@ -125,7 +125,8 @@ def write_polymesh(m, tag, case_dir, patch_types=None):
             f.write(f'    {name}\n    {{\n        type {t};\n' + ('        inGroups List<word> 1(wall);\n' if t == 'wall' else '')
                     + f'        nFaces {n};\n        startFace {st};\n    }}\n')
         f.write(')\n')
-    return {'axes': m.axes, 'cells': cells, 'cell_centres': np.array([[(m.axes[d][c[d]] + m.axes[d][c[d] + 1]) / 2 for d in range(3)] for c in cells]),
+    return {'topology': {'points': pts, 'faces': faces, 'owner': owner, 'neighbour': neigh, 'patches': pat_info, 'patch_types': types, 'n_cells': len(cells)},
+            'axes': m.axes, 'cells': cells, 'cell_centres': np.array([[(m.axes[d][c[d]] + m.axes[d][c[d] + 1]) / 2 for d in range(3)] for c in cells]),
             'patches': {name: by_patch[name] for name in order}, 'n_points': len(pts), 'n_faces': len(faces), 'n_internal': n_int}
 
 

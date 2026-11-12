@@ -454,6 +454,13 @@ class Tools:
                       'stress at the nearest node, coordinates in mm), an OpenFOAM case folder (the *_flow folder: velocity and pressure in the nearest cell, metres) or an Elmer .vtu '
                       '(all fields at the nearest node, metres). Use it when the user asks "what is the stress / pressure / velocity at ...".',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'x': num, 'y': num, 'z': num}, 'required': ['file', 'x', 'y']})
+        self.register('cfd_export', self.cfd_export, 'Set up the CFD case for ANSYS FLUENT or STAR-CCM+ (commercial: they cannot run here and need your licence): writes the mesh in Fluent .msh format '
+                      '(made by ShipBrain\'s own grid), a plain-words setup sheet, and a PyFluent script or a STAR-CCM+ macro (written from the documented APIs, not run here). Same case arguments as '
+                      'openfoam_flow (plate or STEP part, fluid, velocity, turbulence), so the OpenFOAM run can cross-check it. Results come back as exported CSV: probe_result / show_result read them.',
+                      {'type': 'object', 'properties': {'target': {'type': 'string', 'enum': ['fluent', 'starccm']}, 'velocity': num, 'fluid': {'type': 'string', 'enum': ['water', 'seawater', 'air', 'oil']},
+                                                         'body_file': {'type': 'string'}, 'length': num, 'height': num, 'width': num, 'plate_x': num, 'plate_t': num, 'plate_h': num,
+                                                         'plate_w': num, 'turbulence': {'type': 'string', 'enum': ['laminar', 'sst']}, 'cell': num, 'name': {'type': 'string'}},
+                       'required': ['target', 'velocity']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1584,6 +1591,14 @@ class Tools:
     def show_result(self, file, frd=None, field=None, view='iso', scale=None, vtu=False):
         from . import viz
         src = self._path(file)
+        if src.lower().endswith(('.csv', '.tsv', '.txt')):
+            from . import tabfield
+            out = os.path.splitext(src)[0] + '_' + re.sub(r'[^A-Za-z0-9]+', '_', field or 'field') + '.png'
+            info = tabfield.render(src, out, field=field)
+            info['png'] = os.path.basename(out)
+            info['files'] = [info['png']]
+            info['plain_english'] = f"Picture {info['png']}: {info['field']} from {info['min']:.4g} to {info['max']:.4g} in the {info['plane']} plane."
+            return info
         base = os.path.splitext(src)[0]
         if field and not frd:
             cand = base + '.frd'
@@ -1705,6 +1720,10 @@ class Tools:
         if os.path.isdir(src):
             r = openfoam.probe(src, x, y, z)
             r['plain_english'] = (f"At the cell nearest ({x:g}, {y:g}, {z:g}) m [{r['distance_m']} m away]: velocity {r['speed_m_s']} m/s {r['velocity_m_s']}, pressure {r['pressure_pa']} Pa.")
+        elif src.lower().endswith(('.csv', '.txt', '.tsv', '.dat', '.xy')):
+            from . import tabfield
+            r = tabfield.probe(src, x, y, z)
+            r['plain_english'] = (f"Nearest point of the table ({r['distance']:.4g} from where you asked): at {r['at']}: " + ', '.join(f'{k} = {v:.6g}' for k, v in list(r['values'].items())[:8]) + '.')
         elif src.lower().endswith('.vtu'):
             v = elmer.read_vtu(src)
             X = v['points']
@@ -1720,6 +1739,22 @@ class Tools:
             r = viz.probe(src, frd, x, y, z)
             r['plain_english'] = (f"At node {r['node']} ({r['x']:.4g}, {r['y']:.4g}, {r['z']:.4g}) mm, {r['distance_mm']} mm from the point you gave: von Mises {r['von_mises_MPa']} MPa, "
                                   f"displacement {r['displacement_magnitude_mm']} mm {r['displacement_mm']}.")
+        return r
+
+    def cfd_export(self, target, velocity, fluid='water', body_file=None, length=2.0, height=1.0, width=None, plate_x=0.5, plate_t=0.02, plate_h=0.4, plate_w=None,
+                   turbulence='laminar', cell=0.02, name='cfd_case'):
+        from . import cfdexport
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        kw = dict(velocity=float(velocity), fluid=fluid, length=float(length), height=float(height), width=float(width) if width else None, plate_x=float(plate_x),
+                  plate_t=float(plate_t), plate_h=float(plate_h), plate_w=float(plate_w) if plate_w else None, turbulence=turbulence, cell=float(cell))
+        if body_file:
+            kw['body_file'] = self._path(body_file)
+        r = cfdexport.export(target, self.workdir, name, **kw)
+        prog = {'fluent': 'ANSYS Fluent', 'starccm': 'STAR-CCM+'}[target]
+        how = (f"python {name}_fluent.py  (needs Fluent and `pip install ansys-fluent-core`)" if target == 'fluent' else f"starccm+ -batch {name}_starccm.java  (or File > Play Macro)")
+        r['plain_english'] = (f"Case for {prog} written: {', '.join(r['files'])} ({r['cells']:,} hexahedral cells; Fluent .msh, metres). Run it with {how}. I could not run or compile the script here (no {prog}); "
+                              f"the mesh was checked by reading it back with OpenFOAM's Fluent importer. Export the solution as CSV and upload it: I can read the value at any place and draw it. "
+                              f"The same case runs in OpenFOAM here (openfoam_flow) for a cross-check.")
         return r
 
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
@@ -2336,6 +2371,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'\bpicture\b|\bimage\b|visuali[sz]|show (me )?(the )?(stress|result|model|plot)|contour|render|screenshot of (the )?(model|mesh)|plot (the )?(stress|displacement)|paraview|\.vtu', ('show_result',)),
     (r'\bcfd\b|\bfsi\b|fluid.structure|\belmer\b|flow (past|around|over|on)|drag|(water|air|wind|current) (at|of) [0-9.]+ ?m/s|navier|turbulen|k-?omega|pressure distribution|wave load|openfoam|simplefoam', ('elmer_flow', 'openfoam_flow', 'flow_load_stress', 'physics_lab')),
     (r'(stress|pressure|velocity|displacement|value|temperature)s? (at|in|near|on) (the )?(point|node|location|position|x ?=|\()|at (x|coordinate)|probe|read (the )?(value|result)', ('probe_result',)),
+    (r'fluent|star-?ccm|simcenter star|ansys cfd|abaqus cfd|\bccm\b', ('cfd_export', 'find_solvers', 'probe_result')),
     (r'finite[- ]volume|\bfvm\b|1d (cfd|diffusion|convection|conduction)|\btdma\b|simple algorithm|upwind|central differenc', ('fvm_1d',)),
     (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),
     (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),

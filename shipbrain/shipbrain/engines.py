@@ -76,6 +76,10 @@ ENGINES = [
            'mesher, fe_edit, repair_model and fe_quality cover meshing, cleanup and quality checks for free'),
     ('Abaqus', {'static': 'writes', 'modal': 'writes', 'buckling': 'writes', 'ultimate': 'knowledge', 'contact': 'knowledge', 'impact': 'knowledge'}, 'writes', 'fe_convert(file, to=["inp"]) (+ Abaqus script)',
      ['abaqus'], None, 'needs an Abaqus licence'),
+    ('ANSYS Fluent', {'cfd': 'writes', 'heat': 'knowledge'}, 'writes', 'cfd_export(target="fluent", ...) - mesh .msh, setup sheet, PyFluent script; results back as CSV (probe_result / show_result)',
+     ['fluent'], None, 'needs an ANSYS Fluent licence; ShipBrain cannot run it here - the script is written from the PyFluent documentation and not tested'),
+    ('STAR-CCM+', {'cfd': 'writes', 'heat': 'knowledge'}, 'writes', 'cfd_export(target="starccm", ...) - mesh .msh, setup sheet, Java macro; results back as CSV',
+     ['starccm+'], None, 'needs a Simcenter STAR-CCM+ licence; the macro is written from the Java API and not compiled here'),
     ('MoFEM', {'contact', 'ultimate', 'fracture', 'heat'}, 'knowledge', 'knowledge_search(query, scope="mofem")',
      ['mofem_part', 'contact_3d', 'plastic_3d'], 'mofem-cephas', 'open-source C++ FE library (MIT): contact, plasticity, '
                                                                  'thermo-elasticity, adaptive meshing; install via its Docker image / Spack'),

@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 116/116, wrong replies 0/116.
+replies score 118/118, wrong replies 0/118.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1120,6 +1120,16 @@ Checked (`tests/test_pulsation.py`): closed-closed and open-closed pipe modes n 
 water speed of sound with the wall correction, a three-leg route equal to one straight column (corners connect), and simply supported pipe bending modes
 within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
 Training: `training/pulsation_tasks.py`.
+
+### ANSYS, Abaqus, Fluent, STAR-CCM+ (commercial solvers)
+
+These need the user's licence and could not be run where ShipBrain was built, so what is claimed is limited to what was checked:
+- **Fluent / STAR-CCM+ CFD** - `cfd_export` writes the case: the mesh in Fluent's ASCII `.msh` format from ShipBrain's own grid (`fluentmesh.py`; **checked** by reading it back with OpenFOAM's
+  Fluent importer: same cells, `checkMesh` passes, zone names kept), a setup sheet in plain words, and a PyFluent script or a STAR-CCM+ Java macro (**not run, not compiled**: written from the
+  documented APIs; the files say so). The identical case runs in OpenFOAM here for a cross-check of the drag.
+- **Results back** - tables exported from Fluent / STAR-CCM+ / ParaView (CSV with x, y, z and fields; column spellings recognised) are read by `probe_result` and drawn by `show_result` (`tabfield.py`, tested).
+- **Abaqus / ANSYS structure** - ShipBrain's models are written as Abaqus `.inp` / ANSYS `.mac` / Nastran `.bdf` and run in the installed solver by `solve` (adapters follow the documented batch commands,
+  **not tested** without the software); `find_solvers` now also finds Fluent and STAR-CCM+. Their closed result files (.odb, .rst) must be exported.
 
 ### Uploading any file in the chat window
 
