@@ -582,7 +582,7 @@ def test_memory_and_feedback(tmp_path):
     assert 'memory' in r and Memory(str(tmp_path)).recall('stiffener spacing decks')
     t = agent.Tools(tmp_path / 'w', memory=Memory(str(tmp_path)))
     ctx, used = agent.retrieve(t, 'which stiffener spacing on decks?')
-    assert any(u.startswith('memory:') for u in used) and 'taught by the user' in ctx
+    assert any(u.startswith('memory:') for u in used) and 'the user corrected it: Use 800 mm' in ctx and 'Do it this way now' in ctx
 
 
 def test_hybrid_search_with_embedding_server(tmp_path):
