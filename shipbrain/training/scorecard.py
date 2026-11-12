@@ -28,6 +28,7 @@ def _items():
                              if v not in (None, {}, False)}})
 
     # ------------------------------------------------------------ complete: everything given
+    add('complete', 'AISC check of a bolted extended end plate moment joint: beam W360X44, column W410X149, plate 300x550x32, four M30 A325 bolts at 140 gauge, 45 mm to the flanges, 6 mm web weld, 100 kN shear and 400 kN column axial, with a 25 mm stiffener', 'connection_check', {})
     add('complete', 'Lug plate with 6 bolts, 2 columns of 3, gauge 90 and pitch 80, M20 class 10.9, 150 kN carried 220 mm off the bolt centre - are the bolts alright?', 'bolt_group', {'d': 20})
     add('complete', 'Model a column foot for HEB260 with a 35 mm plate and M24 anchors', 'steel_connection', {'kind': 'base_plate'})
     add('complete', 'I want a bolted joint between two IPE330 beams, cover plates top, bottom and both sides of the web', 'steel_connection', {'kind': 'splice'})
@@ -131,6 +132,7 @@ def _items():
     add('missing', 'I need a hexahedral mesh for my casting', ask=True)
     add('missing', 'Make a drawing of a stiffened deck panel', ask=True)
     add('missing', 'fuel line 30 m3/h ka pressure drop?', ask=True)
+    add('missing', 'Does my gusset plate brace connection pass the AISC checks?', ask=True)
     add('missing', 'Give me the 3D model of a beam to column joint', ask=True)
     add('missing', 'Draw the 3D pipe between the pump and the tank for me', ask=True)
     # ------------------------------------------------------------ multi-step: the right first step

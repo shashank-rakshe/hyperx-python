@@ -344,6 +344,17 @@ class Tools:
                       {'type': 'object', 'properties': {'bolts': {'type': 'array'}, 'grid': {'type': 'object'}, 'vx': num, 'vy': num, 'torsion': num,
                                                          'ex': num, 'ey': num, 'capacity_kn': num, 'd': num, 'cls': {'type': 'string'},
                                                          'shear_planes': {'type': 'integer'}}})
+        self.register('connection_check', self.connection_check, 'AISC 360 connection design check with Osoconn (MIT, compiled on first use): '
+                      'shear_clip_angle (double clip angle shear connection), moment_end_plate (extended end plate moment connection, 4 or 8 bolts, '
+                      'column stiffener / doubler plate), vertical_brace and horizontal_brace (gusset plate brace connections). Every limit state '
+                      '(bolt shear / tension / bearing, plate yielding / rupture, welds, column flange / web / panel zone, stiffeners, block shear ...) '
+                      'is returned as an interaction ratio with the governing one and OK / NOT OK. params = Osoconn keywords e.g. SHEAR_FORCE, '
+                      'BOLT_DIAMETER (M22 or 3/4), BEAM_SECTION (AISC W310X74 / W14X30), PLATE_THICKNESS ...; units NEWTON_MM (N, mm, MPa) or KIP_IN; '
+                      'method LRFD | ASD. A missing or wrong input is reported with the allowed values: ask the user or fix it. See skill connection-check.',
+                      {'type': 'object', 'properties': {'kind': {'type': 'string', 'enum': ['shear_clip_angle', 'moment_end_plate', 'vertical_brace', 'horizontal_brace']},
+                                                         'params': {'type': 'object'}, 'units': {'type': 'string', 'enum': ['NEWTON_MM', 'KIP_IN']},
+                                                         'method': {'type': 'string', 'enum': ['LRFD', 'ASD']}, 'name': {'type': 'string'}},
+                       'required': ['kind', 'params']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1348,6 +1359,11 @@ class Tools:
         return BG.solve(Vx=float(vx), Vy=float(vy), torsion=float(torsion), capacity_kn=capacity_kn, bolts=bolts, grid=grid, d=d, cls=cls,
                         shear_planes=int(shear_planes), ex=float(ex), ey=float(ey))
 
+    def connection_check(self, kind, params, units='NEWTON_MM', method='LRFD', name=None):
+        from . import osoconn
+        r = osoconn.run(kind, params, method=method, units=units, workdir=self.workdir, name=name)
+        return r
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -1952,7 +1968,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'p&id|\bpid\b|dexpi|pumps?, tanks|equipment list|instrument', ('dexpi', 'pid_kg')),
     (r'\.stp\b|\.step\b|\.iges?\b|sldprt|catpart|solidworks|catia|inventor|fusion|rhino|freecad|\.prt\b|native', ('native_cad', 'file_info')),
     (r'\.stl\b|scan(ned)? (part|mesh)|reverse', ('reverse_cad', 'stl_to_step')),
-    (r'bolt group|bolt pattern|eccentric|bracket|lug|connection|joint|end ?plate|fin ?plate|shear tab|base ?plate|anchor bolt|splice|cover plate|moment connection', ('steel_connection', 'bolt', 'bolt_group')),
+    (r'aisc|clip angle|gusset|brace|bracing|interaction ratio|resistance|strong enough|passes?|bolt group|bolt pattern|eccentric|bracket|lug|connection|joint|end ?plate|fin ?plate|shear tab|base ?plate|anchor bolt|splice|cover plate|moment connection', ('steel_connection', 'bolt', 'bolt_group', 'connection_check')),
     (r'scan|trace|cent(er|re) ?line|vector(ise|ize)|raster|photo of', ('trace_drawing',)),
     (r'compare|revision|rev\b|what changed|difference between', ('compare_drawings', 'compare_structures')),
     (r'quality|jacobian|warpage|skew|aspect|element check', ('fe_quality', 'mesh_check')),

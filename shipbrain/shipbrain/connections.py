@@ -9,7 +9,7 @@ Kinds (axes: column along Z, web in the Y-Z plane, beam along +Y from the column
   base_plate  column on a base plate with four anchor bolts (optional ribs, concrete block)
   splice      beam splice: flange cover plates and web cover plates, bolted
 
-Sizes: IPE, HEA, HEB names (or {"h","b","tw","tf"} in mm); bolts "M20-8.8". Root fillets of rolled sections are not modelled.
+Sizes: IPE, HEA, HEB names, AISC W shapes (W310X74, W14X30; Osoconn database) (or {"h","b","tw","tf"} in mm); bolts "M20-8.8". Root fillets of rolled sections are not modelled.
 Not here: connection resistance (strength) checks - this is geometry, spacing checks and meshes.
 IDEA StatiCa's own connection library is proprietary; nothing of it is used.
 """
@@ -36,6 +36,11 @@ def section(spec):
         h, b, tw, tf = (float(spec[k]) for k in ('h', 'b', 'tw', 'tf'))
         return {'name': spec.get('name', f'{h:g}x{b:g}x{tw:g}x{tf:g}'), 'h': h, 'b': b, 'tw': tw, 'tf': tf}
     key = str(spec).upper().replace(' ', '').replace('-', '')
+    if key not in SECTIONS and key.startswith('W'):                  # AISC W shapes from Osoconn's database (metric W310X74 or inch W14X30)
+        from .osoconn import aisc_section
+        s = aisc_section(key)
+        if s:
+            return s
     if key not in SECTIONS:
         raise ValueError(f'unknown section {spec!r}: use one of {", ".join(sorted(SECTIONS))} or {{"h","b","tw","tf"}}')
     h, b, tw, tf = SECTIONS[key]

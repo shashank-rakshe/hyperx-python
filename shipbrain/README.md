@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 96/96, wrong replies 0/96.
+replies score 98/98, wrong replies 0/98.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1061,6 +1061,16 @@ the EN 1993-1-8 shear value per shear plane (M20 8.8: 94.1 kN). Checked: a conce
 Bolt shear only: no bearing, tear-out, block shear or plate rupture. Training: `training/boltgroup_tasks.py`.
 Knowledge packs added with it: osoconn, steelpy, ezbolt, bolt (Go), Bolt-Calculation-Tool, BOLTS_archive (parts library, GPL), BAT (GPL),
 ideastatica-public (IDEA StatiCa's public API client and samples, MIT; the program itself is not included).
+
+### Connection resistance checks to AISC 360 (Osoconn)
+
+`connection_check` runs Osoconn (MIT, copied as written in `vendor/osoconn`; the C++ app is compiled on first use, about 40 s, needs
+cmake and g++): double clip angle shear connection, extended end plate moment connection, vertical and horizontal brace gusset
+connections. All limit states come back as interaction ratios with the governing one (bolt shear / tension / bearing, plate yielding and
+rupture, welds, column flange / web / panel zone, stiffeners, block shear ...), LRFD or ASD, N / mm or kip / in. Checked: the upstream
+example inputs reproduce their own results (maximum ratio and every check, 4 connection types), a metric end plate case fails by 4 % on plate
+thickness and passes after thickening to 32 mm, wrong or missing inputs return Osoconn's message. Its AISC section database (557 W shapes,
+angles, channels) also feeds `steel_connection`, so beams and columns can be W shapes. Not Eurocode. Training: `training/osoconn_tasks.py`.
 
 ## Tests
 
