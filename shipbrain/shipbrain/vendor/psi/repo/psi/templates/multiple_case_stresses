@@ -1,0 +1,53 @@
+{% extends "multiple_case_report" %}
+
+{% block header %}
+{{ super() }}
+{{ "%-10s" | format(" ") }}{{ "%-10s" | format(" ") }}{{ "%-s (%s)" | format("STRESSES", units.stress) | center(50) }}
+
+{{ "%-10s" | format("NODE") }}{{ "%-10s" | format("LOAD CASE") }}{{ "%10s" | format("HOOP") }}{{ "%10s" | format("AXIAL") }}{{ "%10s" | format("TORSION") }}{{ "%10s" | format("PRESSURE") }}{{ "%10s" | format("BENDING") }}{{ "%10s" | format("CODE") }}
+{% endblock %}
+
+{% block body %}
+{%- for i, point in enumerate(loadcases[0].points) -%}
+
+{%- set ns = namespace(HOOP=0, AXIAL=0, TORSION=0, PRESSURE=0, BENDING=0, CODE=0) -%}
+
+{%- for loadcase in loadcases -%}
+
+{%- set results = loadcase.stresses.results[i] -%}
+{%- set hoop = results[0] -%}
+{%- set axial = results[1] -%}
+{%- set torsion = results[2] -%}
+{%- set pressure = results[3] -%}
+{%- set bending = results[4] -%}
+{%- set code = results[10] -%}
+
+{%- if abs(hoop) > abs(ns.HOOP) -%}
+    {%- set ns.HOOP = hoop -%}
+{% endif -%}
+{%- if abs(axial) > abs(ns.AXIAL) -%}
+    {%- set ns.AXIAL = axial -%}
+{% endif -%}
+{%- if abs(torsion) > abs(ns.TORSION) -%}
+    {%- set ns.TORSION = torsion -%}
+{% endif -%}
+{%- if abs(pressure) > abs(ns.PRESSURE) -%}
+    {%- set ns.PRESSURE = pressure -%}
+{% endif -%}
+{%- if abs(bending) > abs(ns.BENDING) -%}
+    {%- set ns.BENDING = bending -%}
+{% endif -%}
+{% if loop.first %}
+{{ "%-10s" | format(point.name) }}{{ "%10s" | format(loadcase.name + " (" + loadcase.stype + ") ") }}{{ "% 10.1f" | format(hoop) }}{{ "% 10.1f" | format(axial) }}{{ "% 10.1f" | format(torsion) }}{{ "% 10.1f" | format(pressure) }}{{ "% 10.1f" | format(bending) }}{{ "%10s" | format(code) }}
+{%- elif loop.last %}
+{{ "%-10s" | format(" ") }}{{ "%10s" | format(loadcase.name + " (" + loadcase.stype + ") ") }}{{ "% 10.1f" | format(hoop) }}{{ "% 10.1f" | format(axial) }}{{ "% 10.1f" | format(torsion) }}{{ "% 10.1f" | format(pressure) }}{{ "% 10.1f" | format(bending) }}
+{{ "%-10s" | format(" ") }}{{ "%10s" | format("MAX ") }}{{ "% 10.1f" | format(ns.HOOP) }}{{ "% 10.1f" | format(ns.AXIAL) }}{{ "% 10.1f" | format(ns.TORSION) }}{{ "% 10.1f" | format(ns.PRESSURE) }}{{ "% 10.1f" | format(ns.BENDING) }}{{ "%10s" | format(ns.CODE) }}
+{%- else -%}
+{{ "%-10s" | format(" ") }}{{ "%10s" | format(loadcase.name + " (" + loadcase.stype + ") ") }}{{ "% 10.1f" | format(hoop) }}{{ "% 10.1f" | format(axial) }}{{ "% 10.1f" | format(torsion) }}{{ "% 10.1f" | format(pressure) }}{{ "% 10.1f" | format(bending) }}
+{%- endif -%}
+{% endfor %}
+{% endfor -%}
+{% endblock %}
+
+{% block footer %}
+{% endblock %}

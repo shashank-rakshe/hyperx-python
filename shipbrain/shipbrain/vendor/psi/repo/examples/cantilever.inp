@@ -1,0 +1,66 @@
+"""Simple analysis of a cantilevered pipe"""
+
+# parameter
+L = 10*12
+
+mdl = Model('simple')
+
+# properties
+pipe1 = Pipe.from_file('pipe1', '10', '40')
+mat1 = Material.from_file('mat1', 'A53A', 'B31.1')
+
+# geometry
+pt10 = Point(10)
+run20 = Run(20, L)
+
+# supports
+anc1 = Anchor('A1', 10)
+anc1.apply([run20])
+
+# d1 = Displacement('D1', 1, 10, dy=1.0)
+# d1.apply([run20])
+
+# v1 = GlobalY('V1', 20)
+# v1.apply([run20])
+
+# loads
+W1 = Weight('W1', 1)
+W1.apply([run20])
+
+P1 = Pressure('P1', 1, 250)
+P1.apply([run20])
+
+T1 = Thermal('T1', 1, 500, 70)
+T1.apply([run20])
+
+# F1 = Force('F1', 1, 20, fy=-10000)
+# F1.apply([run20])
+
+# loadcases
+L1 = LoadCase('L1', 'ope', [Weight, Pressure, Thermal], [1, 1, 1])
+L2 = LoadCase('L2', 'sus', [Weight, Pressure], [1, 1])
+L3 = LoadComb('L12', 'exp', 'algebraic', [L1, L2], [1, -1])
+
+# code
+b311 = B31167('B311')
+b311.apply([run20])
+
+# solve
+mdl.analyze()
+# mdl.settings.units = 'si'
+
+# reports
+reac = Reactions('R1', [L1, L2, L3])
+reac.to_screen()
+
+disp = Movements('R2', [L1])
+disp.to_screen()
+
+forc = Forces('R3', [L1])
+forc.to_screen()
+
+mforc = MForces('R4', [L1])
+mforc.to_screen()
+
+str1 = Stresses('S1', [L2])
+str1.to_screen()

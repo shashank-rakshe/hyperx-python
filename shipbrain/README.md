@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 101/101, wrong replies 0/101.
+replies score 103/103, wrong replies 0/103.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1097,6 +1097,17 @@ base plate: the two anchors on the lifting side take the uplift; end plate: shea
 two integration points through the thickness, so the plastic bending capacity is 15 % high - corrected by scaling fy by 0.866; peak strain at bolt holes is mesh dependent and not used
 (bearing is checked per bolt instead); no weld check, no buckling, no slip-critical bolts, no friction. Takes 30 s (fin plate, base plate) to 3 minutes (end plate). Use it to find the weak part
 and compare variants, not as the only design check. Training: `training/cbfem_tasks.py`.
+
+### Pipe stress analysis (psi, ASME B31.1)
+
+`pipe_stress` runs psi - Pipe Stress Infinity (GPL-3.0, Denis Gomes), copied in `vendor/psi` - on a route given in plain words (legs or waypoints,
+the same as `pipe_route`): sustained and expansion code checks against B31.1 allowables, support and anchor loads, movements, in mm / kN / kNm / MPa / deg C.
+Before use psi was checked carefully: on this machine the OpenBLAS inside old numpy returned wrong solutions (found by solving the same matrix with
+scipy and numpy 2), so the reference was psi on its pinned versions with a safe OpenBLAS kernel (47 of its 48 tests pass); ShipBrain's copy has two
+small numpy-2 compatibility edits and one data typo fixed (A53A modulus at 300 F was 10x too high) - see `vendor/psi/SOURCE.md` - and prints the same numbers for
+every psi example and V&V input. ShipBrain's own checks (`tests/test_pipestress.py`): cantilever weight reaction and moment exact; fully restrained thermal force
+E A alpha dT exact; an L-bend within 1.3 % of an independent frame model (psi includes shear deformation); rests carry exactly the pipe + water weight and never
+pull. psi's own limits: no bends yet (corners are sharp joints), one material (A53 grade A), B31.1-1967 only, water only. Training: `training/pipestress_tasks.py`.
 
 ## Tests
 

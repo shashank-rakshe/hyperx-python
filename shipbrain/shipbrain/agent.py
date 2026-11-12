@@ -378,6 +378,16 @@ class Tools:
                           'plate_t': num, 'ext': num, 'rows': {'type': 'integer'}, 'cols': {'type': 'integer'}, 'pitch': num, 'gauge': num,
                           'ribs': {'type': 'boolean'}, 'beam_length': num, 'column_length': num, 'V': num, 'M': num, 'N': num,
                           'fy': num, 'fu': num, 'size': num, 'lf_max': num, 'name': {'type': 'string'}}, 'required': ['kind']})
+        self.register('pipe_stress', self.pipe_stress, 'Pipe STRESS analysis (psi - Pipe Stress Infinity, GPL; ASME B31.1-1967): a pipe route '
+                      '(legs like pipe_route, or waypoints in mm), size (nps + schedule, or od_mm), operating and installation temperature (deg C), '
+                      'pressure (bar), water inside or not, supports [{"at": waypoint index (0 start, -1 end) or [x,y,z] mm, "type": anchor | rest '
+                      '(one-way vertical) | hold | guide | x | y | z}] (default: anchors at both ends), rest_spacing_m = rests every so many metres '
+                      'on horizontal legs. Returns sustained and expansion code stress against the allowables, support / anchor loads, movements. '
+                      'Material is A53 grade A only; corners are sharp joints (no bend flexibility / bend SIF yet in psi) - say so.',
+                      {'type': 'object', 'properties': {'legs': {'type': 'array'}, 'waypoints': {'type': 'array'}, 'nps': {'type': ['number', 'string']},
+                                                         'od_mm': num, 'schedule': {'type': 'string'}, 't_oper_c': num, 't_amb_c': num,
+                                                         'pressure_bar': num, 'water': {'type': 'boolean'}, 'supports': {'type': 'array'},
+                                                         'rest_spacing_m': num, 'name': {'type': 'string'}}})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1424,6 +1434,13 @@ class Tools:
         r['plain_english'] = sentence
         return r
 
+    def pipe_stress(self, legs=None, waypoints=None, nps=None, od_mm=None, schedule='40', t_oper_c=20.0, t_amb_c=21.1, pressure_bar=0.0,
+                    water=True, supports=None, rest_spacing_m=None, name='pipe_stress'):
+        from . import pipestress
+        return pipestress.analyse(legs=legs, waypoints=waypoints, nps=nps, od_mm=od_mm, schedule=schedule, t_oper_c=float(t_oper_c),
+                                  t_amb_c=float(t_amb_c), pressure_bar=float(pressure_bar), water=bool(water), supports=supports,
+                                  rest_spacing_m=rest_spacing_m, workdir=self.workdir, name=name)
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -2020,6 +2037,7 @@ EXT_TOOLS = {'.3dm': ('native_cad', 'file_info'), '.sldprt': ('native_cad',), '.
 KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always needs
     (r'chain|mooring|fairlead|anchor|catenary|touch ?down|\bR[345]S?\b|riser|umbilical|power cable|lazy.?wave', ('mooring', 'cable_run')),
     (r'pipe|piping|m3/h|m3/s|gpm|l/s|head loss|pressure (drop|loss)|pump|ballast|bilge|cooling (water|line)|fire main|fuel (oil|line)|lube', ('pipe_flow',)),
+    (r'pipe stress|piping stress|stress analysis of (the |a |my )?pip|thermal expansion|expansion loop|anchor (load|force)s?|support loads?|b31\.?[13]|flexibility analysis|nozzle load', ('pipe_stress', 'pipe_route')),
     (r'rout(e|ing)|pipe run|run of pipe|isometric|\bbends?\b|elbow|east|west|north|south|go(es)? up|then up', ('pipe_route', 'pipe_flow')),
     (r'plate|plating|panel|psi|kpa|bar\b|pressure|stress|deflect|head of|thick', ('plate_check', 'plate_buckling', 'moose_plate')),
     (r'stiffen|stiffner|profile|\bfb ?\d|\bhp ?\d|t-?bar|l-?bar|angle|section modulus|longitudinal', ('stiffener_check', 'section_props')),

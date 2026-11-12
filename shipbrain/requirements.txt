@@ -19,6 +19,9 @@ xsdata          # OCX: the official OCX classes of every schema version (MIT)
 xmlschema       # OCX: validation against the official XSD (MIT)
 msgpack         # construction drawing sets (CIR, ConstructDrawingAI - non-commercial licence)
 pyyaml          # ConstructDrawingAI configuration
+pint            # pipe stress (psi, vendor/psi): its unit system
+tqdm            # pipe stress (psi): progress messages
+jinja2          # pipe stress (psi): report templates
 langchain<1     # cad3dify (drawing_to_step) with langchain-openai<1, langchain-experimental<1, svglib, rlPyCairo, loguru; MIT
 rapidocr-onnxruntime  # OCR for scanned drawings (Apache-2.0); optional
 opencv-python-headless  # scanned drawings (Apache-2.0); optional
