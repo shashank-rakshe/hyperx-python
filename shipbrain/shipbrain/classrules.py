@@ -145,7 +145,7 @@ def download(out_dir, societies=None, max_files=400, depth=2, log=print):
             try:
                 body, ctype, final = _get(url)
             except Exception as e:
-                log and log(f'  {soc}: {url} - {type(e).__name__}')
+                log and log(f'  {soc}: {url} - {type(e).__name__} {getattr(e, "code", "")}'.rstrip())
                 continue
             if 'pdf' in ctype or final.lower().endswith('.pdf'):
                 name = re.sub(r'[^\w.\-]+', '_', urllib.parse.unquote(os.path.basename(urllib.parse.urlparse(final).path)) or 'rule.pdf')
@@ -169,7 +169,7 @@ def download(out_dir, societies=None, max_files=400, depth=2, log=print):
                 elif not re.search(r'\.(jpg|png|gif|zip|docx?|xlsx?|mp4)$', low) and re.search(r'rule|standard|resolution|guide|class|requirement|offshore|ship|publication', low):
                     queue.append((u, d + 1))
         got[soc] = n
-        log and log(f'{soc}: {n} PDF(s) in {dst}')
+        log and log(f'{soc}: {n} PDF(s) in {dst}' + ('' if n else ' - none downloaded: the site refuses automatic downloads (HTTP 403) or has moved; download the books by hand and attach them as a private Kaggle dataset with "rules" in its name'))
     return got
 
 
