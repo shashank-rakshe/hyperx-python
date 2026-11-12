@@ -240,6 +240,12 @@ All outside data is downloaded on Kaggle, which has internet:
    "rules" in its name, attach it to the training notebook too.
 4. Optional: `training/kaggle/detector_kernel.py` in a GPU notebook trains the drawing symbol detector.
 
+## Training samples for the tools added late
+
+`training/late_tools_tasks.py` (data `training/data/late_tools_train.jsonl.gz`, 220 samples from real tool runs, wired into `kernel.py`): propeller_bem, propeller_design (also the question it asks when inputs are missing),
+blade_geometry, nastran_read, nastran_plate_deck, hull_resistance (and the refusal outside Holtrop's range), gz_curve, hull_motions, hull_generate then stl_stability, catamaran_hull, dbb_blocks, pynite_fea, openhcm_read,
+and answers about what those tools are not. An earlier full run does not include it; an incremental run (`SB_MODE=auto`) trains on it as new data.
+
 ## Kaggle: one pasted cell, and training only on new data
 
 `training/kaggle/PASTE_IN_KAGGLE.md`: a two-line cell downloads `kernel.py` from this repository and runs it; the run fetches code, packs and data itself. **Incremental training** (`training/incremental.py`,
