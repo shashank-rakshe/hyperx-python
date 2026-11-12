@@ -100,6 +100,11 @@ def describe_meshio(path, workdir):
     return info, say
 
 
+def _has(mod):
+    import importlib.util
+    return importlib.util.find_spec(mod) is not None
+
+
 def convert_to_inp(m, out):
     """a meshio mesh -> ShipBrain / CalculiX .inp (shells for surface cells, solids for volume cells); None if there is nothing to convert"""
     from .femodel import FEModel
@@ -260,6 +265,11 @@ def describe(path, workdir=None):
             d, say = describe_csv(path)
         elif ext in ('.zip', '.tar', '.tgz', '.tar.gz'):
             d, say = describe_archive(path, workdir)
+        elif ext == '.op2' and _has('pyNastran'):
+            from . import nastran_bridge as NB
+            r = NB.read_op2(path)
+            d = r
+            say = 'Nastran results (OP2): ' + '; '.join(f"subcase {k}: largest displacement {v['max']:.4g} at node {v['node']}" + (f", largest von Mises {r['von_mises'][k]['max']:.4g}" if k in r['von_mises'] else '') for k, v in r['displacement'].items()) + '.'
         elif ext in ('.op2', '.rst', '.rth', '.odb', '.h3d', '.d3plot', '.fdb'):
             d, say = {}, f"{what}: a closed binary format that ShipBrain cannot open. {how}."
             out['readable'] = False

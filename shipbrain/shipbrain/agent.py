@@ -529,6 +529,12 @@ class Tools:
         self.register('blade_geometry', self.blade_geometry, 'Propeller blade 3D geometry with BladeX (MIT): radii, chord lengths, pitch, rake, skew angles (deg) per radius and a NACA 4-digit section (naca, or nacas per radius) -> '
                       'the suction / pressure surface points and a closed STL (tip and root capped) with its volume; units as given.',
                       {'type': 'object', 'properties': {k: {'type': 'array', 'items': {'type': 'number'}} for k in ('radii', 'chord_lengths', 'pitch', 'rake', 'skew_angles')} | {'naca': {'type': 'string'}, 'nacas': {'type': 'array'}, 'name': {'type': 'string'}}, 'required': ['radii', 'chord_lengths', 'pitch']})
+        self.register('nastran_read', self.nastran_read, 'Read a Nastran file with pyNastran: a bulk data deck (.bdf / .nas / .dat): nodes, elements, element types, properties, materials, loads, supports, mass, centre of mass, '
+                      'bounding box, solution type; or an OP2 result file: largest displacement and largest shell von Mises stress per subcase (file in the work folder).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
+        self.register('nastran_plate_deck', self.nastran_plate_deck, 'Write a Nastran bulk data deck (SOL 101, CQUAD4 / PSHELL / MAT1 / SPC1 / FORCE) of a cantilever plate: length L, width W, thickness t, mesh nx x ny, '
+                      'E, nu, rho (SI: m, N, Pa, kg/m3), end force in N and direction 1|2|3. Runs in any Nastran-format solver; ShipBrain checks it with CalculiX when asked.',
+                      {'type': 'object', 'properties': {k: num for k in ('L', 'W', 't', 'nx', 'ny', 'E', 'nu', 'rho', 'force_N', 'direction')} | {'name': {'type': 'string'}}, 'required': ['L', 'W', 't']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -2106,6 +2112,30 @@ class Tools:
         return {'files': [name + '.stl'], 'sections': n, 'points_per_face': int(up.shape[1]), 'stl': d,
                 'plain_english': f"Blade surface built from {n} radial sections (BladeX): closed STL with {d.get('triangles')} triangles, volume {d.get('volume')} (cubic of the length unit given)."}
 
+    def nastran_read(self, file):
+        from . import nastran_bridge as NB
+        path = self._path(file)
+        if path.lower().endswith('.op2'):
+            r = NB.read_op2(path)
+            d = list(r['displacement'].items())
+            vm = r['von_mises']
+            say = 'Nastran results: ' + '; '.join(f"subcase {k}: largest displacement {v['max']:.4g} at node {v['node']}" + (f", largest von Mises {vm[k]['max']:.4g}" if k in vm else '') for k, v in d) + ' (model units).'
+        else:
+            r = NB.read_bdf(path)
+            say = (f"Nastran model: {r['nodes']} nodes, {r['elements']} elements ({', '.join(r['element_types'])}), {r['materials']} material(s), {r['loads']} load card(s), {r['spcs']} support set(s)"
+                   + (f", mass {r['mass']:.6g}" if r['mass'] else '') + f", SOL {r['sol']}.")
+        r['plain_english'] = say
+        return r
+
+    def nastran_plate_deck(self, L, W, t, nx=20, ny=10, E=210e9, nu=0.3, rho=7850.0, force_N=1000.0, direction=3, name='plate'):
+        from . import nastran_bridge as NB
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        p = NB.write_plate(os.path.join(self.workdir, name + '.bdf'), float(L), float(W), float(t), int(nx), int(ny), float(E), float(nu), float(rho), float(force_N), int(direction))
+        r = NB.read_bdf(p)
+        r['files'] = [name + '.bdf']
+        r['plain_english'] = f"Wrote {name}.bdf: {r['nodes']} nodes, {r['elements']} CQUAD4, clamped at x = 0, {float(force_N):g} N at x = {float(L):g} in direction {int(direction)}, mass {r['mass']:.4g} kg (SI units)."
+        return r
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -2730,6 +2760,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'openhcm|hull condition model|\bhcm\b|\.hcm\b', ('openhcm_read', 'structure_to_mesh')),
     (r'roll period|natural period|heave|pitch(ing)? period|seakeeping|ship motions?|resonan|rao\b', ('hull_motions', 'gz_curve')),
     (r'building block|\bdbb\b|weight (estimate|budget)|requirements? .*(shall|should)|shall.*should|centre of gravity of the (ship|vessel|blocks)', ('dbb_blocks', 'ship_hydrostatics')),
+    (r'nastran|pynastran|\bbdf\b|\bop2\b|\bf06\b', ('nastran_read', 'nastran_plate_deck', 'fe_convert')),
     (r'propeller|screw|open.water (curve|diagram)|\bkt\b|\bkq\b|advance ratio|bollard|thrust coefficient|cavitation number', ('propeller_bem', 'propeller_design', 'blade_geometry', 'hull_resistance')),
     (r'finite[- ]volume|\bfvm\b|1d (cfd|diffusion|convection|conduction)|\btdma\b|simple algorithm|upwind|central differenc', ('fvm_1d',)),
     (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),

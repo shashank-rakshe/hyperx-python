@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 136/136, wrong replies 0/136.
+replies score 138/138, wrong replies 0/138.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1137,6 +1137,15 @@ lifting-line code copied unchanged under `vendor/pythonprop`: design for blades,
 pythonocc and smithers imports are replaced by placeholders because only the geometry is used, IGES export needs pythonocc-core). Checked (`tests/test_propdesign.py`): the designed KT equals T / (rho n^2 D^4)
 within 1 %, efficiency lies under the actuator-disk limit, the curve falls with J, and the STL of a constant NACA 0012 blade is closed with the volume within 3 % of area x span (every triangle faces outwards).
 Limits: lifting-line theory, no cavitation or strength check; the chord and thickness shape are PythonProp's example distributions scaled to the diameter; OpenProp (MATLAB) is not run (pack only). Skill `propeller-design`.
+
+### Nastran, code_aster, ensim4, FLOW (four more repositories)
+
+Packs (full): `pyNastran` (BSD-3, 37 000 chunks incl. the docs site content in `docs/`), `code_aster` (GPL-3, 78 000 chunks: sources, command catalogues, documentation, astest cases), `ensim4` (MIT, C engine and
+exhaust 1D-CFD simulator) and `flow` (MIT, browser FEA / CFD platform), rows in `NOTICE.md`. Working: tools `nastran_read` (BDF deck summary with mass and bounding box; OP2 largest displacement and von Mises per subcase;
+`.op2` files dropped in the chat window are now read) and `nastran_plate_deck` (cantilever plate deck). Checked (`tests/test_nastran.py`, with the small `plate.bdf` / `plate.op2` of the pyNastran repository, BSD-3, in
+`tests/data/pynastran`): counts and the OP2 maxima, mass = rho L W t, total force on the deck = the requested force, and the deck solved by CalculiX (through `FEModel`) gives a tip deflection and root stress within 5 %
+of beam theory. Not run here: code_aster (large install; skill `code-aster` helps to write and understand `.comm` / `.export`), ensim4 (needs SDL3 and audio) and FLOW (its solvers are small 2D teaching codes, the skill says so).
+Skills `nastran-pynastran`, `code-aster`, `engine-1d-cfd`, `flow-browser-sim`. Environment note: pyNastran 1.4 needs NumPy below 2.4 (the bridge patches `np.in1d`, but `np.chararray` is gone in 2.4+): use NumPy 2.3.
 
 ### Own tools for what the unlicensed repositories do: motions, design blocks, hull dataset
 

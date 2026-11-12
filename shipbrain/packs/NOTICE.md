@@ -559,3 +559,31 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: GPL-3.0
 - Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
 - PythonProp contributors, Python port of OpenProp
+
+## ensim4
+
+- Source: https://github.com/glouw/ensim4
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2025 Gustav Louw
+
+## flow
+
+- Source: https://github.com/Vitalcheffe/flow
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2026 FLOW Contributors
+
+## pyNastran
+
+- Source: https://github.com/SteveDoyle2/pyNastran
+- Licence: BSD-3-Clause
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2011-2026 Steven Doyle
+
+## code_aster
+
+- Source: https://gitlab.com/codeaster/src
+- Licence: GPL-3.0
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- Copyright (c) EDF R&D, code_aster contributors
