@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 99/99, wrong replies 0/99.
+replies score 101/101, wrong replies 0/101.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1082,6 +1082,21 @@ closest worked verification example in the pack, adapts it to the user's numbers
 `engthiago/xcfem`, and when neither is there the tool returns an install card and keeps the script. Tested with a stand-in module (script
 run, output and files, failing script, install card, routing); NOT tested against a real XC here. Training (27 conversations,
 `training/xc_tasks.py`) teaches routing, asking for missing inputs and the honest not-installed path; no XC result is ever invented.
+
+### CBFEM for steel connections (own implementation)
+
+`steel_cbfem` runs a component-based finite element analysis of a steel connection from plain words, built from the published method (Wald, Sokol et al.; EN 1993-1-5
+annex C) on ShipBrain's shell mesher and CalculiX - NOT IDEA StatiCa's solver or code (that program is commercial; the `ideastatica-public` repository only holds its API client).
+Plates: elastic - plastic shells (fy, optional fu hardening), bolt holes with an RBE3-like ring; bolts: springs with EN 1993-1-8 tension (0.9 fub As / 1.25), shear
+and bearing capacity; contact: compression-only node pairs found by an active-set iteration (cheap elastic solves, then the non-linear ramp); welds: shared nodes; limit state:
+5 % plastic strain away from the bolt holes and loads, bolt tension / shear / bearing / interaction T/(1.4 Ft) + V/Fv; the answer is the load factor of the first limit.
+Kinds: end plate, fin plate, base plate (splice refused - not validated). Loads: shear V, moment M, axial N at the connection.
+Validation (see `tests/test_cbfem.py`): plastic bending of a cantilever plate within +13 % of the analytic collapse load; T-stub flange yielding 121 kN against 102 kN EN 1993-1-8 (+19 %);
+T-stub bolt-limited 102 kN against 121 kN (-16 %, conservative: the bolt reaches its capacity before the flange hinge forms); fin plate: the whole shear is found in the bolts and bearing governs;
+base plate: the two anchors on the lifting side take the uplift; end plate: shear shared by the bolts, tension in the upper rows. Known limits: CalculiX expands shell elements into bricks with
+two integration points through the thickness, so the plastic bending capacity is 15 % high - corrected by scaling fy by 0.866; peak strain at bolt holes is mesh dependent and not used
+(bearing is checked per bolt instead); no weld check, no buckling, no slip-critical bolts, no friction. Takes 30 s (fin plate, base plate) to 3 minutes (end plate). Use it to find the weak part
+and compare variants, not as the only design check. Training: `training/cbfem_tasks.py`.
 
 ## Tests
 

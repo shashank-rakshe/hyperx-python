@@ -363,6 +363,21 @@ class Tools:
                       'Needs XC installed (Docker image engthiago/xcfem or a local install): if not, the answer says how to install it.',
                       {'type': 'object', 'properties': {'script': {'type': 'string', 'description': 'full Python text of the XC model; it must print or write its results'},
                                                          'name': {'type': 'string'}}, 'required': ['script']})
+        self.register('steel_cbfem', self.steel_cbfem, 'CBFEM (component-based finite element) analysis of a steel connection from plain words, '
+                      'own implementation of the published method on CalculiX (NOT IDEA StatiCa): plates as elastic-plastic shells (steel fy / fu, '
+                      'plastic strain limit 5 %), bolts as springs with EN 1993-1-8 tension and shear capacity, contact between plates, welds as shared '
+                      'nodes. Kinds: end_plate, fin_plate, base_plate (see steel_connection for the geometry words; splices are not available). Loads = member '
+                      'forces at the connection: V shear kN (downward), M moment kNm (beams: positive = hogging; column base: about the strong axis), '
+                      'N axial kN. Returns the load factor at which the first limit is hit (plastic strain 5 %, bolt tension / shear / interaction, '
+                      'collapse), whether the design load passes, bolt forces and utilisation, peak plastic strain. Takes minutes. Accuracy: '
+                      'within about +20 % / -16 % of the EN 1993-1-8 T-stub formulas: use it to find the weak plate or bolt and to compare '
+                      'variants, not as the only design check. Does not check welds, buckling or slip-critical bolts.',
+                      {'type': 'object', 'properties': {
+                          'kind': {'type': 'string', 'enum': ['end_plate', 'fin_plate', 'base_plate']},
+                          'beam': {'type': ['string', 'object']}, 'column': {'type': ['string', 'object']}, 'bolt': {'type': 'string'},
+                          'plate_t': num, 'ext': num, 'rows': {'type': 'integer'}, 'cols': {'type': 'integer'}, 'pitch': num, 'gauge': num,
+                          'ribs': {'type': 'boolean'}, 'beam_length': num, 'column_length': num, 'V': num, 'M': num, 'N': num,
+                          'fy': num, 'fu': num, 'size': num, 'lf_max': num, 'name': {'type': 'string'}}, 'required': ['kind']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1283,11 +1298,8 @@ class Tools:
         r['svg'], r['dxf'] = os.path.basename(r['svg']), os.path.basename(r['dxf'])
         return r
 
-    def steel_connection(self, kind, beam=None, column=None, bolt='M20-8.8', plate_t=None, ext=0.0, rows=None, cols=None, pitch=None,
-                         gauge=None, ribs=False, beam_length=None, column_length=None, mesh='none', size=None, load_kn=None,
-                         solve=False, name=None):
-        from . import connections as K
-        import csv
+    @staticmethod
+    def _connection_kwargs(K, kind, plate_t, ext, rows, cols, pitch, gauge, ribs, beam_length, column_length):
         kd = K.kind_of(kind)
         kw = {}
         if plate_t:
@@ -1315,6 +1327,14 @@ class Tools:
         if kd == 'base_plate' and 'Lb' in kw:
             kw.pop('Lb')
         kw = {k: v for k, v in kw.items() if v is not None}
+        return kd, kw
+
+    def steel_connection(self, kind, beam=None, column=None, bolt='M20-8.8', plate_t=None, ext=0.0, rows=None, cols=None, pitch=None,
+                         gauge=None, ribs=False, beam_length=None, column_length=None, mesh='none', size=None, load_kn=None,
+                         solve=False, name=None):
+        from . import connections as K
+        import csv
+        kd, kw = self._connection_kwargs(K, kind, plate_t, ext, rows, cols, pitch, gauge, ribs, beam_length, column_length)
         nm = re.sub(r'[^A-Za-z0-9_\-]', '_', name or kd)[:40]
         step = os.path.join(self.workdir, nm + '.step')
         c = K.build(kd, beam=beam, column=column, bolt_spec=bolt, out=step, name=nm, **kw)
@@ -1375,6 +1395,34 @@ class Tools:
     def xc_run(self, script, name='xc_model'):
         from . import xcfem
         return xcfem.run(script, self.workdir, name)
+
+    def steel_cbfem(self, kind, beam=None, column=None, bolt='M20-8.8', plate_t=None, ext=0.0, rows=None, cols=None, pitch=None, gauge=None,
+                    ribs=False, beam_length=None, column_length=None, V=0.0, M=0.0, N=0.0, fy=355.0, fu=0.0, size=30.0, lf_max=2.0, name=None):
+        from . import connections as K, cbfem
+        kd, kw = self._connection_kwargs(K, kind, plate_t, ext, rows, cols, pitch, gauge, ribs, beam_length, column_length)
+        nm = re.sub(r'[^A-Za-z0-9_\-]', '_', name or kd + '_cbfem')[:40]
+        c = K.build(kd, beam=beam, column=column, bolt_spec=bolt, name=nm, **kw)
+        spec = cbfem.from_connection(c, V=float(V), M=float(M), N=float(N), size=float(size), fy=float(fy), fu=float(fu), lf_max=float(lf_max))
+        r = cbfem.run(spec, self.workdir, nm)
+        r['kind'], r['details'] = kd, c.info
+        r['curve'] = r['curve'][::max(1, len(r['curve']) // 20)]
+        worst = max(r['at_design_load']['bolts'], key=lambda b: b['utilisation_interaction'], default=None)
+        cap = r['capacity_factor']
+        sentence = (f"CBFEM of the {kd.replace('_', ' ')} ({c.info.get('beam', c.info.get('column'))}, {c.bolt['name']} bolts, steel fy {fy:g} MPa), design loads "
+                    f"V {V:g} kN, M {M:g} kNm, N {N:g} kN: ")
+        if cap is None:
+            sentence += f"no limit reached up to {r['lf_reached']:.2f} times the design load (plastic strain 5 %, bolt capacities): the connection passes with at least that reserve. "
+        else:
+            sentence += (f"the first limit is {r['limit']} at {cap:.2f} times the design load, so the connection "
+                         f"{'passes' if cap >= 1 else 'FAILS'} the design load" + (f" with a reserve of {(cap - 1) * 100:.0f} %" if cap >= 1 else '') + '. ')
+        sentence += f"At the design load the peak plastic strain is {r['at_design_load']['max_plastic_strain_percent']:.2f} % (limit 5 %)"
+        if worst:
+            sentence += (f" and the most loaded bolt ({worst['bolt']}) carries {worst['tension_kN']:g} kN tension and {worst['shear_kN']:g} kN shear "
+                         f"(utilisation {worst['utilisation_interaction']:.2f}).")
+        sentence += (' This is ShipBrain\'s own CBFEM, checked within about +20 % / -16 % of the EN 1993-1-8 T-stub formulas: use it to find the weak part and compare variants. '
+                     'Welds, buckling and slip-critical bolts are not checked.')
+        r['plain_english'] = sentence
+        return r
 
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
@@ -1981,6 +2029,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'\.stp\b|\.step\b|\.iges?\b|sldprt|catpart|solidworks|catia|inventor|fusion|rhino|freecad|\.prt\b|native', ('native_cad', 'file_info')),
     (r'\.stl\b|scan(ned)? (part|mesh)|reverse', ('reverse_cad', 'stl_to_step')),
     (r'\bxc\b|xcfem|reinforced concrete|rebar|eurocode ?[23]|\bEC[23]\b|\bEHE\b|ACI ?318|fibre? section|code check|limit state|interaction diagram|construction phase', ('xc_run', 'knowledge_search')),
+    (r'cbfem|component.based|plastic strain|connection (capacity|resistance)|bolt(s)? (tension|prying)|prying|t-?stub', ('steel_cbfem', 'steel_connection')),
     (r'aisc|clip angle|gusset|brace|bracing|interaction ratio|resistance|strong enough|passes?|bolt group|bolt pattern|eccentric|bracket|lug|connection|joint|end ?plate|fin ?plate|shear tab|base ?plate|anchor bolt|splice|cover plate|moment connection', ('steel_connection', 'bolt', 'bolt_group', 'connection_check')),
     (r'scan|trace|cent(er|re) ?line|vector(ise|ize)|raster|photo of', ('trace_drawing',)),
     (r'compare|revision|rev\b|what changed|difference between', ('compare_drawings', 'compare_structures')),
@@ -1999,7 +2048,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
 ]
 
 
-def select_tools(tools, question, k=16):
+def select_tools(tools, question, k=20):
     """the tools worth showing in full for this question: core ones, strong keyword and file-type hits, the best word
     matches with tool names / descriptions, then the routed engine's tools (a small model chooses far better from ~16
     than from 85; every other tool is still listed by name)"""

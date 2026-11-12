@@ -461,3 +461,24 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: GPL-3.0
 - Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
 - Copyright (C) xc authors (Luis C. Pérez Tato and contributors), see the repository
+
+## psi
+
+- Source: https://github.com/denisgomes/psi
+- Licence: GPL
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- Copyright: the psi authors, see the repository
+
+## AlgoHex
+
+- Source: https://github.com/cgg-bern/AlgoHex
+- Licence: AGPL-3.0
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- Copyright: the AlgoHex authors, see the repository
+
+## OpenPulse
+
+- Source: https://github.com/MOPT-UFSC/OpenPulse
+- Licence: GPL
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- Copyright: the OpenPulse authors, see the repository

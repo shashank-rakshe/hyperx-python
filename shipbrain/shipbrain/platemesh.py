@@ -1191,7 +1191,7 @@ def build_plates(spec, out_dir='.', formats=('bdf', 'inp')):
     s.setdefault('name', 'assembly')
     s.setdefault('material', M.DEFAULT_SPEC['material'])
     h = float(s.get('element_size', 100))
-    m = mesh_plates(s['plates'], h, all_quad=s.get('all_quad', True), beams=s.get('beams'), snap_tol=s.get('snap_tol'),
+    m = mesh_plates(s['plates'], h, close_gap=s.get('close_gap', True), all_quad=s.get('all_quad', True), beams=s.get('beams'), snap_tol=s.get('snap_tol'),
                     min_seg=s.get('min_seg'), bracket_ties=s.get('bracket_ties', True), repair=s.get('repair', True))
     m.spec = {'name': s['name'], 'material': s['material'], 'pressure': 0}
     m.loads = []
