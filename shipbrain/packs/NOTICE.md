@@ -496,3 +496,10 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) the repository owner, see its LICENSE
+
+## vesseljs
+
+- Source: https://github.com/shiplab/vesseljs (commit 0ae1a063e003)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2017 shiplab (Vessel.js authors: NTNU Ship Design and Operation Lab, H. M. Gaspar and contributors). Example vessel names in its docs are replaced by "ExampleVessel" here.

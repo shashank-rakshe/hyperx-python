@@ -461,6 +461,12 @@ class Tools:
                                                          'body_file': {'type': 'string'}, 'length': num, 'height': num, 'width': num, 'plate_x': num, 'plate_t': num, 'plate_h': num,
                                                          'plate_w': num, 'turbulence': {'type': 'string', 'enum': ['laminar', 'sst']}, 'cell': num, 'name': {'type': 'string'}},
                        'required': ['target', 'velocity']})
+        self.register('ship_hydrostatics', self.ship_hydrostatics, 'Hydrostatics and initial stability of a hull with Vessel.js (MIT, NTNU; runs in Node.js): draft, trim, heel, KB, BM, KG, GM and a hydrostatic table '
+                      '(volume, waterplane area, Cb, LCB, LCF, KB, BM at several drafts). Hull = box / wigley / a Vessel.js specification file the user uploaded (spec_file); the weights are '
+                      'point masses [{name, mass_t, cg: [x from aft, y to port, z above keel]}] in tonnes and metres; water density default 1025 (sea), 1000 for fresh. Small-angle stability only '
+                      '(GM, not the full GZ curve).',
+                      {'type': 'object', 'properties': {'hull': {'type': 'string', 'enum': ['box', 'wigley']}, 'length': num, 'beam': num, 'depth': num, 'design_draft': num,
+                                                         'weights': {'type': 'array'}, 'spec_file': {'type': 'string'}, 'drafts': {'type': 'array'}, 'density': num}, 'required': []})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1759,6 +1765,32 @@ class Tools:
                               f"The same case runs in OpenFOAM here (openfoam_flow) for a cross-check.")
         return r
 
+    def ship_hydrostatics(self, hull='box', length=None, beam=None, depth=None, design_draft=None, weights=None, spec_file=None, drafts=None, density=1025.0):
+        from . import vesselbridge as VB
+        if spec_file:
+            spec = json.load(open(self._path(spec_file), encoding='utf-8'))
+            hull_a = spec['structure']['hull']['attributes']
+            ds = drafts or [round(hull_a['Depth'] * f, 3) for f in (0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8)]
+            out = VB.run(spec, drafts=ds)
+            st = out['stability']
+            out['summary'] = {'mass_t': round(st['mass_kg'] / 1000, 3), 'draft_m': round(st['T'], 4), 'KB_m': round(st['KB'], 4), 'BMt_m': round(st['BMt'], 4), 'KG_m': round(st['KG'], 4),
+                              'GMt_m': round(st['GMt'], 4), 'GMl_m': round(st['GMl'], 3), 'trim_deg': round(st['trim_deg'], 4), 'draft_fwd_m': st['draftfp'], 'draft_aft_m': st['draftap'],
+                              'heel_offset_m': st['heel_m'], 'LCG_m': round(st['cg']['x'], 4), 'rho_kg_m3': 1025.0}
+        else:
+            miss = [n for n, v in (('length', length), ('beam', beam), ('depth', depth)) if not v]
+            if miss or not weights:
+                return {'error': 'I need ' + ', '.join(miss + ([] if weights else ['the weights (mass in t and centre of gravity [x from aft, y, z above keel] in m)'])) + ' - or upload a Vessel.js specification (spec_file)'}
+            out = VB.analyse(float(length), float(beam), float(depth), hull, weights, T_design=design_draft, drafts=drafts, rho=float(density))
+        s = out['summary']
+        out['table'] = [{k: round(h[k], 4) for k in ('T', 'Vs', 'displacement_t', 'Awp', 'Cb', 'Cwp', 'LCB', 'LCF', 'KB', 'BMt', 'BMl') if k in h} for h in out['hydrostatics']] if out.get('hydrostatics') else []
+        verdict = ('GM is NEGATIVE: the ship is unstable (it capsizes or lolls) at this loading.' if s['GMt_m'] < 0 else
+                   (f"GM {s['GMt_m']} m is below 0.15 m, the usual minimum for initial stability (the full intact-stability criteria also need the GZ curve)." if s['GMt_m'] < 0.15 else
+                    f"GM {s['GMt_m']} m is positive (the usual minimum for initial stability is 0.15 m; the full criteria also need the GZ curve, which this tool does not compute)."))
+        trim = f", trimmed {s['trim_deg']:.3g} degrees (draft forward {s['draft_fwd_m']:.3f} m, aft {s['draft_aft_m']:.3f} m)" if s.get('draft_fwd_m') is not None and abs(s['trim_deg']) > 1e-3 else ''
+        out['plain_english'] = (f"Floating at {s['mass_t']:g} t the hull sits at a draft of {s['draft_m']} m{trim}. KB {s['KB_m']} m, BM {s['BMt_m']} m, KG {s['KG_m']} m, so GM = KB + BM - KG = {s['GMt_m']} m. "
+                                + verdict + ' (Vessel.js, small angles, sea water ' + str(round(s['rho_kg_m3'])) + ' kg/m3.)')
+        return out
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -2374,6 +2406,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'\bcfd\b|\bfsi\b|fluid.structure|\belmer\b|flow (past|around|over|on)|drag|(water|air|wind|current) (at|of) [0-9.]+ ?m/s|navier|turbulen|k-?omega|pressure distribution|wave load|openfoam|simplefoam', ('elmer_flow', 'openfoam_flow', 'flow_load_stress', 'physics_lab')),
     (r'(stress|pressure|velocity|displacement|value|temperature)s? (at|in|near|on) (the )?(point|node|location|position|x ?=|\()|at (x|coordinate)|probe|read (the )?(value|result)', ('probe_result',)),
     (r'fluent|star-?ccm|simcenter star|ansys cfd|abaqus cfd|\bccm\b', ('cfd_export', 'find_solvers', 'probe_result')),
+    (r'hydrostatic|stability|metacentr|\bgm\b|\bkb\b|\bkg\b|freeboard|displacement of (the )?(hull|vessel|ship|barge)|draft (of|at|for)|trim and|vessel\.?js|loading condition', ('ship_hydrostatics',)),
     (r'finite[- ]volume|\bfvm\b|1d (cfd|diffusion|convection|conduction)|\btdma\b|simple algorithm|upwind|central differenc', ('fvm_1d',)),
     (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),
     (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),

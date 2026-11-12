@@ -41,6 +41,8 @@ def _items():
     add('complete', 'In the stress result of fls_fe.inp, what is the von Mises stress and displacement at x = 300, y = 0, z = 500 mm?', 'probe_result', {'x': 300, 'y': 0, 'z': 500})
     add('complete', 'Read me the pressure and velocity in the flow case my_flow at x = 1.2 m, y = 0.2 m, z = 0.025 m', 'probe_result', {'x': 1.2, 'y': 0.2, 'z': 0.025})
     add('complete', 'Set up the 1 m/s water flow past my plate 0.4 m high for ANSYS Fluent with SST turbulence - mesh and script please', 'cfd_export', {'target': 'fluent'})
+    add('complete', 'Pontoon 36 m long, 10 m wide, 3.5 m deep, lightship 250 t with its centre of gravity 1.6 m above the keel, carrying 400 t at 1.1 m: what draft and what GM in sea water?', 'ship_hydrostatics', {'length': 36, 'beam': 10, 'depth': 3.5})
+    add('complete', 'Is this barge stable? 28 x 7 x 3.2 m, 380 t total, KG 2.4 m, sits in a river', 'ship_hydrostatics', {'length': 28, 'beam': 7, 'depth': 3.2})
     add('complete', 'I ran it in STAR-CCM+ and exported star_result.csv - what is the pressure at x = 0.5, y = 0.2, z = 0?', 'probe_result', {'x': 0.5, 'y': 0.2, 'z': 0})
     add('complete', 'Hot water header NPS 8 schedule 40 runs 10 m west, then 4 m south; fixed points at both ends; 120 C and 6 bar, full of water - check stresses to B31.1', 'pipe_stress', {'t_oper_c': 120})
     add('complete', 'Run the component based finite element analysis for a shear tab: IPE360 beam to a HEB300 column, four M20 8.8 bolts, 150 kN reaction', 'steel_cbfem', {'V': 150})

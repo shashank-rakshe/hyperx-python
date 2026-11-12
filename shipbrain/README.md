@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 118/118, wrong replies 0/118.
+replies score 120/120, wrong replies 0/120.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1120,6 +1120,18 @@ Checked (`tests/test_pulsation.py`): closed-closed and open-closed pipe modes n 
 water speed of sound with the wall correction, a three-leg route equal to one straight column (corners connect), and simply supported pipe bending modes
 within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
 Training: `training/pulsation_tasks.py`.
+
+### Hydrostatics and initial stability (Vessel.js)
+
+`ship_hydrostatics` runs Vessel.js (MIT; NTNU Ship Design and Operation Lab, H. M. Gaspar and contributors; the library's ES modules are copied unchanged in `vendor/vesseljs`, a small
+runner of ours drives them in Node.js - needs Node, free). Hull = box, Wigley or a half-breadth table / an uploaded Vessel.js ship specification; weights = tonnes and centres of gravity.
+Result: draft, trim, heel, KB, BM, KG, GM, drafts forward and aft, and a hydrostatic table; GM below 0 is called out as unstable. Knowledge pack `vesseljs` (docs and code, 4,500 chunks;
+the example vessel name in its docs is replaced by "ExampleVessel").
+
+Checked (`tests/test_vesselbridge.py`): the box barge equals the exact formulas (draft, KB = T/2, BM = B2/12T, GM to 0.002 m); the Wigley hull equals its analytical hydrostatics within 1 %
+(Cb = 4/9, KB = 5T/8, BM = 3B2/35T); the library's own reference case (draft 3.322 m, trim 0.129, GM 2.402 m) is reproduced; fresh water, an off-centre load (heel) and errors. Limits: small angles
+only (no GZ curve, no free-surface correction, no damage stability); the library also has ship motions, Holtrop resistance, manoeuvring and fuel modules that are not wired in yet.
+Training: `training/vessel_tasks.py`.
 
 ### ANSYS, Abaqus, Fluent, STAR-CCM+ (commercial solvers)
 
