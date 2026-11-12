@@ -486,6 +486,15 @@ class Tools:
                       'catamaran STL, plus the generator\'s data; analyse them with stl_stability. Needs numba.',
                       {'type': 'object', 'properties': {'l_to_b': num, 'b_to_t': num, 'tt_to_t': num, 'volume_m3': num, 'lwl': num, 'separation': num, 'name': {'type': 'string'}},
                        'required': ['l_to_b', 'b_to_t', 'tt_to_t']})
+        self.register('openhcm_read', self.openhcm_read, 'Read an OpenHCM (Hull Condition Model, the open ship-structure XML format of class societies and CAD vendors) file in the workspace: counts of plates and '
+                      'stiffeners, thicknesses, areas, mass, compartments, stiffener types; with mesh = true the flat plates and the stiffeners become a CalculiX shell mesh (element_size mm, coordinates assumed mm).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'mesh': {'type': 'boolean'}, 'element_size': num, 'name': {'type': 'string'}}, 'required': ['file']})
+        self.register('pynite_fea', self.pynite_fea, 'Frame, truss and plate finite-element analysis with PyNite (MIT; pip install PyNiteFEA): 3D beams with releases, nodal and member loads, load combinations, '
+                      'rectangular plate meshes with pressure and simply supported / clamped edges. model = {materials: {name: {E, nu}}, sections: {name: {A, Iy, Iz, J}}, nodes: {name: [x, y, z]}, members: '
+                      '[{name, i, j, material, section, releases?}], supports: {node: fixed | pinned | roller_y | [6 flags]}, node_loads: [{node, dir FX|FY|FZ|MX|MY|MZ, value}], member_loads: [{member, dir '
+                      'Fy|Fz|Fx, w1, w2}], plates: [{name, width, height, t, mesh, material, pressure, edges: {left|right|bottom|top: simple|clamped}}]}. Units are yours, kept consistent (N, mm, MPa). Returns '
+                      'displacements, reactions, member forces and plate deflection.',
+                      {'type': 'object', 'properties': {'model': {'type': 'object'}}, 'required': ['model']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1889,6 +1898,40 @@ class Tools:
             say += f" Catamaran with the centre planes {float(separation):g} m apart: {files[-1]} ({2 * d['volume_m3']:.0f} m3). Give it to stl_stability with the draft {d['T']:.3f} m and the KG for hydrostatics and the GZ curve."
         return {'demihull': {k: d[k] for k in ('lwl', 'b', 'T', 'volume_m3')}, 'files': files, 'plain_english': say}
 
+    def openhcm_read(self, file, mesh=False, element_size=100.0, name='openhcm'):
+        from . import openhcm as OH
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        m = OH.read(self._path(file))
+        sm = OH.summary(m)
+        out = {'summary': sm, 'compartment_names': m['compartments'][:50]}
+        say = (f"OpenHCM model: {sm['plates']} plates ({sm['plates_with_contour']} with contours, {sm['plates_with_triangle_mesh']} as triangle meshes), {sm['stiffeners']} stiffeners "
+               f"({', '.join(sm['stiffener_types']) or 'no types'}), {sm['compartments']} compartments, plate thicknesses {sm['thicknesses'][:8]}. If the coordinates are mm: plate area {sm['plate_area_m2_if_mm']} m2, "
+               f"plate steel {sm['plate_mass_t_if_mm']} t, stiffener length {sm['stiffener_length_m_if_mm']} m.")
+        if mesh:
+            from .platemesh import build_plates
+            spec, rep = OH.to_plate_spec(m, float(element_size), name)
+            if not spec['plates']:
+                return {**out, 'error': 'no flat contour plates to mesh: ' + '; '.join(rep['plates_skipped'][:3])}
+            mm_, info = build_plates(spec, self.workdir)
+            out.update({'mesh': {k: info[k] for k in ('nodes', 'elements') if k in info}, 'conversion': rep, 'files': [name + '.inp']})
+            say += f" Shell mesh {name}.inp written: {info.get('nodes')} nodes, {info.get('elements')} elements" + (f"; {len(rep['plates_skipped'])} plate(s) skipped ({rep['plates_skipped'][0]})" if rep['plates_skipped'] else '') + '.'
+        out['plain_english'] = say
+        return out
+
+    def pynite_fea(self, model):
+        from . import pynite_bridge as PB
+        r = PB.analyse(model)
+        r.pop('model', None)
+        say = [f"PyNite solved the model (combination {r['combo']}): largest displacement {r['max_displacement']:.4g}."]
+        for n, rx in list(r['reactions'].items())[:6]:
+            say.append(f"reaction at {n}: FX {rx['FX']:.5g}, FY {rx['FY']:.5g}, FZ {rx['FZ']:.5g}, MZ {rx['MZ']:.5g}.")
+        for n, mem in list(r['members'].items())[:6]:
+            say.append(f"member {n}: moment about z {mem['min_M_z']:.5g} to {mem['max_M_z']:.5g}, shear {mem['min_V_y']:.5g} to {mem['max_V_y']:.5g}, deflection {mem['min_deflection_y']:.5g} to {mem['max_deflection_y']:.5g}.")
+        for n, pl in r['plates'].items():
+            say.append(f"plate {n}: largest deflection {pl['max_deflection']:.5g} ({pl['elements']} elements).")
+        r['plain_english'] = ' '.join(say) + ' Linear elastic; units are the ones you gave.'
+        return r
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -2509,6 +2552,8 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'resistance of (the |a |my )?(hull|ship|vessel)|(ship|hull) resistance|effective power|holtrop|\bpe\b|propulsion power|power (needed|required) (at|for)|knots?\b.*(power|resistance)|(power|resistance).*knots?\b', ('hull_resistance', 'hull_generate')),
     (r'\bgz\b|righting (lever|arm)|stability (curve|criteria)|imo (intact|stability)|is code|angle of (vanishing|maximum)|dynamic stability|area under (the )?gz|capsiz', ('gz_curve', 'stl_stability', 'ship_hydrostatics')),
     (r'catamaran|demihull|slender hull|fast ?ships|twin.?hull|multi.?hull', ('catamaran_hull', 'stl_stability')),
+    (r'pynite|space frame|portal frame|truss analysis|continuous beam|plate bending|beam on elastic|\bp-?delta\b|load combination', ('pynite_fea', 'frame_solve')),
+    (r'openhcm|hull condition model|\bhcm\b|\.hcm\b', ('openhcm_read', 'structure_to_mesh')),
     (r'finite[- ]volume|\bfvm\b|1d (cfd|diffusion|convection|conduction)|\btdma\b|simple algorithm|upwind|central differenc', ('fvm_1d',)),
     (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),
     (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),

@@ -524,3 +524,17 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: GPL-3.0
 - Use: COPYLEFT: knowledge + training allowed by the owner (shipbrain/licence_mode.json); ShipBrain and models trained with it stay open under the same terms
 - Copyright (c) 2023 NTNU, John Martin Kleven Godo
+
+## Pynite
+
+- Source: https://github.com/JWock82/Pynite
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2018 D. Craig Brinck
+
+## OpenHCMViewer
+
+- Source: https://github.com/OpenHCMStandard/OpenHCMViewer
+- Licence: Apache-2.0
+- Use: ok: permissive licence, keep the attribution (NOTICE / AUTHORS of the repository)
+- Copyright (c) Bureau Veritas Marine & Offshore and the OpenHCM Consortium

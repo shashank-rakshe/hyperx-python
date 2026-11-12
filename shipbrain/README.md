@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 128/128, wrong replies 0/128.
+replies score 130/130, wrong replies 0/130.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1120,6 +1120,16 @@ Checked (`tests/test_pulsation.py`): closed-closed and open-closed pipe modes n 
 water speed of sound with the wall correction, a three-leg route equal to one straight column (corners connect), and simply supported pipe bending modes
 within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
 Training: `training/pulsation_tasks.py`.
+
+### PyNite, OpenHCM, the global hull FE study, and the skills
+
+`pynite_fea` runs PyNite (MIT, `pip install PyNiteFEA`): 3D frames with releases, nodal / member loads and combinations, rectangular plates with pressure and simply supported / clamped edges (`pynite_bridge.py`).
+Checked (`tests/test_pynite_openhcm.py`): cantilever and simply supported beam equal beam theory (0.2 %), a simply supported square plate equals Timoshenko's 0.00406 q a4 / D within 1 % and a clamped one 0.00126 within 2 %.
+`openhcm_read` reads OpenHCM XML (the open ship-structure format of class societies and CAD vendors) with ShipBrain's own reader (`openhcm.py`; the Apache-2.0 web viewer is the knowledge pack `OpenHCMViewer` and was the
+reference for the element names): counts, thicknesses, areas, mass, compartments, and a CalculiX shell mesh of the flat plates and stiffeners. It was tested on a model written to that description: **no real OpenHCM file was
+available**, so a real file may need reader fixes. Packs `Pynite` (MIT) and `OpenHCMViewer` (Apache-2.0) are in; the global-hull-FEA repository (ANSYS command files of a tanker, D. Melozzi) and ShipD have no licence: private packs for
+the owner's computer only, never in the repo or in training.
+Nine skills were added, each repository in three parts - modelling, analysis, tool knowledge: `pynite-*`, `openhcm-*` and `global-hull-fea-*` (the last written from general naval architecture knowledge, not from the unlicensed repository).
 
 ### Any hull STL: stability with NavalToolbox, catamarans with FAST-SHIPS
 
