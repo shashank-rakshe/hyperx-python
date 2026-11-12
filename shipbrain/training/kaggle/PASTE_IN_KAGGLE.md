@@ -22,3 +22,7 @@ The cell downloads the code and all the data itself (git clone of the repository
 
 Adding data later = just add it to the repository (a new pack, a new `training/data/*.jsonl.gz`, new tasks) and run the same cell again. Samples are recognised by content, so the same sample is never learned twice.
 If the saved state is lost, or the base model in `training/base_model.json` changes, the run falls back to full training and says why. A run that the accept gate rejects does NOT update the saved state, so the next run tries the same new data again.
+
+## Time budget
+
+A run is stopped by Kaggle after 12 h, and the free GPU quota is about 30 h per week. `SB_BUDGET_H` (default 11) makes the run skip the optional last steps (small draft model, speed measurement) when less than 2 h of the budget are left, so the main model and its GGUF are never lost to them. Set `import os; os.environ['SB_BUDGET_H']='8'` before the `%run` line to be more careful.

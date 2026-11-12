@@ -21,6 +21,10 @@ STATUS_BRANCH = 'kaggle-runs'          # progress, log tail and scores are writt
 UPLOAD_MODEL = True                    # also attach the GGUF files to a GitHub release (public repo -> public model)
 LOG = '/kaggle/working/run.log'
 RUN_ID = __import__('time').strftime('%Y%m%d-%H%M')
+T0 = __import__('time').time()
+BUDGET_H = float(os.environ.get('SB_BUDGET_H', 11))   # Kaggle stops a session at 12 h: optional last steps (draft model, speed measurement) are skipped when this much time is already used
+def hours():
+    return (__import__('time').time() - T0) / 3600
 
 try:
     from kaggle_secrets import UserSecretsClient
@@ -294,6 +298,9 @@ report('scoring the trained model')
 sh('python training/cad_eval.py --local /kaggle/working/shipbrain_model/lora --limit 30 --out /kaggle/working/cad_eval_after.json', required=False)
 sh(f'python training/evaluate.py --local /kaggle/working/shipbrain_model/lora --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_after.json', required=False)
 sh('python training/scorecard.py --local /kaggle/working/shipbrain_model/lora --out /kaggle/working/scorecard_after.json', required=False)
+if DRAFT and not INCREMENTAL and hours() > BUDGET_H - 2:
+    print(f'draft model skipped: {hours():.1f} h used of the {BUDGET_H:g} h budget', flush=True)
+    DRAFT = ''
 if DRAFT and not INCREMENTAL:
     report('training the small draft model')
 if DRAFT and not INCREMENTAL:      # same data, 1 epoch (skipped in incremental runs: it would see only the new data; the earlier draft file stays valid): the draft learns the tool format, so the main model accepts more of its guesses
@@ -378,7 +385,7 @@ elif token:
         api.upload_file(path_or_fileobj=f, path_in_repo=os.path.basename(f), repo_id=repo)
     print('uploaded to https://huggingface.co/' + repo)
 # last: measure ShipBrain's model on this GPU with Simthesizer (no weights needed) -> /kaggle/working/shipbrain_serving
-if os.environ.get('SB_SERVING_PROFILE', '1') != '0':
+if os.environ.get('SB_SERVING_PROFILE', '1') != '0' and hours() < BUDGET_H - 2:
     report('measuring serving speed on this GPU (Simthesizer)')
     sh('SB_INSIDE_TRAINING=1 timeout 5400 python training/kaggle/serving_profile_kernel.py', required=False)
 shutil.rmtree('/kaggle/working/src', ignore_errors=True)
