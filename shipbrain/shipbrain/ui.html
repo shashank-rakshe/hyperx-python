@@ -44,7 +44,7 @@ details.tool pre{margin:0;padding:8px 10px;overflow:auto;max-height:320px;border
 #empty h2{color:var(--ink);font-weight:600}
 .ex{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:18px}
 .ex button{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;max-width:340px;font-size:14px;text-align:left}
-#composer{padding:10px 16px 16px}
+#composer{padding:10px 16px 16px}#ups .up{background:var(--tool);border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:13px;display:flex;gap:8px}#ups .up b{white-space:nowrap}#ups .up span{flex:1}#ups .up button{background:none;border:0;color:var(--mute)}body.drag #composer #box{outline:2px dashed var(--acc)}
 #box{display:flex;gap:8px;align-items:flex-end;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px}
 #in{flex:1;border:0;outline:0;resize:none;background:none;color:var(--ink);font:inherit;max-height:200px;min-height:24px;padding:4px}
 #send{background:var(--acc);color:#fff;border:0;border-radius:9px;padding:7px 14px}#send:disabled{opacity:.5}
@@ -76,10 +76,10 @@ details.tool pre{margin:0;padding:8px 10px;overflow:auto;max-height:320px;border
 <main id="main">
   <div id="top"><b>Ship<span>Brain</span></b><button class="btn" onclick="newChat()">New</button><button class="btn" onclick="toggleRight()">3D</button><button class="btn" onclick="openSettings()">⚙</button></div>
   <div id="log"><div class="wrap" id="msgs"></div></div>
-  <div id="composer"><div class="wrap">
+  <div id="composer"><div class="wrap"><div id="ups"></div>
     <div id="box">
-      <button id="up" title="Upload STEP / IGES / STL / drawing" onclick="document.getElementById('file').click()">+</button>
-      <input type="file" id="file" hidden onchange="upload(this.files[0])">
+      <button id="up" title="Upload any file: CAD, mesh, results, PDF, PowerPoint, Word, Excel, DXF, drawings, zip of a case ... (or drop / paste files here)" onclick="document.getElementById('file').click()">+</button>
+      <input type="file" id="file" hidden multiple onchange="uploadMany([...this.files]);this.value=''">
       <textarea id="in" rows="1" placeholder="Ask, or give a command: mesh a deck panel 4.8 x 3.2 m, t=12, FB150x12 at 800…"></textarea>
       <button id="send" onclick="send()">Send</button>
     </div>
@@ -189,9 +189,20 @@ async function send(){
   // the model needs to see tool results in later turns
   a.steps.filter(s=>s.kind==='tool'&&s.result).forEach(s=>{a.content+='\n[tool '+s.name+' -> '+JSON.stringify(s.result).slice(0,800)+']'});
   save();render();$('send').disabled=false}
-async function upload(f){if(!f)return;const b64=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result.split(',')[1]);fr.readAsDataURL(f)});
-  const r=await (await fetch('/api/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:f.name,data:b64})})).json();
-  $('in').value=($('in').value+' ').trimStart()+'[uploaded '+r.saved+'] ';$('in').focus();loadFiles()}
+async function upload(f){if(!f)return;const card=document.createElement('div');card.className='up';card.innerHTML='<b>'+esc(f.name)+'</b><span>uploading…</span><button onclick="this.parentNode.remove()">✕</button>';$('ups').appendChild(card);
+  try{const b64=await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result.split(',')[1]);fr.onerror=rej;fr.readAsDataURL(f)});
+    const r=await (await fetch('/api/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:f.name,data:b64})})).json();
+    $('in').value=($('in').value+' ').trimStart()+'[uploaded '+r.saved+'] ';
+    card.querySelector('span').textContent='saved - reading it…';loadFiles();
+    const i=await (await fetch('/api/inspect?file='+encodeURIComponent(r.saved))).json();
+    card.querySelector('span').textContent=i.plain_english||i.error||'saved'}
+  catch(e){card.querySelector('span').textContent='could not upload: '+e}
+  $('in').focus()}
+async function uploadMany(fs){for(const f of fs)await upload(f)}
+['dragenter','dragover'].forEach(ev=>document.addEventListener(ev,e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files')){e.preventDefault();document.body.classList.add('drag')}}));
+['dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{if(ev==='drop'||e.target===document.documentElement)document.body.classList.remove('drag')}));
+document.addEventListener('drop',e=>{if(e.dataTransfer&&e.dataTransfer.files.length){e.preventDefault();uploadMany(e.dataTransfer.files)}});
+document.addEventListener('paste',e=>{const fs=[...(e.clipboardData||{}).files||[]];if(fs.length){e.preventDefault();uploadMany(fs)}});
 async function loadFiles(){try{const r=await (await fetch('/api/files')).json();
   $('files').innerHTML=r.files.map(f=>'<a href="/files/'+encodeURIComponent(f)+'">'+esc(f)+'</a>').join('')||'<span style="color:var(--mute)">no files yet</span>'}catch(e){}}
 async function status(){try{const s=await (await fetch('/api/status')).json();

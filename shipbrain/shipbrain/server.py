@@ -67,6 +67,18 @@ class H(BaseHTTPRequestHandler):
             if img and 'inline' in urllib.parse.parse_qs(u.query):
                 return self._send(200, open(p, 'rb').read(), img)                 # pictures are shown in the chat
             self._send(200, open(p, 'rb').read(), 'application/octet-stream', {'Content-Disposition': f'attachment; filename="{name}"'})
+        elif u.path == '/api/inspect':
+            q = {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
+            try:
+                from . import intake
+                path = os.path.join(STATE['tools'].workdir, os.path.basename(q['file']))
+                try:
+                    r = STATE['tools'].file_info(os.path.basename(q['file']))
+                except Exception:
+                    r = intake.describe(path, STATE['tools'].workdir)                # whatever file_info cannot read is still described, never refused
+                self._send(200, {'file': os.path.basename(q['file']), 'plain_english': r.get('plain_english', ''), 'readable': r.get('readable', True)})
+            except Exception as e:
+                self._send(400, {'error': f'{type(e).__name__}: {e}'})
         elif u.path in ('/api/field', '/api/probe'):
             q = {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
             wd = STATE['tools'].workdir

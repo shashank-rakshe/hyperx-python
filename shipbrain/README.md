@@ -1121,6 +1121,15 @@ water speed of sound with the wall correction, a three-leg route equal to one st
 within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
 Training: `training/pulsation_tasks.py`.
 
+### Uploading any file in the chat window
+
+The + button takes several files at once; files can also be dropped on the window or pasted. Each is saved in the workspace and read at once (`intake.py`, behind `file_info`):
+a note under the message box says what it is and what was found. Read: STEP / IGES / native CAD (SolidWorks, CATIA, NX ...), STL (closed? volume), FE decks (.bdf .nas .fem .inp),
+foreign mesh formats through meshio (.msh .vtk .vtu .unv .med .cgns .obj .ply ... - converted to a ShipBrain `.inp` so the mesh, analysis and picture tools work on them; result fields
+are listed), CalculiX `.frd` results, DXF, PDF, images, PowerPoint, Word, Excel, CSV, OCX, and zip / tar archives (an OpenFOAM or Elmer case inside is recognised and unpacked).
+Not readable, said plainly with what to export: closed binary results of other solvers (Nastran .op2, ANSYS .rst, Abaqus .odb, LS-DYNA, HyperView .h3d) and ANSYS .fdb; old binary
+Office files need LibreOffice. An unknown file is described (text or binary sniffed), never refused. Tested in `tests/test_intake.py` and in a headless browser with 12 formats at once.
+
 ### Results in the chat window
 
 Every picture a tool makes (`files` in its result: png, jpg, svg) is shown in the chat, click to enlarge. A structural result also opens an interactive view in the right

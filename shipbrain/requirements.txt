@@ -1,34 +1,38 @@
-# app core: Python standard library + numpy
-numpy
-scipy           # fast Delaunay for the own mesher (pure-Python fallback built in), image comparison
-cadquery        # STEP import (cad_mesh), STEP export (drawing_to_3d), cadquery_build
-rhino3dm       # Rhino .3dm import (McNeel, MIT): exact NURBS, layers, blocks
-pyNastran       # robust Nastran .bdf reading (a built-in reader is used if missing)
-ezdxf           # DXF drawings: drawing_to_3d, compare_drawings, file_info
-pdfplumber      # vector PDF drawings: lines, line styles, words (MIT)
-liteparse       # document reading: PDF -> text / markdown with layout and tables, OCR (Apache-2.0)
-pypdfium2       # PDF rendering + text for the knowledge base (Apache-2.0/BSD)
-pydantic        # pid-to-kg (P&ID -> knowledge graph, copied repo): MIT
-duckdb          # pid-to-kg graph store, MIT
-networkx        # pid-to-kg graph queries, BSD
-wasmtime        # runs Awatif's frame solver (frame_solve); Apache-2.0
-pillow          # images for drawing comparison
-shapely         # ship drawing reader (shiptools/deckrules_tool), BSD
-lxml            # ship drawing reader XML, BSD
-xsdata          # OCX: the official OCX classes of every schema version (MIT)
-xmlschema       # OCX: validation against the official XSD (MIT)
-msgpack         # construction drawing sets (CIR, ConstructDrawingAI - non-commercial licence)
-pyyaml          # ConstructDrawingAI configuration
-pint            # pipe stress (psi, vendor/psi): its unit system
-tqdm            # pipe stress (psi): progress messages
-jinja2          # pipe stress (psi): report templates
-h5py            # pulsation (OpenPulse, vendor/openpulse): its project files
-ordered-set     # pulsation (OpenPulse)
-langchain<1     # cad3dify (drawing_to_step) with langchain-openai<1, langchain-experimental<1, svglib, rlPyCairo, loguru; MIT
-rapidocr-onnxruntime  # OCR for scanned drawings (Apache-2.0); optional
-opencv-python-headless  # scanned drawings (Apache-2.0); optional
-# GNU Octave (octave-cli) on PATH: optional, runs MATLAB-language (.m) code (free alternative to MATLAB)
-# CalculiX (ccx) on PATH: optional, solve_calculix / fatigue solve
 # ANSYS (PyMAPDL: ansys-mapdl-core) and Abaqus: optional, need their own licences; ShipBrain writes inputs + scripts
+# CalculiX (ccx) on PATH: optional, solve_calculix / fatigue solve
+# GNU Octave (octave-cli) on PATH: optional, runs MATLAB-language (.m) code (free alternative to MATLAB)
+# app core: Python standard library + numpy
 # everything here is free open source (no AGPL / paid-licence libraries). no gmsh: meshing is done by shipbrain/platemesh.py (own conforming mesher)
 # training (GPU machine / Colab only): unsloth trl datasets
+cadquery        # STEP import (cad_mesh), STEP export (drawing_to_3d), cadquery_build
+duckdb          # pid-to-kg graph store, MIT
+ezdxf           # DXF drawings: drawing_to_3d, compare_drawings, file_info
+h5py            # pulsation (OpenPulse, vendor/openpulse): its project files
+jinja2          # pipe stress (psi): report templates
+langchain<1     # cad3dify (drawing_to_step) with langchain-openai<1, langchain-experimental<1, svglib, rlPyCairo, loguru; MIT
+liteparse       # document reading: PDF -> text / markdown with layout and tables, OCR (Apache-2.0)
+lxml            # ship drawing reader XML, BSD
+meshio
+msgpack         # construction drawing sets (CIR, ConstructDrawingAI - non-commercial licence)
+networkx        # pid-to-kg graph queries, BSD
+numpy
+opencv-python-headless  # scanned drawings (Apache-2.0); optional
+openpyxl
+ordered-set     # pulsation (OpenPulse)
+pdfplumber      # vector PDF drawings: lines, line styles, words (MIT)
+pillow          # images for drawing comparison
+pint            # pipe stress (psi, vendor/psi): its unit system
+pyNastran       # robust Nastran .bdf reading (a built-in reader is used if missing)
+pydantic        # pid-to-kg (P&ID -> knowledge graph, copied repo): MIT
+pypdfium2       # PDF rendering + text for the knowledge base (Apache-2.0/BSD)
+python-docx
+python-pptx
+pyyaml          # ConstructDrawingAI configuration
+rapidocr-onnxruntime  # OCR for scanned drawings (Apache-2.0); optional
+rhino3dm       # Rhino .3dm import (McNeel, MIT): exact NURBS, layers, blocks
+scipy           # fast Delaunay for the own mesher (pure-Python fallback built in), image comparison
+shapely         # ship drawing reader (shiptools/deckrules_tool), BSD
+tqdm            # pipe stress (psi): progress messages
+wasmtime        # runs Awatif's frame solver (frame_solve); Apache-2.0
+xmlschema       # OCX: validation against the official XSD (MIT)
+xsdata          # OCX: the official OCX classes of every schema version (MIT)

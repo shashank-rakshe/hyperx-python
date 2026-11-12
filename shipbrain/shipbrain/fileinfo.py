@@ -117,9 +117,9 @@ def file_info(path):
         say.append(f"{name} is an XML file ({_size(size)}) with {sum(tags.values())} elements under <{root}>; the most common are "
                    + ', '.join(f'<{k}> x{v}' for k, v in tags.most_common(6)) + '.')
     else:
-        txt = open(path, encoding='utf-8', errors='replace').read(200000)
-        lines = txt.splitlines()
-        info.update(lines=len(lines), first_lines=lines[:5])
-        say.append(f"{name} is a text file with {len(lines)} lines. It can be added to the knowledge folder so I can search it.")
+        from . import intake
+        r = intake.describe(path, os.path.dirname(os.path.abspath(path)))
+        info.update({k: v for k, v in r.items() if k not in ('plain_english', 'file', 'size')})
+        say.append(r['plain_english'].split('): ', 1)[-1])
     info['plain_english'] = ' '.join(say)
     return info

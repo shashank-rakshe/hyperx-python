@@ -2312,7 +2312,12 @@ EXT_TOOLS = {'.3dm': ('native_cad', 'file_info'), '.sldprt': ('native_cad',), '.
              '.dxf': ('compare_drawings', 'drawing_check', 'drawing_to_model'), '.dwg': ('compare_drawings', 'drawing_check'),
              '.pdf': ('compare_drawings', 'parse_document', 'drawing_check', 'trace_drawing'), '.png': ('trace_drawing', 'look', 'compare_drawings'),
              '.jpg': ('trace_drawing', 'look'), '.tif': ('trace_drawing',), '.3docx': ('ocx_read', 'ocx_validate'),
-             '.dwxml': ('process_sim',), '.dwxmz': ('process_sim',), '.dat': ('cable_run',), '.i': ('moose_run',), '.sim': ('nx_open',)}
+             '.dwxml': ('process_sim',), '.dwxmz': ('process_sim',), '.dat': ('cable_run',), '.i': ('moose_run',), '.sim': ('nx_open',),
+             '.msh': ('file_info', 'mesh_check', 'analysis_run'), '.vtk': ('file_info', 'show_result'), '.vtu': ('file_info', 'probe_result', 'show_result'),
+             '.unv': ('file_info', 'mesh_check'), '.med': ('file_info',), '.cgns': ('file_info',), '.obj': ('file_info', 'reverse_cad'), '.ply': ('file_info', 'reverse_cad'),
+             '.frd': ('show_result', 'probe_result', 'file_info'), '.zip': ('file_info',), '.tgz': ('file_info',), '.pptx': ('file_info', 'parse_document', 'look'),
+             '.docx': ('file_info', 'parse_document'), '.xlsx': ('file_info', 'parse_document'), '.csv': ('file_info', 'calc'), '.sif': ('file_info', 'elmer_flow'),
+             '.op2': ('file_info',), '.rst': ('file_info',), '.odb': ('file_info',), '.comm': ('file_info',)}
 
 
 KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always needs
