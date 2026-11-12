@@ -467,6 +467,13 @@ class Tools:
                       '(GM, not the full GZ curve).',
                       {'type': 'object', 'properties': {'hull': {'type': 'string', 'enum': ['box', 'wigley']}, 'length': num, 'beam': num, 'depth': num, 'design_draft': num,
                                                          'weights': {'type': 'array'}, 'spec_file': {'type': 'string'}, 'drafts': {'type': 'array'}, 'density': num}, 'required': []})
+        self.register('hull_generate', self.hull_generate, 'Design a ship HULL from parameters (ShipBrain\'s own parametric generator, metres and degrees): principal dimensions L, B, D, T; midship section '
+                      '(bilge radius r_bilge, deadrise, flare); plan form (ent, run, n_ent, n_run fullness exponents, transom); optional bulb (bulb_len, bulb_b, bulb_h, bulb_z). Returns the '
+                      'coefficients (Cb, Cp, Cm, Cwp, LCB, KB, wetted area), a watertight STL, a picture, and with a KG the hydrostatics and GM through Vessel.js. target_cb solves the fullness '
+                      'for a given block coefficient. With samples = N it draws N random valid hulls and writes a CSV of their parameters and coefficients (a hull dataset).',
+                      {'type': 'object', 'properties': {k: num for k in ('L', 'B', 'D', 'T', 'r_bilge', 'deadrise', 'flare', 'ent', 'run', 'n_ent', 'n_run', 'transom', 'bulb_len', 'bulb_b', 'bulb_h',
+                                                                         'bulb_z', 'vee', 'target_cb', 'kg', 'seed')} | {'name': {'type': 'string'}, 'samples': {'type': 'integer'}, 'kind': {'type': 'string', 'enum': ['ship', 'boat']}},
+                       'required': []})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1791,6 +1798,53 @@ class Tools:
                                 + verdict + ' (Vessel.js, small angles, sea water ' + str(round(s['rho_kg_m3'])) + ' kg/m3.)')
         return out
 
+    def hull_generate(self, name='hull', samples=None, kind='ship', seed=0, target_cb=None, kg=None, **hp):
+        import csv, random
+        from . import hullgen as HG, viz, intake
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        if samples:
+            rng = random.Random(int(seed))
+            rows = []
+            for _ in range(min(int(samples), 2000)):
+                q = HG.random_hull(rng, kind)
+                c = HG.coefficients(q, nx=201, nz=61)
+                rows.append(dict(q, **{k: round(v, 5) for k, v in c.items() if not isinstance(v, dict)}))
+            path = os.path.join(self.workdir, name + '_dataset.csv')
+            with open(path, 'w', newline='') as f:
+                w = csv.DictWriter(f, fieldnames=list(rows[0]))
+                w.writeheader()
+                w.writerows(rows)
+            cb = [r['Cb'] for r in rows]
+            return {'file': os.path.basename(path), 'files': [os.path.basename(path)], 'hulls': len(rows), 'Cb_range': [min(cb), max(cb)],
+                    'plain_english': f"{len(rows)} random valid {kind} hulls written to {os.path.basename(path)}: their parameters and Cb, Cp, Cm, Cwp, LCB, KB, volume and wetted area. Block coefficients run from {min(cb):.3f} to {max(cb):.3f}."}
+        p = HG.params(**{k: v for k, v in hp.items() if v is not None})
+        if target_cb:
+            p = HG.solve_cb(p, float(target_cb))
+        c = HG.coefficients(p)
+        stl = os.path.join(self.workdir, name + '.stl')
+        HG.write_stl(p, stl)
+        png = os.path.join(self.workdir, name + '.png')
+        viz.render(stl, png, view='iso', units='m')
+        info, _ = intake.describe_stl(stl)
+        out = {'parameters': p, 'coefficients': {k: round(v, 5) for k, v in c.items() if not isinstance(v, dict)}, 'section_area_curve': c['section_area_curve'],
+               'files': [name + '.stl', name + '.png'], 'stl': {'triangles': info['triangles'], 'closed': info['closed']}}
+        say = (f"Hull {p['L']:g} x {p['B']:g} x {p['D']:g} m, draft {p['T']:g} m: Cb {c['Cb']:.3f}, Cp {c['Cp']:.3f}, Cm {c['Cm']:.3f}, Cwp {c['Cwp']:.3f}, LCB {c['LCB_percent_L']:+.2f} % of L from midships, "
+               f"displacement {c['volume_m3'] * 1.025:,.0f} t in sea water, wetted area {c['wetted_area_m2']:,.0f} m2." + (f" Fullness exponents solved for Cb {target_cb}: n = {p['n_ent']:.3g}." if target_cb else ''))
+        if kg is not None:
+            try:
+                from . import vesselbridge as VB
+                tab, bmax = HG.vessel_table(p)
+                r = VB.analyse(HG.loa(p), bmax, p['D'], 'box', [{'name': 'ship', 'mass_t': c['volume_m3'] * 1.025, 'cg': [c['LCB_m'], 0, float(kg)]}], table=tab, drafts=[p['T']])
+                sm = r['summary']
+                out['hydrostatics'] = sm
+                say += f" With KG {float(kg):g} m (Vessel.js on this hull): KB {sm['KB_m']} m, BM {sm['BMt_m']} m, GM {sm['GMt_m']} m, draft {sm['draft_m']} m."
+            except Exception as e:
+                say += f" (Vessel.js hydrostatics not run: {str(e)[:120]})"
+        if p['bulb_len'] > 0:
+            say += ' The STL holds the hull and the bulb as two closed shells that overlap at the stem.'
+        out['plain_english'] = say + ' Files: ' + ', '.join(out['files']) + '.'
+        return out
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -2407,6 +2461,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'(stress|pressure|velocity|displacement|value|temperature)s? (at|in|near|on) (the )?(point|node|location|position|x ?=|\()|at (x|coordinate)|probe|read (the )?(value|result)', ('probe_result',)),
     (r'fluent|star-?ccm|simcenter star|ansys cfd|abaqus cfd|\bccm\b', ('cfd_export', 'find_solvers', 'probe_result')),
     (r'hydrostatic|stability|metacentr|\bgm\b|\bkb\b|\bkg\b|freeboard|displacement of (the )?(hull|vessel|ship|barge)|draft (of|at|for)|trim and|vessel\.?js|loading condition', ('ship_hydrostatics',)),
+    (r'hull (form|shape|design|generat|param)|parametric hull|design (a |the )?hull|block coefficient|\bcb\b|bulb|hull dataset|ship-?d\b|prismatic coeff|waterplane coeff|section area curve', ('hull_generate', 'ship_hydrostatics')),
     (r'finite[- ]volume|\bfvm\b|1d (cfd|diffusion|convection|conduction)|\btdma\b|simple algorithm|upwind|central differenc', ('fvm_1d',)),
     (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),
     (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),

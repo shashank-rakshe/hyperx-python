@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 120/120, wrong replies 0/120.
+replies score 122/122, wrong replies 0/122.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1120,6 +1120,19 @@ Checked (`tests/test_pulsation.py`): closed-closed and open-closed pipe modes n 
 water speed of sound with the wall correction, a three-leg route equal to one straight column (corners connect), and simply supported pipe bending modes
 within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
 Training: `training/pulsation_tasks.py`.
+
+### Hull generator (own code; Ship-D idea, no Ship-D code)
+
+`hull_generate` designs a ship hull from parameters - principal dimensions, midship section (bilge radius, deadrise, flare), plan form (entrance and run lengths, fullness exponents, transom), V-shaped
+ends, optional bulb - and returns the coefficients (Cb, Cp, Cm, Cwp, LCB, KB, wetted area, section area curve), a watertight STL, a picture, and with a KG the GM through Vessel.js; `target_cb`
+solves for a block coefficient; `samples = N` writes a CSV of N random valid hulls. It is `hullgen.py`, written from scratch because the Ship-D repository (https://github.com/noahbagz/ShipD) has
+no licence: its code and data are NOT in the repo and not used for training (the owner can build a private pack on their own computer with `repopack build --private-only`). If its authors add
+a licence, it can be added properly.
+
+Checked (`tests/test_hullgen.py`): the rounded-bilge and deadrise midship sections equal their closed forms (to 0.0002 in Cm); Cwp equals the exact integral of the plan form; a symmetric hull has
+LCB at midships; Vessel.js reading the same hull's table gives the same volume (1 %), KB, LCB and waterplane area as the own integration; the STL is watertight (hull and bulb as two closed shells) with
+the right volume (1.2 %); target Cb is hit within 0.002 or refused with the reachable range; invalid hulls are refused. Limits: similar-section lofting with tapered ends - concept studies and sensitivity,
+not a faired lines plan. Training: `training/hull_tasks.py`.
 
 ### Hydrostatics and initial stability (Vessel.js)
 

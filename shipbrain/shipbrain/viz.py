@@ -118,7 +118,7 @@ def nodal_results(model, ids, X, frd):
 
 
 # ====================================================================== picture
-def render(src, out_png, frd=None, field=None, view='iso', scale=None, title=None, size=(9, 6.5), dpi=130, cmap='turbo', edges=None):
+def render(src, out_png, frd=None, field=None, view='iso', scale=None, title=None, size=(9, 6.5), dpi=130, cmap='turbo', edges=None, units='mm'):
     """draw the model (and a result field) to a PNG; returns a dict with the value range"""
     import matplotlib
     matplotlib.use('Agg')
@@ -172,7 +172,7 @@ def render(src, out_png, frd=None, field=None, view='iso', scale=None, title=Non
     ax.set_box_aspect((1, 1, 1))
     el, az = VIEWS.get(view, VIEWS['iso'])
     ax.view_init(elev=el, azim=az)
-    ax.set_xlabel('x [mm]'); ax.set_ylabel('y [mm]'); ax.set_zlabel('z [mm]')
+    ax.set_xlabel(f'x [{units}]'); ax.set_ylabel(f'y [{units}]'); ax.set_zlabel(f'z [{units}]')
     if vals is not None:
         sm = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
         cb = fig.colorbar(sm, ax=ax, shrink=0.7, pad=0.08)
