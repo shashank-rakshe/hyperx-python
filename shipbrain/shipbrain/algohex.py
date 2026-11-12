@@ -149,8 +149,7 @@ def cells_from_ovm(data):
                 other += 1
                 continue
             h = bot + top
-            from .hexmesh import scaled_jacobian
-            if float(np.min(scaled_jacobian(V, [h]))) < 0:
+            if hex_volume(V, [h]) < 0:                       # orientation from the cell's volume (not from one bad corner)
                 h = bot[::-1] + top[::-1]
             hexes.append(h)
         else:

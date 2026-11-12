@@ -1131,7 +1131,12 @@ on RWTH Aachen's GitLab, which the sandbox cannot reach, and ShipBrain does not 
 it from its sources on GitHub's computers, runs it on its own demo and on ShipBrain parts, and publishes the checked meshes as the release `algohex-latest`;
 on the user's computer ShipBrain runs the user's own AlgoHex build or container image. Checked here (`tests/test_algohex.py`): the tet split conserves volume
 and is conforming, hex meshes written with randomly oriented faces come back in C3D8 order with the same quality, AlgoHex's demo tet mesh reads with the right
-volume, a STEP part gives a valid tet input.
+volume, a STEP part gives a valid tet input, and a hex with one folded corner is counted as inverted instead of being flipped.
+**First real run on GitHub** (build 7 min, run 10 min, commit 27cd6e7e; results in the release `algohex-latest`): AlgoHex's own demo cylinder 9,792 hexes,
+none inverted, smallest scaled Jacobian 0.34, mean 0.98; an L-bracket 10,290 hexes, all perfect (1.0, volume exact); but a cylinder (10,220 hexes) has 5 inverted
+cells (smallest Jacobian -0.07) and a block with a hole (11,543 hexes) 15 (-0.52), volumes within 0.26 % and 0.22 %. So AlgoHex works, but its curved-part meshes
+are not guaranteed valid: ShipBrain's check counts the inverted cells and the answer says so - treat such a mesh as needing repair before use. These inputs are
+tetrahedra split from ShipBrain's own voxel hex mesh, so their surface is stair-stepped, which is not the intended AlgoHex input (a smooth surface mesh).
 
 ## Tests
 

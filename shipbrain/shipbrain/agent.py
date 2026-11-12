@@ -1480,7 +1480,9 @@ class Tools:
         rep['plain_english'] = (f"AlgoHex turned {prep['tets']:,} tetrahedra into {rep.get('hexahedra', 0):,} hexahedra "
                                 f"(smallest scaled Jacobian {rep.get('min_scaled_jacobian', 0):.2f}, {rep.get('inverted', 0)} inverted"
                                 + (f", volume {rep['volume_error_percent']:+.2f} % against the exact" if 'volume_error_percent' in rep else '')
-                                + f") and ShipBrain wrote {rep['inp']} (CalculiX C3D8).")
+                                + f") and ShipBrain wrote {rep['inp']} (CalculiX C3D8)."
+                                + (f" WARNING: {rep['inverted']} hexahedra are inverted or folded (smallest scaled Jacobian {rep['min_scaled_jacobian']:.2f}): "
+                                   "repair or remesh those cells before running an analysis; the other cells are fine." if rep.get('inverted') else ''))
         return rep
 
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):

@@ -113,3 +113,18 @@ def test_tool_without_algohex_gives_install_card(tmp_path, monkeypatch):
     T = agent.Tools(str(tmp_path), knowledge.load(None))
     r = T.call('hex_mesh_algohex', {'file': 'b.step', 'size': 3})
     assert r.get('install', {}).get('key') == 'algohex' and os.path.exists(tmp_path / 'b_tets.vtk')
+
+
+def test_orientation_comes_from_the_volume_not_one_bad_corner(tmp_path):
+    from shipbrain.hexmesh import scaled_jacobian
+    X, H = grid(2, 2, 1, 1.0)
+    X = X.copy()
+    X[H[0][6]] = X[H[0][0]] + np.array([0.15, 0.15, 0.15])         # fold one corner of hex 0 inside: positive volume, one inverted corner
+    own = scaled_jacobian(X, H)
+    assert own[0] < 0 and AH.hex_volume(X, [H[0]]) > 0
+    for seed in range(3):
+        p = str(tmp_path / f'f{seed}.ovm')
+        write_ovm_hex(X, H, p, seed)
+        r = AH.report(p)
+        assert r['hexahedra'] == len(H) and r['inverted'] == int(np.sum(own <= 0))
+        assert r['min_scaled_jacobian'] == pytest.approx(float(np.min(own)), abs=1e-4)
