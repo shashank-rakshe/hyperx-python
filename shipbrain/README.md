@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 124/124, wrong replies 0/124.
+replies score 126/126, wrong replies 0/126.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1120,6 +1120,15 @@ Checked (`tests/test_pulsation.py`): closed-closed and open-closed pipe modes n 
 water speed of sound with the wall correction, a three-leg route equal to one straight column (corners connect), and simply supported pipe bending modes
 within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
 Training: `training/pulsation_tasks.py`.
+
+### GZ curve and the IMO intact criteria
+
+`gz_curve` computes the righting-lever curve of a generated hull at a KG and displacement (`stability.py`, own code; the method is the classical heeled-hull integration that the FreeCAD Ship
+workbench also uses - its code, LGPL-2.1, is in the knowledge pack `freecad_ship`): at each heel angle the waterline plane is moved until the displaced volume equals the displacement, the centre of
+buoyancy of the heeled hull is integrated and GZ = yB cos(phi) + (zB - KG) sin(phi). Output: the curve, the six criteria of IS Code 2.2 with pass / fail, the deck-edge immersion angle, the angle of
+vanishing stability, a picture. Checked (`tests/test_stability.py`): a barge follows the wall-sided formula GZ = sin(phi)(GM + 1/2 BM tan2(phi)) within 3 % up to deck-edge immersion, the deck edge goes
+under at the right angle, displacement is kept at every angle, GZ is odd in the heel, a higher KG lowers and fails the curve, a sinking hull is refused. Limits: level keel (no trim), hull up to the deck
+(the deck-edge immersion angle stands in for the down-flooding angle unless given), free-surface loss as a single GG' number, no damage stability, no weather criterion: concept level, not class approval.
 
 ### Hull resistance and the "more data = more accuracy" question
 

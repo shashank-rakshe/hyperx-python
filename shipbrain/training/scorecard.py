@@ -47,6 +47,8 @@ def _items():
     add('complete', 'I want 200 random ship hulls with Cb, Cp and LCB for a design study', 'hull_generate', {'samples': 200})
     add('complete', 'What power does a 130 m, 21 m beam, 7.8 m draft hull need at 15 knots? Block coefficient 0.7, entrance 0.3 L, run 0.25 L, depth 11 m', 'hull_resistance', {'L': 130, 'B': 21, 'T': 7.8})
     add('complete', 'Resistance of my 100 m x 16 m hull, 6 m draft, 9 m deep, at Froude numbers 0.18 and 0.24 by Holtrop', 'hull_resistance', {'L': 100, 'B': 16, 'T': 6})
+    add('complete', 'Check the IMO intact stability criteria for a hull 90 m x 15 m x 11 m depth, 5.5 m draft, KG 6.0 m: GZ curve please', 'gz_curve', {'kg': 6.0})
+    add('complete', 'What is the angle of vanishing stability of my barge 40 x 12 x 5 m, draft 2.5 m, KG 3 m, with 0.3 m free surface loss?', 'gz_curve', {'kg': 3.0})
     add('complete', 'I ran it in STAR-CCM+ and exported star_result.csv - what is the pressure at x = 0.5, y = 0.2, z = 0?', 'probe_result', {'x': 0.5, 'y': 0.2, 'z': 0})
     add('complete', 'Hot water header NPS 8 schedule 40 runs 10 m west, then 4 m south; fixed points at both ends; 120 C and 6 bar, full of water - check stresses to B31.1', 'pipe_stress', {'t_oper_c': 120})
     add('complete', 'Run the component based finite element analysis for a shear tab: IPE360 beam to a HEB300 column, four M20 8.8 bolts, 150 kN reaction', 'steel_cbfem', {'V': 150})

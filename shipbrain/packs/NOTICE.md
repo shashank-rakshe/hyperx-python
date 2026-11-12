@@ -503,3 +503,10 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: MIT
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2017 shiplab (Vessel.js authors: NTNU Ship Design and Operation Lab, H. M. Gaspar and contributors). Example vessel names in its docs are replaced by "ExampleVessel" here.
+
+## freecad_ship
+
+- Source: https://github.com/FreeCAD/freecad.ship
+- Licence: LGPL-2.1
+- Use: COPYLEFT: knowledge + training allowed by the owner (shipbrain/licence_mode.json); ShipBrain and models trained with it stay open under the same terms
+- Copyright (c) FreeCAD Ship workbench authors (Jose Luis Cercos-Pita and contributors)

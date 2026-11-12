@@ -487,6 +487,12 @@ class Tools:
                       'and pressure). Coarse and indicative: wall functions, no boundary-layer cells; read the stated accuracy.',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'draft': num, 'speed_kn': num, 'fluid': {'type': 'string', 'enum': ['seawater', 'water']}, 'level': {'type': 'integer'},
                                                          'name': {'type': 'string'}}, 'required': ['file', 'draft', 'speed_kn']})
+        self.register('gz_curve', self.gz_curve, 'Righting-lever (GZ) curve and the IMO intact-stability criteria (IS Code 2.2: areas 0-30, 0-40, 30-40 degrees, GZ at 30 degrees, angle of maximum GZ, GM) of a generated '
+                      'hull (hull_generate parameters, metres) at a given KG and displacement or draft, optional free-surface loss of slack tanks and flooding angle. Level keel, hull up to the deck. '
+                      'Returns the curve, pass / fail per criterion and a picture. Concept-level: a real ship needs the approved stability program with the actual loading conditions and openings.',
+                      {'type': 'object', 'properties': {k: num for k in ('L', 'B', 'D', 'T', 'r_bilge', 'deadrise', 'flare', 'ent', 'run', 'n_ent', 'n_run', 'transom', 'bulb_len', 'bulb_b', 'bulb_h',
+                                                                         'bulb_z', 'vee', 'kg', 'mass_t', 'draft', 'free_surface_m', 'flooding_angle_deg')} | {'name': {'type': 'string'}},
+                       'required': ['L', 'B', 'D', 'T', 'kg']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1929,6 +1935,23 @@ class Tools:
                                 + (' Pictures: ' + ', '.join(files) + '.' if files else ''))
         return out
 
+    def gz_curve(self, kg, mass_t=None, draft=None, free_surface_m=0.0, flooding_angle_deg=None, name='gz', **hp):
+        from . import hullgen as HG, stability as ST
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        p = HG.params(**{k: v for k, v in hp.items() if v is not None})
+        res = ST.gz_curve(p, float(kg), mass_t=float(mass_t) if mass_t else None, draft=float(draft) if draft else None, free_surface_m=float(free_surface_m or 0.0))
+        cr = ST.criteria(res, float(flooding_angle_deg) if flooding_angle_deg else None)
+        png = os.path.join(self.workdir, name + '.png')
+        ST.plot(res, cr, png, f"GZ curve: {p['L']:g} x {p['B']:g} x {p['D']:g} m, KG {float(kg):g} m")
+        table = [{'heel_deg': r['heel_deg'], 'GZ_m': round(r['GZ_m'], 4)} for r in res['curve'] if r['heel_deg'] % 5 == 0]
+        bad = [c['criterion'] for c in cr['criteria'] if not c['pass']]
+        say = (f"At {res['mass_t']:,.0f} t and KG {float(kg):g} m the initial GM is {res['GM_from_slope_m']:.2f} m; GZ peaks at {cr['max_GZ_m']:.2f} m at {cr['angle_of_max_GZ_deg']:g} degrees"
+               + (f", the lee deck edge goes under at {cr['deck_edge_immersion_deg']:g} degrees" if cr['deck_edge_immersion_deg'] is not None else '')
+               + (f" and the curve vanishes at {cr['angle_of_vanishing_stability_deg']:.0f} degrees" if cr['angle_of_vanishing_stability_deg'] else '') + '. '
+               + ('All six IMO intact criteria are met.' if cr['all_pass'] else 'NOT met: ' + '; '.join(bad) + '.')
+               + ' (Level keel, hull to the deck; the criteria need your approved loading conditions, the down-flooding angle and the weather criterion too.)')
+        return {'curve': table, 'GM_m': res['GM_from_slope_m'], 'mass_t': res['mass_t'], **cr, 'files': [name + '.png'], 'plain_english': say}
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -2548,6 +2571,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'hull (form|shape|design|generat|param)|parametric hull|design (a |the )?hull|block coefficient|\bcb\b|bulb|hull dataset|ship-?d\b|prismatic coeff|waterplane coeff|section area curve', ('hull_generate', 'ship_hydrostatics')),
     (r'resistance of (the |a |my )?(hull|ship|vessel)|(ship|hull) resistance|effective power|holtrop|\bpe\b|propulsion power|power (needed|required) (at|for)|knots?\b.*(power|resistance)|(power|resistance).*knots?\b', ('hull_resistance', 'hull_generate')),
     (r'(flow|cfd|openfoam|viscous|form) (around|past|over|on|of) (the |my |a )?(hull|ship|stl)|hull (cfd|flow)|run openfoam on (the )?(hull|stl)|viscous resistance|form (drag|resistance)', ('hull_flow', 'hull_resistance', 'openfoam_flow')),
+    (r'\bgz\b|righting (lever|arm)|stability (curve|criteria)|imo (intact|stability)|is code|angle of (vanishing|maximum)|dynamic stability|area under (the )?gz|capsiz', ('gz_curve', 'ship_hydrostatics')),
     (r'finite[- ]volume|\bfvm\b|1d (cfd|diffusion|convection|conduction)|\btdma\b|simple algorithm|upwind|central differenc', ('fvm_1d',)),
     (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),
     (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),
