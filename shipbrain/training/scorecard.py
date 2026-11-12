@@ -45,6 +45,8 @@ def _items():
     add('complete', 'Is this barge stable? 28 x 7 x 3.2 m, 380 t total, KG 2.4 m, sits in a river', 'ship_hydrostatics', {'length': 28, 'beam': 7, 'depth': 3.2})
     add('complete', 'Generate a hull for me: 140 m long, 22 m beam, 12.5 m deep, 8.5 m draft, block coefficient 0.68, with a bulbous bow 4 m long', 'hull_generate', {'L': 140, 'B': 22, 'D': 12.5, 'T': 8.5, 'target_cb': 0.68})
     add('complete', 'I want 200 random ship hulls with Cb, Cp and LCB for a design study', 'hull_generate', {'samples': 200})
+    add('complete', 'What power does a 130 m, 21 m beam, 7.8 m draft hull need at 15 knots? Block coefficient 0.7, entrance 0.3 L, run 0.25 L, depth 11 m', 'hull_resistance', {'L': 130, 'B': 21, 'T': 7.8})
+    add('complete', 'Resistance of my 100 m x 16 m hull, 6 m draft, 9 m deep, at Froude numbers 0.18 and 0.24 by Holtrop', 'hull_resistance', {'L': 100, 'B': 16, 'T': 6})
     add('complete', 'I ran it in STAR-CCM+ and exported star_result.csv - what is the pressure at x = 0.5, y = 0.2, z = 0?', 'probe_result', {'x': 0.5, 'y': 0.2, 'z': 0})
     add('complete', 'Hot water header NPS 8 schedule 40 runs 10 m west, then 4 m south; fixed points at both ends; 120 C and 6 bar, full of water - check stresses to B31.1', 'pipe_stress', {'t_oper_c': 120})
     add('complete', 'Run the component based finite element analysis for a shear tab: IPE360 beam to a HEB300 column, four M20 8.8 bolts, 150 kN reaction', 'steel_cbfem', {'V': 150})

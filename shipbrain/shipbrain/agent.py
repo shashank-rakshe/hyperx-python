@@ -474,6 +474,13 @@ class Tools:
                       {'type': 'object', 'properties': {k: num for k in ('L', 'B', 'D', 'T', 'r_bilge', 'deadrise', 'flare', 'ent', 'run', 'n_ent', 'n_run', 'transom', 'bulb_len', 'bulb_b', 'bulb_h',
                                                                          'bulb_z', 'vee', 'target_cb', 'kg', 'seed')} | {'name': {'type': 'string'}, 'samples': {'type': 'integer'}, 'kind': {'type': 'string', 'enum': ['ship', 'boat']}},
                        'required': []})
+        self.register('hull_resistance', self.hull_resistance, 'Calm-water resistance and effective power of a generated hull (hull_generate parameters) by the Holtrop-Mennen method (Vessel.js, run in Node) at speeds '
+                      'in knots or Froude numbers; method "surrogate" answers from a model trained on 2,400 generated hulls (milliseconds, ~2 % mean error against Holtrop, measured on unseen hulls). '
+                      'Valid only inside Holtrop\'s range (0.55 <= Cp <= 0.85, 3.9 <= L/B <= 14.9, 2.1 <= B/T <= 4.0, Fn <= 0.45): outside it the tool refuses. An estimate for ordinary displacement ships (about +-10-20 % '
+                      'against real ships), not a CFD result.',
+                      {'type': 'object', 'properties': {k: num for k in ('L', 'B', 'D', 'T', 'r_bilge', 'deadrise', 'flare', 'ent', 'run', 'n_ent', 'n_run', 'transom', 'bulb_len', 'bulb_b', 'bulb_h',
+                                                                         'bulb_z', 'vee', 'target_cb')} | {'speeds_kn': {'type': 'array'}, 'froude': {'type': 'array'}, 'method': {'type': 'string', 'enum': ['holtrop', 'surrogate']}},
+                       'required': ['L', 'B', 'D', 'T']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1845,6 +1852,26 @@ class Tools:
         out['plain_english'] = say + ' Files: ' + ', '.join(out['files']) + '.'
         return out
 
+    def hull_resistance(self, speeds_kn=None, froude=None, method='holtrop', target_cb=None, **hp):
+        from . import hullgen as HG, hullresist as HR
+        p = HG.params(**{k: v for k, v in hp.items() if v is not None})
+        if target_cb:
+            p = HG.solve_cb(p, float(target_cb))
+        c = HG.coefficients(p)
+        if method == 'surrogate':
+            rows, meta, outside = HR.predict(p, fns=froude, speeds_kn=speeds_kn)
+            note = f"surrogate trained on {meta['hulls']:,} generated hulls: mean error {meta['mean_error_percent']} % (95 % of hulls within {meta['p95_error_percent']} %) against Holtrop on hulls it had not seen"
+            if outside:
+                note += '; this hull is at the edge of the training range, so the error can be larger - use method holtrop'
+        else:
+            rows = HR.holtrop(p, speeds_kn=speeds_kn, fns=froude, c=c)
+            note = 'Holtrop-Mennen method, Vessel.js'
+        out = {'hull': {'L': p['L'], 'B': p['B'], 'T': p['T'], 'Cb': round(c['Cb'], 4), 'Cp': round(c['Cp'], 4)}, 'results': rows, 'method': method, 'parameters': p}
+        out['plain_english'] = (f"Hull {p['L']:g} x {p['B']:g} m, draft {p['T']:g} m, Cb {c['Cb']:.3f}, Cp {c['Cp']:.3f} ({note}): " + '; '.join(
+            f"{r['speed_kn']:.1f} kn (Fn {r['Fn']:.2f}): resistance {r['Rt_kN']:,.0f} kN, effective power {r['Pe_kW']:,.0f} kW" for r in rows)
+            + '. Calm water, bare hull estimate for an ordinary displacement ship (Holtrop is good to roughly +-10-20 % against real ships); shaft power needs the propulsive efficiency, and wind, waves and fouling add to it.')
+        return out
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -2462,6 +2489,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'fluent|star-?ccm|simcenter star|ansys cfd|abaqus cfd|\bccm\b', ('cfd_export', 'find_solvers', 'probe_result')),
     (r'hydrostatic|stability|metacentr|\bgm\b|\bkb\b|\bkg\b|freeboard|displacement of (the )?(hull|vessel|ship|barge)|draft (of|at|for)|trim and|vessel\.?js|loading condition', ('ship_hydrostatics',)),
     (r'hull (form|shape|design|generat|param)|parametric hull|design (a |the )?hull|block coefficient|\bcb\b|bulb|hull dataset|ship-?d\b|prismatic coeff|waterplane coeff|section area curve', ('hull_generate', 'ship_hydrostatics')),
+    (r'resistance of (the |a |my )?(hull|ship|vessel)|(ship|hull) resistance|effective power|holtrop|\bpe\b|propulsion power|power (needed|required) (at|for)|knots?\b.*(power|resistance)|(power|resistance).*knots?\b', ('hull_resistance', 'hull_generate')),
     (r'finite[- ]volume|\bfvm\b|1d (cfd|diffusion|convection|conduction)|\btdma\b|simple algorithm|upwind|central differenc', ('fvm_1d',)),
     (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),
     (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),

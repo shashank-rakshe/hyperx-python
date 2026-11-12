@@ -16,6 +16,21 @@ try {
   if (req.drafts) {
     out.hydrostatics = req.drafts.map(T => { const h = hull.calculateAttributesAtDraft(T); const r = { T }; for (const k of Object.keys(h)) if (typeof h[k] === "number") r[k] = h[k]; return r; });
   }
+  if (req.action === "resistance") {                  // Holtrop resistance (Vessel.js HullResistance): one answer per speed (knots)
+    const prop = req.propeller;
+    out.resistance = req.speeds.map(v => {
+      const sp = JSON.parse(JSON.stringify(req.spec));
+      sp.designState.calculationParameters.speed = v;
+      try {
+        const sh = new Vessel.Ship(sp);
+        const st = new Vessel.ShipState(sh.designState.getSpecification());
+        const hr = new Vessel.HullResistance(sh, st, prop, new Vessel.WaveCreator());
+        hr.writeOutput();
+        const o = hr.returnOutput();
+        return { speed_kn: v, Rt_N: o.Rtadd, Pe_W: o.Pe, w: o.w, t: o.t, etah: o.etah };
+      } catch (e) { return { speed_kn: v, error: String(e && e.message || e) }; }
+    });
+  }
   if (req.mass_kg !== undefined) out.draft_at_mass = hull.calculateDraftAtMass(req.mass_kg);
 } catch (e) { out.error = String(e && e.message || e); }
 log(JSON.stringify(out));

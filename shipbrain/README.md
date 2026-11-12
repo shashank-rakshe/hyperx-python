@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 122/122, wrong replies 0/122.
+replies score 124/124, wrong replies 0/124.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1120,6 +1120,19 @@ Checked (`tests/test_pulsation.py`): closed-closed and open-closed pipe modes n 
 water speed of sound with the wall correction, a three-leg route equal to one straight column (corners connect), and simply supported pipe bending modes
 within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
 Training: `training/pulsation_tasks.py`.
+
+### Hull resistance and the "more data = more accuracy" question
+
+`hull_resistance` gives the calm-water resistance and effective power of a generated hull: Holtrop-Mennen through Vessel.js (exact, ~30 ms), or a surrogate trained on a dataset ShipBrain made itself
+(`hullresist.py`, `python -m shipbrain.hullresist --train`): **2,400 random valid hulls x 5 Froude numbers = 12,000 labelled points** (`training/data/hull_resistance_dataset.csv.gz`, model
+`shipbrain/data/hull_resistance_surrogate.npz`), hulls restricted to Holtrop's range. Measured on 480 hulls the model never saw: mean error **2.3 %**, median 1.4 %, 95 % within 7.8 %, worst 15.5 %
+(a straight-line fit on the same numbers: 9.7 %).
+
+Does a large dataset make it accurate by itself? Not by itself, and the measurements say so. Learning curve (same unseen hulls): 100 training hulls 4.4 % mean error, 200: 3.4 %, 400: 2.9 %, 800: 2.7 %,
+1,200: 2.3 %, 2,000: 2.1 % - it flattens, because the labels switch regime inside Holtrop's formulas, and **a surrogate can never be more accurate than its labels**: these are Holtrop estimates
+(+-10-20 % against real ships), not measurements. The first attempt (21 raw hull parameters as inputs) was worse than the straight-line fit (median error 15 %); what fixed it was feeding the
+surrogate the numbers the method actually uses (L/B, B/T, Cb, Cm, Cwp, LCB, Fn, length, bulb, transom). Because Holtrop is as fast to run as the surrogate, the tool answers with the exact method; a
+surrogate pays off when the labels are slow (CFD runs of minutes): the same dataset machinery is for that. Tests: `tests/test_hullresist.py` (fresh hulls, error in line with the claim).
 
 ### Hull generator (own code; Ship-D idea, no Ship-D code)
 

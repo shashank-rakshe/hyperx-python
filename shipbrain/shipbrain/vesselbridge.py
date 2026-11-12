@@ -20,7 +20,7 @@ def node():
     return shutil.which('node') or shutil.which('nodejs')
 
 
-def run(spec, drafts=None, mass_kg=None, action='stability', rho=None, timeout=120):
+def run(spec, drafts=None, mass_kg=None, action='stability', rho=None, timeout=120, speeds=None, propeller=None):
     x = node()
     if not x:
         raise RuntimeError('Node.js is not installed: install it (free, https://nodejs.org) and ask again - Vessel.js runs in Node.')
@@ -29,6 +29,10 @@ def run(spec, drafts=None, mass_kg=None, action='stability', rho=None, timeout=1
         req['drafts'] = [float(d) for d in drafts]
     if mass_kg is not None:
         req['mass_kg'] = float(mass_kg)
+    if speeds is not None:
+        req['speeds'] = [float(v) for v in speeds]
+    if propeller is not None:
+        req['propeller'] = propeller
     r = subprocess.run([x, os.path.join(ROOT, 'runner.mjs')], input=json.dumps(req), capture_output=True, text=True, timeout=timeout, cwd=ROOT)
     line = next((l for l in reversed(r.stdout.splitlines()) if l.startswith('{')), None)
     if not line:
