@@ -53,6 +53,8 @@ def _items():
     add('complete', 'GZ curve and IMO criteria of my hull.stl at 6.2 m draft with KG 5.4 m, trim optimised, sea water', 'stl_stability', {'kg': 5.4, 'draft': 6.2})
     add('complete', 'Solve a 3 m cantilever, E 206000, I 2e7 mm4, A 5000 mm2, tip load 1 kN down, with PyNite and give me the deflection and the reaction moment', 'pynite_fea')
     add('complete', 'Read the OpenHCM file hull_block.xml and make a shell mesh of its flat plates with 150 mm elements', 'openhcm_read', {'mesh': True})
+    add('complete', 'What are the roll, heave and pitch periods of a 90 m x 15 m hull, 11 m deep, 5.5 m draft, KG 6.2 m, and the roll in beam waves of 9 s and 1 m amplitude?', 'hull_motions', {'kg': 6.2})
+    add('complete', 'Sum these blocks for my design: a hold 30x10x5 m with cargo density 0.8, an engine room 12x10x5 m at 0.35 t/m3, steel 40 m3 - and check shall cargo volume 1200 m3', 'dbb_blocks')
     add('complete', 'I ran it in STAR-CCM+ and exported star_result.csv - what is the pressure at x = 0.5, y = 0.2, z = 0?', 'probe_result', {'x': 0.5, 'y': 0.2, 'z': 0})
     add('complete', 'Hot water header NPS 8 schedule 40 runs 10 m west, then 4 m south; fixed points at both ends; 120 C and 6 bar, full of water - check stresses to B31.1', 'pipe_stress', {'t_oper_c': 120})
     add('complete', 'Run the component based finite element analysis for a shear tab: IPE360 beam to a HEB300 column, four M20 8.8 bolts, 150 kN reaction', 'steel_cbfem', {'V': 150})

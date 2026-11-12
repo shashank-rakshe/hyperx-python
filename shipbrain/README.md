@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 130/130, wrong replies 0/130.
+replies score 132/132, wrong replies 0/132.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1120,6 +1120,16 @@ Checked (`tests/test_pulsation.py`): closed-closed and open-closed pipe modes n 
 water speed of sound with the wall correction, a three-leg route equal to one straight column (corners connect), and simply supported pipe bending modes
 within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
 Training: `training/pulsation_tasks.py`.
+
+### Own tools for what the unlicensed repositories do: motions, design blocks, hull dataset
+
+ShipD, shiplab/dbb, ShipStructure and the global-hull FEA repository have no licence, so none of their code or data is used. ShipBrain's own versions of what they are about:
+- `hull_motions` (`seakeeping.py`): roll (IMO IS Code 2.3.4 formula and the 0.4 B form), heave and pitch natural periods of a generated hull, and a one-degree-of-freedom regular-wave response with the damping as input.
+  Closed-form teaching estimates, no strip theory, no forward speed, not checked against model tests; checked against the closed forms for a barge and the resonance / long-wave / short-wave limits (`tests/test_motions_dbb.py`).
+- `dbb_blocks` (`dbb.py`): design building blocks - volumes with density and centre of gravity, grouped, summed to weight and CG, linked to shall / should requirements with red / green / orange status, and the
+  weights list for `ship_hydrostatics` / `gz_curve`. Written from the method's description, not from any editor's code.
+- `hulldataset.py`: `python -m shipbrain.hulldataset --n 2000` makes a dataset of random valid hulls with coefficients, GM, GZ summary, natural periods and Holtrop resistance, all from ShipBrain's own tools
+  (`training/data/hull_dataset.csv.gz`). Licence requests for the four repositories are in `docs/LICENCE_REQUESTS.md`.
 
 ### PyNite, OpenHCM, the global hull FE study, and the skills
 

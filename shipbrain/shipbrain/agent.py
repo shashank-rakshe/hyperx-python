@@ -507,6 +507,16 @@ class Tools:
                       'pass / fail per criterion and a picture.',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'kg': num, 'draft': num, 'displacement_t': num, 'lcg': num, 'tcg': num, 'density': num, 'scale': num,
                                                          'rule': {'type': 'string'}, 'name': {'type': 'string'}}, 'required': ['file', 'kg']})
+        self.register('hull_motions', self.hull_motions, 'Natural periods (roll by the IMO formula, heave, pitch) and a simple regular-wave response (heave in head waves, roll in beam waves) of a generated hull '
+                      '(hull_generate parameters, metres) at a KG: closed-form teaching estimates, no strip theory, no forward speed - NOT a seakeeping program. wave_period_s gives the response in one regular wave; '
+                      'resonance is flagged. The damping ratios are assumptions you can change.',
+                      {'type': 'object', 'properties': {k: num for k in ('L', 'B', 'D', 'T', 'r_bilge', 'deadrise', 'flare', 'ent', 'run', 'n_ent', 'n_run', 'transom', 'bulb_len', 'bulb_b', 'bulb_h',
+                                                                         'bulb_z', 'vee', 'kg', 'wave_period_s', 'wave_amplitude_m', 'zeta_heave', 'zeta_roll', 'draft')},
+                       'required': ['L', 'B', 'D', 'T', 'kg']})
+        self.register('dbb_blocks', self.dbb_blocks, 'Design building blocks for early ship design: blocks {name, group, shape box|cylinder|sphere or volume, size [m], density t/m3, cg [x, y, z], fullness} '
+                      'summed to weight and centre of gravity per block and group, linked to requirements {name, metric weight|volume|area|total_weight|length|beam|height, direction at_least|at_most, shall, '
+                      'should, blocks | group} with red (shall not met) / green / orange (beyond the should) status; returns the weights list that ship_hydrostatics and gz_curve take.',
+                      {'type': 'object', 'properties': {'blocks': {'type': 'array'}, 'requirements': {'type': 'array'}, 'hull': {'type': 'object'}}, 'required': ['blocks']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1981,6 +1991,39 @@ class Tools:
                               + ' Hull as given in the STL: openings, tanks and the approved loading conditions are not in this check, so it is a design check, not class approval.')
         return r
 
+    def hull_motions(self, kg, wave_period_s=None, wave_amplitude_m=1.0, zeta_heave=0.2, zeta_roll=0.07, draft=None, **hp):
+        from . import hullgen as HG, seakeeping as SK
+        p = HG.params(**{k: v for k, v in hp.items() if v is not None})
+        if wave_period_s:
+            r = SK.response(p, float(kg), float(wave_period_s), float(wave_amplitude_m), draft=float(draft) if draft else None, zeta_heave=float(zeta_heave), zeta_roll=float(zeta_roll))
+            per = r['periods']
+        else:
+            r = None
+            per = SK.periods(p, float(kg), float(draft) if draft else None)
+        say = (f"Hull {p['L']:g} x {p['B']:g} m, draft {per['draft_m']:g} m, KG {float(kg):g} m: GM {per['GMt_m']:.2f} m. Natural periods: roll "
+               + (f"{per['roll_period_imo_s']:.1f} s (IMO formula; {per['roll_period_k04B_s']:.1f} s with k = 0.4 B)" if per['roll_period_imo_s'] else 'none - GM is negative, the ship is unstable')
+               + f", heave {per['heave_period_s']:.1f} s, pitch {per['pitch_period_s']:.1f} s.")
+        if r:
+            say += f" In a regular wave of {wave_period_s:g} s ({r['wavelength_m']:.0f} m long, amplitude {wave_amplitude_m:g} m): heave amplitude {r['heave']['amplitude_m']:.2f} m (head waves)"
+            if 'roll' in r:
+                say += f", roll amplitude {r['roll']['amplitude_deg']:.1f} degrees (beam waves, wave slope {r['roll']['wave_slope_deg']:.1f} degrees)"
+            if r['heave']['near_resonance'] or r.get('roll', {}).get('near_resonance'):
+                say += '. Near resonance: the answer depends on the damping you assume'
+            say += '.'
+        say += ' Closed-form teaching estimates, no forward speed, not a seakeeping program and not checked against model tests.'
+        return {'periods': per, 'response': r, 'plain_english': say}
+
+    def dbb_blocks(self, blocks, requirements=None, hull=None):
+        from . import dbb
+        r = dbb.analyse(blocks, requirements or [], hull)
+        red = [q['name'] for q in r['requirements'] if q['status'] == 'red']
+        orange = [q['name'] for q in r['requirements'] if q['status'] == 'orange']
+        r['plain_english'] = (f"{len(r['blocks'])} blocks in {len(r['groups'])} groups: total weight {r['total_weight_t']:,.1f} t, centre of gravity ({r['cg'][0]:.2f}, {r['cg'][1]:.2f}, {r['cg'][2]:.2f}) m. "
+                              + (f"Requirements not met (shall): {', '.join(red)}. " if red else ('All shall requirements are met. ' if r['requirements'] else ''))
+                              + (f"Beyond the should (an excess): {', '.join(orange)}. " if orange else '')
+                              + 'The weights list can go straight into ship_hydrostatics or gz_curve (mass and centre of gravity of every block).')
+        return r
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -2603,6 +2646,8 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'catamaran|demihull|slender hull|fast ?ships|twin.?hull|multi.?hull', ('catamaran_hull', 'stl_stability')),
     (r'pynite|space frame|portal frame|truss analysis|continuous beam|plate bending|beam on elastic|\bp-?delta\b|load combination', ('pynite_fea', 'frame_solve')),
     (r'openhcm|hull condition model|\bhcm\b|\.hcm\b', ('openhcm_read', 'structure_to_mesh')),
+    (r'roll period|natural period|heave|pitch(ing)? period|seakeeping|ship motions?|resonan|rao\b', ('hull_motions', 'gz_curve')),
+    (r'building block|\bdbb\b|weight (estimate|budget)|requirements? .*(shall|should)|shall.*should|centre of gravity of the (ship|vessel|blocks)', ('dbb_blocks', 'ship_hydrostatics')),
     (r'finite[- ]volume|\bfvm\b|1d (cfd|diffusion|convection|conduction)|\btdma\b|simple algorithm|upwind|central differenc', ('fvm_1d',)),
     (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),
     (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),
