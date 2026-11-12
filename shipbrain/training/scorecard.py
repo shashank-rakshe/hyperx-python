@@ -70,6 +70,8 @@ def _items():
         {'file': 'pump_casing.step', 'holes_below': 10, 'fillets_below': 5})
     add('complete', 'Hot spot fatigue model of the bracket toe in bracket_assy.step', ['fatigue_mesh', 'file_info'])
     add('complete', 'Hex mesh the casting pump_foot.step with 4 mm cells', 'hex_mesh', {'file': 'pump_foot.step', 'size': 4})
+    add('complete', 'I want a DXF of a 350 x 120 mm plate with one 25 mm hole in the centre', 'dxf_draw',
+        {'parts.0.length': 350, 'parts.0.width': 120, 'parts.0.holes.0.d': 25, 'parts.0.holes.0.x': 175, 'parts.0.holes.0.y': 60})
     add('complete', 'Calculate 2 * pi * 0.35 * 1450 / 60', 'calc')
     add('complete', 'Lube oil line 20 m3/h, 30 m of 65 mm pipe, 4 bends, one globe valve - pressure loss?', 'pipe_flow',
         {'flow_m3h': 20, 'segments.0.d_mm': 65, 'segments.0.length_m': 30, 'fluid': 'lube oil'})
@@ -95,6 +97,8 @@ def _items():
     add('messy', 'T-bar web 300x12 flange 120x15, plate 14 x 750: section props', 'section_props',
         {'profile.type': 'TBar', 'profile.h': 300, 'profile.t': 12, 'profile.bf': 120, 'profile.tf': 15, 't_plate': 14, 'b_eff': 750})
     add('messy', 'brick mesh of shaft_seat.stp, element size 0.25 inch', 'hex_mesh', {'file': 'shaft_seat.stp', 'size': 6.35}, tol=0.02)
+    add('messy', 'plate 10 inch by 5 inch with one 1 inch hole in the middle, make the drawing', 'dxf_draw',
+        {'parts.0.length': 254, 'parts.0.width': 127, 'parts.0.holes.0.d': 25.4, 'parts.0.holes.0.x': 127, 'parts.0.holes.0.y': 63.5}, tol=0.02)
     add('messy', 'convert 4500 lbf.ft to kN.m', 'convert_units')
     add('messy', 'plate 2400 by 800 thk 12 under 0,05 MPa', 'plate_check', {'a': 2400, 'b': 800, 't': 12, 'q': 0.05})
     add('messy', 'MOOSE: 2.8m x 0.8m x 14mm, 2 bar, clamped all round', 'moose_plate', {'a': 2800, 'b': 800, 't': 14, 'q': 0.2})
@@ -120,6 +124,7 @@ def _items():
     add('missing', 'Check the hull girder strength', ask=True)
     add('missing', 'Mesh it with 100 mm elements', ask=True)
     add('missing', 'I need a hexahedral mesh for my casting', ask=True)
+    add('missing', 'Make a drawing of a stiffened deck panel', ask=True)
     add('missing', 'fuel line 30 m3/h ka pressure drop?', ask=True)
     # ------------------------------------------------------------ multi-step: the right first step
     add('multi', 'I uploaded deck_scan.png (old drawing). Make a vector copy and then compare it with deck_rev2.dxf',

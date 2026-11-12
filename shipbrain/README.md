@@ -289,6 +289,26 @@ handled while checking:
 Not included (said in the answers): pump curves, NPSH / cavitation, water hammer, two-phase flow, fouling margins.
 Skill `pipe-hydraulics`, pack `packs/ProcessPi.sbpack`, 60 training conversations from real runs, tests.
 
+## 2D drawings from plain words: dxf_draw and dxf_check (ezdxf)
+
+The user describes the drawing; the model turns the words into `parts` (it works out hole positions from "40 mm from the
+edges", converts inches, asks when a key size is missing); `shipbrain/dxfdraw.py` draws a properly layered DXF plus a
+PNG preview:
+- **plate** (holes, hole grid, corner radius, slots), **panel** (stiffened panel in plan: stiffener lines at the spacing
+  with the profile label, frames FR1 ... at their spacing, dimension chains "4 @ 800 = 3200"), **flange** (bore, bolt circle,
+  bolt holes), **shapes** (lines, circles, rectangles, polylines, texts).
+- layers OUTLINE, HOLES, STIFFENER, FRAME, CENTER, HIDDEN, DIM, TEXT, TITLE with real linetypes; units set to mm; the
+  scale is chosen automatically (1:20 for a 4.8 m panel on A3; text and arrows are 2.5 mm on paper at that scale);
+  sheet border and title block (title, scale, date); notes; centre marks and diameter / linear dimensions.
+- errors are explained, not hidden: a hole outside the plate, a bore larger than the flange, a missing size.
+- `dxf_check(file)`: drafting quality of any DXF - units missing, everything on layer 0, undefined linetypes, zero-length
+  and duplicate entities, 3D leftovers, nearly-meeting line ends (an outline that looks closed but is not), dimension
+  text typed over the measured value, stray objects far from the drawing. Checked on a deliberately bad drawing with seven
+  planted problems: all seven found; the drawings made by `dxf_draw` pass clean. (`drawing_check` stays the tool for the
+  arithmetic written on a drawing.)
+Skill `dxf-draw`, 120 training conversations from real runs (`training/dxf_tasks.py`), tests. It also writes what
+LibreCAD and QCAD open (their packs hold the format knowledge).
+
 ## Scanned drawings -> vectors: VTracer (MIT)
 
 [VTracer](https://github.com/visioncortex/vtracer) (visioncortex; built for high-resolution scans of historic blueprints)
@@ -905,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 86/86, wrong replies 0/86.
+replies score 89/89, wrong replies 0/89.
 
 ### Understanding users: asking, units, design loops, error recovery
 

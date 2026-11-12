@@ -337,6 +337,20 @@ class Tools:
                       'E, nu; feature_angle (deg, default 35). Reports volume against the exact volume and the quality.',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'size': num, 'to': {'type': 'string'}, 'E': num,
                                                          'nu': num, 'feature_angle': num}, 'required': ['file', 'size']})
+        self.register('dxf_draw', self.dxf_draw, 'Draw a 2D drawing from the user\'s description -> DXF (layers OUTLINE, HOLES, STIFFENER, FRAME, CENTER, DIM, '
+                      'TEXT, TITLE; dimensions, centre lines, title block) + PNG preview. parts (mm, x / y from the part\'s lower-left corner): '
+                      '{"type":"plate","length","width","thickness","corner_radius","holes":[{"x","y","d"}],"hole_grid":{"x0","y0","nx","ny","dx","dy","d"},'
+                      '"slots":[{"x","y","length","width"}]} | {"type":"panel","length","width","thickness","stiffeners":{"spacing","profile","direction":"x|y"},'
+                      '"frames":{"spacing"}} | {"type":"flange","od","id","thickness","bolt_circle","n_bolts","bolt_d"} | {"type":"shapes","lines":[...],'
+                      '"circles":[{"x","y","d"}],"rects":[{"x","y","w","h"}],"texts":[{"x","y","text"}],"polylines":[{"points","closed"}]}. '
+                      'title, sheet A4..A0, scale (20 = 1:20, automatic if omitted), notes [..], dims (default true).',
+                      {'type': 'object', 'properties': {'parts': {'type': 'array'}, 'title': {'type': 'string'}, 'sheet': {'type': 'string'},
+                                                         'scale': num, 'notes': {'type': 'array'}, 'dims': {'type': 'boolean'},
+                                                         'name': {'type': 'string'}}, 'required': ['parts']})
+        self.register('dxf_check', self.dxf_check, 'Drafting-quality check of a DXF drawing: units, layers (everything on layer 0), linetypes, '
+                      'zero-length and duplicate entities, gaps in outlines, 3D leftovers, dimension text typed over the measured value, '
+                      'stray entities. (drawing_check reads the arithmetic written on a drawing.)',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
         self.register('reverse_cad', self.reverse_cad, 'Mesh (STL scan / 3D-print / mesh export) -> STEP AP242 solid with ReverseCAD '
                       '(non-commercial licence): watertight B-Rep, volume, area, centre of mass, inertia, mass for a material, '
                       'recognised holes / ISO threads / fillets / chamfers / slots / cavities, and its own verification of the STEP '
@@ -1225,6 +1239,18 @@ class Tools:
         r.pop('volume', None)
         return {k: (round(v, 4) if isinstance(v, float) else v) for k, v in r.items()}
 
+    def dxf_draw(self, parts, title=None, sheet=None, scale=None, notes=None, dims=True, name='drawing'):
+        from . import dxfdraw
+        name = re.sub(r'[^A-Za-z0-9_\-]', '_', str(name or 'drawing'))[:40]
+        r = dxfdraw.draw(parts, os.path.join(self.workdir, name + '.dxf'), title=title, sheet=sheet, scale=scale, notes=notes, dims=dims)
+        r['file'] = os.path.basename(r.pop('file'))
+        r['png'] = os.path.basename(r['png'])
+        return r
+
+    def dxf_check(self, file):
+        from . import dxfdraw
+        return dxfdraw.check(self._path(file))
+
     def reverse_cad(self, file, material=None, heatmap=False):
         from . import reversecad
         src = self._path(file)
@@ -1803,6 +1829,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'moose|\.i\b|multiphysics', ('moose_plate', 'moose_run')),
     (r'ocx|3docx', ('ocx_read', 'ocx_syntax', 'ocx_validate', 'ocx_write')),
     (r'hex(a|ahedral)?\b|hexahedr|brick (mesh|element)|solid mesh|casting|forging|foundation|shaft bracket|lug\b|thick plate', ('hex_mesh', 'cad_mesh')),
+    (r'\bdraw\b|drawing of|sketch|dxf|title block|general arrangement|plan view|dimensioned|\ba[0-4] sheet|drafting', ('dxf_draw', 'dxf_check')),
     (r'mesh|element size|fea|fe model', ('cad_mesh', 'panel_mesh', 'plates_mesh', 'analysis_run')),
     (r'frame|beam|portal|truss|column|pipe support', ('frame_solve',)),
     (r'fatigue|hot ?spot|weld toe', ('fatigue_mesh',)),
