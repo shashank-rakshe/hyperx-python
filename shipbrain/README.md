@@ -1028,6 +1028,13 @@ in plain words. Built on CadQuery / OpenCascade; checked against the analytic vo
 (cadcore, MIT): the same route gave the same volume (17,501,172.7 mm3). Finding from that check: cadcore's fillet radius is the
 inner radius of the bend, so centre-line radius = fillet + pipe radius. Training: `training/piperoute_tasks.py`.
 
+### Centre-line tracing (idea from AutoTrace)
+
+`trace_drawing` with `mode: "centerline"` turns a thin-line scan or sketch into ONE line along the middle of every pen stroke (DXF
+layer CENTERLINE) instead of the outline of the stroke. Own code (thinning, line walking, simplification); AutoTrace
+(autotrace/autotrace, LGPL/GPL) is in the knowledge pack as reference. Checked on a drawn box, diagonal and circle: lengths within
+2 % of the true centre-lines; a noisy 3000 x 2000 px sheet with 60 strokes takes about 5 s.
+
 ## Tests
 
 ```bash

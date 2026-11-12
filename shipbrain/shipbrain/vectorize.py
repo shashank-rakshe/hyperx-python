@@ -11,6 +11,7 @@ revisions of a scanned drawing, for a clean vector copy and for overlaying on a 
 text (drawing_texts / OCR), not from the traced lines.
 """
 import math, os, re
+import numpy as np
 
 RASTER = ('.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.webp', '.gif')
 
@@ -174,3 +175,123 @@ def trace(path, out_base=None, page=0, dpi=200, scale=None, speckle=8, adaptive=
                               f"({n_pts} points) written to {os.path.basename(dxf)} (layer TRACE, in {unit}) and "
                               f"{os.path.basename(svg)}. Each pen stroke is traced as its outline; dust smaller than "
                               f"{speckle} px was dropped.")}
+
+
+# ====================================================================== centre-line tracing (own code)
+def _thin(img):
+    """Zhang-Suen thinning of a boolean image (True = ink) to one-pixel-wide lines"""
+    im = np.pad(img, 1).astype(np.uint8)
+    while True:
+        changed = False
+        for step in (0, 1):
+            P = [im[:-2, 1:-1], im[:-2, 2:], im[1:-1, 2:], im[2:, 2:], im[2:, 1:-1], im[2:, :-2], im[1:-1, :-2], im[:-2, :-2]]  # P2..P9
+            c = im[1:-1, 1:-1]
+            B = sum(p.astype(int) for p in P)
+            A = sum(((P[i] == 0) & (P[(i + 1) % 8] == 1)).astype(int) for i in range(8))
+            if step == 0:
+                m = (P[0] * P[2] * P[4] == 0) & (P[2] * P[4] * P[6] == 0)
+            else:
+                m = (P[0] * P[2] * P[6] == 0) & (P[0] * P[4] * P[6] == 0)
+            kill = (c == 1) & (B >= 2) & (B <= 6) & (A == 1) & m
+            if kill.any():
+                im[1:-1, 1:-1][kill] = 0
+                changed = True
+        if not changed:
+            return im[1:-1, 1:-1].astype(bool)
+
+
+def _simplify(pts, tol):
+    """Douglas-Peucker"""
+    if len(pts) < 3:
+        return pts
+    a, b = np.array(pts[0], float), np.array(pts[-1], float)
+    ab = b - a
+    n = np.hypot(*ab)
+    P = np.array(pts, float)
+    d = np.hypot(*(P - a).T) if n < 1e-12 else np.abs(ab[0] * (P[:, 1] - a[1]) - ab[1] * (P[:, 0] - a[0])) / n
+    i = int(np.argmax(d))
+    if d[i] <= tol:
+        return [pts[0], pts[-1]]
+    return _simplify(pts[:i + 1], tol)[:-1] + _simplify(pts[i:], tol)
+
+
+def skeleton_lines(skel, min_len=6, tol=1.2):
+    """skeleton pixels -> polylines (walk from line ends and junctions; closed loops handled last)"""
+    H, W = skel.shape
+    ys, xs = np.nonzero(skel)
+    on = {(int(x), int(y)) for x, y in zip(xs, ys)}
+    def redundant(p, q):                                      # a diagonal step that a two-step 4-connected path already covers
+        if p[0] == q[0] or p[1] == q[1]:
+            return False
+        return (p[0], q[1]) in on or (q[0], p[1]) in on
+    nb = lambda p: [(p[0] + dx, p[1] + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+                    if (dx or dy) and (p[0] + dx, p[1] + dy) in on and not redundant(p, (p[0] + dx, p[1] + dy))]
+    deg = {p: len(nb(p)) for p in on}
+    nodes = {p for p, d in deg.items() if d != 2}
+    seen, lines = set(), []
+
+    def walk(start, nxt):
+        line, prev, cur = [start], start, nxt
+        seen.add(frozenset((start, nxt)))
+        while True:
+            line.append(cur)
+            if cur in nodes and cur != start:
+                break
+            cand = [q for q in nb(cur) if q != prev and frozenset((cur, q)) not in seen]
+            if not cand:
+                break
+            q = min(cand, key=lambda r: abs(r[0] - cur[0]) + abs(r[1] - cur[1]))   # prefer straight over diagonal steps
+            seen.add(frozenset((cur, q)))
+            prev, cur = cur, q
+            if cur == start:
+                line.append(cur)
+                break
+        return line
+    for n in sorted(nodes):
+        for q in nb(n):
+            if frozenset((n, q)) not in seen:
+                lines.append(walk(n, q))
+    for p in sorted(on):                                      # closed loops with no end or junction
+        for q in nb(p):
+            if frozenset((p, q)) not in seen:
+                lines.append(walk(p, q))
+    out = []
+    for l in lines:
+        if len(l) >= min_len or (len(l) >= 2 and l[0] != l[-1] and False):
+            out.append(_simplify(l, tol))
+    return out
+
+
+def trace_centerline(path, out_base=None, page=0, dpi=200, scale=None, threshold=None, min_len=6, tol=1.2):
+    """thin-line drawing -> centre-lines (one line per pen stroke, not an outline) -> DXF layer CENTERLINE"""
+    from PIL import Image
+    out_base = out_base or os.path.splitext(path)[0] + '_centerline'
+    src = path
+    if path.lower().endswith('.pdf'):
+        src = _page_png(path, page, dpi, out_base + '_page.png')
+    g = np.asarray(Image.open(src).convert('L'), float)
+    if threshold is None:
+        lo, hi = np.percentile(g, 2), np.percentile(g, 60)
+        threshold = (lo + hi) / 2 if hi - lo > 30 else 128    # halfway between ink and paper
+    ink = g < threshold
+    if ink.mean() > 0.5:                                     # light lines on a dark ground
+        ink = ~ink
+    lines = skeleton_lines(_thin(ink), min_len=int(min_len), tol=float(tol))
+    k = float(scale or 1.0)
+    import ezdxf
+    doc = ezdxf.new('R2018')
+    doc.layers.add('CENTERLINE', color=7)
+    msp = doc.modelspace()
+    H = g.shape[0]
+    for l in lines:
+        pts = [(x * k, (H - y) * k) for x, y in l]
+        msp.add_lwpolyline(pts, close=len(pts) > 3 and pts[0] == pts[-1], dxfattribs={'layer': 'CENTERLINE'})
+    dxf = out_base + '.dxf'
+    doc.saveas(dxf)
+    w, h = g.shape[1], g.shape[0]
+    unit = f'{k:g} drawing unit(s) per pixel' if scale else 'pixels'
+    tot = sum(sum(math.dist(a, b) for a, b in zip(l, l[1:])) for l in lines) * k
+    return {'dxf': dxf, 'lines': len(lines), 'total_length': round(tot, 1), 'image_px': [w, h], 'units': unit,
+            'plain_english': (f"Centre-line traced {os.path.basename(path)} ({w} x {h} px): {len(lines)} lines, total length {tot:,.0f} ({unit}), "
+                              f"written to {os.path.basename(dxf)} (layer CENTERLINE). Each pen stroke became ONE line along its middle "
+                              f"(good for thin line drawings; use the outline mode for filled shapes).")}

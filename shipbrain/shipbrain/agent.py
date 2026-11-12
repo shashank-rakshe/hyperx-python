@@ -316,9 +316,11 @@ class Tools:
         self.register('trace_drawing', self.trace_drawing, 'Scanned drawing (PNG / JPG / TIFF, or a scanned PDF page) -> vectors with '
                       'VTracer: DXF (layer TRACE) + SVG, scan noise removed. scale = drawing units per pixel (optional). Every pen '
                       'stroke becomes its outline (good for a clean vector copy / overlay; for comparing two scans use compare_drawings, '
-                      'which overlays the pictures).',
+                      'which overlays the pictures). mode "centerline" (own thinning code, ideas from AutoTrace) gives ONE line along the middle '
+                      'of each thin stroke instead of an outline: best for thin line drawings, sketches, pipe diagrams.',
                       {'type': 'object', 'properties': {'file': {'type': 'string'}, 'page': {'type': 'integer'}, 'scale': num,
-                                                         'dpi': num}, 'required': ['file']})
+                                                         'dpi': num, 'mode': {'type': 'string', 'enum': ['outline', 'centerline']}},
+                       'required': ['file']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1226,8 +1228,12 @@ class Tools:
                                                                        if pp else ' (no postprocessor CSV: add [Outputs] csv = true)') + '.')
         return r
 
-    def trace_drawing(self, file, page=0, scale=None, dpi=200):
+    def trace_drawing(self, file, page=0, scale=None, dpi=200, mode='outline'):
         from . import vectorize
+        if str(mode).lower() in ('centerline', 'centreline', 'center', 'centre', 'lines'):
+            r = vectorize.trace_centerline(self._path(file), page=int(page), scale=scale, dpi=dpi)
+            r['dxf'] = os.path.basename(r['dxf'])
+            return r
         r = vectorize.trace(self._path(file), page=int(page), scale=scale, dpi=dpi)
         r['svg'], r['dxf'] = os.path.basename(r['svg']), os.path.basename(r['dxf'])
         return r
@@ -1836,7 +1842,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'p&id|\bpid\b|dexpi|pumps?, tanks|equipment list|instrument', ('dexpi', 'pid_kg')),
     (r'\.stp\b|\.step\b|\.iges?\b|sldprt|catpart|solidworks|catia|inventor|fusion|rhino|freecad|\.prt\b|native', ('native_cad', 'file_info')),
     (r'\.stl\b|scan(ned)? (part|mesh)|reverse', ('reverse_cad', 'stl_to_step')),
-    (r'scan|trace|vector(ise|ize)|raster|photo of', ('trace_drawing',)),
+    (r'scan|trace|cent(er|re) ?line|vector(ise|ize)|raster|photo of', ('trace_drawing',)),
     (r'compare|revision|rev\b|what changed|difference between', ('compare_drawings', 'compare_structures')),
     (r'quality|jacobian|warpage|skew|aspect|element check', ('fe_quality', 'mesh_check')),
     (r'topology|lightening|lighten|material layout|bracket shape|optimi[sz]e .*(bracket|shape|layout)', ('topology',)),
