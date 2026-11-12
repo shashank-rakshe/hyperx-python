@@ -82,7 +82,7 @@ ENGINES = [
     ('OpenCourant / OpenRadioss', {'impact'}, 'knowledge', 'knowledge_search(query, scope="OpenCourantRP")',
      ['starter_linux64_gf', 'starter_win64.exe', 'engine_linux64_gf'], 'OpenCourantRP',
      'explicit dynamics (collision, grounding, drop, sloshing); Radioss input decks'),
-    ('OpenFOAM', {'cfd', 'heat'}, 'knowledge', 'knowledge_search + guided case set-up',
+    ('OpenFOAM', {'cfd', 'heat'}, 'runs', 'openfoam_flow(velocity, fluid, body_file ...) steady laminar / SST flow past a plate or a STEP part; flow_load_stress(file, velocity, fix) = flow -> forces -> stress',
      ['simpleFoam', 'blockMesh', 'interFoam'], None, 'free CFD (GPL): resistance, wind loads, sloshing (interFoam)'),
     ('Elmer', {'heat', 'cfd', 'static', 'modal'}, 'runs', 'elmer_flow(velocity, fluid, plate_h, plate = rigid | elastic ...) - 2D plate in a channel, laminar / SST, FSI',
      ['ElmerSolver', 'ElmerGrid'], None, 'free multiphysics FE (heat, flow, FSI)'),

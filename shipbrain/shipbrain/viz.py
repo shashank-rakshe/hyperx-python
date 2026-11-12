@@ -268,3 +268,46 @@ def render_flow(vtu, out_png, field='velocity', scale=None, arrows=True, title=N
     ax.set_title(title or os.path.basename(vtu) + ' - ' + field)
     fig.tight_layout(); fig.savefig(out_png, dpi=dpi); plt.close(fig)
     return {'png': out_png, 'field': field, 'min': lo, 'max': hi, 'deformation_scale': sc}
+
+
+def render_slice(res, grid, out_png, field='velocity', plane='xy', at=None, title=None, size=(11, 5.5), dpi=130, cmap='turbo', arrows=True):
+    """a slice through an OpenFOAM result (openfoam.results) on ShipBrain's own grid: plane 'xy' (side view, at z = `at`, default mid) or 'xz'
+    (plan view, at y = `at`, default 10 % of the height). Cells of the body are left white."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.collections import PolyCollection
+    axes = grid['axes']
+    ia, ib, ic = (0, 1, 2) if plane == 'xy' else (0, 2, 1)
+    cut = axes[ic]
+    if at is None:
+        at = 0.5 * (cut[0] + cut[-1]) if plane == 'xy' else cut[0] + 0.1 * (cut[-1] - cut[0])
+    kc = int(np.clip(np.searchsorted(cut, at) - 1, 0, len(cut) - 2))
+    U, p, cells = res['U_cells'], res['p_cells'], res['cells']
+    val = np.linalg.norm(U, axis=1) if field == 'velocity' else p
+    polys, fv, vecs, ctr = [], [], [], []
+    for n, c in enumerate(cells):
+        if c[ic] != kc:
+            continue
+        a0, a1, b0, b1 = axes[ia][c[ia]], axes[ia][c[ia] + 1], axes[ib][c[ib]], axes[ib][c[ib] + 1]
+        polys.append([(a0, b0), (a1, b0), (a1, b1), (a0, b1)])
+        fv.append(val[n])
+        vecs.append((U[n][ia], U[n][ib]))
+        ctr.append(((a0 + a1) / 2, (b0 + b1) / 2))
+    if not polys:
+        raise ValueError('nothing in that slice')
+    fv = np.array(fv)
+    fig, ax = plt.subplots(figsize=size)
+    pc = PolyCollection(polys, array=fv, cmap=cmap, edgecolors='none')
+    ax.add_collection(pc)
+    if arrows:
+        step = max(1, len(ctr) // 350)
+        ctr, vecs = np.array(ctr), np.array(vecs)
+        ax.quiver(ctr[::step, 0], ctr[::step, 1], vecs[::step, 0], vecs[::step, 1], color='k', width=0.0012, alpha=0.6)
+    ax.set_xlim(axes[ia][0], axes[ia][-1]); ax.set_ylim(axes[ib][0], axes[ib][-1]); ax.set_aspect('equal')
+    ax.set_xlabel('xyz'[ia] + ' [m]'); ax.set_ylabel('xyz'[ib] + ' [m]')
+    cb = fig.colorbar(pc, ax=ax, shrink=0.8)
+    cb.set_label('velocity magnitude [m/s]' if field == 'velocity' else 'pressure [Pa]')
+    ax.set_title(title or f'{field}, slice {plane} at {"xyz"[ic]} = {(cut[kc] + cut[kc + 1]) / 2:.3g} m')
+    fig.tight_layout(); fig.savefig(out_png, dpi=dpi); plt.close(fig)
+    return {'png': out_png, 'field': field, 'min': float(fv.min()), 'max': float(fv.max())}

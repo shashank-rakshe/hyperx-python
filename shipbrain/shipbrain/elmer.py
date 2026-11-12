@@ -288,7 +288,7 @@ def _sif(name, rho, mu, U, plate, structure, turbulence, steady, dt, steps, H, w
       + ('' if sst else '  Linear System Solver = Direct\n  Linear System Direct Method = UMFPACK\n') +
       f'  Nonlinear System Max Iterations = {1 if (fsi or trans or sst) else 30}\n  Nonlinear System Convergence Tolerance = 1.0e-6\n'
       + ('  Nonlinear System Newton After Iterations = 10\n  Nonlinear System Newton After Tolerance = 1.0e-2\n  Nonlinear System Relaxation Factor = 0.5\n'
-         if sst else '  Nonlinear System Newton After Iterations = 3\n  Nonlinear System Newton After Tolerance = 1.0e-3\n  Nonlinear System Relaxation Factor = 1.0\n')
+         if sst else '  Nonlinear System Newton After Iterations = 8\n  Nonlinear System Newton After Tolerance = 1.0e-3\n  Nonlinear System Relaxation Factor = 0.7\n')
       + ('  Linear System Solver = Iterative\n  Linear System Iterative Method = BiCGStabL\n  Linear System Preconditioning = ILU1\n  Linear System Max Iterations = 1000\n'
          '  Linear System Convergence Tolerance = 1.0e-7\n' if sst else '')
       + '  Steady State Convergence Tolerance = 1.0e-5\nEnd')

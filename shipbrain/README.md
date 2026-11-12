@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 112/112, wrong replies 0/112.
+replies score 114/114, wrong replies 0/114.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1120,6 +1120,21 @@ Checked (`tests/test_pulsation.py`): closed-closed and open-closed pipe modes n 
 water speed of sound with the wall correction, a three-leg route equal to one straight column (corners connect), and simply supported pipe bending modes
 within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
 Training: `training/pulsation_tasks.py`.
+
+### 3D flow with OpenFOAM and the flow-to-stress chain
+
+`openfoam_flow` runs OpenFOAM (GPL-3, OpenCFD/ESI; v1912 from Ubuntu's `openfoam` package) - simpleFoam, steady incompressible, laminar or RANS k-omega SST with wall functions -
+on a plate or on a part from a STEP / STL file, 2D or 3D. ShipBrain writes everything around it with its own code (`openfoam.py`): the graded block grid, the part cut out
+cell by cell (stair-stepped wall), the polyMesh written directly (no gmsh, no blockMesh, no snappyHexMesh), the case files, and the results read from OpenFOAM's ASCII output
+(forces are summed from the face pressures and wall shear by ShipBrain; the `forces` function object crashes in this Ubuntu build). Pictures: velocity and pressure slices.
+
+`flow_load_stress` chains it: the force on every face of the body goes to the nearest element of the part's shell mesh (nodal forces, their sum equals the flow force exactly -
+tested), CalculiX solves displacement and von Mises, and the stress and displacement pictures are made (`flowload.py`). One-way coupling.
+
+Checked (`tests/test_openfoam.py`, skipped when OpenFOAM is missing): checkMesh passes on the written 2D and 3D meshes; channel flow is parabolic (umax = 1.5 x mean within 3 %,
+dp/dx within 5 %); the drag coefficient of a plate in a channel at Re 70 agrees with Elmer's (refined: OpenFOAM 7.29, 7.18, 7.10 and Elmer 6.26, 6.87, 7.24 at 40, 20, 10 mm
+cells - the two solvers converge to the same value); the nodal forces sum to the flow force. NOT validated against measurements: the SST runs and the loads on curved or
+bent parts (stair-stepped wall, coarse grid). Not covered: free surface, waves, ship motions, transient LES. Training: `training/openfoam_tasks.py`.
 
 ### Flow and fluid-structure interaction (Elmer FEM)
 

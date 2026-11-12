@@ -433,6 +433,22 @@ class Tools:
                                                          'material': {'type': 'string', 'enum': ['steel', 'aluminium', 'rubber', 'plastic']}, 'E_pa': num, 'poisson': num,
                                                          'turbulence': {'type': 'string', 'enum': ['laminar', 'sst']}, 'cell': num, 'name': {'type': 'string'}},
                        'required': ['velocity']})
+        self.register('openfoam_flow', self.openfoam_flow, 'CFD with OpenFOAM (free, GPL; simpleFoam steady incompressible, laminar or RANS k-omega SST; needs OpenFOAM installed): '
+                      'water / seawater / air / oil flowing past a body in a channel, 2D or 3D, SI units. The body is a plate (plate_t, plate_h, plate_w) or a PART from a '
+                      'STEP / STL file in the workspace (placed on the channel floor; stair-stepped wall - rough on curved parts). Returns drag and side forces, drag coefficient, '
+                      'velocity and pressure ranges, whether it converged, and writes pictures (velocity and pressure slices). Mesh made by ShipBrain (no gmsh).',
+                      {'type': 'object', 'properties': {'velocity': num, 'fluid': {'type': 'string', 'enum': ['water', 'seawater', 'air', 'oil']}, 'body_file': {'type': 'string'},
+                                                         'length': num, 'height': num, 'width': num, 'plate_x': num, 'plate_t': num, 'plate_h': num, 'plate_w': num,
+                                                         'turbulence': {'type': 'string', 'enum': ['laminar', 'sst']}, 'cell': num, 'iterations': {'type': 'integer'},
+                                                         'name': {'type': 'string'}}, 'required': ['velocity']})
+        self.register('flow_load_stress', self.flow_load_stress, 'ONE-WAY FLUID-STRUCTURE chain for a part from a STEP file: (1) OpenFOAM flow past the part (3D, SI, water / seawater / '
+                      'air / oil, laminar or SST k-omega), (2) the pressure + shear forces on its faces become nodal forces on the part\'s shell mesh (conserved: their sum equals the '
+                      'body force), (3) CalculiX gives displacement and von Mises stress with the supports you name (fix = [{"x": -500, "dof": "123456"}] in the part\'s mm), '
+                      '(4) pictures of the flow (velocity, pressure) and of the stress and displacement. Channel size and cell default from the part size. The part is placed on the '
+                      'channel floor, flow along +x. Not two-way: the bending does not change the flow (use elmer_flow for a flexible plate).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'velocity': num, 'fluid': {'type': 'string', 'enum': ['water', 'seawater', 'air', 'oil']},
+                                                         'fix': {'type': 'array'}, 'thickness_mm': num, 'element_size': num, 'turbulence': {'type': 'string', 'enum': ['laminar', 'sst']},
+                                                         'cell': num, 'name': {'type': 'string'}}, 'required': ['file', 'velocity', 'fix']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1611,6 +1627,71 @@ class Tools:
         r['plain_english'] = s + ' Pictures: ' + ', '.join(files[1:]) + '.'
         return r
 
+    def openfoam_flow(self, velocity, fluid='water', body_file=None, length=2.0, height=1.0, width=None, plate_x=0.5, plate_t=0.02, plate_h=0.4, plate_w=None,
+                      turbulence='laminar', cell=0.02, iterations=None, name='of_flow'):
+        from . import openfoam, viz
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        kw = dict(velocity=float(velocity), fluid=fluid, length=float(length), height=float(height), width=float(width) if width else None, plate_x=float(plate_x),
+                  plate_t=float(plate_t), plate_h=float(plate_h), plate_w=float(plate_w) if plate_w else None, turbulence=turbulence, cell=float(cell),
+                  end_iter=int(iterations) if iterations else None)
+        if body_file:
+            kw['body_file'] = self._path(body_file)
+        out, res, info = openfoam.solve(self.workdir, name, **kw)
+        files = []
+        for f in ('velocity', 'pressure'):
+            png = os.path.join(self.workdir, f'{name}_{f}.png')
+            viz.render_slice(res, info['grid'], png, field=f)
+            files.append(os.path.basename(png))
+        out['files'] = files
+        s = (f"{fluid} at {velocity:g} m/s past the {'part ' + os.path.basename(body_file) if body_file else 'plate'} ({'2D' if out['two_d'] else '3D'}, {out['cells']:,} cells, "
+             f"{turbulence}): drag {out['drag_n']:.4g} N (Cd {out['drag_coefficient']} on the {out['frontal_area_m2']:g} m2 frontal area), side force {out['side_force_y_n']:.3g} N up, "
+             f"pressure from {out['pressure_min_pa']:.4g} to {out['pressure_max_pa']:.4g} Pa, highest velocity {out['max_velocity_m_s']:.4g} m/s.")
+        if not out['converged']:
+            s += (f" WARNING: not converged after {out['iterations']} iterations (pressure residual {out['last_pressure_residual']:.2g}): the numbers are indicative; "
+                  "run more iterations, refine, or use a transient run.")
+        if body_file:
+            s += ' The part wall is stair-stepped on the grid: forces on curved parts are approximate.'
+        out['plain_english'] = s + ' Pictures: ' + ', '.join(files) + '.'
+        return out
+
+    def flow_load_stress(self, file, velocity, fix, fluid='water', thickness_mm=10.0, element_size=50.0, turbulence='sst', cell=None, name='fls'):
+        from . import openfoam, flowload, cadplates, viz, solver as _s
+        from .femodel import FEModel
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        src = self._path(file)
+        _, (bx0, by0, bz0, bx1, by1, bz1) = openfoam._voxel_body(src, 'mm')
+        D = max(bx1 - bx0, by1 - by0, bz1 - bz0)
+        cell = float(cell) if cell else round(D / 10, 3)
+        out, res, info = openfoam.solve(self.workdir, name + '_flow', velocity=float(velocity), fluid=fluid, length=6 * D, height=max(2 * D, 2.5 * (by1 - by0)), width=3 * D,
+                                        plate_x=1.5 * D, body_file=src, turbulence=turbulence, cell=cell)
+        m, minfo = cadplates.mesh_cad(src, float(element_size), float(thickness_mm), self.workdir, name=name + '_fe', fix=fix)
+        inp = os.path.join(self.workdir, name + '_fe.inp')
+        F = flowload.nodal_forces(FEModel.read(inp), res['body_faces'], info['offset'])
+        flowload.write_cload(inp, F)
+        fsum = sum(F.values())
+        sol = _s.run_calculix(inp)
+        files = []
+        for f in ('velocity', 'pressure'):
+            png = os.path.join(self.workdir, f'{name}_{f}.png')
+            viz.render_slice(res, info['grid'], png, field=f)
+            files.append(os.path.basename(png))
+        pics = {}
+        for f in ('von_mises', 'displacement'):
+            png = os.path.join(self.workdir, f'{name}_{f}.png')
+            pics[f] = viz.render(inp, png, frd=sol['frd'], field=f)
+            files.append(os.path.basename(png))
+        r = {'flow': {k: out[k] for k in ('cells', 'converged', 'iterations', 'drag_n', 'side_force_y_n', 'drag_coefficient', 'max_velocity_m_s', 'pressure_min_pa', 'pressure_max_pa')},
+             'force_applied_n': [round(float(x), 4) for x in fsum], 'max_displacement_mm': sol['max_displacement_mm'], 'max_von_mises_MPa': sol['max_von_mises_MPa'],
+             'shell_elements': minfo['elements'], 'files': files}
+        s = (f"{fluid} at {velocity:g} m/s past {os.path.basename(file)} ({out['cells']:,} flow cells, {turbulence}): drag {out['drag_n']:.4g} N, vertical force "
+             f"{out['side_force_y_n']:.3g} N. Those forces ({fsum[0]:.4g}, {fsum[1]:.4g}, {fsum[2]:.3g} N - equal to the flow force) loaded the {minfo['elements']:,}-element shell model: "
+             f"max displacement {sol['max_displacement_mm']} mm, max von Mises {sol['max_von_mises_MPa']} MPa (shell nodal maximum). Pictures: {', '.join(files)}.")
+        if not out['converged']:
+            s += ' WARNING: the flow solution did not fully converge: treat the loads as indicative.'
+        s += ' The flow sees the part stair-stepped on a coarse grid and the structure is one-way coupled: an engineering estimate, check with a finer grid.'
+        r['plain_english'] = s
+        return r
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -2218,7 +2299,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'\.stp\b|\.step\b|\.iges?\b|sldprt|catpart|solidworks|catia|inventor|fusion|rhino|freecad|\.prt\b|native', ('native_cad', 'file_info')),
     (r'\.stl\b|scan(ned)? (part|mesh)|reverse', ('reverse_cad', 'stl_to_step')),
     (r'\bpicture\b|\bimage\b|visuali[sz]|show (me )?(the )?(stress|result|model|plot)|contour|render|screenshot of (the )?(model|mesh)|plot (the )?(stress|displacement)|paraview|\.vtu', ('show_result',)),
-    (r'\bcfd\b|\bfsi\b|fluid.structure|\belmer\b|flow (past|around|over|on)|drag|(water|air|wind|current) (at|of) [0-9.]+ ?m/s|navier|turbulen|k-?omega|pressure distribution|wave load', ('elmer_flow', 'physics_lab')),
+    (r'\bcfd\b|\bfsi\b|fluid.structure|\belmer\b|flow (past|around|over|on)|drag|(water|air|wind|current) (at|of) [0-9.]+ ?m/s|navier|turbulen|k-?omega|pressure distribution|wave load|openfoam|simplefoam', ('elmer_flow', 'openfoam_flow', 'flow_load_stress', 'physics_lab')),
     (r'finite[- ]volume|\bfvm\b|1d (cfd|diffusion|convection|conduction)|\btdma\b|simple algorithm|upwind|central differenc', ('fvm_1d',)),
     (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),
     (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),
