@@ -330,6 +330,13 @@ class Tools:
                       {'type': 'object', 'properties': {'flow_m3h': num, 'segments': {'type': 'array'}, 'branches': {'type': 'array'},
                                                          'fluid': {'type': 'string'}, 'density': num, 'viscosity_cst': num,
                                                          'pump_efficiency': num}, 'required': ['flow_m3h', 'segments']})
+        self.register('hex_mesh', self.hex_mesh, 'Hexahedral (brick) mesh of a SOLID part - castings, foundations, shaft brackets, lugs, thick '
+                      'plates - with ShipBrain\'s own mesher: voxel grid whose boundary nodes are snapped onto the true surface, '
+                      'sharp edges and corners, every brick checked (scaled Jacobian). file: .step/.stp/.brep/.stl; size = cell size '
+                      '(mm; about a third of the thinnest wall at most); to: inp (CalculiX / Abaqus) | bdf (Nastran) | fem (OptiStruct); '
+                      'E, nu; feature_angle (deg, default 35). Reports volume against the exact volume and the quality.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'size': num, 'to': {'type': 'string'}, 'E': num,
+                                                         'nu': num, 'feature_angle': num}, 'required': ['file', 'size']})
         self.register('reverse_cad', self.reverse_cad, 'Mesh (STL scan / 3D-print / mesh export) -> STEP AP242 solid with ReverseCAD '
                       '(non-commercial licence): watertight B-Rep, volume, area, centre of mass, inertia, mass for a material, '
                       'recognised holes / ISO threads / fillets / chamfers / slots / cavities, and its own verification of the STEP '
@@ -1209,6 +1216,15 @@ class Tools:
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
                              pump_efficiency=pump_efficiency, branches=branches)
 
+    def hex_mesh(self, file, size, to='inp', E=206000.0, nu=0.3, feature_angle=35.0):
+        from . import hexmesh
+        ext = {'inp': '.inp', 'bdf': '.bdf', 'fem': '.fem'}.get(str(to).lower().strip('.'), '.inp')
+        out = os.path.splitext(self._path(file))[0] + '_hex' + ext
+        r = hexmesh.write(self._path(file), float(size), out, E=float(E), nu=float(nu), feature_angle=float(feature_angle))
+        r['file'] = os.path.basename(out)
+        r.pop('volume', None)
+        return {k: (round(v, 4) if isinstance(v, float) else v) for k, v in r.items()}
+
     def reverse_cad(self, file, material=None, heatmap=False):
         from . import reversecad
         src = self._path(file)
@@ -1786,6 +1802,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'\bnx\b|journal|simcenter|nx open|\.sim\b', ('nx_open', 'nx_rename')),
     (r'moose|\.i\b|multiphysics', ('moose_plate', 'moose_run')),
     (r'ocx|3docx', ('ocx_read', 'ocx_syntax', 'ocx_validate', 'ocx_write')),
+    (r'hex(a|ahedral)?\b|hexahedr|brick (mesh|element)|solid mesh|casting|forging|foundation|shaft bracket|lug\b|thick plate', ('hex_mesh', 'cad_mesh')),
     (r'mesh|element size|fea|fe model', ('cad_mesh', 'panel_mesh', 'plates_mesh', 'analysis_run')),
     (r'frame|beam|portal|truss|column|pipe support', ('frame_solve',)),
     (r'fatigue|hot ?spot|weld toe', ('fatigue_mesh',)),

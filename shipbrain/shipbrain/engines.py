@@ -57,6 +57,8 @@ ENGINES = [
      'paid programs; RhinoInside.NX (no open licence, early beta) links them - ShipBrain gives its download link only'),
     ('cadmpeg (native CAD reader)', {'cad'}, 'runs', 'native_cad(file, op="convert"|"inspect"|"measure"|"diff")', ['@cadmpeg'], 'cadmpeg',
      'opens SolidWorks / CATIA / Inventor / Fusion / Rhino / FreeCAD / ACIS / IGES files and writes STEP (Apache-2.0)'),
+    ('ShipBrain hex mesher', {'mesh': 'runs', 'static': 'runs'}, 'runs', 'hex_mesh(file, size, to)', [], None,
+     'own code (voxel grid, boundary snapped to the surface, edges and corners, Jacobian-checked); checked against Peterson Kt and beam theory'),
     ('ProcessPi (pipe hydraulics)', {'hydraulics'}, 'runs', 'pipe_flow(flow_m3h, segments, fluid, branches)', [], 'processpi',
      'MIT; Darcy-Weisbach / Colebrook, valve and bend K / Le-D tables, elevation, parallel branches; fluids set by ShipBrain'),
     ('TensorMesh (differentiable FE on PyTorch)', {'topology': 'runs', 'static': 'runs'}, 'runs',

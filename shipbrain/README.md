@@ -321,6 +321,33 @@ image `idaholab/moose` (all modules compiled; ShipBrain runs it by itself with t
 - Knowledge pack `packs/moose.sbpack`: the docs of the framework syntax, solid mechanics, heat transfer, contact and XFEM,
   and their example / test input files (6 344 chunks). Skill `moose`; install card (Docker is the easiest).
 
+## Hexahedral meshing of solid parts: ShipBrain's own hex mesher
+
+`shipbrain/hexmesh.py` (own code, numpy only, no Gmsh; the idea of voxel / octree hex meshing with feature-preserving
+snapping comes from the published paper by Gao et al. 2019 - none of the paper's code, which has no licence, is used).
+Tool `hex_mesh(file, size, to)`: STEP / BREP / STL -> hexahedra written as `.inp` (CalculiX / Abaqus), `.bdf` (Nastran)
+or `.fem` (OptiStruct). For castings, foundations, shaft brackets, lugs and thick plates - not for thin plates (use the
+shell meshers).
+
+1. a regular grid whose cell size divides each side of the bounding box exactly (axis-aligned faces come out exact);
+2. a cell is solid when its centre is inside the part (ray parity down every grid column);
+3. the solid cells are the hexahedra - one conforming mesh, no hanging nodes (a uniform grid, not an octree);
+4. boundary nodes are snapped onto the true surface, nodes near a sharp edge (dihedral angle > 35 deg) onto that edge,
+   nodes near a corner onto the corner; interior nodes are smoothed; the moves grow in ten steps and a node is held back
+   only where going on would make a brick poor (scaled Jacobian below 0.3), so the mesh is always valid;
+5. the answer reports the exact-volume error, the worst and mean scaled Jacobian and how many nodes were snapped.
+
+Checked (not only run):
+- volumes within 0.1-1.5 % of the exact CAD volume (plain voxels 0.2-4 %), no inverted brick on blocks, plates with holes,
+  cylinders, flanges, L brackets;
+- through CalculiX (C3D8I) a 200 x 40 x 20 cantilever is within 1.4-1.9 % of beam theory with shear on 160 to 4 320 bricks;
+- a plate with a hole in tension (hole / width = 0.5) against Peterson's Kt: stress at the hole side -4.6 %, +2.3 %,
+  +1.4 % of the published value at 3, 2 and 1.5 mm cells (3 786 to 35 056 bricks). A single-node maximum on the hole edge
+  can spike (nodal extrapolation noise): compare the stress at a point and refine.
+Limits (said in the answers): a uniform grid follows curved surfaces in steps; features smaller than a cell vanish; thin
+walls need cells of about a third of the wall. A size that would make more than 4 million cells is refused with a
+suggestion. Skill `hex-mesh`, 60 training conversations from real meshing runs (`training/hexmesh_tasks.py`), tests.
+
 ## Differentiable FE and topology optimisation: TensorMesh (Apache-2.0)
 
 [TensorMesh](https://github.com/camlab-ethz/TensorMesh) (CAMLab, ETH Zurich) is copied as written in `vendor/tensormesh`
@@ -878,7 +905,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 83/83, wrong replies 0/83.
+replies score 86/86, wrong replies 0/86.
 
 ### Understanding users: asking, units, design loops, error recovery
 
