@@ -1121,6 +1121,13 @@ water speed of sound with the wall correction, a three-leg route equal to one st
 within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
 Training: `training/pulsation_tasks.py`.
 
+### Pictures of models and results (`show_result`)
+
+`viz.py` draws a STEP / STL / mesh as a shaded picture, or a CalculiX result on the mesh (von Mises stress, displacement drawn deformed) with a colour bar, as a
+PNG (matplotlib, no GUI, own code), and writes an ASCII VTU for ParaView. CalculiX expands shells and renumbers nodes, so the value at a shell node is taken from the
+expanded nodes around it (displacement: mean, stress: largest). Checked (`tests/test_viz.py`): the pictured maxima equal CalculiX's (displacement 2 %, stress 10 %)
+on a cantilever plate whose tip deflection matches beam theory P L3 / 3EI within 8 %.
+
 ### 1D finite volume cases (Finite-Volume-Method-for-1D-CFD-Simulations)
 
 `fvm_1d` runs the repo's own MATLAB/Octave scripts (MIT, Mohith Sai Gorla; copied unchanged in `vendor/fvm1d/repo`) in Octave: steady conduction,

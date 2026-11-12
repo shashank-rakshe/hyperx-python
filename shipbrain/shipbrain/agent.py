@@ -418,6 +418,11 @@ class Tools:
                       'convection_diffusion (central scheme: rho, u, K, L, n, phi_a, phi_b) or simple (1D duct pressure correction: rho, A). Returns the nodal '
                       'values and, where an exact solution exists, the exact values and the largest error. Teaching-size 1D problems only - not a 3D CFD solver.',
                       {'type': 'object', 'properties': {'case': {'type': 'string'}, 'params': {'type': 'object'}}, 'required': ['case']})
+        self.register('show_result', self.show_result, 'Make a PICTURE (png) of a model or an analysis result: the geometry of a STEP / STL / mesh (.inp, .bdf), or a '
+                      'result field on the mesh - von_mises stress or displacement (drawn deformed) - from the CalculiX .frd next to it; view iso / front / top / side; '
+                      'optional ParaView file (.vtu). Run the analysis first (solve_calculix / analysis_run) for a field.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'frd': {'type': 'string'}, 'field': {'type': 'string', 'enum': ['von_mises', 'displacement']},
+                                                         'view': {'type': 'string'}, 'scale': num, 'vtu': {'type': 'boolean'}}, 'required': ['file']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1545,6 +1550,27 @@ class Tools:
                                   f"{r['max_error']:g}. Values at the cell centres and both ends: {r['values']}.")
         return r
 
+    def show_result(self, file, frd=None, field=None, view='iso', scale=None, vtu=False):
+        from . import viz
+        src = self._path(file)
+        base = os.path.splitext(src)[0]
+        if field and not frd:
+            cand = base + '.frd'
+            if not os.path.exists(cand):
+                return {'error': 'no result file next to ' + file + ': run the analysis first (solve_calculix or analysis_run)'}
+            frd = cand
+        out = base + ('_' + field if field else '_view') + '.png'
+        info = viz.render(src, out, frd=self._path(frd) if frd else None, field=field, view=view, scale=scale)
+        info['png'] = os.path.basename(out)
+        files = [info['png']]
+        if vtu:
+            files.append(os.path.basename(viz.export_vtu(src, base + '.vtu', frd=self._path(frd) if frd else None)))
+        info['files'] = files
+        info['plain_english'] = (f"Picture {info['png']}: " + (f"{field.replace('_', ' ')} from {info['min']:.3g} to {info['max']:.3g} {info['units']}"
+                                 + (f", drawn deformed x{info['deformation_scale']:g}" if field == 'displacement' else '') if field else f"{info['faces']} faces, view {view}")
+                                 + (f". ParaView file {files[-1]}." if vtu else '.'))
+        return info
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -2151,6 +2177,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'p&id|\bpid\b|dexpi|pumps?, tanks|equipment list|instrument', ('dexpi', 'pid_kg')),
     (r'\.stp\b|\.step\b|\.iges?\b|sldprt|catpart|solidworks|catia|inventor|fusion|rhino|freecad|\.prt\b|native', ('native_cad', 'file_info')),
     (r'\.stl\b|scan(ned)? (part|mesh)|reverse', ('reverse_cad', 'stl_to_step')),
+    (r'\bpicture\b|\bimage\b|visuali[sz]|show (me )?(the )?(stress|result|model|plot)|contour|render|screenshot of (the )?(model|mesh)|plot (the )?(stress|displacement)|paraview|\.vtu', ('show_result',)),
     (r'finite[- ]volume|\bfvm\b|1d (cfd|diffusion|convection|conduction)|\btdma\b|simple algorithm|upwind|central differenc', ('fvm_1d',)),
     (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),
     (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),
