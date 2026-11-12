@@ -132,6 +132,7 @@ def _items():
     add('missing', 'I need a hexahedral mesh for my casting', ask=True)
     add('missing', 'Make a drawing of a stiffened deck panel', ask=True)
     add('missing', 'fuel line 30 m3/h ka pressure drop?', ask=True)
+    add('missing', 'Verify the flexural steel of my concrete footing against the code', ask=True)
     add('missing', 'Does my gusset plate brace connection pass the AISC checks?', ask=True)
     add('missing', 'Give me the 3D model of a beam to column joint', ask=True)
     add('missing', 'Draw the 3D pipe between the pump and the tank for me', ask=True)

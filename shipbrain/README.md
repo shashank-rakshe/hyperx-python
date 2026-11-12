@@ -925,7 +925,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 98/98, wrong replies 0/98.
+replies score 99/99, wrong replies 0/99.
 
 ### Understanding users: asking, units, design loops, error recovery
 
@@ -1071,6 +1071,17 @@ rupture, welds, column flange / web / panel zone, stiffeners, block shear ...), 
 example inputs reproduce their own results (maximum ratio and every check, 4 connection types), a metric end plate case fails by 4 % on plate
 thickness and passes after thickening to 32 mm, wrong or missing inputs return Osoconn's message. Its AISC section database (557 W shapes,
 angles, channels) also feeds `steel_connection`, so beams and columns can be W shapes. Not Eurocode. Training: `training/osoconn_tasks.py`.
+
+### XC called during assessments
+
+XC (open source finite elements with structural code checks: Eurocode 2 / 3, ACI 318, AISC 360, EHE, SIA, EAE; fibre sections,
+non-linear and dynamic runs, construction phases) is in the knowledge pack `xc` (the whole repository) and is RUN through `xc_run`:
+the question is routed to XC by `choose_engine` (new analysis type "rc" - concrete / code checks - and "ultimate"), the model finds the
+closest worked verification example in the pack, adapts it to the user's numbers, runs the script and reports what it printed
+(skill `xc-assessment`). XC itself is not copied (C++ with many libraries): ShipBrain uses a local install or the Docker image
+`engthiago/xcfem`, and when neither is there the tool returns an install card and keeps the script. Tested with a stand-in module (script
+run, output and files, failing script, install card, routing); NOT tested against a real XC here. Training (27 conversations,
+`training/xc_tasks.py`) teaches routing, asking for missing inputs and the honest not-installed path; no XC result is ever invented.
 
 ## Tests
 

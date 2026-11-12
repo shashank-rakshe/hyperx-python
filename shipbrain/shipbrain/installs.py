@@ -163,6 +163,11 @@ SOFTWARE = {
                                '(all modules, program moose-opt; ShipBrain runs it by itself). Or the conda / source build from '
                                'the link (Windows: inside WSL2).'},
               'check': lambda: __import__('shipbrain.moose', fromlist=['x']).exe() is not None, 'match': r'MOOSE is not installed'},
+    'xcfem': {'name': 'XC (free structural FE and code checking)', 'why': 'to run reinforced concrete and steel code checks and non-linear '
+                    'models written for XC', 'link': 'https://github.com/xcfem/xc',
+              'steps': {'all': 'easiest: install Docker (https://docs.docker.com/get-docker/), then: docker pull engthiago/xcfem   '
+                               '(ShipBrain runs it by itself). Or the native Linux build: https://github.com/xcfem/xc/blob/master/install/install.md'},
+              'check': lambda: __import__('shipbrain.xcfem', fromlist=['x']).exe() is not None, 'match': r'XC is not installed'},
     'vtracer': {'name': 'VTracer (free, MIT)', 'why': 'to turn scanned drawings (PNG / JPG / TIFF / scanned PDF) into vectors (DXF / SVG)',
                 'link': 'https://pypi.org/project/vtracer/', 'steps': {'all': 'pip install "vtracer==1.0.0a4"'},
                 'check': lambda: (lambda m: m is not None and hasattr(m, 'Config'))(__import__('importlib').util.find_spec('vtracer') and __import__('vtracer')),
@@ -238,7 +243,7 @@ SOFTWARE = {
 
 ENGINE_KEYS = {'CalculiX': 'calculix', 'ShipBrain fatigue': 'calculix', 'ShipBrain AI surrogate': 'calculix', 'MYSTRAN': 'mystran',
                'OpenFOAM': 'openfoam', 'Elmer': 'elmer', 'Code_Aster': 'code_aster', 'OpenCourant': 'openradioss',
-               'OpenPhysicsAI': 'cc', 'Awatif': 'wasmtime'}
+               'OpenPhysicsAI': 'cc', 'Awatif': 'wasmtime', 'MOOSE': 'moose', 'XC': 'xcfem'}
 
 
 def os_key():

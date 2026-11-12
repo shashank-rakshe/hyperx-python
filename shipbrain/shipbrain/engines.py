@@ -27,6 +27,7 @@ ANALYSES = {   # analysis type -> words that point to it
     'topology': r'topology|lightening hole|material layout|where (to put|is) material|lighten|weight saving|optimi[sz]e (the )?(shape|bracket|web|layout)',
     'mooring': r'mooring|anchor (line|chain)|catenary|fairlead|chain grade|\bR3S?\b|\bR4S?\b|power cable|umbilical|riser|lazy.?wave|touchdown',
     'reverse': r'\bstl\b|scan(ned)? (part|mesh)|reverse.?engineer|mesh to (step|cad|solid)|3d.?print(ed)? (part|file)',
+    'rc': r'reinforced concrete|\brebar\b|concrete (section|beam|slab|column|wall)|eurocode ?[23]|\bEC[23]\b|\bEHE\b|ACI ?318|AISC ?360|\bSIA ?26[23]\b|code check|limit state|fibre? section|interaction diagram|construction phase|steel member (check|design)|member (check|design)',
     'process': r'process simulat|flowsheet|\bflash\b|distillation|column|vapou?r fraction|heat and mass balance|property package|'
                r'thermodynamic|dew point|bubble point|absorber|stripper|reactor|dwsim|phase envelope',
 }
@@ -113,6 +114,10 @@ ENGINES = [
                                   'cfd': 'knowledge', 'ultimate': 'knowledge'}, 'runs',
      'moose_plate(a, b, t, q, clamped) / moose_run(input.i)', ['@moose'], 'moose',
      'LGPL-2.1; shells, solids, contact, XFEM, heat transfer, Navier-Stokes, porous flow; run from the Docker image idaholab/moose'),
+    ('XC (finite elements + structural codes)', {'rc': 'runs', 'ultimate': 'runs'}, 'runs',
+     'knowledge_search (xc pack: worked verification examples) -> xc_run(script)', ['@xc'], 'xc',
+     'GPL-3; reinforced concrete (EC2, ACI 318, EHE, SIA 262) and steel (EC3, AISC 360, EAE) code checks, fibre sections, non-linear '
+     'static / dynamic, construction phases; run from the Docker image engthiago/xcfem or a local install'),
 ]
 
 
@@ -132,6 +137,9 @@ def installed(names):
     if names == ['@moose']:
         from . import moose
         return moose.exe() is not None
+    if names == ['@xc']:
+        from . import xcfem
+        return xcfem.exe() is not None
     if names == ['@torch']:
         import importlib.util
         return importlib.util.find_spec('torch') is not None

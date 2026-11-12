@@ -77,22 +77,23 @@
 {"id": "missing-077", "category": "missing", "user": "I need a hexahedral mesh for my casting", "expect": {"tol": 0.03, "ask": true}}
 {"id": "missing-078", "category": "missing", "user": "Make a drawing of a stiffened deck panel", "expect": {"tol": 0.03, "ask": true}}
 {"id": "missing-079", "category": "missing", "user": "fuel line 30 m3/h ka pressure drop?", "expect": {"tol": 0.03, "ask": true}}
-{"id": "missing-080", "category": "missing", "user": "Does my gusset plate brace connection pass the AISC checks?", "expect": {"tol": 0.03, "ask": true}}
-{"id": "missing-081", "category": "missing", "user": "Give me the 3D model of a beam to column joint", "expect": {"tol": 0.03, "ask": true}}
-{"id": "missing-082", "category": "missing", "user": "Draw the 3D pipe between the pump and the tank for me", "expect": {"tol": 0.03, "ask": true}}
-{"id": "multi-083", "category": "multi", "user": "I uploaded deck_scan.png (old drawing). Make a vector copy and then compare it with deck_rev2.dxf", "expect": {"tool": "trace_drawing", "args": {"file": "deck_scan.png"}, "tol": 0.03}}
-{"id": "multi-084", "category": "multi", "user": "Take foundation.sldprt, convert it, mesh it with 40 mm elements and check the element quality", "expect": {"tool": "native_cad", "args": {"file": "foundation.sldprt"}, "tol": 0.03}}
-{"id": "multi-085", "category": "multi", "user": "Read hatch_cover.step, remove small holes below 8 mm, then mesh for FEA", "expect": {"tool": ["file_info", "repair_model"], "tol": 0.03}}
-{"id": "multi-086", "category": "multi", "user": "Check hold_model.bdf for quality problems and fix the duplicate nodes", "expect": {"tool": ["fe_quality", "mesh_check"], "args": {"file": "hold_model.bdf"}, "tol": 0.03}}
-{"id": "multi-087", "category": "multi", "user": "Here is my scan part.stl - make a STEP and mesh it", "expect": {"tool": ["reverse_cad", "stl_to_step", "file_info"], "args": {"file": "part.stl"}, "tol": 0.03}}
-{"id": "multi-088", "category": "multi", "user": "Design the seawater cooling line for 120 m3/h: size the pipe and find the pump power. Route is 50 m with 8 bends.", "expect": {"tool": "pipe_flow", "args": {"flow_m3h": 120}, "tol": 0.03}}
-{"id": "multi-089", "category": "multi", "user": "Convert block.3dm to STEP and then mesh the plates with 100 mm", "expect": {"tool": "native_cad", "args": {"file": "block.3dm"}, "tol": 0.03}}
-{"id": "multi-090", "category": "multi", "user": "Check the plate 2400x800x12 at 0.05 MPa by hand and then with MOOSE shells", "expect": {"tool": ["plate_check", "moose_plate"], "args": {"a": 2400, "b": 800, "t": 12, "q": 0.05}, "tol": 0.03}}
-{"id": "no_tool-091", "category": "no_tool", "user": "What is the difference between a web frame and an ordinary frame?", "expect": {"tool": ["knowledge_search", null], "tol": 0.03, "no_tool": true}}
-{"id": "no_tool-092", "category": "no_tool", "user": "Why do we use studless chain for offshore moorings?", "expect": {"tool": ["knowledge_search", null], "tol": 0.03, "no_tool": true}}
-{"id": "no_tool-093", "category": "no_tool", "user": "What does Jacobian ratio mean in a mesh quality check?", "expect": {"tool": ["knowledge_search", null], "tol": 0.03, "no_tool": true}}
-{"id": "no_tool-094", "category": "no_tool", "user": "Explain hot spot stress in simple words", "expect": {"tool": ["knowledge_search", null], "tol": 0.03, "no_tool": true}}
-{"id": "no_tool-095", "category": "no_tool", "user": "When is a pipe flow laminar?", "expect": {"tool": ["knowledge_search", null], "tol": 0.03, "no_tool": true}}
-{"id": "no_tool-096", "category": "no_tool", "user": "What is a lightening hole?", "expect": {"tool": ["knowledge_search", null], "tol": 0.03, "no_tool": true}}
-{"id": "no_tool-097", "category": "no_tool", "user": "Hi, what can you do?", "expect": {"tool": [null], "tol": 0.03, "no_tool": true}}
-{"id": "no_tool-098", "category": "no_tool", "user": "What is the difference between R3 and R4 chain grades?", "expect": {"tool": ["knowledge_search", null], "tol": 0.03, "no_tool": true}}
+{"id": "missing-080", "category": "missing", "user": "Verify the flexural steel of my concrete footing against the code", "expect": {"tol": 0.03, "ask": true}}
+{"id": "missing-081", "category": "missing", "user": "Does my gusset plate brace connection pass the AISC checks?", "expect": {"tol": 0.03, "ask": true}}
+{"id": "missing-082", "category": "missing", "user": "Give me the 3D model of a beam to column joint", "expect": {"tol": 0.03, "ask": true}}
+{"id": "missing-083", "category": "missing", "user": "Draw the 3D pipe between the pump and the tank for me", "expect": {"tol": 0.03, "ask": true}}
+{"id": "multi-084", "category": "multi", "user": "I uploaded deck_scan.png (old drawing). Make a vector copy and then compare it with deck_rev2.dxf", "expect": {"tool": "trace_drawing", "args": {"file": "deck_scan.png"}, "tol": 0.03}}
+{"id": "multi-085", "category": "multi", "user": "Take foundation.sldprt, convert it, mesh it with 40 mm elements and check the element quality", "expect": {"tool": "native_cad", "args": {"file": "foundation.sldprt"}, "tol": 0.03}}
+{"id": "multi-086", "category": "multi", "user": "Read hatch_cover.step, remove small holes below 8 mm, then mesh for FEA", "expect": {"tool": ["file_info", "repair_model"], "tol": 0.03}}
+{"id": "multi-087", "category": "multi", "user": "Check hold_model.bdf for quality problems and fix the duplicate nodes", "expect": {"tool": ["fe_quality", "mesh_check"], "args": {"file": "hold_model.bdf"}, "tol": 0.03}}
+{"id": "multi-088", "category": "multi", "user": "Here is my scan part.stl - make a STEP and mesh it", "expect": {"tool": ["reverse_cad", "stl_to_step", "file_info"], "args": {"file": "part.stl"}, "tol": 0.03}}
+{"id": "multi-089", "category": "multi", "user": "Design the seawater cooling line for 120 m3/h: size the pipe and find the pump power. Route is 50 m with 8 bends.", "expect": {"tool": "pipe_flow", "args": {"flow_m3h": 120}, "tol": 0.03}}
+{"id": "multi-090", "category": "multi", "user": "Convert block.3dm to STEP and then mesh the plates with 100 mm", "expect": {"tool": "native_cad", "args": {"file": "block.3dm"}, "tol": 0.03}}
+{"id": "multi-091", "category": "multi", "user": "Check the plate 2400x800x12 at 0.05 MPa by hand and then with MOOSE shells", "expect": {"tool": ["plate_check", "moose_plate"], "args": {"a": 2400, "b": 800, "t": 12, "q": 0.05}, "tol": 0.03}}
+{"id": "no_tool-092", "category": "no_tool", "user": "What is the difference between a web frame and an ordinary frame?", "expect": {"tool": ["knowledge_search", null], "tol": 0.03, "no_tool": true}}
+{"id": "no_tool-093", "category": "no_tool", "user": "Why do we use studless chain for offshore moorings?", "expect": {"tool": ["knowledge_search", null], "tol": 0.03, "no_tool": true}}
+{"id": "no_tool-094", "category": "no_tool", "user": "What does Jacobian ratio mean in a mesh quality check?", "expect": {"tool": ["knowledge_search", null], "tol": 0.03, "no_tool": true}}
+{"id": "no_tool-095", "category": "no_tool", "user": "Explain hot spot stress in simple words", "expect": {"tool": ["knowledge_search", null], "tol": 0.03, "no_tool": true}}
+{"id": "no_tool-096", "category": "no_tool", "user": "When is a pipe flow laminar?", "expect": {"tool": ["knowledge_search", null], "tol": 0.03, "no_tool": true}}
+{"id": "no_tool-097", "category": "no_tool", "user": "What is a lightening hole?", "expect": {"tool": ["knowledge_search", null], "tol": 0.03, "no_tool": true}}
+{"id": "no_tool-098", "category": "no_tool", "user": "Hi, what can you do?", "expect": {"tool": [null], "tol": 0.03, "no_tool": true}}
+{"id": "no_tool-099", "category": "no_tool", "user": "What is the difference between R3 and R4 chain grades?", "expect": {"tool": ["knowledge_search", null], "tol": 0.03, "no_tool": true}}

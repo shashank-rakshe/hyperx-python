@@ -355,6 +355,14 @@ class Tools:
                                                          'params': {'type': 'object'}, 'units': {'type': 'string', 'enum': ['NEWTON_MM', 'KIP_IN']},
                                                          'method': {'type': 'string', 'enum': ['LRFD', 'ASD']}, 'name': {'type': 'string'}},
                        'required': ['kind', 'params']})
+        self.register('xc_run', self.xc_run, 'Run an XC (xcfem, GPL, https://github.com/xcfem/xc) Python script: finite element models with '
+                      'structural CODE CHECKS - reinforced concrete (Eurocode 2, ACI 318, EHE, SIA 262), steel (Eurocode 3, AISC 360, EAE), fibre '
+                      'sections, interaction diagrams, non-linear static / dynamic, construction phases. For assessments of concrete or steel '
+                      'members against a code, or when the user wants XC. First knowledge_search the xc pack for the closest worked example '
+                      '(its verification models), adapt it to the user\'s structure and loads, run it here; report what the script printed. '
+                      'Needs XC installed (Docker image engthiago/xcfem or a local install): if not, the answer says how to install it.',
+                      {'type': 'object', 'properties': {'script': {'type': 'string', 'description': 'full Python text of the XC model; it must print or write its results'},
+                                                         'name': {'type': 'string'}}, 'required': ['script']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1364,6 +1372,10 @@ class Tools:
         r = osoconn.run(kind, params, method=method, units=units, workdir=self.workdir, name=name)
         return r
 
+    def xc_run(self, script, name='xc_model'):
+        from . import xcfem
+        return xcfem.run(script, self.workdir, name)
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -1968,6 +1980,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'p&id|\bpid\b|dexpi|pumps?, tanks|equipment list|instrument', ('dexpi', 'pid_kg')),
     (r'\.stp\b|\.step\b|\.iges?\b|sldprt|catpart|solidworks|catia|inventor|fusion|rhino|freecad|\.prt\b|native', ('native_cad', 'file_info')),
     (r'\.stl\b|scan(ned)? (part|mesh)|reverse', ('reverse_cad', 'stl_to_step')),
+    (r'\bxc\b|xcfem|reinforced concrete|rebar|eurocode ?[23]|\bEC[23]\b|\bEHE\b|ACI ?318|fibre? section|code check|limit state|interaction diagram|construction phase', ('xc_run', 'knowledge_search')),
     (r'aisc|clip angle|gusset|brace|bracing|interaction ratio|resistance|strong enough|passes?|bolt group|bolt pattern|eccentric|bracket|lug|connection|joint|end ?plate|fin ?plate|shear tab|base ?plate|anchor bolt|splice|cover plate|moment connection', ('steel_connection', 'bolt', 'bolt_group', 'connection_check')),
     (r'scan|trace|cent(er|re) ?line|vector(ise|ize)|raster|photo of', ('trace_drawing',)),
     (r'compare|revision|rev\b|what changed|difference between', ('compare_drawings', 'compare_structures')),
