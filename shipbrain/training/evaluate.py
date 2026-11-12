@@ -82,6 +82,11 @@ def main():
         idx = max((j for j, m in enumerate(msgs) if m['role'] == 'assistant' and '```tool' in m['content']), default=None)
         target_i = idx if idx is not None else len(msgs) - 1
         prompt, ref = msgs[:target_i], msgs[target_i]['content']
+        try:                                               # the app's per-question system prompt (same as in training)
+            from finetune import with_system
+            prompt = with_system(prompt)
+        except Exception:
+            pass
         try:
             got = ''.join(llm.stream(prompt))
         except Exception as e:

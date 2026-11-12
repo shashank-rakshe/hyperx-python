@@ -893,6 +893,21 @@ real run, wording different from the scorecard - checked: no scorecard request a
 - **recover**: a tool error (unknown fitting name, impossible mooring geometry, non-standard bolt class) -> read it ->
   fix and run again, or explain what the user must decide
 
+### Fewer tools per question, the same prompt in training and use
+
+ShipBrain has 85 tools; a small model chooses far better from ~15. `agent.select_tools` picks, for each question, the
+core tools (knowledge, files, units, calculator, memory), strong keyword hits (chain / fairlead -> mooring, gpm / head
+loss -> pipe_flow, plating / psi -> plate_check, mixture -> process_sim, P&ID -> dexpi ...), file types (.3dm, .stl,
+.bdf, .dxf ...), the best word matches and the routed engine's tools. Only those are described in full; every other
+tool is listed by name, so nothing becomes unreachable. Measured: the needed tool is shown in full for 99.3 % of the
+1 668 tool calls in the training data and for 60 / 60 scorecard requests; the system prompt drops from ~2 550 to ~900
+tokens (faster first answer on a CPU).
+
+Before, only 495 of 2 882 stored training conversations carried a system prompt at all. Now `finetune.with_system` gives
+every training conversation (and the DPO pairs, the scorecard and the evaluation) the same per-question prompt the app
+uses. The prompt also says: a missing KEY input -> ask; a missing secondary value -> assume and say so; a tool error ->
+fix and retry or ask.
+
 ### Learning from 👍 / 👎: DPO after the fine-tune
 
 After the normal fine-tune, the Kaggle run does one short DPO step (Direct Preference Optimisation, with Hugging Face

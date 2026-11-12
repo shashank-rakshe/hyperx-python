@@ -215,12 +215,13 @@ def main(argv=None):
     from evaluate import LocalModel
     llm = LocalModel(a.local) if a.local else agent.LLM(a.server, a.model, temperature=0.0, max_tokens=500)
     import tempfile
-    sysmsg = {'role': 'system', 'content': agent.system_prompt(agent.Tools(tempfile.mkdtemp(), knowledge.load(None)))}
+    T = agent.Tools(tempfile.mkdtemp(), knowledge.load(None))
     items = [json.loads(l) for l in open(a.items, encoding='utf-8')]
     items = items[:a.limit] if a.limit else items
     res, t0 = [], time.time()
     for k, it in enumerate(items):
         try:
+            sysmsg = {'role': 'system', 'content': agent.system_prompt(T, agent.PROMPT_COMPACT, question=it['user'])}   # as the app
             reply = ''.join(llm.stream([sysmsg, {'role': 'user', 'content': it['user']}]))
         except Exception as e:
             reply = f'ERROR {e}'

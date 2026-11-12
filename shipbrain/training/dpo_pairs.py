@@ -14,7 +14,9 @@ next assistant turn:
 
     python training/dpo_pairs.py --data data/*.jsonl --feedback feedback.jsonl --out data/dpo_pairs.jsonl --max 2000
 """
-import argparse, glob, gzip, json, os, random, re
+import argparse, glob, gzip, json, os, random, re, sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 NUM = re.compile(r'(?<![\w.])(\d{1,3}(?:,\d{3})+|\d+\.\d+|\d{2,})(?![\w.])')
 CAVEAT = re.compile(r'\s*(\([^()]*(check|static|not |only|assum|non-commercial|approx|guess)[^()]*\)\.?|'
@@ -106,6 +108,11 @@ def main(argv=None):
                 msgs = d.get('messages') or []
                 if msgs and msgs[0]['role'] == 'system' and sysmsg is None:
                     sysmsg = msgs[0]
+                try:                                             # the same system prompt as the fine-tune and the app
+                    from finetune import with_system
+                    msgs = with_system(msgs)
+                except Exception:
+                    pass
                 synth += from_conversation(msgs, r)
     for pat in a.feedback:
         for p in sorted(glob.glob(pat)):

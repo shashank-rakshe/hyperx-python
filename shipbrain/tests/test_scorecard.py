@@ -24,3 +24,22 @@ def test_scoring_rules():
     nt = next(i for i in sc._items() if i['category'] == 'no_tool')
     assert sc.score(nt, 'A web frame is a deep transverse member supporting the longitudinals.')['ok']
     assert not sc.score(nt, '```tool\n{"name": "plate_check", "args": {"a": 1}}\n```')['ok']
+
+
+def test_tool_selector_recall_and_prompt():
+    import gzip, glob, tempfile
+    from shipbrain import agent, knowledge
+    T = agent.Tools(tempfile.mkdtemp(), knowledge.load(None))
+    hit = tot = 0
+    for f in sorted(glob.glob(os.path.join(os.path.dirname(HERE), 'training', 'data', '*.jsonl.gz'))):
+        for l in gzip.open(f, 'rt'):
+            m = json.loads(l).get('messages') or []
+            q = next((x['content'] for x in m if x['role'] == 'user' and isinstance(x['content'], str)), '')
+            used = {c['name'] for x in m if x['role'] == 'assistant' and isinstance(x['content'], str)
+                    for c in [agent.parse_tool_call(x['content'])] if c}
+            sel = set(agent.select_tools(T, q))
+            tot += len(used)
+            hit += len(used & sel)
+    assert tot > 1000 and hit / tot > 0.97                   # the needed tool is shown in full almost always
+    full, small = agent.system_prompt(T), agent.system_prompt(T, question='84 mm R3 chain in 120 m water')
+    assert len(small) < 0.5 * len(full) and 'mooring(' in small and 'Other tools' in small and 'pipe_flow' in small

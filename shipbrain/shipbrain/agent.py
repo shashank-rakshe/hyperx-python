@@ -1745,7 +1745,9 @@ Call a tool with ONLY:
 ```tool
 {{"name": "<tool>", "args": {{...}}}}
 ```
-then wait for TOOL_RESULT. Missing value: assume a sensible one and say so. End with a short answer: done, key numbers, files, warnings.
+then wait for TOOL_RESULT. A KEY input missing (size, load, geometry, file): ask one short question naming what you need.
+Only a secondary value missing (friction, fluid, material grade): assume a sensible one and say so.
+A tool error: read it, fix the input and call again, or tell the user what to decide. End with a short answer: done, key numbers, files, warnings.
 Result with "install": tell the user what to install and give its link and steps exactly as written.
 Every technical answer in natural language: what it means in sentences, the result with units, where it comes from (formula,
 class society rule + section), then the numbers. Never only JSON, code or a bare number unless asked.
@@ -1754,18 +1756,98 @@ Tools: {tools}
 """
 
 
-def system_prompt(tools, compact=True):
+CORE_TOOLS = ('knowledge_search', 'file_info', 'calc', 'convert_units', 'recall', 'remember', 'list_files', 'choose_engine')
+EXT_TOOLS = {'.3dm': ('native_cad', 'file_info'), '.sldprt': ('native_cad',), '.catpart': ('native_cad',), '.ipt': ('native_cad',),
+             '.f3d': ('native_cad',), '.fcstd': ('native_cad',), '.prt': ('native_cad', 'nx_open'), '.igs': ('native_cad',),
+             '.iges': ('native_cad',), '.stl': ('reverse_cad', 'stl_to_step'), '.step': ('cad_mesh', 'repair_model', 'surface_extract'),
+             '.stp': ('cad_mesh', 'repair_model'), '.bdf': ('fe_quality', 'mesh_check', 'fe_convert', 'fe_edit', 'analysis_run'),
+             '.fem': ('fe_quality', 'fe_convert', 'fe_edit'), '.inp': ('fe_quality', 'mesh_check', 'fe_convert', 'analysis_run'),
+             '.dxf': ('compare_drawings', 'drawing_check', 'drawing_to_model'), '.dwg': ('compare_drawings', 'drawing_check'),
+             '.pdf': ('compare_drawings', 'parse_document', 'drawing_check', 'trace_drawing'), '.png': ('trace_drawing', 'look', 'compare_drawings'),
+             '.jpg': ('trace_drawing', 'look'), '.tif': ('trace_drawing',), '.3docx': ('ocx_read', 'ocx_validate'),
+             '.dwxml': ('process_sim',), '.dwxmz': ('process_sim',), '.dat': ('cable_run',), '.i': ('moose_run',), '.sim': ('nx_open',)}
+
+
+KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always needs
+    (r'chain|mooring|fairlead|anchor|catenary|touch ?down|\bR[345]S?\b|riser|umbilical|power cable|lazy.?wave', ('mooring', 'cable_run')),
+    (r'pipe|piping|m3/h|m3/s|gpm|l/s|head loss|pressure (drop|loss)|pump|ballast|bilge|cooling (water|line)|fire main|fuel (oil|line)|lube', ('pipe_flow',)),
+    (r'plate|plating|panel|psi|kpa|bar\b|pressure|stress|deflect|head of|thick', ('plate_check', 'plate_buckling', 'moose_plate')),
+    (r'stiffen|stiffner|profile|\bfb ?\d|\bhp ?\d|t-?bar|l-?bar|angle|section modulus|longitudinal', ('stiffener_check', 'section_props')),
+    (r'bolt|torque|preload|\bm\d{1,2}\b|unc|unf|8\.8|10\.9|12\.9|thread', ('bolt',)),
+    (r'mixture|composition|phase|flash|stream|flowsheet|dwsim|distillation|vapou?r|dew|bubble|mol(e|ar)? ?%|mass ?%', ('process_sim',)),
+    (r'p&id|\bpid\b|dexpi|pumps?, tanks|equipment list|instrument', ('dexpi', 'pid_kg')),
+    (r'\.stp\b|\.step\b|\.iges?\b|sldprt|catpart|solidworks|catia|inventor|fusion|rhino|freecad|\.prt\b|native', ('native_cad', 'file_info')),
+    (r'\.stl\b|scan(ned)? (part|mesh)|reverse', ('reverse_cad', 'stl_to_step')),
+    (r'scan|trace|vector(ise|ize)|raster|photo of', ('trace_drawing',)),
+    (r'compare|revision|rev\b|what changed|difference between', ('compare_drawings', 'compare_structures')),
+    (r'quality|jacobian|warpage|skew|aspect|element check', ('fe_quality', 'mesh_check')),
+    (r'topology|lightening|lighten|material layout|bracket shape|optimi[sz]e .*(bracket|shape|layout)', ('topology',)),
+    (r'class|iacs|\bur s\d|hull girder|rule|dnv|abs\b|lloyd|\bbv\b|classnk|\bkr\b|\bccs\b', ('class_rule',)),
+    (r'\bnx\b|journal|simcenter|nx open|\.sim\b', ('nx_open', 'nx_rename')),
+    (r'moose|\.i\b|multiphysics', ('moose_plate', 'moose_run')),
+    (r'ocx|3docx', ('ocx_read', 'ocx_syntax', 'ocx_validate', 'ocx_write')),
+    (r'mesh|element size|fea|fe model', ('cad_mesh', 'panel_mesh', 'plates_mesh', 'analysis_run')),
+    (r'frame|beam|portal|truss|column|pipe support', ('frame_solve',)),
+    (r'fatigue|hot ?spot|weld toe', ('fatigue_mesh',)),
+    (r'convert|inch|feet|\bft\b|psi|lbf|kgf', ('convert_units',)),
+]
+
+
+def select_tools(tools, question, k=16):
+    """the tools worth showing in full for this question: core ones, strong keyword and file-type hits, the best word
+    matches with tool names / descriptions, then the routed engine's tools (a small model chooses far better from ~16
+    than from 85; every other tool is still listed by name)"""
+    q = (question or '').lower()
+    names = list(tools.t)
+    pick = [n for n in CORE_TOOLS if n in tools.t]
+    for rx, tl in KEYWORD_TOOLS:
+        if re.search(rx, q):
+            pick += [n for n in tl if n in tools.t]
+    for ext, tl in EXT_TOOLS.items():
+        if re.search(re.escape(ext) + r'\b', q):
+            pick += [n for n in tl if n in tools.t]
+    words = set(re.findall(r'[a-z][a-z0-9]{2,}', q)) - {'the', 'and', 'for', 'with', 'what', 'how', 'this', 'that', 'from', 'can',
+                                                          'you', 'please', 'give', 'check', 'make', 'need', 'want', 'is', 'are'}
+    scored = []
+    for n in names:
+        d = tools.t[n][1].lower()
+        sc = 3 * len(words & set(n.split('_'))) + sum(1 for w in words if w in d[:400])
+        if sc >= 2:
+            scored.append((sc, n))
+    for _, n in sorted(scored, key=lambda x: (-x[0], x[1]))[:6]:
+        pick.append(n)
+    try:
+        from . import engines
+        for kind in engines.classify(question or ''):
+            for e in engines.ENGINES:
+                caps = e[1]
+                if kind in (caps if isinstance(caps, (set, dict)) else ()):
+                    pick += [n for n in names if re.search(r'\b' + re.escape(n) + r'\(', e[3] or '')]
+    except Exception:
+        pass
+    return list(dict.fromkeys(pick))[:max(k, len(CORE_TOOLS) + 6)]
+
+
+def system_prompt(tools, compact=True, question=None, only=None):
     """compact (default): tool names + argument names only (~4x fewer tokens -> much faster first answer on a CPU);
-    the fine-tuned model learns the details from the training data. compact=False: full descriptions (untrained models)."""
+    the fine-tuned model learns the details from the training data. compact=False: full descriptions (untrained models).
+    question / only: show only the relevant tools in full (select_tools), and every other tool by name in one line."""
     if not compact:
         return SYSTEM.format(tools=tools.describe())
+    sel = list(only) if only is not None else (select_tools(tools, question) if question else None)
     items = []
     for n, (_, d, sch) in tools.t.items():
+        if sel is not None and n not in sel:
+            continue
         req = set(sch.get('required', []))
         args = ','.join(k if k in req else k + '?' for k in sch.get('properties', {}))
         first = re.split(r'(?<=[.:])\s', d, 1)[0][:70].rstrip('.:')
         items.append(f'{n}({args}) {first}')
-    return SYSTEM_COMPACT.format(tools='; '.join(items))
+    text = '; '.join(items)
+    if sel is not None:
+        rest = [n for n in tools.t if n not in sel]
+        text += '\nOther tools (call by name when needed): ' + ', '.join(rest)
+    return SYSTEM_COMPACT.format(tools=text)
 
 
 def compact_result(res, limit=2500):
@@ -1942,7 +2024,9 @@ def _install_note(text, shown):
 def run(llm, tools, history, max_steps=MAX_STEPS):
     """history: [{'role','content'}] of the chat so far (user last). Yields UI events (dicts)."""
     tools.llm = llm                                          # look / pid_kg read show pictures to this same model
-    msgs = [{'role': 'system', 'content': system_prompt(tools, PROMPT_COMPACT)}]
+    first_q = next((h['content'] for h in history if h['role'] == 'user' and isinstance(h['content'], str)), '')
+    focus = (first_q + '\n' + history[-1]['content']) if isinstance(history[-1]['content'], str) else first_q
+    msgs = [{'role': 'system', 'content': system_prompt(tools, PROMPT_COMPACT, question=focus)}]
     ctx, used = retrieve(tools, history[-1]['content'])
     for h in tools.hook('question', history[-1]['content']) if hasattr(tools, 'hook') else []:
         ctx = (ctx + '\n\n' if ctx else '') + '[hook] ' + h

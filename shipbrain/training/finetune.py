@@ -19,6 +19,23 @@ reason the fine-tuned model is kept and exported as usual.
 import argparse, json, os
 
 
+_TOOLS = None
+
+
+def with_system(msgs):
+    """every training conversation gets the system prompt the app uses at run time: the relevant tools in full (chosen
+    from the user's first message by agent.select_tools), all others by name - so training and use look the same"""
+    global _TOOLS
+    import sys, tempfile
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from shipbrain import agent, knowledge
+    if _TOOLS is None:
+        _TOOLS = agent.Tools(tempfile.mkdtemp(prefix='sb_ft_'), knowledge.load(None))
+    rest = [m for m in msgs if m['role'] != 'system']
+    q = next((m['content'] for m in rest if m['role'] == 'user' and isinstance(m['content'], str)), '')
+    return [{'role': 'system', 'content': agent.system_prompt(_TOOLS, agent.PROMPT_COMPACT, question=q)}] + rest
+
+
 def _vl_messages(d, root):
     """chat messages -> the content-list form of vision models; images (paths) go before the first user text"""
     from PIL import Image
@@ -156,6 +173,8 @@ def main():
             if 'chosen' in d and 'rejected' in d:          # preference pairs belong to the DPO step, not here
                 continue
             d['_root'] = os.path.dirname(os.path.abspath(path))
+            if os.environ.get('SB_SYSTEM_PROMPT', '1') != '0' and d.get('messages'):
+                d['messages'] = with_system(d['messages'])
             data.append(d)
     with_images = sum(1 for d in data if d.get('images'))
     cfg = dict(per_device_train_batch_size=2 if not with_images else 1, gradient_accumulation_steps=8 if not with_images else 16,
