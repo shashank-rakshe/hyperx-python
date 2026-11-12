@@ -149,10 +149,12 @@ def coefficients(p, T=None, nx=801, nz=301):
     LCF = np.trapezoid(wp * x, x) / Awp
     KB = np.trapezoid(np.trapezoid(2 * Y * z[None, :], z, axis=1), x) / V
     Am = float(area.max())
-    # wetted surface: sides and bottom
-    dYdx = np.gradient(Y, x, axis=0)
-    dYdz = np.gradient(Y, z, axis=1)
-    side = np.trapezoid(np.trapezoid(2 * np.sqrt(1 + dYdx ** 2 + dYdz ** 2), z, axis=1), x)
+    # wetted surface (sides + bottom, no deck, no end caps) from the triangles of the hull truncated at the draft
+    Vm, Fm = _hull_shell(dict(p, D=T, T=T, flare=0.0, bulb_len=0.0), 241, 61)
+    A_, B_, C_ = Vm[Fm[:, 0]], Vm[Fm[:, 1]], Vm[Fm[:, 2]]
+    ar = 0.5 * np.linalg.norm(np.cross(B_ - A_, C_ - A_), axis=1)
+    on = lambda ax, v: (np.abs(A_[:, ax] - v) < 1e-9) & (np.abs(B_[:, ax] - v) < 1e-9) & (np.abs(C_[:, ax] - v) < 1e-9)
+    side = float(ar[~(on(2, T) | on(0, 0.0) | on(0, Vm[:, 0].max()))].sum())
     return {'draft_m': T, 'volume_m3': float(V), 'Awp_m2': float(Awp), 'Cb': float(V / (p['L'] * p['B'] * T)), 'Cp': float(V / (Am * p['L'])), 'Cm': float(Am / (p['B'] * T)),
             'Cwp': float(Awp / (p['L'] * p['B'])), 'LCB_m': float(LCB), 'LCB_percent_L': float(100 * (LCB - p['L'] / 2) / p['L']), 'LCF_m': float(LCF), 'KB_m': float(KB),
             'wetted_area_m2': float(side), 'section_area_curve': {'x_m': [round(float(v), 3) for v in x[::40]], 'area_m2': [round(float(v), 4) for v in area[::40]]}}

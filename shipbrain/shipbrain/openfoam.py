@@ -237,7 +237,7 @@ def build_case(case_dir, velocity=1.0, fluid='water', length=2.0, height=1.0, wi
     return info
 
 
-def _write_files(d, info, turbulence, I, side_walls, end_iter, cell):
+def _write_files(d, info, turbulence, I, side_walls, end_iter, cell, floor_sym=False, robust=False):
     U, nu = info['U'], info['nu']
     for s in ('0', 'constant', 'system'):
         os.makedirs(os.path.join(d, s), exist_ok=True)
@@ -253,6 +253,8 @@ def _write_files(d, info, turbulence, I, side_walls, end_iter, cell):
             if p == 'frontAndBack':
                 r = 'type empty;'
             if p in ('top', 'sides') and side_walls != 'wall':
+                r = f'type {sym};'
+            if p == 'floor' and floor_sym:
                 r = f'type {sym};'
             out += f'    {p}\n    {{\n        ' + r.replace('\n', '\n        ') + '\n    }\n'
         return out
@@ -297,7 +299,7 @@ gradSchemes     {{ default Gauss linear; }}
 divSchemes
 {{
     default         none;
-    div(phi,U)      bounded Gauss linearUpwind grad(U);
+    div(phi,U)      bounded Gauss {UDIV};
     div(phi,k)      bounded Gauss upwind;
     div(phi,omega)  bounded Gauss upwind;
     div((nuEff*dev2(T(grad(U))))) Gauss linear;
@@ -306,7 +308,7 @@ laplacianSchemes {{ default Gauss linear corrected; }}
 interpolationSchemes {{ default linear; }}
 snGradSchemes   {{ default corrected; }}
 wallDist        {{ method meshWave; }}
-""".replace('{{', '{').replace('}}', '}'))
+""".replace('{{', '{').replace('}}', '}').replace('{UDIV}', 'upwind' if robust is True else 'linearUpwind grad(U)'))
     open(os.path.join(d, 'system', 'fvSolution'), 'w').write(_hdr('dictionary', 'fvSolution', 'system') + """solvers
 {
     p { solver GAMG; smoother GaussSeidel; tolerance 1e-7; relTol 0.05; }
@@ -320,9 +322,9 @@ SIMPLE
 }
 relaxationFactors
 {
-    equations { U 0.9; ".*" 0.9; }
+    equations { U RELAX; ".*" RELAX; }
 }
-""")
+""".replace('RELAX', '0.7' if robust else '0.9'))
 
 
 def run_case(case_dir, timeout=7200):

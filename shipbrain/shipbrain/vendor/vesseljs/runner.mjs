@@ -27,7 +27,8 @@ try {
         const hr = new Vessel.HullResistance(sh, st, prop, new Vessel.WaveCreator());
         hr.writeOutput();
         const o = hr.returnOutput();
-        return { speed_kn: v, Rt_N: o.Rtadd, Pe_W: o.Pe, w: o.w, t: o.t, etah: o.etah };
+        const cf = hr.coefficients;
+        return { speed_kn: v, Rt_N: o.Rtadd, Pe_W: o.Pe, w: o.w, t: o.t, etah: o.etah, k: cf.k, cf: cf.cf, wa: cf.wa, speedSI: cf.speedSI };
       } catch (e) { return { speed_kn: v, error: String(e && e.message || e) }; }
     });
   }

@@ -481,6 +481,12 @@ class Tools:
                       {'type': 'object', 'properties': {k: num for k in ('L', 'B', 'D', 'T', 'r_bilge', 'deadrise', 'flare', 'ent', 'run', 'n_ent', 'n_run', 'transom', 'bulb_len', 'bulb_b', 'bulb_h',
                                                                          'bulb_z', 'vee', 'target_cb')} | {'speeds_kn': {'type': 'array'}, 'froude': {'type': 'array'}, 'method': {'type': 'string', 'enum': ['holtrop', 'surrogate']}},
                        'required': ['L', 'B', 'D', 'T']})
+        self.register('hull_flow', self.hull_flow, 'Flow around a ship HULL STL (from hull_generate or uploaded; metres, hullgen frame: x stern->bow, y beam, z up) with OpenFOAM: double-body, steady SST k-omega, the hull '
+                      'below the waterline in an unbounded stream (the waterline is a symmetry plane: NO wave resistance), half hull meshed with snappyHexMesh on ShipBrain\'s own background grid. '
+                      'Returns the viscous resistance split into pressure (form) and friction parts, the Holtrop viscous resistance for comparison, convergence, and pictures (centre-plane velocity '
+                      'and pressure). Coarse and indicative: wall functions, no boundary-layer cells; read the stated accuracy.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'draft': num, 'speed_kn': num, 'fluid': {'type': 'string', 'enum': ['seawater', 'water']}, 'level': {'type': 'integer'},
+                                                         'name': {'type': 'string'}}, 'required': ['file', 'draft', 'speed_kn']})
         self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
                       'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
                       'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
@@ -1872,6 +1878,57 @@ class Tools:
             + '. Calm water, bare hull estimate for an ordinary displacement ship (Holtrop is good to roughly +-10-20 % against real ships); shaft power needs the propulsive efficiency, and wind, waves and fouling add to it.')
         return out
 
+    def hull_flow(self, file, draft, speed_kn, fluid='seawater', level=4, name='hull_flow'):
+        from . import shipcfd, viz
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        out, info = shipcfd.solve_ship(self.workdir, name, self._path(file), float(draft), float(speed_kn), fluid=fluid, level=int(level), end_iter=1500)
+        v = out['speed_m_s']
+        rho = info['rho']
+        cf = 0.075 / (math.log10(v * out['L'] / info['nu']) - 2) ** 2                       # ITTC-57 friction line on the same wetted area
+        rf = 0.5 * rho * v * v * out['wetted_area_m2'] * cf
+        out['ittc57_friction_N'] = rf
+        out['friction_ratio_to_ittc57'] = out['friction_resistance_N'] / rf
+        out['pressure_percent_of_viscous'] = 100 * out['pressure_resistance_N'] / out['Rv_N']
+        files = []
+        try:                                                                                 # centre-plane pictures from the cell centres
+            import numpy as np
+            import matplotlib
+            matplotlib.use('Agg')
+            import matplotlib.pyplot as plt
+            from . import openfoam as OF
+            d = os.path.join(self.workdir, name)
+            pts, faces, own, nei, start, n = shipcfd._read_poly(d)
+            t = OF.last_time(d)
+            p = np.asarray(OF.read_field(os.path.join(d, t, 'p'))) * rho
+            U = np.asarray(OF.read_field(os.path.join(d, t, 'U'), vec=True))
+            cc = np.zeros((len(p), 3)); ws = np.zeros(len(p))
+            for fi, f in enumerate(faces):
+                c, Sf = shipcfd._face_geometry(pts, f)
+                a = np.linalg.norm(Sf)
+                cc[own[fi]] += a * c; ws[own[fi]] += a
+                if fi < len(nei):
+                    cc[nei[fi]] += a * c; ws[nei[fi]] += a
+            cc /= ws[:, None]
+            near = cc[:, 2] < 0.08 * out['L']                                              # the cells next to the centre plane
+            for fld, val, lab in (('velocity', np.linalg.norm(U, axis=1), 'velocity magnitude [m/s]'), ('pressure', p, 'pressure [Pa]')):
+                fig, ax = plt.subplots(figsize=(11, 4.2))
+                sc = ax.scatter(cc[near, 0], cc[near, 1], c=val[near], s=6, cmap='turbo', linewidths=0)
+                ax.set_aspect('equal'); ax.set_xlim(cc[near, 0].min(), cc[near, 0].max()); ax.set_xlabel('x [m]'); ax.set_ylabel('y [m]')
+                ax.set_xlim(info['L'] * 0.4, info['L'] * 3.2); ax.set_ylim(info['L'] * 0.35, cc[near, 1].max() + 1)
+                fig.colorbar(sc, ax=ax, shrink=0.8).set_label(lab); ax.set_title(f'{name}: {fld} near the centre plane (flow to the right, bow first)')
+                fig.tight_layout(); png = os.path.join(self.workdir, f'{name}_{fld}.png'); fig.savefig(png, dpi=120); plt.close(fig)
+                files.append(os.path.basename(png))
+        except Exception as e:
+            files = []
+        out['files'] = files
+        out['plain_english'] = (f"Flow around the hull at {speed_kn:g} knots (Fn {out['Fn']:.2f}), double-body (no waves), {out['cells']:,} cells, {'converged' if out['converged'] else 'NOT converged'} in {out['iterations']} iterations: "
+                                f"viscous resistance {out['Rv_N'] / 1000:,.0f} kN = pressure (form) {out['pressure_resistance_N'] / 1000:,.0f} kN + friction {out['friction_resistance_N'] / 1000:,.0f} kN. "
+                                f"For comparison the ITTC-57 flat-plate friction on the same wetted area ({out['wetted_area_m2']:,.0f} m2) is {rf / 1000:,.0f} kN, so the computed friction is "
+                                f"{100 * out['friction_ratio_to_ittc57']:.0f} % of it (wall functions on a coarse grid with no boundary-layer cells: expect the friction to be low). "
+                                "Wave-making resistance is not in this number. Indicative only - refine with a higher level to see how much it moves."
+                                + (' Pictures: ' + ', '.join(files) + '.' if files else ''))
+        return out
+
     def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
         from . import pipeflow
         return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
@@ -2490,6 +2547,7 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'hydrostatic|stability|metacentr|\bgm\b|\bkb\b|\bkg\b|freeboard|displacement of (the )?(hull|vessel|ship|barge)|draft (of|at|for)|trim and|vessel\.?js|loading condition', ('ship_hydrostatics',)),
     (r'hull (form|shape|design|generat|param)|parametric hull|design (a |the )?hull|block coefficient|\bcb\b|bulb|hull dataset|ship-?d\b|prismatic coeff|waterplane coeff|section area curve', ('hull_generate', 'ship_hydrostatics')),
     (r'resistance of (the |a |my )?(hull|ship|vessel)|(ship|hull) resistance|effective power|holtrop|\bpe\b|propulsion power|power (needed|required) (at|for)|knots?\b.*(power|resistance)|(power|resistance).*knots?\b', ('hull_resistance', 'hull_generate')),
+    (r'(flow|cfd|openfoam|viscous|form) (around|past|over|on|of) (the |my |a )?(hull|ship|stl)|hull (cfd|flow)|run openfoam on (the )?(hull|stl)|viscous resistance|form (drag|resistance)', ('hull_flow', 'hull_resistance', 'openfoam_flow')),
     (r'finite[- ]volume|\bfvm\b|1d (cfd|diffusion|convection|conduction)|\btdma\b|simple algorithm|upwind|central differenc', ('fvm_1d',)),
     (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),
     (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),

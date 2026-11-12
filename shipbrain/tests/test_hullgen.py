@@ -82,3 +82,15 @@ def test_tool_makes_a_hull_a_dataset_and_a_picture(tmp_path):
     assert 'cannot be reached' in T.call('hull_generate', {'L': 120, 'B': 20, 'D': 11, 'T': 7.5, 'ent': 0.3, 'run': 0.22, 'target_cb': 0.4})['error']
     d = T.call('hull_generate', {'samples': 20, 'name': 'd', 'seed': 2})
     assert d['hulls'] == 20 and (tmp_path / 'd_dataset.csv').read_text().count('\n') == 21
+
+
+def test_wetted_area_matches_the_closed_form_and_the_stl_surface():
+    p = P(L=30, B=8, D=4, T=2.4, r_bilge=0, ent=0.02, run=0.02, n_ent=1, n_run=1, transom=1.0)
+    assert H.coefficients(p)['wetted_area_m2'] == pytest.approx(30 * (8 + 2 * 2.4), rel=0.04)       # bottom + two sides of a barge
+    p = P(L=120, B=20, D=7.5, T=7.5, r_bilge=1.5, ent=0.35, run=0.25, n_ent=2, n_run=2.5, transom=0.0)
+    V, F = H.stl_mesh(p, nx=241, nz=61)
+    A, B_, C = V[F[:, 0]], V[F[:, 1]], V[F[:, 2]]
+    ar = 0.5 * np.linalg.norm(np.cross(B_ - A, C - A), axis=1)
+    flat = lambda ax, v: (abs(A[:, ax] - v) < 1e-6) & (abs(B_[:, ax] - v) < 1e-6) & (abs(C[:, ax] - v) < 1e-6)
+    stl_wetted = ar[~(flat(2, 7.5) | flat(0, 0.0))].sum()
+    assert H.coefficients(p)['wetted_area_m2'] == pytest.approx(stl_wetted, rel=0.02)
