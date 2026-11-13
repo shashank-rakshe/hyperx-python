@@ -76,6 +76,15 @@ def cleanup_output():
 __import__('atexit').register(lambda: cleanup_output() if os.path.exists('/kaggle/working') else None)
 
 
+def gen(name, file=None):
+    """a committed, already generated set (training/data/generated/<file>.jsonl.gz, made once and pushed to git): copied to data/<name>.jsonl and the slow step that makes it is skipped.
+    SB_USE_GENERATED=0 makes everything live again."""
+    f = f'training/data/generated/{file or name}.jsonl.gz'
+    if os.environ.get('SB_USE_GENERATED', '1') == '1' and os.path.exists(f):
+        return sh(f'zcat {f} > data/{name}.jsonl', required=False)
+    return False
+
+
 def dsh(cmd, required=True, limit=None):
     """a data-making step: skipped (counted as done) when the data came ready-made from the CPU notebook"""
     return True if PREBUILT else sh(cmd, required, limit)
@@ -228,15 +237,18 @@ if PREBUILT:
     sh(f'cp -r "{PREBUILT_DATA}/." data/')
     PRIVATE_TRAIN, PRIVATE_EVAL, OWN_PACKS = [], [], []          # the ready data already holds them (the glob above would also catch its own files)
     print('data steps skipped: ready-made data from', PREBUILT[-1], flush=True)
-dsh(f'python training/make_dataset.py --n {N_TRAIN} --eval-n {N_EVAL} --out data/train.jsonl --eval-out data/eval.jsonl {extra}')
-if not dsh('timeout 2700 python training/repo_tasks.py --packs packs --out data/repo_train.jsonl --eval-out data/repo_eval.jsonl', required=False):
-    open('data/repo_train.jsonl', 'w').close()          # knowledge of shared repos is a bonus, not a blocker
+if not (gen('train') and gen('eval', 'eval_base')):
+    dsh(f'python training/make_dataset.py --n {N_TRAIN} --eval-n {N_EVAL} --out data/train.jsonl --eval-out data/eval.jsonl {extra}')
+if not (gen('repo_train') and gen('repo_eval')):
+    if not dsh('timeout 2700 python training/repo_tasks.py --packs packs --out data/repo_train.jsonl --eval-out data/repo_eval.jsonl', required=False):
+        open('data/repo_train.jsonl', 'w').close()          # knowledge of shared repos is a bonus, not a blocker
 # next.BREP.io's stl2step (Rust, used unchanged): STL inputs in the CAD training tasks
 dsh('(command -v cargo || curl -sSf https://sh.rustup.rs | sh -s -- -y -q) && . $HOME/.cargo/env && '
    'python -c "from shipbrain import brep; brep.build()"', required=False)
 # OpenPhysicsAI (copied whole): build it, run the examples that finish quickly, learn from the real records
-if not dsh('python training/physics_tasks.py --out data/physics_train.jsonl --timeout 40', required=False):
-    open('data/physics_train.jsonl', 'w').close()
+if not gen('physics_train'):
+    if not dsh('python training/physics_tasks.py --out data/physics_train.jsonl --timeout 40', required=False):
+        open('data/physics_train.jsonl', 'w').close()
 # synthetic P&ID sheets with exact answer keys: teach the (vision) base model to read P&IDs into pid-to-kg's format
 if not dsh('python training/synth_pid.py --n 400 --out data/synth_pid_train.jsonl --img-dir data/pid_images', required=False):
     open('data/synth_pid_train.jsonl', 'w').close()
@@ -308,8 +320,9 @@ sh('zcat training/data/missing_tools2_train.jsonl.gz > data/missing_tools2_train
 sh('zcat training/data/missing_tools3_train.jsonl.gz > data/missing_tools3_train.jsonl || touch data/missing_tools3_train.jsonl', required=False)   # DXF plan -> 3D + mesh, dimension arithmetic check   # structure_to_mesh, OCX -> STEP, your own Python folder, PDF reading
 # packs added after the ready-made data was made (SB_NEW_PACKS lists them): their knowledge questions are made here, always (about 1 minute)
 NEW_PACKS = os.environ.get('SB_NEW_PACKS', 'unsloth,LlamaFactory,neurobrix,OpenModelica,mayo-develop,multiverse,GPUCADforAM,OpenGeometry,steel-python,Civil-Engineering-Scripts,mdlARC,weight-space-engineering')
-if not sh(f'python training/repo_tasks.py --packs packs --only {NEW_PACKS} --no-cad --out data/repo_new_train.jsonl --eval-out data/repo_new_eval.jsonl', required=False):
-    open('data/repo_new_train.jsonl', 'w').close()
+if not ('SB_NEW_PACKS' not in os.environ and gen('repo_new_train') and gen('repo_new_eval')):
+    if not sh(f'python training/repo_tasks.py --packs packs --only {NEW_PACKS} --no-cad --out data/repo_new_train.jsonl --eval-out data/repo_new_eval.jsonl', required=False):
+        open('data/repo_new_train.jsonl', 'w').close()
 sh('cat data/repo_new_eval.jsonl >> data/eval.jsonl', required=False)   # python_run + cadquery_build in plain words   # mesh -> solve -> picture chain, cad_mesh, fatigue_mesh, cfd_export, memory, engine choice ... (tools that had no examples)   # propeller, Nastran, hull resistance / GZ / motions, blocks, frames, catamaran, HCM
 # MOOSE plate checks made on GitHub in the official MOOSE image (release moose-latest)
 dsh(f'curl -sSfL -o /tmp/moose_train.jsonl.gz https://github.com/{GH_REPO}/releases/download/moose-latest/moose_train.jsonl.gz'
@@ -318,12 +331,14 @@ dsh(f'curl -sSfL -o /tmp/moose_train.jsonl.gz https://github.com/{GH_REPO}/relea
 if not dsh('python training/cad3dify_tasks.py --out data/cad3dify_train.jsonl --img-dir data/cad3dify_images', required=False):
     open('data/cad3dify_train.jsonl', 'w').close()
 # class rules: IACS calculators + every rule section with a formula in the class rule packs (natural-language answers)
-if not dsh('python training/class_rule_tasks.py --packs packs --out data/class_rule_train.jsonl', required=False):
-    open('data/class_rule_train.jsonl', 'w').close()
+if CLASS_PACKS or not gen('class_rule_train'):
+    if not dsh('python training/class_rule_tasks.py --packs packs --out data/class_rule_train.jsonl', required=False):
+        open('data/class_rule_train.jsonl', 'w').close()
 # public OCX ship models (real CAD exports): fetched here, names removed, learned from; never stored
-if not dsh('python training/ocx_samples.py --out data/ocx_train.jsonl --eval-out data/ocx_eval.jsonl', required=False):
-    open('data/ocx_train.jsonl', 'w').close()
-    open('data/ocx_eval.jsonl', 'w').close()
+if not (gen('ocx_train') and gen('ocx_eval')):
+    if not dsh('python training/ocx_samples.py --out data/ocx_train.jsonl --eval-out data/ocx_eval.jsonl', required=False):
+        open('data/ocx_train.jsonl', 'w').close()
+        open('data/ocx_eval.jsonl', 'w').close()
 dsh('cat data/repo_eval.jsonl >> data/eval.jsonl', required=False)
 dsh('cat data/ocx_eval.jsonl >> data/eval.jsonl', required=False)
 def _plain(paths):
