@@ -264,6 +264,11 @@ its hex meshing suite and ship XML import rules are skills `hex-meshing-suite` a
 blade_geometry, nastran_read, nastran_plate_deck, hull_resistance (and the refusal outside Holtrop's range), gz_curve, hull_motions, hull_generate then stl_stability, catamaran_hull, dbb_blocks, pynite_fea, openhcm_read,
 and answers about what those tools are not. An earlier full run does not include it; an incremental run (`SB_MODE=auto`) trains on it as new data.
 
+## Lightning AI (or your own GPU PC)
+
+`training/lightning/run_lightning.sh data|train|all` runs the same training as the Kaggle cell on a Lightning AI Studio or any Linux machine with an NVIDIA GPU: it downloads the Kaggle kernel and swaps `/kaggle/working` and `/kaggle/input` for folders in your home directory
+(checked: the script parses and no Kaggle path is left). Steps and settings: `training/lightning/README.md`. HF and GitHub tokens are read from environment variables there. Not run on Lightning itself yet.
+
 ## Kaggle: one pasted cell, and training only on new data
 
 `training/kaggle/PASTE_IN_KAGGLE.md`: a two-line cell downloads `kernel.py` from this repository and runs it; the run fetches code, packs and data itself. **Incremental training** (`training/incremental.py`,

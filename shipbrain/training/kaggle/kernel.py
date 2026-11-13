@@ -56,7 +56,7 @@ try:
     from kaggle_secrets import UserSecretsClient
     GH_TOKEN = UserSecretsClient().get_secret('GH_TOKEN')
 except Exception:
-    GH_TOKEN = None
+    GH_TOKEN = os.environ.get('GH_TOKEN')      # outside Kaggle (Lightning AI, your own PC): environment variable
 
 
 def gh(method, url, body=None, raw=None, ctype='application/json'):
@@ -452,7 +452,7 @@ if GH_TOKEN and UPLOAD_MODEL:
 try:
     token = UserSecretsClient().get_secret('HF_TOKEN')
 except Exception:
-    token = None
+    token = os.environ.get('HF_TOKEN')
 if token and not ACCEPTED:
     print('new model NOT uploaded to Hugging Face: the accept gate rejected it (see accept.json)', flush=True)
 elif token:
