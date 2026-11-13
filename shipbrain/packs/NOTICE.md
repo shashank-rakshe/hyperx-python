@@ -657,3 +657,10 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: Apache-2.0
 - Use: ok: permissive licence, keep the attribution
 - Copyright 2025–2026 Hocine Benkelaya
+
+## LlamaFactory
+
+- Source: https://github.com/hiyouga/LlamaFactory (commit 6d1059c72745)
+- Licence: Apache-2.0
+- Use: ok: permissive licence, keep the attribution
+- https://github.com/hiyouga/LlamaFactory contributors
