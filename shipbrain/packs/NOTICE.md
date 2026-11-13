@@ -650,3 +650,10 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: AGPL-3.0 (dual-licensed with the OSMC Public License)
 - Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
 - Copyright (c) 1998-current, Open Source Modelica Consortium (OSMC)
+
+## neurobrix
+
+- Source: https://github.com/NeuroBrix/neurobrix (commit 3396960e529b)
+- Licence: Apache-2.0
+- Use: ok: permissive licence, keep the attribution
+- Copyright 2025–2026 Hocine Benkelaya
