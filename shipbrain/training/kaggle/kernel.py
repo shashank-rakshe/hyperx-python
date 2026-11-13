@@ -41,7 +41,15 @@ __import__('threading').Thread(target=_heartbeat, daemon=True).start()
 # DATA ON A CPU NOTEBOOK (no GPU quota): run once with  SB_DATA_ONLY=1  in a notebook WITHOUT accelerator; it writes shipbrain_train_data/ to its Output.
 # Then attach that notebook's output as Input of the GPU notebook: the data steps are skipped and the GPU run only trains.
 DATA_ONLY = os.environ.get('SB_DATA_ONLY') == '1'
+if not DATA_ONLY and shutil.which('nvidia-smi') is None:      # no GPU: training is impossible here (Unsloth vision needs a GPU), so only make the data and stop
+    DATA_ONLY = True
+    print('NO GPU in this notebook: making the training data only (SB_DATA_ONLY switched on). Attach this notebook output to a GPU notebook to train.', flush=True)
 PREBUILT = sorted(glob.glob('/kaggle/input/**/shipbrain_train_data/data_ready.flag', recursive=True))
+PREBUILT_DATA = os.path.join(os.path.dirname(PREBUILT[-1]), 'data') if PREBUILT else None
+if not PREBUILT:                                              # rescue: the data folder of a run that made the data and then failed at the training step (it stays in that notebook's output)
+    _alt = sorted(glob.glob('/kaggle/input/**/src/shipbrain/data/train.jsonl', recursive=True))
+    if _alt and glob.glob(os.path.dirname(_alt[-1]) + '/dpo_pairs.jsonl'):
+        PREBUILT, PREBUILT_DATA = [_alt[-1]], os.path.dirname(_alt[-1])
 
 
 def dsh(cmd, required=True, limit=None):
@@ -193,7 +201,7 @@ if FEEDBACK_FILES:                       # the app's exported 👍 / 👎 (priva
     PRIVATE = True; UPLOAD_MODEL = False  # user feedback is private: the model is never published
 if PREBUILT:
     os.makedirs('data', exist_ok=True)
-    sh(f'cp -r "{os.path.dirname(PREBUILT[-1])}/data/." data/')
+    sh(f'cp -r "{PREBUILT_DATA}/." data/')
     PRIVATE_TRAIN, PRIVATE_EVAL, OWN_PACKS = [], [], []          # the ready data already holds them (the glob above would also catch its own files)
     print('data steps skipped: ready-made data from', PREBUILT[-1], flush=True)
 dsh(f'python training/make_dataset.py --n {N_TRAIN} --eval-n {N_EVAL} --out data/train.jsonl --eval-out data/eval.jsonl {extra}')
