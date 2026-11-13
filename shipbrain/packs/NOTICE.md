@@ -664,3 +664,10 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: Apache-2.0
 - Use: ok: permissive licence, keep the attribution
 - https://github.com/hiyouga/LlamaFactory contributors
+
+## unsloth
+
+- Source: https://github.com/unslothai/unsloth (shallow clone of the default branch)
+- Licence: Apache-2.0 for the core library, AGPL-3.0 for the studio part (the repository carries both)
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- Copyright Unsloth AI and contributors

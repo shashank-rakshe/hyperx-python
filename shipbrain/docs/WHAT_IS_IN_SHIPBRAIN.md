@@ -83,6 +83,7 @@ A repository without a licence cannot be copied into this public repository: it 
 | OpenModelica/OpenModelica (documentation link you gave) | pack `OpenModelica` | AGPL-3.0 (dual with OSMC-PL) |
 | NeuroBrix/neurobrix (release v0.6.10) | pack `neurobrix` | Apache-2.0 |
 | hiyouga/LlamaFactory | pack `LlamaFactory` | Apache-2.0 |
+| unslothai/unsloth | pack `unsloth` (the library ShipBrain trains with) | Apache-2.0 core + AGPL-3.0 studio |
 
 Not repositories but also included: the pyNastran documentation site (`docs/` of its repository), the Ship XML import rules (`docs/ship_xml_import_rules.md`), and your Vibrationdata and class-society material through the packs and skills.
 
