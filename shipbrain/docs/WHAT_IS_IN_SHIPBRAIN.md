@@ -38,7 +38,7 @@ A repository without a licence cannot be copied into this public repository: it 
 | camlab-ethz/TensorMesh | pack `TensorMesh` | Apache-2.0 |
 | casys-kaist/simthesizer | pack `simthesizer` | MIT |
 | cgg-bern/AlgoHex | pack `AlgoHex` | AGPL-3.0 |
-| codeaster/src | ? | ? |
+| codeaster/src (gitlab.com) | pack `code_aster` | GPL-3.0 |
 | davidemelozzi/Global-Ship-Hull-Structural-Analysis-Based-on-the-Finite-Element-Method | private pack only (no licence); licence request written | none |
 | dealii/dealii | pack `dealii` | LGPL + Apache-2.0 |
 | denisgomes/psi | pack `psi` | GPL |
