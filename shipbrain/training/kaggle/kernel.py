@@ -88,6 +88,12 @@ def sh(cmd, required=True):
     return r.returncode == 0
 
 
+# SB_FAST=1: for a nearly used-up weekly quota: 1 epoch, fewer scoring samples, no draft model, no speed measurement (about half the GPU time)
+if os.environ.get('SB_FAST') == '1':
+    os.environ.setdefault('EPOCHS', '1')
+    os.environ.setdefault('SB_SERVING_PROFILE', '0')
+    EVAL_LIMIT = 30
+    DRAFT = ''
 os.chdir('/kaggle/working')
 report('started')
 shutil.rmtree('/kaggle/working/src', ignore_errors=True)        # a re-run in the same session must not fail
@@ -131,6 +137,8 @@ try:
     print('base model:', BASE, '| draft:', DRAFT, flush=True)
 except Exception as e:
     print('(base_model.json not read:', e, ')', flush=True)
+if os.environ.get('SB_FAST') == '1':
+    DRAFT = ''                           # base_model.json would bring the draft model back
 BASE_ID = BASE                           # the real base model name (BASE may become an adapter folder below)
 # ---- continue from an older ShipBrain model: attach that run's output (Add Input -> Notebook Output) and start with
 #      SB_CONTINUE=1 python k.py   (default: train fresh from the base model on ALL data - recommended, nothing is forgotten)
@@ -146,7 +154,7 @@ if FEEDBACK_FILES:                       # the app's exported 👍 / 👎 (priva
     extra += ' ' + ' '.join(f'--feedback {f}' for f in FEEDBACK_FILES)
     PRIVATE = True; UPLOAD_MODEL = False  # user feedback is private: the model is never published
 sh(f'python training/make_dataset.py --n {N_TRAIN} --eval-n {N_EVAL} --out data/train.jsonl --eval-out data/eval.jsonl {extra}')
-if not sh('python training/repo_tasks.py --packs packs --out data/repo_train.jsonl --eval-out data/repo_eval.jsonl', required=False):
+if not sh('timeout 2700 python training/repo_tasks.py --packs packs --out data/repo_train.jsonl --eval-out data/repo_eval.jsonl', required=False):
     open('data/repo_train.jsonl', 'w').close()          # knowledge of shared repos is a bonus, not a blocker
 # next.BREP.io's stl2step (Rust, used unchanged): STL inputs in the CAD training tasks
 sh('(command -v cargo || curl -sSf https://sh.rustup.rs | sh -s -- -y -q) && . $HOME/.cargo/env && '

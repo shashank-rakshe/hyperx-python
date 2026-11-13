@@ -196,11 +196,15 @@ def load_training_packs(folder):
     return packs
 
 
-def make(packs_dir, workdir, seed=0, per_pack=40, cad=True, cad_variants=2, examples=None):
+def make(packs_dir, workdir, seed=0, per_pack=40, cad=True, cad_variants=2, examples=None, max_chunks=3000):
     """-> (train, eval): lists of {'task', 'messages'}; the tools see only training-allowed packs"""
     r = random.Random(seed)
     kb = Knowledge()
     packs = load_training_packs(packs_dir)
+    for p in packs:                                            # a huge pack (tens of thousands of chunks) makes every search slow: make its questions from a fixed random subset
+        if len(p['chunks']) > max_chunks:
+            rr = random.Random('subset:' + p['name'])
+            p['chunks'] = rr.sample(p['chunks'], max_chunks)
     for p in packs:
         for c in p['chunks']:
             kb.add(f"repo:{p['name']}/{c['source']}", c['text'], c.get('title', ''), id=c['id'])
