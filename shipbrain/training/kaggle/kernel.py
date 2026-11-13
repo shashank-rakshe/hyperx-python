@@ -38,6 +38,17 @@ def _heartbeat():
 __import__('threading').Thread(target=_heartbeat, daemon=True).start()
 
 
+# DATA ON A CPU NOTEBOOK (no GPU quota): run once with  SB_DATA_ONLY=1  in a notebook WITHOUT accelerator; it writes shipbrain_train_data/ to its Output.
+# Then attach that notebook's output as Input of the GPU notebook: the data steps are skipped and the GPU run only trains.
+DATA_ONLY = os.environ.get('SB_DATA_ONLY') == '1'
+PREBUILT = sorted(glob.glob('/kaggle/input/**/shipbrain_train_data/data_ready.flag', recursive=True))
+
+
+def dsh(cmd, required=True, limit=None):
+    """a data-making step: skipped (counted as done) when the data came ready-made from the CPU notebook"""
+    return True if PREBUILT else sh(cmd, required, limit)
+
+
 def hours():
     return (__import__('time').time() - T0) / 3600
 
@@ -142,7 +153,7 @@ _dm = sorted(glob.glob('/kaggle/input/**/shipbrain_data/manifest.json', recursiv
 DATA = os.path.dirname(_dm[0]) if _dm else None       # the DATA notebook's output (training/kaggle/data_kernel.py), if attached
 if DATA:
     print('data folder attached:', DATA, open(_dm[0]).read()[:1500], flush=True)
-if os.environ.get('SB_CLASS_RULES', '1') != '0' and not (DATA and glob.glob(f'{DATA}/packs/class_rules_*.private.sbpack')):
+if os.environ.get('SB_CLASS_RULES', '1') != '0' and not PREBUILT and not (DATA and glob.glob(f'{DATA}/packs/class_rules_*.private.sbpack')):
     sh('python -m shipbrain.classrules download --out /tmp/class_rules_pdfs --max-files 80', required=False)
     for d in sorted(set(os.path.dirname(os.path.dirname(f)) for f in glob.glob('/kaggle/input/**/*.pdf', recursive=True)
                         if 'rule' in f.lower())):
@@ -179,95 +190,100 @@ FEEDBACK_FILES = sorted(f for f in glob.glob('/kaggle/input/**/*feedback*.jsonl'
 if FEEDBACK_FILES:                       # the app's exported 👍 / 👎 (private dataset): liked conversations join the training data
     extra += ' ' + ' '.join(f'--feedback {f}' for f in FEEDBACK_FILES)
     PRIVATE = True; UPLOAD_MODEL = False  # user feedback is private: the model is never published
-sh(f'python training/make_dataset.py --n {N_TRAIN} --eval-n {N_EVAL} --out data/train.jsonl --eval-out data/eval.jsonl {extra}')
-if not sh('timeout 2700 python training/repo_tasks.py --packs packs --out data/repo_train.jsonl --eval-out data/repo_eval.jsonl', required=False):
+if PREBUILT:
+    os.makedirs('data', exist_ok=True)
+    sh(f'cp -r "{os.path.dirname(PREBUILT[-1])}/data/." data/')
+    PRIVATE_TRAIN, PRIVATE_EVAL, OWN_PACKS = [], [], []          # the ready data already holds them (the glob above would also catch its own files)
+    print('data steps skipped: ready-made data from', PREBUILT[-1], flush=True)
+dsh(f'python training/make_dataset.py --n {N_TRAIN} --eval-n {N_EVAL} --out data/train.jsonl --eval-out data/eval.jsonl {extra}')
+if not dsh('timeout 2700 python training/repo_tasks.py --packs packs --out data/repo_train.jsonl --eval-out data/repo_eval.jsonl', required=False):
     open('data/repo_train.jsonl', 'w').close()          # knowledge of shared repos is a bonus, not a blocker
 # next.BREP.io's stl2step (Rust, used unchanged): STL inputs in the CAD training tasks
-sh('(command -v cargo || curl -sSf https://sh.rustup.rs | sh -s -- -y -q) && . $HOME/.cargo/env && '
+dsh('(command -v cargo || curl -sSf https://sh.rustup.rs | sh -s -- -y -q) && . $HOME/.cargo/env && '
    'python -c "from shipbrain import brep; brep.build()"', required=False)
 # OpenPhysicsAI (copied whole): build it, run the examples that finish quickly, learn from the real records
-if not sh('python training/physics_tasks.py --out data/physics_train.jsonl --timeout 40', required=False):
+if not dsh('python training/physics_tasks.py --out data/physics_train.jsonl --timeout 40', required=False):
     open('data/physics_train.jsonl', 'w').close()
 # synthetic P&ID sheets with exact answer keys: teach the (vision) base model to read P&IDs into pid-to-kg's format
-if not sh('python training/synth_pid.py --n 400 --out data/synth_pid_train.jsonl --img-dir data/pid_images', required=False):
+if not dsh('python training/synth_pid.py --n 400 --out data/synth_pid_train.jsonl --img-dir data/pid_images', required=False):
     open('data/synth_pid_train.jsonl', 'w').close()
 # public P&ID drawing sets (real permitted facilities): downloaded here, prepared with pid-to-kg, learned from; never stored
-if not sh('python training/public_pids.py --out data/public_pid_train.jsonl --max-pages 4', required=False):
+if not dsh('python training/public_pids.py --out data/public_pid_train.jsonl --max-pages 4', required=False):
     open('data/public_pid_train.jsonl', 'w').close()
 # construction drawings (ConstructDrawingAI's synthetic engine, non-commercial licence): pictures with exact answer keys
-if not sh('python training/construct_tasks.py --n 160 --out data/construct_train.jsonl --img-dir data/construct_images', required=False):
+if not dsh('python training/construct_tasks.py --n 160 --out data/construct_train.jsonl --img-dir data/construct_images', required=False):
     open('data/construct_train.jsonl', 'w').close()
 # real drawings with full answer keys: PID2Graph P&IDs (CC BY-SA) + CubiCasa5K floor plans (CC BY-NC); downloaded here
 # made on GitHub by .github/workflows/shipbrain-data.yml (release data-latest): fetched here, nothing to attach by hand
-sh(f'curl -sfL -o /tmp/real_drawings.zip https://github.com/{GH_REPO}/releases/download/data-latest/shipbrain-real-drawings.zip '
+dsh(f'curl -sfL -o /tmp/real_drawings.zip https://github.com/{GH_REPO}/releases/download/data-latest/shipbrain-real-drawings.zip '
    '&& unzip -qo /tmp/real_drawings.zip -d data && wc -l data/construct_real_train.jsonl', required=False)
-sh(f'curl -sfL -o /tmp/parsebench.zip https://github.com/{GH_REPO}/releases/download/data-latest/parsebench.zip '
+dsh(f'curl -sfL -o /tmp/parsebench.zip https://github.com/{GH_REPO}/releases/download/data-latest/parsebench.zip '
    '&& unzip -qo /tmp/parsebench.zip -d data || true', required=False)   # ParseBench pages (only when its licence allows)
-sh('touch data/parsebench_train.jsonl', required=False)
+dsh('touch data/parsebench_train.jsonl', required=False)
 if os.path.exists('data/construct_real_train.jsonl') and os.path.getsize('data/construct_real_train.jsonl') > 0:
     print('real drawing samples: from the GitHub release data-latest', flush=True)
-elif not sh('python training/construct_real.py --out data/construct_real_train.jsonl --img-dir data/construct_real_images'
+elif not dsh('python training/construct_real.py --out data/construct_real_train.jsonl --img-dir data/construct_real_images'
           + (f' --data-root "{DATA}"' if DATA else ''), required=False):
     open('data/construct_real_train.jsonl', 'w').close()
 # DEXPI P&IDs (pyDEXPI's real example P&IDs: summary, validation, pictures with exact tags) - made with pyDEXPI
 # (Python 3.12+) and kept in the repo: training/data/dexpi_train.jsonl.gz + training/data/dexpi_images/
-sh('zcat training/data/dexpi_train.jsonl.gz > data/dexpi_train.jsonl && cp -r training/data/dexpi_images data/ '
+dsh('zcat training/data/dexpi_train.jsonl.gz > data/dexpi_train.jsonl && cp -r training/data/dexpi_images data/ '
    '|| touch data/dexpi_train.jsonl', required=False)
 # DWSIM process simulations: made with the real simulator and kept in the repo (training/data/dwsim_train.jsonl.gz)
-sh('zcat training/data/dwsim_train.jsonl.gz > data/dwsim_train.jsonl || touch data/dwsim_train.jsonl', required=False)
+dsh('zcat training/data/dwsim_train.jsonl.gz > data/dwsim_train.jsonl || touch data/dwsim_train.jsonl', required=False)
 # ReverseCAD STL -> STEP conversions (non-commercial licence): real runs, kept in the repo (training/data/reversecad_train.jsonl.gz)
-sh('zcat training/data/reversecad_train.jsonl.gz > data/reversecad_train.jsonl || touch data/reversecad_train.jsonl', required=False)
+dsh('zcat training/data/reversecad_train.jsonl.gz > data/reversecad_train.jsonl || touch data/reversecad_train.jsonl', required=False)
 # cadmpeg native CAD reading (Apache-2.0) on its public CC0 / NIST specimens: real runs, kept in the repo
-sh('zcat training/data/cadmpeg_train.jsonl.gz > data/cadmpeg_train.jsonl || touch data/cadmpeg_train.jsonl', required=False)
+dsh('zcat training/data/cadmpeg_train.jsonl.gz > data/cadmpeg_train.jsonl || touch data/cadmpeg_train.jsonl', required=False)
 # Rhino .3dm import with ShipBrain's own exact reader (rhino3dm, MIT): real conversions, kept in the repo
-sh('zcat training/data/rhino_train.jsonl.gz > data/rhino_train.jsonl || touch data/rhino_train.jsonl', required=False)
+dsh('zcat training/data/rhino_train.jsonl.gz > data/rhino_train.jsonl || touch data/rhino_train.jsonl', required=False)
 # NX Open journals with nxopentse (AGPL) + NX File Renamer (GPL): kept in the repo
-sh('zcat training/data/nx_train.jsonl.gz > data/nx_train.jsonl || touch data/nx_train.jsonl', required=False)
+dsh('zcat training/data/nx_train.jsonl.gz > data/nx_train.jsonl || touch data/nx_train.jsonl', required=False)
 # CableDyn mooring lines and cables (Apache-2.0): real solver runs, kept in the repo
-sh('zcat training/data/cabledyn_train.jsonl.gz > data/cabledyn_train.jsonl || touch data/cabledyn_train.jsonl', required=False)
+dsh('zcat training/data/cabledyn_train.jsonl.gz > data/cabledyn_train.jsonl || touch data/cabledyn_train.jsonl', required=False)
 # TensorMesh topology optimisation and solid solves (Apache-2.0): real runs, kept in the repo
-sh('zcat training/data/tensormesh_train.jsonl.gz > data/tensormesh_train.jsonl || touch data/tensormesh_train.jsonl', required=False)
+dsh('zcat training/data/tensormesh_train.jsonl.gz > data/tensormesh_train.jsonl || touch data/tensormesh_train.jsonl', required=False)
 # VTracer scanned-drawing tracing (MIT): real runs, kept in the repo
-sh('zcat training/data/vtracer_train.jsonl.gz > data/vtracer_train.jsonl || touch data/vtracer_train.jsonl', required=False)
+dsh('zcat training/data/vtracer_train.jsonl.gz > data/vtracer_train.jsonl || touch data/vtracer_train.jsonl', required=False)
 # ProcessPi pipe hydraulics (MIT): real runs, kept in the repo
-sh('zcat training/data/pipeflow_train.jsonl.gz > data/pipeflow_train.jsonl || touch data/pipeflow_train.jsonl', required=False)
+dsh('zcat training/data/pipeflow_train.jsonl.gz > data/pipeflow_train.jsonl || touch data/pipeflow_train.jsonl', required=False)
 # understanding users: ask when inputs are missing, messy units, design loops, recovery from tool errors (real runs)
-sh('zcat training/data/understanding_train.jsonl.gz > data/understanding_train.jsonl || touch data/understanding_train.jsonl', required=False)
+dsh('zcat training/data/understanding_train.jsonl.gz > data/understanding_train.jsonl || touch data/understanding_train.jsonl', required=False)
 # ShipBrain's own hex mesher: real meshing runs on solid parts, kept in the repo
-sh('zcat training/data/hexmesh_train.jsonl.gz > data/hexmesh_train.jsonl || touch data/hexmesh_train.jsonl', required=False)
+dsh('zcat training/data/hexmesh_train.jsonl.gz > data/hexmesh_train.jsonl || touch data/hexmesh_train.jsonl', required=False)
 # 2D drawings from plain words (dxf_draw / dxf_check): real runs, kept in the repo
-sh('zcat training/data/dxf_train.jsonl.gz > data/dxf_train.jsonl || touch data/dxf_train.jsonl', required=False)
-sh('zcat training/data/piperoute_train.jsonl.gz > data/piperoute_train.jsonl || touch data/piperoute_train.jsonl', required=False)
-sh('zcat training/data/centerline_train.jsonl.gz > data/centerline_train.jsonl || touch data/centerline_train.jsonl', required=False)
-sh('zcat training/data/connection_train.jsonl.gz > data/connection_train.jsonl || touch data/connection_train.jsonl', required=False)
-sh('zcat training/data/boltgroup_train.jsonl.gz > data/boltgroup_train.jsonl || touch data/boltgroup_train.jsonl', required=False)
-sh('zcat training/data/osoconn_train.jsonl.gz > data/osoconn_train.jsonl || touch data/osoconn_train.jsonl', required=False)
-sh('zcat training/data/xc_train.jsonl.gz > data/xc_train.jsonl || touch data/xc_train.jsonl', required=False)
-sh('zcat training/data/cbfem_train.jsonl.gz > data/cbfem_train.jsonl || touch data/cbfem_train.jsonl', required=False)
-sh('zcat training/data/pipestress_train.jsonl.gz > data/pipestress_train.jsonl || touch data/pipestress_train.jsonl', required=False)
-sh('zcat training/data/pulsation_train.jsonl.gz > data/pulsation_train.jsonl || touch data/pulsation_train.jsonl', required=False)
-sh('zcat training/data/parts_train.jsonl.gz > data/parts_train.jsonl || touch data/parts_train.jsonl', required=False)
-sh('zcat training/data/fvm_train.jsonl.gz > data/fvm_train.jsonl || touch data/fvm_train.jsonl', required=False)
-sh('zcat training/data/elmer_train.jsonl.gz > data/elmer_train.jsonl || touch data/elmer_train.jsonl', required=False)
-sh('zcat training/data/openfoam_train.jsonl.gz > data/openfoam_train.jsonl || touch data/openfoam_train.jsonl', required=False)
-sh('zcat training/data/vessel_train.jsonl.gz > data/vessel_train.jsonl || touch data/vessel_train.jsonl', required=False)
-sh('zcat training/data/hull_train.jsonl.gz > data/hull_train.jsonl || touch data/hull_train.jsonl', required=False)
-sh('zcat training/data/late_tools_train.jsonl.gz > data/late_tools_train.jsonl || touch data/late_tools_train.jsonl', required=False)   # propeller, Nastran, hull resistance / GZ / motions, blocks, frames, catamaran, HCM
+dsh('zcat training/data/dxf_train.jsonl.gz > data/dxf_train.jsonl || touch data/dxf_train.jsonl', required=False)
+dsh('zcat training/data/piperoute_train.jsonl.gz > data/piperoute_train.jsonl || touch data/piperoute_train.jsonl', required=False)
+dsh('zcat training/data/centerline_train.jsonl.gz > data/centerline_train.jsonl || touch data/centerline_train.jsonl', required=False)
+dsh('zcat training/data/connection_train.jsonl.gz > data/connection_train.jsonl || touch data/connection_train.jsonl', required=False)
+dsh('zcat training/data/boltgroup_train.jsonl.gz > data/boltgroup_train.jsonl || touch data/boltgroup_train.jsonl', required=False)
+dsh('zcat training/data/osoconn_train.jsonl.gz > data/osoconn_train.jsonl || touch data/osoconn_train.jsonl', required=False)
+dsh('zcat training/data/xc_train.jsonl.gz > data/xc_train.jsonl || touch data/xc_train.jsonl', required=False)
+dsh('zcat training/data/cbfem_train.jsonl.gz > data/cbfem_train.jsonl || touch data/cbfem_train.jsonl', required=False)
+dsh('zcat training/data/pipestress_train.jsonl.gz > data/pipestress_train.jsonl || touch data/pipestress_train.jsonl', required=False)
+dsh('zcat training/data/pulsation_train.jsonl.gz > data/pulsation_train.jsonl || touch data/pulsation_train.jsonl', required=False)
+dsh('zcat training/data/parts_train.jsonl.gz > data/parts_train.jsonl || touch data/parts_train.jsonl', required=False)
+dsh('zcat training/data/fvm_train.jsonl.gz > data/fvm_train.jsonl || touch data/fvm_train.jsonl', required=False)
+dsh('zcat training/data/elmer_train.jsonl.gz > data/elmer_train.jsonl || touch data/elmer_train.jsonl', required=False)
+dsh('zcat training/data/openfoam_train.jsonl.gz > data/openfoam_train.jsonl || touch data/openfoam_train.jsonl', required=False)
+dsh('zcat training/data/vessel_train.jsonl.gz > data/vessel_train.jsonl || touch data/vessel_train.jsonl', required=False)
+dsh('zcat training/data/hull_train.jsonl.gz > data/hull_train.jsonl || touch data/hull_train.jsonl', required=False)
+dsh('zcat training/data/late_tools_train.jsonl.gz > data/late_tools_train.jsonl || touch data/late_tools_train.jsonl', required=False)   # propeller, Nastran, hull resistance / GZ / motions, blocks, frames, catamaran, HCM
 # MOOSE plate checks made on GitHub in the official MOOSE image (release moose-latest)
-sh(f'curl -sSfL -o /tmp/moose_train.jsonl.gz https://github.com/{GH_REPO}/releases/download/moose-latest/moose_train.jsonl.gz'
+dsh(f'curl -sSfL -o /tmp/moose_train.jsonl.gz https://github.com/{GH_REPO}/releases/download/moose-latest/moose_train.jsonl.gz'
    ' && zcat /tmp/moose_train.jsonl.gz > data/moose_train.jsonl || touch data/moose_train.jsonl', required=False)
 # cad3dify's own drawing -> CadQuery -> render -> correct loop, in its own prompt format, on the verified CAD examples
-if not sh('python training/cad3dify_tasks.py --out data/cad3dify_train.jsonl --img-dir data/cad3dify_images', required=False):
+if not dsh('python training/cad3dify_tasks.py --out data/cad3dify_train.jsonl --img-dir data/cad3dify_images', required=False):
     open('data/cad3dify_train.jsonl', 'w').close()
 # class rules: IACS calculators + every rule section with a formula in the class rule packs (natural-language answers)
-if not sh('python training/class_rule_tasks.py --packs packs --out data/class_rule_train.jsonl', required=False):
+if not dsh('python training/class_rule_tasks.py --packs packs --out data/class_rule_train.jsonl', required=False):
     open('data/class_rule_train.jsonl', 'w').close()
 # public OCX ship models (real CAD exports): fetched here, names removed, learned from; never stored
-if not sh('python training/ocx_samples.py --out data/ocx_train.jsonl --eval-out data/ocx_eval.jsonl', required=False):
+if not dsh('python training/ocx_samples.py --out data/ocx_train.jsonl --eval-out data/ocx_eval.jsonl', required=False):
     open('data/ocx_train.jsonl', 'w').close()
     open('data/ocx_eval.jsonl', 'w').close()
-sh('cat data/repo_eval.jsonl >> data/eval.jsonl', required=False)
-sh('cat data/ocx_eval.jsonl >> data/eval.jsonl', required=False)
+dsh('cat data/repo_eval.jsonl >> data/eval.jsonl', required=False)
+dsh('cat data/ocx_eval.jsonl >> data/eval.jsonl', required=False)
 def _plain(paths):
     out = []
     for f in paths:                                   # .jsonl.gz -> .jsonl next to the data folder
@@ -316,6 +332,13 @@ if MODE != 'full':
         raise SystemExit('SB_MODE=new but no saved model state found (Kaggle secret HF_TOKEN + one earlier finished run, or attach the dataset shipbrain_state)')
     else:
         print('no saved model state: full training on all data (this run saves the state for the next one)', flush=True)
+if DATA_ONLY:
+    os.makedirs('/kaggle/working/shipbrain_train_data', exist_ok=True)
+    sh('rm -rf /kaggle/working/shipbrain_train_data/data && cp -r data /kaggle/working/shipbrain_train_data/data')
+    open('/kaggle/working/shipbrain_train_data/data_ready.flag', 'w').write(RUN_ID)
+    print('DATA READY in /kaggle/working/shipbrain_train_data - attach this notebook output to the GPU notebook', flush=True)
+    report('data ready')
+    raise SystemExit(0)
 report('scoring the base model')
 sh(f'python training/cad_eval.py --local {BASE} --limit 30 --out /kaggle/working/cad_eval_before.json', required=False)
 sh(f'python training/evaluate.py --local {BASE} --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_before.json', required=False)
