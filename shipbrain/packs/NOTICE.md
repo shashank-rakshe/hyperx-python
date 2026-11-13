@@ -622,3 +622,24 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: BSD-2-Clause
 - Use: ok: permissive licence, keep the attribution
 - Copyright (c) 2016, Fougue SAS, and the additions of the repository owner
+
+## Civil-Engineering-Scripts
+
+- Source: https://github.com/majahmed999-sudo/Civil-Engineering-Scripts (commit 9e36d1baf343)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- https://github.com/majahmed999-sudo/Civil-Engineering-Scripts contributors
+
+## mdlARC
+
+- Source: https://github.com/mvakde/mdlARC (commit d9c3838ca54b)
+- Licence: MIT
+- Use: ok: permissive licence, keep the attribution
+- Copyright 2026 Mithil Vakde
+
+## weight-space-engineering
+
+- Source: https://github.com/xuguang-ai/weight-space-engineering (commit e8bd60c7d38d)
+- Licence: Apache-2.0
+- Use: ok: permissive licence, keep the attribution
+- https://github.com/xuguang-ai/weight-space-engineering contributors

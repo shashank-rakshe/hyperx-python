@@ -240,6 +240,13 @@ All outside data is downloaded on Kaggle, which has internet:
    "rules" in its name, attach it to the training notebook too.
 4. Optional: `training/kaggle/detector_kernel.py` in a GPU notebook trains the drawing symbol detector.
 
+## Everything you shared: the complete list
+
+`docs/WHAT_IS_IN_SHIPBRAIN.md` lists all 75 repositories you gave, each with its status (pack in the repo, or private pack only because it has no licence) and licence. The latest additions: your own `mayo-develop` (company, product, hull and part names removed;
+its hex meshing suite and ship XML import rules are skills `hex-meshing-suite` and `ship-xml-import-rules`, the rules in full in `docs/ship_xml_import_rules.md`), `multiverse`, `GPUCADforAM`, `OpenGeometry`, `steel-python` (a browser-automation SDK, not structural steel),
+`Civil-Engineering-Scripts`, `mdlARC`, `weight-space-engineering`. Eight repositories without a licence are private packs only. Opening Rhino `.3dm` and NX `.prt` files works (`native_cad`, `tests/test_rhino_nx.py`, a real NIST NX part becomes STEP with 139 faces);
+2D drawings to ship XML is `shiptools/` (`drawing_to_model`, `xml_from_members`, `xml_validate`).
+
 ## Seeing and choosing the right tool: code tools on, a Python tool, routing for every tool
 
 - **Code tools are on by default** on this PC (`python -m shipbrain.server`): `cadquery_build` (CadQuery scripts to STEP / STL) and the new `python_run` (a short Python script in the work folder: loops, tables, plots, CSV, with a time limit;

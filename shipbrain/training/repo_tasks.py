@@ -202,11 +202,13 @@ def load_training_packs(folder):
     return packs
 
 
-def make(packs_dir, workdir, seed=0, per_pack=40, cad=True, cad_variants=2, examples=None, max_chunks=3000):
+def make(packs_dir, workdir, seed=0, per_pack=40, cad=True, cad_variants=2, examples=None, max_chunks=3000, only=None):
     """-> (train, eval): lists of {'task', 'messages'}; the tools see only training-allowed packs"""
     r = random.Random(seed)
     kb = Knowledge()
     packs = load_training_packs(packs_dir)
+    if only:
+        packs = [p for p in packs if p['name'] in only]
     for p in packs:                                            # a huge pack (tens of thousands of chunks) makes every search slow: make its questions from a fixed random subset
         if len(p['chunks']) > max_chunks:
             rr = random.Random('subset:' + p['name'])
@@ -244,10 +246,11 @@ def main(argv=None):
     ap.add_argument('--per-pack', type=int, default=40, help='knowledge questions per pack (train + eval)')
     ap.add_argument('--cad-variants', type=int, default=2, help='phrasings per verified CAD example')
     ap.add_argument('--no-cad', action='store_true')
+    ap.add_argument('--only', default='', help='comma-separated pack names: make questions only for these packs (the others are not even loaded)')
     ap.add_argument('--seed', type=int, default=0)
     a = ap.parse_args(argv)
     work = tempfile.mkdtemp(prefix='sb_repo_')
-    train, ev = make(a.packs, work, a.seed, a.per_pack, not a.no_cad, a.cad_variants)
+    train, ev = make(a.packs, work, a.seed, a.per_pack, not a.no_cad, a.cad_variants, only=[x.strip() for x in a.only.split(',') if x.strip()] or None)
     for path, rows in ((a.out, train), (a.eval_out, ev)):
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         with open(path, 'w', encoding='utf-8') as f:
