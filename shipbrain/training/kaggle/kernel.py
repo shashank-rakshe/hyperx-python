@@ -52,6 +52,30 @@ if not PREBUILT:                                              # rescue: the data
         PREBUILT, PREBUILT_DATA = [_alt[-1]], os.path.dirname(_alt[-1])
 
 
+def cleanup_output():
+    """keep Kaggle's output small so it saves quickly: the data of this run is moved to shipbrain_train_data/data (unless it came from an input), then the copy of the repository
+    (src: vendor builds, node_modules, Rust targets), the saved-state folder and caches are deleted. Runs at the end of a data-only run and also when a run stops with an error."""
+    try:
+        import atexit  # noqa: F401
+        W = '/kaggle/working'
+        d, out = f'{W}/src/shipbrain/data', f'{W}/shipbrain_train_data'
+        if os.path.isdir(d) and not PREBUILT and not os.path.isdir(out + '/data'):
+            os.makedirs(out, exist_ok=True)
+            shutil.move(d, out + '/data')
+            ok = all(os.path.exists(f'{out}/data/{f}') for f in ('train.jsonl', 'eval.jsonl', 'dpo_pairs.jsonl'))
+            open(f'{out}/' + ('data_ready.flag' if ok else 'data_partial.flag'), 'w').write(RUN_ID)
+        shutil.rmtree(f'{W}/src', ignore_errors=True)
+        shutil.rmtree(f'{W}/state', ignore_errors=True)
+        for c in ('/tmp/class_rules_pdfs', '/tmp/real_drawings.zip', '/tmp/parsebench.zip', '/tmp/moose_train.jsonl.gz', os.path.expanduser('~/.cache/pip')):
+            shutil.rmtree(c, ignore_errors=True) if os.path.isdir(c) else (os.remove(c) if os.path.exists(c) else None)
+        print('output cleaned: only the data folder, logs and results stay', flush=True)
+    except Exception as e:
+        print('(cleanup skipped:', type(e).__name__, str(e)[:100], ')', flush=True)
+
+
+__import__('atexit').register(lambda: cleanup_output() if os.path.exists('/kaggle/working') else None)
+
+
 def dsh(cmd, required=True, limit=None):
     """a data-making step: skipped (counted as done) when the data came ready-made from the CPU notebook"""
     return True if PREBUILT else sh(cmd, required, limit)
@@ -369,6 +393,7 @@ if DATA_ONLY:
     open('/kaggle/working/shipbrain_train_data/DATA_TABLE.txt', 'w').write(DATA_TABLE)
     print('DATA READY in /kaggle/working/shipbrain_train_data - attach this notebook output to the GPU notebook', flush=True)
     report('data ready')
+    cleanup_output()
     raise SystemExit(0)
 report('scoring the base model')
 sh(f'python training/cad_eval.py --local {BASE} --limit 30 --out /kaggle/working/cad_eval_before.json', required=False)
