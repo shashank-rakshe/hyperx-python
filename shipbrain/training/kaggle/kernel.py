@@ -12,6 +12,7 @@ BASE = 'unsloth/Qwen3-VL-4B-Instruct'   # FIXED base model: read again from trai
 DRAFT = 'unsloth/Qwen3-0.6B'           # tiny draft model for speculative decoding on the CPU ('' = skip)
 N_TRAIN = 4000
 N_EVAL = 200
+N_TRAIN = int(os.environ.get('SB_N_TRAIN', N_TRAIN))      # synthetic samples from make_dataset (smaller = faster)
 EVAL_LIMIT = 60
 BRANCH = 'claude/new-session-qpeo6g'
 REPO = 'https://github.com/shashank-rakshe/hyperx-python.git'
