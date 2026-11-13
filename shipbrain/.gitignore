@@ -21,3 +21,4 @@ mesh_vs_*.png
 shiptools/ship_src/
 shiptools/rules_index.json
 shiptools/*_data/
+OpenProp_Geometry.txt

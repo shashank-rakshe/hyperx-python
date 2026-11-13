@@ -33,14 +33,23 @@ def design(Z, rpm, D, thrust_N, speed_ms, hub_d=None, duct=False, tau=0.9, rho=1
     i = pt['input']
     i.update(Z=int(Z), N=rpm, D=D, Vs=speed_ms, Js=Js, L=np.pi / Js, R=R, Rhub=hub / 2, Rhub_oR=hub / D, rho=rho, Mp=int(Mp), Np=int(Np), Plot_flag=0,
              CTDES=thrust_N / (0.5 * rho * speed_ms ** 2 * np.pi * R ** 2), Duct_flag=1 if duct else 0, TAU=float(tau) if duct else 1.0, Rduct=R + 0.02 * D, Cduct=D)
+    import tempfile
     sink = io.StringIO()
-    with contextlib.redirect_stdout(sink):
-        pt['design'] = epps(i)
-        pt['geometry'] = geom(pt)
-        out = {}
-        if curve:
-            Jc = np.round(np.arange(max(0.2, 0.5 * Js), 1.6 * Js + 1e-9, 0.1 * max(Js, 0.3)), 3)
-            pt['states'] = analyze(pt, np.pi / Jc)
+    cwd0 = os.getcwd()
+    tmp = tempfile.mkdtemp(prefix='sb_pp_')
+    os.chdir(tmp)                                             # PythonProp writes OpenProp_Geometry.txt into the current folder: keep it out of the project
+    try:
+      with contextlib.redirect_stdout(sink):
+          pt['design'] = epps(i)
+          pt['geometry'] = geom(pt)
+          out = {}
+          if curve:
+              Jc = np.round(np.arange(max(0.2, 0.5 * Js), 1.6 * Js + 1e-9, 0.1 * max(Js, 0.3)), 3)
+              pt['states'] = analyze(pt, np.pi / Jc)
+    finally:
+        os.chdir(cwd0)
+        import shutil
+        shutil.rmtree(tmp, ignore_errors=True)
     d = pt['design']
     r = {'design_J': round(Js, 4), 'design_KT': float(np.ravel(d['KT'])[0]), 'design_KQ': float(np.ravel(d['KQ'])[0]), 'design_efficiency': float(np.ravel(d['EFFY'])[0]),
          'thrust_N': float(thrust_N), 'rpm': float(rpm), 'D': float(D), 'Z': int(Z), 'duct': bool(duct)}
