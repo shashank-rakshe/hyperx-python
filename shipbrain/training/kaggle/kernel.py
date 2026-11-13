@@ -332,10 +332,23 @@ if MODE != 'full':
         raise SystemExit('SB_MODE=new but no saved model state found (Kaggle secret HF_TOKEN + one earlier finished run, or attach the dataset shipbrain_state)')
     else:
         print('no saved model state: full training on all data (this run saves the state for the next one)', flush=True)
+def data_table():
+    """every data file with its sample count: an empty file = a step that made nothing (so it is visible in the log, not silent)"""
+    rows = []
+    for f in sorted(glob.glob('data/*.jsonl')):
+        n = sum(1 for _ in open(f, errors='replace'))
+        rows.append(f'{os.path.basename(f):36s} {n:7d} samples' + ('   <-- EMPTY' if n == 0 else ''))
+    txt = '\n'.join(rows)
+    print('DATA TABLE\n' + txt, flush=True)
+    return txt
+
+
+DATA_TABLE = data_table()
 if DATA_ONLY:
     os.makedirs('/kaggle/working/shipbrain_train_data', exist_ok=True)
     sh('rm -rf /kaggle/working/shipbrain_train_data/data && cp -r data /kaggle/working/shipbrain_train_data/data')
     open('/kaggle/working/shipbrain_train_data/data_ready.flag', 'w').write(RUN_ID)
+    open('/kaggle/working/shipbrain_train_data/DATA_TABLE.txt', 'w').write(DATA_TABLE)
     print('DATA READY in /kaggle/working/shipbrain_train_data - attach this notebook output to the GPU notebook', flush=True)
     report('data ready')
     raise SystemExit(0)
