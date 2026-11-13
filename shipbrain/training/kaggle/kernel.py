@@ -6,6 +6,7 @@ to a PRIVATE Hugging Face repo <your-name>/shipbrain-gguf.
 Settings come from env-style constants below (kaggle_run.py rewrites them).
 """
 import glob, json, os, shutil, subprocess, sys
+os.environ['PYTHONUNBUFFERED'] = '1'       # every step's output reaches the Kaggle log at once (otherwise it appears only when the step ends)
 
 BASE = 'unsloth/Qwen3-VL-4B-Instruct'   # FIXED base model: read again from training/base_model.json after the clone
 DRAFT = 'unsloth/Qwen3-0.6B'           # tiny draft model for speculative decoding on the CPU ('' = skip)
@@ -23,6 +24,19 @@ LOG = '/kaggle/working/run.log'
 RUN_ID = __import__('time').strftime('%Y%m%d-%H%M')
 T0 = __import__('time').time()
 BUDGET_H = float(os.environ.get('SB_BUDGET_H', 11))   # Kaggle stops a session at 12 h: optional last steps (draft model, speed measurement) are skipped when this much time is already used
+CURRENT = ['starting']
+
+
+def _heartbeat():
+    import time
+    while True:
+        time.sleep(300)
+        print(f'[heartbeat] {hours() * 60:.0f} min in, current step: {CURRENT[0][:110]}', flush=True)
+
+
+__import__('threading').Thread(target=_heartbeat, daemon=True).start()
+
+
 def hours():
     return (__import__('time').time() - T0) / 3600
 
@@ -80,6 +94,7 @@ STEP_LIMIT = int(os.environ.get('SB_STEP_LIMIT', 2400))     # seconds: an option
 
 def sh(cmd, required=True, limit=None):
     print('$', cmd, flush=True)
+    CURRENT[0] = cmd
     open(LOG, 'a').write(f'$ {cmd}\n')
     if limit is None and not required:
         limit = STEP_LIMIT
