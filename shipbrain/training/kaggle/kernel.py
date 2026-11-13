@@ -273,7 +273,7 @@ sh('zcat training/data/late_tools_train.jsonl.gz > data/late_tools_train.jsonl |
 sh('zcat training/data/missing_tools_train.jsonl.gz > data/missing_tools_train.jsonl || touch data/missing_tools_train.jsonl', required=False)
 sh('zcat training/data/python_tools_train.jsonl.gz > data/python_tools_train.jsonl || touch data/python_tools_train.jsonl', required=False)
 # packs added after the ready-made data was made (SB_NEW_PACKS lists them): their knowledge questions are made here, always (about 1 minute)
-NEW_PACKS = os.environ.get('SB_NEW_PACKS', 'mayo-develop,multiverse,GPUCADforAM,OpenGeometry,steel-python,Civil-Engineering-Scripts,mdlARC,weight-space-engineering')
+NEW_PACKS = os.environ.get('SB_NEW_PACKS', 'OpenModelica,mayo-develop,multiverse,GPUCADforAM,OpenGeometry,steel-python,Civil-Engineering-Scripts,mdlARC,weight-space-engineering')
 if not sh(f'python training/repo_tasks.py --packs packs --only {NEW_PACKS} --no-cad --out data/repo_new_train.jsonl --eval-out data/repo_new_eval.jsonl', required=False):
     open('data/repo_new_train.jsonl', 'w').close()
 sh('cat data/repo_new_eval.jsonl >> data/eval.jsonl', required=False)   # python_run + cadquery_build in plain words   # mesh -> solve -> picture chain, cad_mesh, fatigue_mesh, cfd_export, memory, engine choice ... (tools that had no examples)   # propeller, Nastran, hull resistance / GZ / motions, blocks, frames, catamaran, HCM

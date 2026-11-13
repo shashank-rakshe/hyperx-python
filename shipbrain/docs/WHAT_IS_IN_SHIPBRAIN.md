@@ -80,6 +80,7 @@ A repository without a licence cannot be copied into this public repository: it 
 | xcfem/xc | pack `xc` | GPL-3.0 |
 | xuguang-ai/weight-space-engineering | pack `weight-space-engineering` | Apache-2.0 |
 | zcstkhk/RhinoInside.NX | private pack only (no licence); licence request written | none |
+| OpenModelica/OpenModelica (documentation link you gave) | pack `OpenModelica` | AGPL-3.0 (dual with OSMC-PL) |
 
 Not repositories but also included: the pyNastran documentation site (`docs/` of its repository), the Ship XML import rules (`docs/ship_xml_import_rules.md`), and your Vibrationdata and class-society material through the packs and skills.
 

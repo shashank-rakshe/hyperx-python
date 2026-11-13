@@ -643,3 +643,10 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: Apache-2.0
 - Use: ok: permissive licence, keep the attribution
 - https://github.com/xuguang-ai/weight-space-engineering contributors
+
+## OpenModelica
+
+- Source: https://github.com/OpenModelica/OpenModelica (commit from the shallow clone of the default branch; docs, OMEdit, test suite)
+- Licence: AGPL-3.0 (dual-licensed with the OSMC Public License)
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- Copyright (c) 1998-current, Open Source Modelica Consortium (OSMC)
