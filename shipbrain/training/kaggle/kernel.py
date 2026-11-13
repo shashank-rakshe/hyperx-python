@@ -75,10 +75,20 @@ def report(stage, extra=None):
         print('(could not report to GitHub:', e, ')', flush=True)
 
 
-def sh(cmd, required=True):
+STEP_LIMIT = int(os.environ.get('SB_STEP_LIMIT', 2400))     # seconds: an optional step that runs longer is stopped and skipped (one hung data step must never eat the GPU quota)
+
+
+def sh(cmd, required=True, limit=None):
     print('$', cmd, flush=True)
     open(LOG, 'a').write(f'$ {cmd}\n')
+    if limit is None and not required:
+        limit = STEP_LIMIT
+    if limit:
+        import shlex
+        cmd = f'timeout -k 20 {int(limit)} bash -c {shlex.quote(cmd)}'
+    t0 = __import__('time').time()
     r = subprocess.run(f'set -o pipefail; ( {cmd} ) 2>&1 | tee -a {LOG}', shell=True, executable='/bin/bash')
+    print(f'   ({__import__("time").time() - t0:.0f} s, exit {r.returncode})', flush=True)
     if r.returncode and required:
         report('FAILED: ' + cmd[:80])
     if r.returncode:
