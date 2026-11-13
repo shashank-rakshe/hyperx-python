@@ -125,6 +125,7 @@ def sh(cmd, required=True, limit=None):
     return r.returncode == 0
 
 
+# the saved sets of the repo are always loaded from the clone (also when the rest of the data came ready-made), so new sets reach the GPU run without redoing the CPU run
 # SB_FAST=1: for a nearly used-up weekly quota: 1 epoch, fewer scoring samples, no draft model, no speed measurement (about half the GPU time)
 if os.environ.get('SB_FAST') == '1':
     os.environ.setdefault('EPOCHS', '1')
@@ -227,48 +228,49 @@ elif not dsh('python training/construct_real.py --out data/construct_real_train.
     open('data/construct_real_train.jsonl', 'w').close()
 # DEXPI P&IDs (pyDEXPI's real example P&IDs: summary, validation, pictures with exact tags) - made with pyDEXPI
 # (Python 3.12+) and kept in the repo: training/data/dexpi_train.jsonl.gz + training/data/dexpi_images/
-dsh('zcat training/data/dexpi_train.jsonl.gz > data/dexpi_train.jsonl && cp -r training/data/dexpi_images data/ '
+sh('zcat training/data/dexpi_train.jsonl.gz > data/dexpi_train.jsonl && cp -r training/data/dexpi_images data/ '
    '|| touch data/dexpi_train.jsonl', required=False)
 # DWSIM process simulations: made with the real simulator and kept in the repo (training/data/dwsim_train.jsonl.gz)
-dsh('zcat training/data/dwsim_train.jsonl.gz > data/dwsim_train.jsonl || touch data/dwsim_train.jsonl', required=False)
+sh('zcat training/data/dwsim_train.jsonl.gz > data/dwsim_train.jsonl || touch data/dwsim_train.jsonl', required=False)
 # ReverseCAD STL -> STEP conversions (non-commercial licence): real runs, kept in the repo (training/data/reversecad_train.jsonl.gz)
-dsh('zcat training/data/reversecad_train.jsonl.gz > data/reversecad_train.jsonl || touch data/reversecad_train.jsonl', required=False)
+sh('zcat training/data/reversecad_train.jsonl.gz > data/reversecad_train.jsonl || touch data/reversecad_train.jsonl', required=False)
 # cadmpeg native CAD reading (Apache-2.0) on its public CC0 / NIST specimens: real runs, kept in the repo
-dsh('zcat training/data/cadmpeg_train.jsonl.gz > data/cadmpeg_train.jsonl || touch data/cadmpeg_train.jsonl', required=False)
+sh('zcat training/data/cadmpeg_train.jsonl.gz > data/cadmpeg_train.jsonl || touch data/cadmpeg_train.jsonl', required=False)
 # Rhino .3dm import with ShipBrain's own exact reader (rhino3dm, MIT): real conversions, kept in the repo
-dsh('zcat training/data/rhino_train.jsonl.gz > data/rhino_train.jsonl || touch data/rhino_train.jsonl', required=False)
+sh('zcat training/data/rhino_train.jsonl.gz > data/rhino_train.jsonl || touch data/rhino_train.jsonl', required=False)
 # NX Open journals with nxopentse (AGPL) + NX File Renamer (GPL): kept in the repo
-dsh('zcat training/data/nx_train.jsonl.gz > data/nx_train.jsonl || touch data/nx_train.jsonl', required=False)
+sh('zcat training/data/nx_train.jsonl.gz > data/nx_train.jsonl || touch data/nx_train.jsonl', required=False)
 # CableDyn mooring lines and cables (Apache-2.0): real solver runs, kept in the repo
-dsh('zcat training/data/cabledyn_train.jsonl.gz > data/cabledyn_train.jsonl || touch data/cabledyn_train.jsonl', required=False)
+sh('zcat training/data/cabledyn_train.jsonl.gz > data/cabledyn_train.jsonl || touch data/cabledyn_train.jsonl', required=False)
 # TensorMesh topology optimisation and solid solves (Apache-2.0): real runs, kept in the repo
-dsh('zcat training/data/tensormesh_train.jsonl.gz > data/tensormesh_train.jsonl || touch data/tensormesh_train.jsonl', required=False)
+sh('zcat training/data/tensormesh_train.jsonl.gz > data/tensormesh_train.jsonl || touch data/tensormesh_train.jsonl', required=False)
 # VTracer scanned-drawing tracing (MIT): real runs, kept in the repo
-dsh('zcat training/data/vtracer_train.jsonl.gz > data/vtracer_train.jsonl || touch data/vtracer_train.jsonl', required=False)
+sh('zcat training/data/vtracer_train.jsonl.gz > data/vtracer_train.jsonl || touch data/vtracer_train.jsonl', required=False)
 # ProcessPi pipe hydraulics (MIT): real runs, kept in the repo
-dsh('zcat training/data/pipeflow_train.jsonl.gz > data/pipeflow_train.jsonl || touch data/pipeflow_train.jsonl', required=False)
+sh('zcat training/data/pipeflow_train.jsonl.gz > data/pipeflow_train.jsonl || touch data/pipeflow_train.jsonl', required=False)
 # understanding users: ask when inputs are missing, messy units, design loops, recovery from tool errors (real runs)
-dsh('zcat training/data/understanding_train.jsonl.gz > data/understanding_train.jsonl || touch data/understanding_train.jsonl', required=False)
+sh('zcat training/data/understanding_train.jsonl.gz > data/understanding_train.jsonl || touch data/understanding_train.jsonl', required=False)
 # ShipBrain's own hex mesher: real meshing runs on solid parts, kept in the repo
-dsh('zcat training/data/hexmesh_train.jsonl.gz > data/hexmesh_train.jsonl || touch data/hexmesh_train.jsonl', required=False)
+sh('zcat training/data/hexmesh_train.jsonl.gz > data/hexmesh_train.jsonl || touch data/hexmesh_train.jsonl', required=False)
 # 2D drawings from plain words (dxf_draw / dxf_check): real runs, kept in the repo
-dsh('zcat training/data/dxf_train.jsonl.gz > data/dxf_train.jsonl || touch data/dxf_train.jsonl', required=False)
-dsh('zcat training/data/piperoute_train.jsonl.gz > data/piperoute_train.jsonl || touch data/piperoute_train.jsonl', required=False)
-dsh('zcat training/data/centerline_train.jsonl.gz > data/centerline_train.jsonl || touch data/centerline_train.jsonl', required=False)
-dsh('zcat training/data/connection_train.jsonl.gz > data/connection_train.jsonl || touch data/connection_train.jsonl', required=False)
-dsh('zcat training/data/boltgroup_train.jsonl.gz > data/boltgroup_train.jsonl || touch data/boltgroup_train.jsonl', required=False)
-dsh('zcat training/data/osoconn_train.jsonl.gz > data/osoconn_train.jsonl || touch data/osoconn_train.jsonl', required=False)
-dsh('zcat training/data/xc_train.jsonl.gz > data/xc_train.jsonl || touch data/xc_train.jsonl', required=False)
-dsh('zcat training/data/cbfem_train.jsonl.gz > data/cbfem_train.jsonl || touch data/cbfem_train.jsonl', required=False)
-dsh('zcat training/data/pipestress_train.jsonl.gz > data/pipestress_train.jsonl || touch data/pipestress_train.jsonl', required=False)
-dsh('zcat training/data/pulsation_train.jsonl.gz > data/pulsation_train.jsonl || touch data/pulsation_train.jsonl', required=False)
-dsh('zcat training/data/parts_train.jsonl.gz > data/parts_train.jsonl || touch data/parts_train.jsonl', required=False)
-dsh('zcat training/data/fvm_train.jsonl.gz > data/fvm_train.jsonl || touch data/fvm_train.jsonl', required=False)
-dsh('zcat training/data/elmer_train.jsonl.gz > data/elmer_train.jsonl || touch data/elmer_train.jsonl', required=False)
-dsh('zcat training/data/openfoam_train.jsonl.gz > data/openfoam_train.jsonl || touch data/openfoam_train.jsonl', required=False)
-dsh('zcat training/data/vessel_train.jsonl.gz > data/vessel_train.jsonl || touch data/vessel_train.jsonl', required=False)
-dsh('zcat training/data/hull_train.jsonl.gz > data/hull_train.jsonl || touch data/hull_train.jsonl', required=False)
-dsh('zcat training/data/late_tools_train.jsonl.gz > data/late_tools_train.jsonl || touch data/late_tools_train.jsonl', required=False)   # propeller, Nastran, hull resistance / GZ / motions, blocks, frames, catamaran, HCM
+sh('zcat training/data/dxf_train.jsonl.gz > data/dxf_train.jsonl || touch data/dxf_train.jsonl', required=False)
+sh('zcat training/data/piperoute_train.jsonl.gz > data/piperoute_train.jsonl || touch data/piperoute_train.jsonl', required=False)
+sh('zcat training/data/centerline_train.jsonl.gz > data/centerline_train.jsonl || touch data/centerline_train.jsonl', required=False)
+sh('zcat training/data/connection_train.jsonl.gz > data/connection_train.jsonl || touch data/connection_train.jsonl', required=False)
+sh('zcat training/data/boltgroup_train.jsonl.gz > data/boltgroup_train.jsonl || touch data/boltgroup_train.jsonl', required=False)
+sh('zcat training/data/osoconn_train.jsonl.gz > data/osoconn_train.jsonl || touch data/osoconn_train.jsonl', required=False)
+sh('zcat training/data/xc_train.jsonl.gz > data/xc_train.jsonl || touch data/xc_train.jsonl', required=False)
+sh('zcat training/data/cbfem_train.jsonl.gz > data/cbfem_train.jsonl || touch data/cbfem_train.jsonl', required=False)
+sh('zcat training/data/pipestress_train.jsonl.gz > data/pipestress_train.jsonl || touch data/pipestress_train.jsonl', required=False)
+sh('zcat training/data/pulsation_train.jsonl.gz > data/pulsation_train.jsonl || touch data/pulsation_train.jsonl', required=False)
+sh('zcat training/data/parts_train.jsonl.gz > data/parts_train.jsonl || touch data/parts_train.jsonl', required=False)
+sh('zcat training/data/fvm_train.jsonl.gz > data/fvm_train.jsonl || touch data/fvm_train.jsonl', required=False)
+sh('zcat training/data/elmer_train.jsonl.gz > data/elmer_train.jsonl || touch data/elmer_train.jsonl', required=False)
+sh('zcat training/data/openfoam_train.jsonl.gz > data/openfoam_train.jsonl || touch data/openfoam_train.jsonl', required=False)
+sh('zcat training/data/vessel_train.jsonl.gz > data/vessel_train.jsonl || touch data/vessel_train.jsonl', required=False)
+sh('zcat training/data/hull_train.jsonl.gz > data/hull_train.jsonl || touch data/hull_train.jsonl', required=False)
+sh('zcat training/data/late_tools_train.jsonl.gz > data/late_tools_train.jsonl || touch data/late_tools_train.jsonl', required=False)
+sh('zcat training/data/missing_tools_train.jsonl.gz > data/missing_tools_train.jsonl || touch data/missing_tools_train.jsonl', required=False)   # mesh -> solve -> picture chain, cad_mesh, fatigue_mesh, cfd_export, memory, engine choice ... (tools that had no examples)   # propeller, Nastran, hull resistance / GZ / motions, blocks, frames, catamaran, HCM
 # MOOSE plate checks made on GitHub in the official MOOSE image (release moose-latest)
 dsh(f'curl -sSfL -o /tmp/moose_train.jsonl.gz https://github.com/{GH_REPO}/releases/download/moose-latest/moose_train.jsonl.gz'
    ' && zcat /tmp/moose_train.jsonl.gz > data/moose_train.jsonl || touch data/moose_train.jsonl', required=False)
@@ -364,7 +366,7 @@ FEEDBACK = ' '.join(FEEDBACK_FILES)
 sh(f"python training/dpo_pairs.py --data 'data/*.jsonl' 'training/data/*.jsonl.gz' --feedback {FEEDBACK} --out data/dpo_pairs.jsonl --max 2000",
    required=False)
 report('training the main model')
-sh(f'MAX_LEN=6144 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/synth_pid_train.jsonl data/physics_train.jsonl data/ocx_train.jsonl data/construct_train.jsonl data/construct_real_train.jsonl data/cad3dify_train.jsonl data/class_rule_train.jsonl data/dexpi_train.jsonl data/dwsim_train.jsonl data/reversecad_train.jsonl data/cadmpeg_train.jsonl data/rhino_train.jsonl data/nx_train.jsonl data/cabledyn_train.jsonl data/tensormesh_train.jsonl data/vtracer_train.jsonl data/pipeflow_train.jsonl data/understanding_train.jsonl data/hexmesh_train.jsonl data/dxf_train.jsonl data/piperoute_train.jsonl data/centerline_train.jsonl data/connection_train.jsonl data/boltgroup_train.jsonl data/osoconn_train.jsonl data/xc_train.jsonl data/cbfem_train.jsonl data/pipestress_train.jsonl data/pulsation_train.jsonl data/parts_train.jsonl data/fvm_train.jsonl data/elmer_train.jsonl data/openfoam_train.jsonl data/vessel_train.jsonl data/hull_train.jsonl data/late_tools_train.jsonl data/moose_train.jsonl data/parsebench_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
+sh(f'MAX_LEN=6144 python training/finetune.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/synth_pid_train.jsonl data/physics_train.jsonl data/ocx_train.jsonl data/construct_train.jsonl data/construct_real_train.jsonl data/cad3dify_train.jsonl data/class_rule_train.jsonl data/dexpi_train.jsonl data/dwsim_train.jsonl data/reversecad_train.jsonl data/cadmpeg_train.jsonl data/rhino_train.jsonl data/nx_train.jsonl data/cabledyn_train.jsonl data/tensormesh_train.jsonl data/vtracer_train.jsonl data/pipeflow_train.jsonl data/understanding_train.jsonl data/hexmesh_train.jsonl data/dxf_train.jsonl data/piperoute_train.jsonl data/centerline_train.jsonl data/connection_train.jsonl data/boltgroup_train.jsonl data/osoconn_train.jsonl data/xc_train.jsonl data/cbfem_train.jsonl data/pipestress_train.jsonl data/pulsation_train.jsonl data/parts_train.jsonl data/fvm_train.jsonl data/elmer_train.jsonl data/openfoam_train.jsonl data/vessel_train.jsonl data/hull_train.jsonl data/late_tools_train.jsonl data/missing_tools_train.jsonl data/moose_train.jsonl data/parsebench_train.jsonl {PRIV} --base {BASE} --out /kaggle/working/shipbrain_model --quant q4_k_m')
 report('scoring the trained model')
 sh('python training/cad_eval.py --local /kaggle/working/shipbrain_model/lora --limit 30 --out /kaggle/working/cad_eval_after.json', required=False)
 sh(f'python training/evaluate.py --local /kaggle/working/shipbrain_model/lora --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_after.json', required=False)
