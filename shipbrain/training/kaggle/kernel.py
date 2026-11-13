@@ -435,13 +435,16 @@ except Exception:
 if token and not ACCEPTED:
     print('new model NOT uploaded to Hugging Face: the accept gate rejected it (see accept.json)', flush=True)
 elif token:
-    from huggingface_hub import HfApi, create_repo
-    api = HfApi(token=token)
-    repo = api.whoami()['name'] + '/shipbrain-gguf'
-    create_repo(repo, private=True, exist_ok=True, token=token)
-    for f in glob.glob('/kaggle/working/*.gguf') + ['/kaggle/working/summary.json']:
-        api.upload_file(path_or_fileobj=f, path_in_repo=os.path.basename(f), repo_id=repo)
-    print('uploaded to https://huggingface.co/' + repo)
+    try:                                  # a bad / read-only token must never break the run: the files stay in this run's Output anyway
+        from huggingface_hub import HfApi, create_repo
+        api = HfApi(token=token)
+        repo = api.whoami()['name'] + '/shipbrain-gguf'
+        create_repo(repo, private=True, exist_ok=True, token=token)
+        for f in glob.glob('/kaggle/working/*.gguf') + ['/kaggle/working/summary.json']:
+            api.upload_file(path_or_fileobj=f, path_in_repo=os.path.basename(f), repo_id=repo)
+        print('uploaded to https://huggingface.co/' + repo)
+    except Exception as e:
+        print('(upload to Hugging Face failed:', type(e).__name__, str(e)[:200], ') - the model files are in the Output tab', flush=True)
 # last: measure ShipBrain's model on this GPU with Simthesizer (no weights needed) -> /kaggle/working/shipbrain_serving
 if os.environ.get('SB_SERVING_PROFILE', '1') != '0' and hours() < BUDGET_H - 2:
     report('measuring serving speed on this GPU (Simthesizer)')
