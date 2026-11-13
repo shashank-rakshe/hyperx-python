@@ -764,6 +764,10 @@ class Tools:
                                                          'step': {'type': 'boolean'}}, 'required': ['file']})
         self.register('list_files', self.list_files, 'List the files in the workspace (uploads and results).', {'type': 'object', 'properties': {}})
         if self.allow_code:
+            self.register('python_run', self.python_run, 'Run a short Python script on this PC (numpy, scipy, matplotlib, pandas and the installed libraries are available) in the workspace folder: '
+                          'for calculations that need a loop, a table or a plot, for reading or converting data files, for batch jobs. Print the results. Returns the printed output, the new or changed '
+                          'files and any error. Not for CAD (use cadquery_build) and not for a single formula (use calc).',
+                          {'type': 'object', 'properties': {'code': {'type': 'string'}, 'timeout_s': {'type': 'number'}, 'name': {'type': 'string'}}, 'required': ['code']})
             self.register('cadquery_build', self.cadquery_build,
                           'Run a CadQuery script that sets `result` (a cq.Workplane); exports STEP + STL. Returns bbox, volume, n_solids, valid '
                           'and PASS/FAIL against expect (put the user\'s sizes there). Then cad_mesh the .step for FE.',
@@ -2614,6 +2618,29 @@ class Tools:
     def list_files(self):
         return {'files': sorted(f for f in os.listdir(self.workdir) if not f.startswith('.'))}
 
+    def python_run(self, code, timeout_s=60, name='script'):
+        import subprocess, time as _t
+        name = re.sub(r'[^A-Za-z0-9_\-]', '_', str(name))[:30] or 'script'
+        timeout_s = max(1, min(float(timeout_s), 300.0))
+        before = {f: os.path.getmtime(os.path.join(self.workdir, f)) for f in os.listdir(self.workdir) if os.path.isfile(os.path.join(self.workdir, f))}
+        path = os.path.join(self.workdir, f'_{name}.py')
+        open(path, 'w', encoding='utf-8').write(code)
+        env = dict(os.environ, MPLBACKEND='Agg', PYTHONUNBUFFERED='1')
+        try:
+            r = subprocess.run([sys.executable, '-I', path], cwd=self.workdir, capture_output=True, text=True, timeout=timeout_s, env=env)
+            out, err, rc = r.stdout, r.stderr, r.returncode
+        except subprocess.TimeoutExpired as e:
+            out, err, rc = (e.stdout or b'').decode('utf-8', 'ignore') if isinstance(e.stdout, bytes) else (e.stdout or ''), f'stopped: the script ran longer than {timeout_s:g} s', -1
+        new = sorted(f for f in os.listdir(self.workdir) if os.path.isfile(os.path.join(self.workdir, f)) and f != os.path.basename(path)
+                     and (f not in before or os.path.getmtime(os.path.join(self.workdir, f)) > before[f]))
+        wd = self.workdir.rstrip('/\\')
+        out, err = out.replace(wd, '.'), err.replace(wd, '.')                       # the folder name is not shown
+        res = {'exit_code': rc, 'output': out[-4000:], 'files': new}
+        if err.strip():
+            res['error_text'] = err.strip()[-1500:]
+        res['plain_english'] = ('The script finished' if rc == 0 else 'The script failed') + (f" and wrote {', '.join(new)}" if new else '') + '.' + (f" Error: {err.strip().splitlines()[-1][:200]}" if rc != 0 and err.strip() else '')
+        return res
+
     def cadquery_build(self, code, name='part', expect=None):
         from . import cadrun
         name = re.sub(r'[^A-Za-z0-9_\-]', '_', name)[:40]
@@ -2782,6 +2809,32 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'frame|beam|portal|truss|column|pipe support', ('frame_solve',)),
     (r'fatigue|hot ?spot|weld toe', ('fatigue_mesh',)),
     (r'convert|inch|feet|\bft\b|psi|lbf|kgf', ('convert_units',)),
+    # --- tools that had no routing rule: code, CadQuery and the rest (each request now offers the right tool in full)
+    (r'python|script|write (a )?(code|program)|loop over|for each|numpy|pandas|csv|plot|matplotlib|calculate with code|automate', ('python_run', 'cadquery_build', 'calc')),
+    (r'cadquery|parametric|3d model|3d cad|make a (3d )?(step|stl)|\bflange\b|bracket|extrude|revolve|fillet|chamfer', ('cadquery_build', 'cad_mesh', 'native_cad')),
+    (r'matlab|octave|vibrationdata|copied (repo|package)|call (a )?function|\.m file|my (code )?folder', ('code_folder', 'code_functions', 'code_call')),
+    (r'\bmcp\b|mcp server|external tool|connected tool', ('mcp_tools', 'mcp_call')),
+    (r'surrogate|train (a )?(small )?model|predict (instantly|fast)|response surface|metamodel', ('surrogate_build', 'surrogate_predict')),
+    (r'my units|prefer(red)? units|units (i|we) use|set (my )?profile|always (use|show) (mm|m|inch)', ('set_profile', 'convert_units')),
+    (r'\bskill|workflow|save (this|these) steps|teach you (a )?(way|workflow)', ('add_skill', 'list_skills')),
+    (r'forget|wrong memory|that is (wrong|correct)|good answer|bad answer|you remembered', ('memory_feedback', 'recall', 'remember')),
+    (r'calculix|\bccx\b|run (the )?(analysis|inp)|solve (the |my )?(inp|mesh|model)|linear static', ('solve_calculix', 'analysis_run', 'solve')),
+    (r'clean (up )?(the )?(geometry|cad|step)|heal|sliver|small faces|repair (the )?(step|cad|geometry)', ('geometry_clean', 'repair_model')),
+    (r'pipe (centre|center)?lines?|extract (the )?pipes?|pipes? from (the )?(cad|step|mesh)', ('pipe_extract', 'pipe_route')),
+    (r'insight|explain (the )?results?|what does (this|the) result mean|interpret|summar(y|ise|ize) (the )?results?', ('result_insight', 'show_result', 'probe_result')),
+    (r'tensor|gpu fem|fast fem solve', ('tensor_fem', 'topology')),
+    (r'compare (the )?mesh (with|to|against) (the )?drawing|mesh (vs|against) drawing', ('compare_mesh_drawing', 'drawing_check')),
+    (r'drawing (to|into) (a )?(3d|step|model)|make (a )?3d (model )?(from|of) (this |the |a )?(2d )?drawing|2d drawing.{0,20}(3d|step)', ('drawing_to_3d', 'drawing_to_step', 'drawing_to_model')),
+    (r'check (the )?(cad )?(model|views?) (against|with) (the )?(drawing|picture)|cad view', ('cad_view_check', 'look')),
+    (r'electrical|symbol|takeoff|take.?off|receptacle|panel schedule|count (the )?(lights|outlets|symbols)', ('drawing_detect', 'drawing_takeoff', 'drawing_qa')),
+    (r'build (a )?structure|structure model|setup check|check (the )?set.?up|before (i )?(run|solve)', ('build_structure', 'setup_check', 'solve')),
+    (r'installed (in|at) (a |an )?(different|unusual)|path (of|to) (the )?(calculix|nastran|ansys|abaqus|openfoam)|remember (the )?solver', ('remember_solver', 'find_solvers')),
+    (r'\bocx\b|class (society )?xml|3docx', ('ocx_read', 'ocx_query', 'ocx_to_step', 'ocx_validate', 'ocx_syntax')),
+    (r'how many users|latency|tokens? per second|server speed|time to first|concurrent users', ('serving_sim',)),
+    (r'\.docx|\.pdf|\.pptx|\.xlsx|document|read (the |this )?(pdf|report|spec)|parse', ('parse_document', 'look', 'file_info')),
+    (r'look at|picture|photo|image|screenshot|sketch|scan', ('look', 'drawing_detect', 'file_info')),
+    (r'column foot|column base|base ?plate|anchor bolts?|end ?plate|fin ?plate|shear tab|beam splice|moment connection', ('steel_connection', 'bolt_group', 'connection_check')),
+    (r'(make|create|draw|give me) (the |a )?(2d )?(drawing|dxf|sheet)|draw (it|this|the)|dxf', ('dxf_draw', 'dxf_check')),
 ]
 
 

@@ -240,6 +240,17 @@ All outside data is downloaded on Kaggle, which has internet:
    "rules" in its name, attach it to the training notebook too.
 4. Optional: `training/kaggle/detector_kernel.py` in a GPU notebook trains the drawing symbol detector.
 
+## Seeing and choosing the right tool: code tools on, a Python tool, routing for every tool
+
+- **Code tools are on by default** on this PC (`python -m shipbrain.server`): `cadquery_build` (CadQuery scripts to STEP / STL) and the new `python_run` (a short Python script in the work folder: loops, tables, plots, CSV, with a time limit;
+  shows the printed output, the new files and any error). They were hidden before unless you started with `--allow-code`. With `--lan` (other PCs on the network) they stay off unless you add `--allow-code`; `--no-code` switches them off.
+  The scripts run on this PC without a sandbox: only ask for code you are comfortable with.
+- **Every tool is now routed:** the 30 tools that had no keyword rule (code, CadQuery, MATLAB folders, MCP, surrogate, solve / mesh check / pictures, drawings, OCX, documents, memory ...) have one (`KEYWORD_TOOLS`), so a plain request offers
+  the right tool in full. Checked (`tests/test_routing_python.py`): 21 requests, one per formerly unrouted tool, plus the scorecard: the expected tool is offered for 106 of 106 requests (it was 104 of 106).
+- **Training now shows the same tools:** the training system prompt (`finetune.py`) was built without the code tools, so the model never saw `cadquery_build` in its tool list. It does now. New data: `python_tools_train` (80 real runs of
+  `python_run` and `cadquery_build`) and `missing_tools_train` (240 real runs: mesh -> solve -> picture chain, cad_mesh, fatigue_mesh, cfd_export, memory, engine choice).
+- Still without training samples (they need a vision model, a commercial program, a big external build or your own file): look, drawing_*, cad_view_check, compare_mesh_drawing, moose_run, hex_mesh_algohex, mcp_call, code_folder, parse_document, remember_solver, structure_to_mesh, ocx_to_step.
+
 ## Training samples for the tools added late
 
 `training/late_tools_tasks.py` (data `training/data/late_tools_train.jsonl.gz`, 220 samples from real tool runs, wired into `kernel.py`): propeller_bem, propeller_design (also the question it asks when inputs are missing),
@@ -940,7 +951,7 @@ generators), scored before and after every Kaggle training (`scorecard_before.js
 `summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
 DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
 **multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
-replies score 138/138, wrong replies 0/138.
+replies score 143/143, wrong replies 0/143.
 
 ### Understanding users: asking, units, design loops, error recovery
 

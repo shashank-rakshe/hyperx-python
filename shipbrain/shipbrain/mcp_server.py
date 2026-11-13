@@ -13,7 +13,7 @@ from .memory import Memory
 def build(a):
     kb = knowledge.load(a.knowledge, cache_dir=os.path.join(a.workdir, '.index'))
     from .examples import Examples
-    t = agent.Tools(a.workdir, kb, allow_code=a.allow_code, examples=Examples(), memory=Memory(os.path.join(a.workdir, '.memory')),
+    t = agent.Tools(a.workdir, kb, allow_code=not getattr(a, 'no_code', False), examples=Examples(), memory=Memory(os.path.join(a.workdir, '.memory')),
                     repo_kb=_repo_kb(a.packs))
     try:
         t.load_ship_tools()
@@ -69,7 +69,8 @@ def main(argv=None):
     ap.add_argument('--packs', default=DEFAULT_PACKS, help='folder of repo knowledge packs (.sbpack); "" = none')
     ap.add_argument('--knowledge', action='append', default=[])
     ap.add_argument('--plugin', action='append', default=[])
-    ap.add_argument('--allow-code', action='store_true')
+    ap.add_argument('--allow-code', action='store_true', help='(default on: the MCP server runs on this PC)')
+    ap.add_argument('--no-code', action='store_true')
     a = ap.parse_args(argv)
     tools = build(a)
     for line in sys.stdin:

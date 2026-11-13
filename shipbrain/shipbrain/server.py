@@ -331,7 +331,8 @@ def main(argv=None):
                                            '(llama-server -m nomic-embed-text-v1.5.Q8_0.gguf --embedding --port 8090)')
     ap.add_argument('--embed-model', default='local')
     ap.add_argument('--examples', help='folder of verified CadQuery examples (default: the built-in library)')
-    ap.add_argument('--allow-code', action='store_true', help='let the model run CadQuery scripts on this PC (cadquery_build tool)')
+    ap.add_argument('--allow-code', action='store_true', help='let the model run CadQuery and Python scripts on this PC (cadquery_build, python_run); ON by default on this PC, OFF with --lan unless you give this flag')
+    ap.add_argument('--no-code', action='store_true', help='switch the code tools (cadquery_build, python_run) off')
     ap.add_argument('--port', type=int, default=7860)
     ap.add_argument('--lan', action='store_true', help='allow other PCs on the network to open the page (default: this PC only)')
     ap.add_argument('--no-browser', action='store_true')
@@ -357,7 +358,7 @@ def main(argv=None):
     from .examples import Examples
     ex = Examples(a.examples)
     from .memory import Memory
-    tools = agent.Tools(a.workdir, kb, allow_code=a.allow_code, examples=ex, memory=Memory(os.path.join(a.workdir, '.memory')),
+    tools = agent.Tools(a.workdir, kb, allow_code=(not a.no_code) and (a.allow_code or not a.lan), examples=ex, memory=Memory(os.path.join(a.workdir, '.memory')),
                         repo_kb=_repo_kb(a.packs))
     try:
         print(f'ship tools: {tools.load_ship_tools()} tools')

@@ -30,7 +30,7 @@ def with_system(msgs):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from shipbrain import agent, knowledge
     if _TOOLS is None:
-        _TOOLS = agent.Tools(tempfile.mkdtemp(prefix='sb_ft_'), knowledge.load(None))
+        _TOOLS = agent.Tools(tempfile.mkdtemp(prefix='sb_ft_'), knowledge.load(None), allow_code=True)     # the app shows the code tools (cadquery_build, python_run) by default: training must show them too
     rest = [m for m in msgs if m['role'] != 'system']
     q = next((m['content'] for m in rest if m['role'] == 'user' and isinstance(m['content'], str)), '')
     return [{'role': 'system', 'content': agent.system_prompt(_TOOLS, agent.PROMPT_COMPACT, question=q)}] + rest
