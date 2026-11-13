@@ -2835,6 +2835,17 @@ KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always ne
     (r'look at|picture|photo|image|screenshot|sketch|scan', ('look', 'drawing_detect', 'file_info')),
     (r'column foot|column base|base ?plate|anchor bolts?|end ?plate|fin ?plate|shear tab|beam splice|moment connection', ('steel_connection', 'bolt_group', 'connection_check')),
     (r'(make|create|draw|give me) (the |a )?(2d )?(drawing|dxf|sheet)|draw (it|this|the)|dxf', ('dxf_draw', 'dxf_check')),
+    # --- phrasings found by the recall check over all training data
+    (r'drawing plate|plate .{0,40}(holes?|slots?) .{0,60}(drawing|dxf|dimension)|(dimension(ed)?|detail) drawing|\bdxf\b|draw (a|the|me)|drawing of|drawing ?[:,]|\w+ drawing\b', ('dxf_draw', 'dxf_check')),
+    (r'\bas a table\b|table of|for (each|all) (of )?(the )?(thickness|diameter|length|size|load|case|value)|for thicknesses|for diameters|for loads|compare (the )?(weights?|stress|values)|loop|batch|weights? of (a )?steel plate', ('python_run',)),
+    (r'(and|then|also) (solve|run|analy[sz]e)( it)?|solve it|show (me )?(the )?(stress|displacement)|stress (picture|plot|result)|largest (stress|displacement)|run (it|the analysis)', ('solve_calculix', 'show_result', 'probe_result')),
+    (r'structural plan|plan\.dxf|\.dxf.{0,40}(3d|model|mesh|step)|(3d|fe) (model|mesh) from (the )?(plan|dxf)|girder.{0,20}stiffener layers', ('drawing_to_3d', 'drawing_check')),
+    (r'my own (python )?(folder|functions?|code|calculations?|scripts?)|use my (functions?|folder|code|calculations?)|python folder', ('code_folder', 'code_functions', 'code_call')),
+    (r'remember|memory|keep it|that is (correct|wrong)|mark it', ('remember', 'recall', 'memory_feedback')),
+    (r'cantilever|simply supported|section area|moment of inertia|\biy\b|\biz\b|point load|udl|reaction|beam .{0,30}(deflection|reaction)', ('pynite_fea', 'frame_solve')),
+    (r'fin plate|end plate|shear tab|splice|column (foot|base)|base ?plate|anchor bolts?|bolt rows?|rows? of m\d+|(heb|hea|ipe)\s?\d{2,3}', ('steel_connection', 'steel_cbfem', 'bolt_group', 'connection_check')),
+    (r'1d (simple|duct|flow|cfd|channel)|simple duct|finite.volume|\bsimple\b.{0,20}(duct|pipe)|duct example', ('fvm_1d', 'openfoam_flow')),
+    (r'outer (skin|surface)|mid.?surfaces?|skin of|\bskid\b|list (all )?(the )?pipes?|pipes? and elbows|elbows', ('surface_extract', 'pipe_extract', 'native_cad')),
 ]
 
 

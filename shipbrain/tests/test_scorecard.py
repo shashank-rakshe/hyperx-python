@@ -29,7 +29,7 @@ def test_scoring_rules():
 def test_tool_selector_recall_and_prompt():
     import gzip, glob, tempfile
     from shipbrain import agent, knowledge
-    T = agent.Tools(tempfile.mkdtemp(), knowledge.load(None))
+    T = agent.Tools(tempfile.mkdtemp(), knowledge.load(None), allow_code=True)       # the app shows the code tools by default
     hit = tot = 0
     for f in sorted(glob.glob(os.path.join(os.path.dirname(HERE), 'training', 'data', '*.jsonl.gz'))):
         for l in gzip.open(f, 'rt'):
