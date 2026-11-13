@@ -8,11 +8,11 @@
 #   bash run_lightning.sh all      # data and training in one go (needs the GPU machine the whole time)
 #
 # Optional settings (export before): SB_FAST=1 (shorter), SB_N_TRAIN=2500, SB_CLASS_RULES=0, SB_MODE=full|auto|new,
-# HF_TOKEN (Hugging Face write token: keeps the model state for incremental runs), SB_BRANCH=<git branch>.
+# HF_TOKEN (Hugging Face write token: keeps the model state for incremental runs), SB_BRANCH=<git branch>, SB_RUN_DIR=<folder for data and results>.
 set -e
 MODE="${1:-all}"
 BRANCH="${SB_BRANCH:-claude/new-session-qpeo6g}"
-BASE="$HOME/shipbrain_run"
+BASE="${SB_RUN_DIR:-$HOME/shipbrain_run}"      # set SB_RUN_DIR to a folder that survives (Google Drive on Colab)
 WORK="$BASE/working"
 INPUT="$BASE/input"
 mkdir -p "$WORK" "$INPUT"
