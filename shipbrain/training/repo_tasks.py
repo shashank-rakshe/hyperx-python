@@ -105,12 +105,13 @@ def _plain(text, n=420):
 
 
 def _docstring(code):
-    m = re.search(r'(?:def|class)\s+\w+[^\n]*:\s*\n\s*(?:\'\'\'|""")(.+?)(?:\'\'\'|""")', code, re.S)
+    code = code[:6000]                                        # a docstring sits at the start; scanning whole huge chunks made the regexes crawl
+    m = re.search(r'(?:def|class)[ \t]+\w+[^\n]*:[ \t]*\n[ \t]*(?:\'\'\'|""")(.+?)(?:\'\'\'|""")', code, re.S)
     if m:
         return re.sub(r'\s+', ' ', m.group(1)).strip()
-    m = re.search(r'((?:^\s*///?.*\n)+)\s*(?:pub|fn|struct|impl|enum|export|function|class)', code, re.M)
+    m = re.search(r'((?:^[ \t]*//[^\n]*\n)+)[ \t]*(?:pub|fn|struct|impl|enum|export|function|class)', code, re.M)   # // or /// lines (one way to match each line: no backtracking blow-up)
     if m:
-        return re.sub(r'\s+', ' ', re.sub(r'^\s*///?\s?', '', m.group(1), flags=re.M)).strip()
+        return re.sub(r'\s+', ' ', re.sub(r'^[ \t]*//[/!]?[ \t]?', '', m.group(1), flags=re.M)).strip()
     return ''
 
 
@@ -121,10 +122,15 @@ def _topic(chunk):
     return title.strip(' :-')
 
 
-def knowledge_candidates(pack):
-    """chunks worth a question: doc sections with a real heading and enough prose; code with a docstring"""
+def knowledge_candidates(pack, limit=400):
+    """chunks worth a question: doc sections with a real heading and enough prose; code with a docstring.
+    Looks at the chunks in a fixed random order and stops after `limit` candidates (a pack has up to tens of thousands of chunks; only about 40 are used)."""
     out = []
-    for c in pack['chunks']:
+    order = list(pack['chunks'])
+    random.Random('cand:' + pack['name']).shuffle(order)
+    for c in order:
+        if len(out) >= limit:
+            break
         src = c['source'].lower()
         topic = _topic(c)
         if src.endswith(repopack.DOC_EXT):
