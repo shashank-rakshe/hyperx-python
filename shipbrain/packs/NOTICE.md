@@ -587,3 +587,38 @@ Each .sbpack holds text chunks (docs and code excerpts) from the repository name
 - Licence: GPL-3.0
 - Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
 - Copyright (c) EDF R&D, code_aster contributors
+
+## multiverse
+
+- Source: https://github.com/aeon-toolkit/multiverse (commit adc21c11e42c)
+- Licence: BSD
+- Use: ok: permissive licence, keep the attribution
+- https://github.com/aeon-toolkit/multiverse contributors
+
+## GPUCADforAM
+
+- Source: https://github.com/DESIGN4ADDITIVE/GPUCADforAM (commit 059cbb89b94b)
+- Licence: Apache-2.0
+- Use: ok: permissive licence, keep the attribution
+- Copyright 2025 Tom Paul
+
+## OpenGeometry
+
+- Source: https://github.com/OpenGeometry-io/OpenGeometry (commit aedbab1f3fd0)
+- Licence: GPL + MPL-2.0
+- Use: COPYLEFT: knowledge + training allowed by the owner; keep ShipBrain and its models open under the same terms
+- https://github.com/OpenGeometry-io/OpenGeometry contributors
+
+## steel-python
+
+- Source: https://github.com/steel-dev/steel-python (commit 50592867e89c)
+- Licence: Apache-2.0
+- Use: ok: permissive licence, keep the attribution
+- Copyright 2026 Steel
+
+## mayo-develop
+
+- Source: https://github.com/shashank-rakshe/mayo-develop (a development fork of Mayo, https://github.com/fougue/mayo; company, product, hull and part names were removed from the pack text)
+- Licence: BSD-2-Clause
+- Use: ok: permissive licence, keep the attribution
+- Copyright (c) 2016, Fougue SAS, and the additions of the repository owner

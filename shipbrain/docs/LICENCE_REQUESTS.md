@@ -13,6 +13,14 @@ licence). Each is covered only by a private knowledge pack on the owner's own co
 | https://github.com/Ultravis66/marine-propeller-simulation | OpenFOAM (MRF) and STAR-CCM+ simulation of a 0.72 m marine propeller, with the STEP / STL geometry | knowledge pack, propeller CFD set-up |
 | https://github.com/Andre-AH/OpenFOAM-propeller-simulation-template | OpenFOAM case template for a general propeller (pimpleFoam, AMI) | knowledge pack, case template for an OpenFOAM propeller tool |
 | https://github.com/EirikSoevik/propeller-analysis | MATLAB propeller analysis: momentum theory, lifting line, cavitation | knowledge pack, compare with the own propeller_bem |
+| https://github.com/zcstkhk/RhinoInside.NX | Rhino.Inside for Siemens NX: open Rhino geometry inside NX | knowledge pack (the Rhino / NX bridge) |
+| https://github.com/theScriptingEngineer/NXOpen-CAE-python | NX Open Python scripts for CAE (meshing, loads, solutions) | knowledge pack, journal generator |
+| https://github.com/gaoxifeng/Feature-Preserving-Octree-Hex-Meshing | feature-preserving octree hexahedral meshing (SIGGRAPH Asia) | knowledge pack, compare with the own hex mesher |
+| https://github.com/Hazem-Kassab/Steel-Structures-Connections | steel connection calculations | knowledge pack, compare with steel_connection |
+| https://github.com/CivilEngrTools/SteelConnDesign | steel connection design | knowledge pack |
+| https://github.com/trevdna/BYU-Steel-Connection-Research | steel connection research code | knowledge pack |
+| https://github.com/Cabji/steelCalc | steel calculators | knowledge pack |
+| https://github.com/batiukmaks/Steel-Strength-Prediction | steel strength prediction | knowledge pack |
 
 ## Text to post as an issue
 
