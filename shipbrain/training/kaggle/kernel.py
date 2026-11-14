@@ -176,7 +176,16 @@ if os.environ.get('SB_FAST') == '1':
 os.chdir('/kaggle/working')
 report('started')
 shutil.rmtree('/kaggle/working/src', ignore_errors=True)        # a re-run in the same session must not fail
-sh(f'git clone -b {BRANCH} --depth 1 {REPO} src')
+_got = False
+for _try in range(3):                                          # a clone that hangs (it happened once on Kaggle: 15 minutes, no progress) is stopped after 4 minutes and tried again
+    shutil.rmtree('/kaggle/working/src', ignore_errors=True)
+    if sh(f'timeout 240 git clone -b {BRANCH} --depth 1 {REPO} src', required=False):
+        _got = True
+        break
+    print(f'git clone failed or was too slow (try {_try + 1} of 3)', flush=True)
+if not _got:                                                   # another download route: the same files as one archive
+    shutil.rmtree('/kaggle/working/src', ignore_errors=True)
+    sh(f'mkdir -p src && curl -sL --max-time 900 https://codeload.github.com/shashank-rakshe/hyperx-python/tar.gz/refs/heads/{BRANCH} | tar xz -C src --strip-components=1')
 os.chdir('/kaggle/working/src/shipbrain')
 sh('pip -q install ' + ('' if DATA_ONLY else 'unsloth ') + 'scipy pyNastran ezdxf pdfplumber pypdfium2 pillow wasmtime pydantic duckdb networkx rapidocr-onnxruntime liteparse xsdata xmlschema msgpack pyyaml "langchain<1" "langchain-openai<1" "langchain-experimental<1" svglib rlPyCairo loguru')
 sh('python -m shipbrain.polyglot setup awatif', required=False)        # Node packages for the copied TypeScript code
