@@ -1,0 +1,20 @@
+# Include documentation and license files in the source distribution
+include README.md
+include LICENSE
+include DCO
+
+# Include packaging configuration
+include pyproject.toml
+
+# Include material preset tables (package data)
+recursive-include tensormesh/material *.csv
+
+# Exclude compiled / cache artifacts
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude __pycache__
+
+# Exclude build directories
+prune build
+prune dist
+prune *.egg-info

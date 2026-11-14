@@ -1,0 +1,212 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Jae Hoon Seo, SMI Lab, Inha University
+name: python
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'python/**'
+      - 'CMakeLists.txt'
+      - 'CITATION.cff'
+      - 'CHANGELOG.md'
+      - 'README.md'
+      - 'doc/**'
+      - 'environment.yml'
+      - '.readthedocs.yaml'
+      - 'examples/openfast/README.md'
+      - 'integration/openfast/README.md'
+      - 'src/CableDyn_Banner.f90'
+      - 'src/CableDyn_CAPI.f90'
+      - 'src/CableDyn_CAPI.h'
+      - 'src/openfast/CableDyn_OF.f90'
+      - 'tests/test_c_api.f90'
+      - 'release/**'
+      - 'integration/**'
+      - 'tests/**'
+      - 'examples/**'
+      - 'validation/**'
+      - '*.md'
+      - '.github/workflows/python.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'python/**'
+      - 'CMakeLists.txt'
+      - 'CITATION.cff'
+      - 'CHANGELOG.md'
+      - 'README.md'
+      - 'doc/**'
+      - 'environment.yml'
+      - '.readthedocs.yaml'
+      - 'examples/openfast/README.md'
+      - 'integration/openfast/README.md'
+      - 'src/CableDyn_Banner.f90'
+      - 'src/CableDyn_CAPI.f90'
+      - 'src/CableDyn_CAPI.h'
+      - 'src/openfast/CableDyn_OF.f90'
+      - 'tests/test_c_api.f90'
+      - 'release/**'
+      - 'integration/**'
+      - 'tests/**'
+      - 'examples/**'
+      - 'validation/**'
+      - '*.md'
+      - '.github/workflows/python.yml'
+
+concurrency:
+  group: python-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint and type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Type-check on the oldest supported Python: newer NumPy stubs use
+      # syntax that mypy rejects when it targets Python 3.10.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.10'
+          cache: pip
+          cache-dependency-path: python/pyproject.toml
+      - name: Install the package and development tools
+        run: python -m pip install --upgrade pip "./python[dev]"
+      - name: Ruff
+        working-directory: python
+        run: |
+          python -m ruff check cabledyn tests
+          python -m ruff format --check cabledyn tests
+      - name: Mypy (strict)
+        working-directory: python
+        run: python -m mypy
+
+  test:
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.10', '3.13']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: python/pyproject.toml
+      - name: Install the package and test dependencies
+        run: python -m pip install --upgrade pip "./python[dev]"
+      - name: Check release metadata
+        run: python release/check_release_metadata.py
+      - name: Run the platform-independent Python tests
+        # test_cabledyn.py exercises the compiled C API and is run by the
+        # Fortran CMake/CTest matrix after the shared library has been built.
+        run: python -m pytest python/tests -q --ignore=python/tests/test_cabledyn.py
+
+  coverage:
+    name: Coverage with the native library and driver
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}        # login shell so the conda env is active
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The same conda-forge toolchain as the Linux job of fortran.yml (environment.yml:
+      # gfortran, CMake, OpenBLAS, LAPACK, Python, NumPy, SciPy).
+      - name: Set up the conda toolchain (gfortran, CMake, OpenBLAS, LAPACK)
+        uses: mamba-org/setup-micromamba@f457c30a868e4760d3a6fcea5f25dc655b8edf39 # v3.2.1
+        with:
+          environment-file: environment.yml
+          cache-environment: true
+      - name: Show toolchain
+        run: gfortran --version && cmake --version && python --version
+      - name: Configure
+        run: cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
+      - name: Build the shared library and the standalone driver
+        run: cmake --build build --parallel --target cabledyn_shared cabledyn
+      - name: Locate the native products
+        run: |
+          library="$(find "$GITHUB_WORKSPACE/build" -maxdepth 2 -type f -name 'libcabledyn.so*' \
+            | sort | head -n 1)"
+          driver="$(find "$GITHUB_WORKSPACE/build" -maxdepth 2 -type f -perm -u+x \
+            \( -name cabledyn -o -name CableDyn_driver \) | head -n 1)"
+          test -n "$library" && test -n "$driver"
+          echo "CABLEDYN_LIBRARY=$library" >> "$GITHUB_ENV"
+          echo "CABLEDYN_DRIVER=$driver" >> "$GITHUB_ENV"
+          echo "library: $library"; echo "driver: $driver"
+      - name: Install the package and test dependencies into the conda environment
+        run: python -m pip install "./python[dev]"
+      - name: Run the whole Python suite with line and branch coverage
+        working-directory: python
+        # Coverage settings (branch, source, fail_under = 95) live in pyproject.toml; the
+        # explicit --cov-fail-under keeps the gate even if that configuration moves.
+        run: >-
+          python -m pytest tests -q --cov --cov-branch --cov-fail-under=95
+          --cov-report=term-missing --cov-report=xml
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: cabledyn-python-coverage
+          path: python/coverage.xml
+          if-no-files-found: ignore
+
+  distribution:
+    name: Build Python distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - run: python -m pip install --upgrade pip build twine
+      - name: Build reproducible distributions
+        shell: bash
+        run: |
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          python -m build python --outdir dist
+      - run: python -m twine check dist/*
+      - name: Install and inspect the wheel in a clean environment
+        shell: bash
+        run: |
+          python -m venv wheel-test
+          wheel-test/bin/python -m pip install dist/*.whl
+          wheel-test/bin/cabledyn-run --help
+          wheel-test/bin/cabledyn-deck --help
+          wheel-test/bin/cabledyn-post --help
+          wheel-test/bin/cabledyn-study --help
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cabledyn-python-distributions
+          path: dist/*
+          if-no-files-found: error
+
+  documentation:
+    name: Sphinx documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: doc/requirements.txt
+      - name: Install documentation dependencies
+        run: python -m pip install --upgrade pip -r doc/requirements.txt
+      - name: Build documentation with warnings as errors
+        run: sphinx-build -W --keep-going -b html doc doc/_build/html

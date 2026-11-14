@@ -1,0 +1,3171 @@
+"""
+The assistant loop: model <-> tools.
+
+Tool-call format (same in the training data, so a small fine-tuned model learns exactly this):
+    ```tool
+    {"name": "panel_mesh", "args": {"length": 4800, ...}}
+    ```
+The app runs the tool and sends back a message that starts with  TOOL_RESULT <name>:  followed by JSON.
+The model then answers (or calls another tool). Numbers, meshes and files always come from tools, never from the model.
+"""
+import numpy as np
+import ast, importlib.util, json, math, operator, os, re, subprocess, sys, textwrap, time, urllib.request
+
+from . import mesh as _mesh, fea as _fea, solver as _solver, platemesh as _pm, meshcheck as _mc
+
+TOOL_RE = re.compile(r'```tool\s*\n(.*?)\n?```', re.S)
+MAX_STEPS = 6
+PROMPT_COMPACT = True          # set False (app: --full-prompt) for an untrained base model
+MESH_TOOLS = ('panel_mesh', 'plates_mesh', 'cad_mesh', 'fatigue_mesh', 'drawing_to_3d')
+
+
+# ====================================================================== safe calculator
+_OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv, ast.Pow: operator.pow,
+        ast.USub: operator.neg, ast.UAdd: operator.pos, ast.Mod: operator.mod, ast.FloorDiv: operator.floordiv}
+_FN = {k: getattr(math, k) for k in ('sqrt', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2', 'log', 'log10', 'exp', 'radians',
+                                     'degrees', 'hypot', 'floor', 'ceil')}
+_FN.update(abs=abs, min=min, max=max, round=round, pi=math.pi, e=math.e)
+
+
+def calc(expression):
+    def ev(n):
+        if isinstance(n, ast.Expression):
+            return ev(n.body)
+        if isinstance(n, ast.Constant) and isinstance(n.value, (int, float)):
+            return n.value
+        if isinstance(n, ast.BinOp) and type(n.op) in _OPS:
+            return _OPS[type(n.op)](ev(n.left), ev(n.right))
+        if isinstance(n, ast.UnaryOp) and type(n.op) in _OPS:
+            return _OPS[type(n.op)](ev(n.operand))
+        if isinstance(n, ast.Name) and n.id in _FN:
+            return _FN[n.id]
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in _FN:
+            return _FN[n.func.id](*[ev(a) for a in n.args])
+        raise ValueError('not allowed in calc: ' + ast.dump(n)[:60])
+    return {'expression': expression, 'value': ev(ast.parse(str(expression).replace('^', '**'), mode='eval'))}
+
+
+# ====================================================================== tool registry
+class Tools:
+    def __init__(self, workdir, kb=None, allow_code=False, examples=None, memory=None, repo_kb=None):
+        self.repo_kb = repo_kb        # knowledge packs of shared git repos (separate, so they never crowd ship knowledge)
+        self.examples = examples
+        self.memory = memory
+        self.converters = []          # e.g. xml_to_members from your private plugin
+        self.workdir = os.path.abspath(workdir)
+        os.makedirs(self.workdir, exist_ok=True)
+        self.kb = kb
+        self.allow_code = allow_code
+        self.t = {}           # name -> (fn, description, schema)
+        self.last_mesh = None
+        self._builtin()
+
+    def register(self, name, fn, description, schema=None):
+        self.t[name] = (fn, description, schema or {'type': 'object', 'properties': {}})
+
+    def _path(self, p):
+        p = p if os.path.isabs(p) else os.path.join(self.workdir, p)
+        return os.path.abspath(p)
+
+    # ------------------------------------------------------------------ built-in tools
+    def _builtin(self):
+        num = {'type': 'number'}
+        prof = {'type': 'object', 'description': 'profile: {"type": "FlatBar"|"TBar"|"LBar"|"HP", "h": web height mm, "t": web mm, '
+                                                 '"bf": flange width mm, "tf": flange mm}'}
+        self.register('knowledge_search', self.knowledge_search,
+                      'Search the rule book / notes / standards in the knowledge folder (keyword + meaning). Use before answering rule or '
+                      'method questions; cite the ids. scope = part of a folder/file name to search only that project.',
+                      {'type': 'object', 'properties': {'query': {'type': 'string'}, 'k': {'type': 'integer'}, 'scope': {'type': 'string'}},
+                       'required': ['query']})
+        self.register('remember', self.remember, 'Store a fact, yard practice or correction the user teaches, so it is used in later answers.',
+                      {'type': 'object', 'properties': {'text': {'type': 'string'}, 'tags': {'type': 'array'}}, 'required': ['text']})
+        self.register('recall', self.recall, 'Search the assistant memory (facts and corrections taught by the user).',
+                      {'type': 'object', 'properties': {'query': {'type': 'string'}}, 'required': ['query']})
+        self.register('set_profile', self.set_profile, 'Save how THIS user works, used in every later answer: units (mm-N-MPa | m-kN-kPa | '
+                      'in-lbf-psi | ft-kip-ksi | mm-kN-MPa), material, yield_MPa, E_MPa, design_code, field, language, notes.',
+                      {'type': 'object', 'properties': {k: ({'type': 'number'} if k in ('yield_MPa', 'E_MPa') else {'type': 'string'})
+                                                         for k in ('units', 'material', 'yield_MPa', 'E_MPa', 'design_code', 'field',
+                                                                   'language', 'notes')}})
+        self.register('convert_units', self.convert_units, 'Convert values between units (tools use mm, N, MPa, t): values = '
+                      '[{"value", "from", "to"}], e.g. in->mm, psi->MPa, kN.m->N.mm, cm4->mm4, msw->MPa.',
+                      {'type': 'object', 'properties': {'values': {'type': 'array'}}, 'required': ['values']})
+        self.register('add_skill', self.add_skill, 'Save a workflow the user teaches ("whenever I ask X, do A then B") as a skill: '
+                      'name, description, steps (list or text), when (optional regex of trigger words). Used from then on.',
+                      {'type': 'object', 'properties': {'name': {'type': 'string'}, 'description': {'type': 'string'},
+                                                         'steps': {'type': 'array'}, 'when': {'type': 'string'}},
+                       'required': ['name', 'description', 'steps']})
+        self.register('list_skills', self.list_skills, 'List the skills (saved workflows) ShipBrain knows: built-in and the user\'s own.',
+                      {'type': 'object', 'properties': {}})
+        self.register('memory_feedback', self.memory_feedback, 'Like (good=true) or dislike a memory by id; forget=true deletes it.',
+                      {'type': 'object', 'properties': {'id': {'type': 'string'}, 'good': {'type': 'boolean'}, 'forget': {'type': 'boolean'}},
+                       'required': ['id']})
+        self.register('panel_mesh', self.panel_mesh,
+                      'Build a stiffened ship panel FE mesh (plate + stiffeners + frames) and write Nastran .bdf and CalculiX/Abaqus .inp. '
+                      'Units mm, MPa. Stiffeners run along X by default; frames cross them.',
+                      {'type': 'object', 'properties': {
+                          'name': {'type': 'string'}, 'length': num, 'width': num, 'thickness': num, 'element_size': num,
+                          'stiffeners': {'type': 'object', 'description': '{"direction": "x"|"y", "spacing": mm (or "count": n), "profile": profile} or null'},
+                          'frames': {'type': 'object', 'description': '{"spacing": mm (or "count": n), "profile": profile} or null'},
+                          'stiffener_model': {'type': 'string', 'enum': ['shell', 'beam']}, 'web_elements': {'type': 'integer'},
+                          'pressure': {'type': 'number', 'description': 'MPa (1 m water head = 0.01 MPa)'},
+                          'boundary': {'type': 'string', 'enum': ['simply', 'clamped', 'free']},
+                          'material': {'type': 'object', 'description': '{"E": MPa, "nu": -, "rho": t/mm3}'}}})
+        self.register('plates_mesh', self.plates_mesh,
+                      'Mesh ANY assembly of flat plates (deck, girders, webs, brackets, floors, bulkheads, openings) with the own '
+                      'conforming all-quad mesher: joints share nodes, no free nodes. Each plate: {"id", "t", "outline": [[x,y,z],...], '
+                      '"holes": [[[x,y,z],...]]}. Units mm, MPa.',
+                      {'type': 'object', 'properties': {
+                          'name': {'type': 'string'}, 'element_size': num, 'plates': {'type': 'array'},
+                          'loads': {'type': 'array', 'description': '[{"plates": [ids], "pressure": MPa}]'},
+                          'fix': {'type': 'array', 'description': '[{"x": 0, "dof": "123456"}] all given coordinates must match'},
+                          'beams': {'type': 'array', 'description': '1D stiffeners sharing plate nodes: [{"id", "a": [x,y,z], "b": [x,y,z], "profile": profile, "normal": [0,0,-1]}]'},
+                          'clean': {'type': 'boolean', 'description': 'clean the geometry first (default true)'}},
+                       'required': ['plates']})
+        self.register('cad_mesh', self.cad_mesh, 'Mesh a STEP/BREP file in the workspace with the own mesher: thin solids -> mid-surface plates, '
+                      'planar sheet faces -> plates; gaps closed, joints conforming. Curved faces are reported, not meshed.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'element_size': num, 'default_t': num,
+                                                         'loads': {'type': 'array'}, 'fix': {'type': 'array'}}, 'required': ['file']})
+        self.register('mesh_check', self.mesh_check, 'Check any shell mesh file (.bdf/.inp, from any mesher): free nodes, duplicate nodes, '
+                      'unconnected parts, free edges, element quality.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
+        self.register('fe_quality', self.fe_quality, 'Pre-processor quality check of an FE model (.bdf/.fem/.inp), as HyperMesh / ANSA do: '
+                      'per shell element aspect, warpage, skew, taper, Jacobian, corner angles, shortest edge, share of triangles '
+                      'against pass/warn/fail limits (criteria: {check: [warn, fail]} overrides; mesh_size sets the shortest-edge '
+                      'limit), plus a model check (missing properties/materials, zero thickness, duplicate elements, loads on '
+                      'missing nodes, no constraints). Failing elements are saved as named sets.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'criteria': {'type': 'object'},
+                                                         'mesh_size': {'type': 'number'}}, 'required': ['file']})
+        self.register('solve_calculix', self.solve_calculix, 'Run CalculiX on an .inp in the workspace (linear static) and return max displacement and von Mises stress.',
+                      {'type': 'object', 'properties': {'inp': {'type': 'string'}}, 'required': ['inp']})
+        self.register('plate_check', _fea.plate_pressure, 'Hand check (Roark): plate field a x b x t under lateral pressure q -> max stress, deflection.',
+                      {'type': 'object', 'properties': {'a': num, 'b': num, 't': num, 'q': num, 'boundary': {'type': 'string', 'enum': ['simply', 'clamped']},
+                                                         'yield_MPa': num}, 'required': ['a', 'b', 't', 'q']})
+        self.register('stiffener_check', _fea.stiffener_check, 'Hand check: stiffener + attached plate as a beam under pressure q -> section modulus, stress, deflection.',
+                      {'type': 'object', 'properties': {'span': num, 'spacing': num, 't_plate': num, 'profile': prof, 'q': num,
+                                                         'end': {'type': 'string', 'enum': ['clamped', 'simply']}, 'yield_MPa': num},
+                       'required': ['span', 'spacing', 't_plate', 'profile', 'q']})
+        self.register('plate_buckling', _fea.plate_buckling, 'Elastic + Johnson-Ostenfeld buckling stress of a plate field a x b x t in compression along a.',
+                      {'type': 'object', 'properties': {'a': num, 'b': num, 't': num, 'k': num, 'yield_MPa': num}, 'required': ['a', 'b', 't']})
+        self.register('section_props', _fea.section, 'Section properties of a profile (A, centroid, I), optionally with attached plating t_plate x b_eff.',
+                      {'type': 'object', 'properties': {'profile': prof, 't_plate': num, 'b_eff': num}, 'required': ['profile']})
+        self.register('calc', calc, 'Exact arithmetic (sqrt, sin, pi, ^ ...). Use it instead of mental arithmetic.',
+                      {'type': 'object', 'properties': {'expression': {'type': 'string'}}, 'required': ['expression']})
+        path_arg = lambda d: {'type': 'object', 'properties': {'file': {'type': 'string', 'description': d}}, 'required': ['file']}
+        self.register('file_info', self.file_info, 'Describe any file in the workspace in plain English (FE model, STEP, DXF, PDF, image, JSON, XML, text): '
+                      'what it is, what is inside, problems found. Call this first when the user asks about an uploaded file.',
+                      path_arg('file name in the workspace'))
+        self.register('fe_convert', self.fe_convert, '(to: bdf Nastran | fem OptiStruct/HyperMesh | inp Abaqus/CalculiX | mac ANSYS) Convert an FE model between Nastran .bdf, Abaqus/CalculiX .inp and ANSYS APDL .mac '
+                      '(+ PyMAPDL and Abaqus driver scripts). 1D/2D/3D elements, properties, materials, supports and loads are kept.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'to': {'type': 'array', 'description': '["bdf","inp","mac"]'}},
+                       'required': ['file']})
+        self.register('fe_edit', self.fe_edit, 'Edit or convert an FE model file step by step and save it. ops (in order), each {"op": name, ...}: '
+                      'equivalence{tol} | delete{group|box|ids|types} | remove_free_nodes | translate{d:[x,y,z]} | mirror{axis,value} | '
+                      'refine | split_quads | renumber{node_start,elem_start} | merge{file} | set_thickness{pid,t} | '
+                      'shell_to_solid{layers} (2D->3D) | solid_skin{t} (3D->2D) | edges_to_beams{which:"free"|"joints"} (2D->1D) | '
+                      'beams_to_shells{height,t} (1D->2D) | remove_degenerate | orient_normals{ref?} | remove_small_parts{min_elements} | repair (all fixes)',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'ops': {'type': 'array'}, 'out': {'type': 'string'}},
+                       'required': ['file', 'ops']})
+        self.register('geometry_clean', self.geometry_clean, 'Clean unclean geometry before meshing: a plate list (repeated/in-line points, '
+                      'corners that almost meet, warped plates, slivers, duplicates, tiny holes) or a STEP file (repair, sew, merge split faces).',
+                      {'type': 'object', 'properties': {'plates': {'type': 'array'}, 'file': {'type': 'string'}, 'merge_tol': {'type': 'number'}}})
+        num_ = {'type': 'number'}
+        self.register('repair_model', self.repair_model, 'Repair / clean up an uploaded model for FEA, as the user asks. CAD (STEP/BREP): '
+                      'remove holes, fillets, chamfers, bosses or small faces up to a size (mm, mm2), then sew and fix; '
+                      'FE mesh (bdf/inp): merge nodes, remove degenerate/duplicate elements, fix normals, delete loose bits. '
+                      'request = the user\'s words (sizes are read from it); explicit sizes win. mesh_size meshes the result.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'request': {'type': 'string'}, 'holes_below': num_,
+                                                         'fillets_below': num_, 'chamfers_below': num_, 'faces_below': num_,
+                                                         'bosses_below': num_, 'sew': {'type': 'boolean'}, 'mesh_size': num_},
+                       'required': ['file']})
+        self.register('surface_extract', self.surface_extract, 'Mid-surface or outer-surface extraction from a solid CAD model (STEP/BREP): '
+                      'every thin solid (flat, bent or curved plate, pipe wall) gives its mid (or outer) surface and thickness, '
+                      'grouped by thickness (Mid_Surface_10T ...) in a STEP file; faces saved as B-splines are recognised first. '
+                      'mesh_size meshes the flat mid-surfaces with the own mesher.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'kind': {'type': 'string', 'description': 'mid | outer'},
+                                                         'max_thickness': num_, 'round_to': num_, 'mesh_size': num_}, 'required': ['file']})
+        self.register('pipe_extract', self.pipe_extract, 'Piping from a CAD model (STEP/BREP): straight pipes and bends (OD, wall, '
+                      'bend radius and angle, length), joined into runs; wall from the model (hollow pipe) or the pipe schedule; '
+                      'writes a 1D FE model of the piping (pipe-section beams, bends split every 15 deg).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'schedule': {'type': 'string', 'description': 'SCH10|SCH40|SCH80|SCH160'},
+                                                         'element_size': num_, 'to': {'type': 'array', 'description': '["bdf","inp"]'}},
+                       'required': ['file']})
+        self.register('surrogate_build', self.surrogate_build, 'AI surrogate (POD + RBF reduced-order model) of a parametric FE problem: '
+                      'runs a study (own mesher + CalculiX), adds runs where it is least accurate, measures its accuracy by '
+                      'leave-one-out; then predicts stress/displacement fields in ~1 ms. Writes the model (.npz) and a C++ header. '
+                      'problem "plate": ranges for L, B, t (mm), p (MPa); edge clamped|simply.',
+                      {'type': 'object', 'properties': {'name': {'type': 'string'}, 'ranges': {'type': 'object'}, 'n': {'type': 'integer'},
+                                                         'max_runs': {'type': 'integer'}, 'edge': {'type': 'string'},
+                                                         'template': {'type': 'object'}}, 'required': ['ranges']})
+        self.register('surrogate_predict', self.surrogate_predict, 'Predict with a trained surrogate: peak von Mises, peak displacement, full '
+                      'field (ParaView .vtk) and an error estimate; if it is not confident (or outside the trained range) the real '
+                      'solver is run instead and the run is added to the model.',
+                      {'type': 'object', 'properties': {'name': {'type': 'string'}, 'params': {'type': 'object'}, 'tol_pct': num_,
+                                                         'fallback': {'type': 'boolean'}}, 'required': ['name', 'params']})
+        self.register('result_insight', self.result_insight, 'Post-process a CalculiX result (.frd): peak stress and where, utilisation vs '
+                      'yield with PASS/FAIL, hotspot areas, elements that need refinement, change against a baseline run, '
+                      'a report draft and a ParaView .vtk of the fields.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'yield_MPa': num_, 'safety_factor': num_,
+                                                         'baseline': {'type': 'string'}}, 'required': ['file']})
+        self.register('frame_solve', self.frame_solve, 'Linear static 3D frame / beam / pipe-support check with Awatif\'s solver (built in, '
+                      'no install): nodes, members (section: pipe [OD,t] | rect [b,h] | I [h,b,tw,tf] | box [h,b,t] | A,Iy,Iz,J; '
+                      'release start|end|both), supports (fixed|pinned|roller|dof list), loads per case G/Q/W (node F [Fx,Fy,Fz,Mx,My,Mz] '
+                      '| member w [wx,wy,wz] N/mm | self_weight), combinations (default ULS-1, ULS-2, SLS). Or file = a 1D model '
+                      '(e.g. from pipe_extract) with supports/loads given at coordinates "at": [x,y,z]. Writes a report.',
+                      {'type': 'object', 'properties': {'nodes': {'type': 'object'}, 'members': {'type': 'array'},
+                                                         'supports': {'type': ['object', 'array']}, 'loads': {'type': 'object'},
+                                                         'combinations': {'type': 'object'}, 'file': {'type': 'string'},
+                                                         'name': {'type': 'string'}, 'divisions': {'type': 'integer'}}})
+        self.register('code_functions', self.code_functions, 'Functions in the open-source repos copied whole into ShipBrain (Python, '
+                      'TypeScript, JavaScript, C++, Rust...): repo (e.g. awatif, diff3d; empty = list the repos), query = words of '
+                      'the file or function name. Shows file, language, signature and whether it can be called.',
+                      {'type': 'object', 'properties': {'repo': {'type': 'string'}, 'query': {'type': 'string'}}})
+        self.register('code_folder', self.code_folder, 'Use a package the user downloaded to this PC (e.g. the Vibrationdata MATLAB '
+                      'package) like a copied repo: name + folder. Then code_functions / code_call work on it (.m runs in GNU Octave).',
+                      {'type': 'object', 'properties': {'name': {'type': 'string'}, 'folder': {'type': 'string'}},
+                       'required': ['name', 'folder']})
+        self.register('code_call', self.code_call, 'Run a function of a copied repo IN ITS OWN LANGUAGE (Python directly, TypeScript / '
+                      'JavaScript through Node.js): repo, file, function, args (JSON list; JS Map = {"__map__": [[key, value], ...]}).',
+                      {'type': 'object', 'properties': {'repo': {'type': 'string'}, 'file': {'type': 'string'}, 'function': {'type': 'string'},
+                                                         'args': {'type': ['array', 'object']}}, 'required': ['repo', 'file', 'function']})
+        self.register('pid_kg', self.pid_kg, 'P&ID / PFD drawings (PDF) -> process knowledge graph, with the pid-to-kg scripts as written '
+                      '(copied repo). action: probe {pdf, pages, plant_name} | render | hints | status | build | query {command: stats | '
+                      'describe | upstream | downstream | path | loops | loop | instruments | sql, args: [...], equipment, variable, on} | '
+                      'export {format: graphml | neo4j} | tags {pages} | read {pages} (the vision model reads each sheet into extract/page_NN.json, '
+                      'checked against the pid-to-kg format; then build).',
+                      {'type': 'object', 'properties': {'action': {'type': 'string'}, 'pdf': {'type': 'string'}, 'pages': {'type': 'string'},
+                                                         'plant_name': {'type': 'string'}, 'work': {'type': 'string'},
+                                                         'command': {'type': 'string'}, 'args': {'type': 'array'},
+                                                         'equipment': {'type': 'boolean'}, 'variable': {'type': 'string'},
+                                                         'on': {'type': 'string'}, 'format': {'type': 'string'}}, 'required': ['action']})
+        self.register('look', self.look, 'Look at a picture or a PDF page with the model\'s own eyes (vision): file (png / jpg / pdf), page '
+                      '(PDF page, 1 = first), question. Use it for drawings, scans, sketches, screenshots.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'question': {'type': 'string'}, 'page': {'type': 'integer'}},
+                       'required': ['file']})
+        self.register('physics_lab', self.physics_lab, 'OpenPhysicsAI\'s physics lab, used as written (C solvers, each checked against a '
+                      'closed form or a measurement): flow / CFD (incl. shocks, wings, cylinders), heat, fire, water and sloshing, '
+                      'sound, radar, magnetics and motors, fracture, impact, gears and mechanisms, metal / plastic 3D printing. '
+                      'action: list {query} | get {scenario} | run {scenario = example name or a full scenario dict, changes = '
+                      'values to override}. Every number in a scenario carries its unit in its key (length_m, pressure_pa).',
+                      {'type': 'object', 'properties': {'action': {'type': 'string'}, 'scenario': {'type': ['string', 'object']},
+                                                         'changes': {'type': 'object'}, 'query': {'type': 'string'}}, 'required': ['action']})
+        self.register('mcp_tools', self.mcp_tools, 'Operations of an MCP server ShipBrain can use as written: server "openphysics" (88: '
+                      'geometry, meshing, materials, structural / thermal analysis, topology optimisation, mechanisms, 3D printing, lab) '
+                      'or one listed in mcp_servers.json; query filters by name.',
+                      {'type': 'object', 'properties': {'server': {'type': 'string'}, 'query': {'type': 'string'}}})
+        self.register('mcp_call', self.mcp_call, 'Call one operation of an MCP server (see mcp_tools): server, tool, arguments.',
+                      {'type': 'object', 'properties': {'server': {'type': 'string'}, 'tool': {'type': 'string'}, 'arguments': {'type': 'object'}},
+                       'required': ['tool']})
+        self.register('stl_to_step', self.stl_to_step, 'Mesh (STL: scans, 3D-print files, mesh exports) -> exact STEP solid with next.BREP.io\'s '
+                      'stl2step: planes, cylinders, cones, spheres, tori recognised. unit of the STL: mm | cm | m | inch | foot. '
+                      '(The CAD tools also accept .stl directly.)',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'unit': {'type': 'string'}}, 'required': ['file']})
+        self.register('native_cad', self.native_cad, 'Native CAD files without the CAD program, with cadmpeg (free): SolidWorks .sldprt, '
+                      'CATIA .CATPart, Inventor .ipt/.iam, Fusion .f3d, Rhino .3dm, FreeCAD .FCStd, ACIS .sat, IGES, NX/Creo .prt '
+                      '(partly). op: convert (to STEP, or to=iges) | inspect (what is inside) | check (errors) | measure (bodies, '
+                      'faces, mass with density kg/m3) | diff (geometry of file vs other). Every other CAD tool also accepts '
+                      'these files directly (they are converted on the way in).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'op': {'type': 'string', 'enum': [
+                          'convert', 'inspect', 'check', 'measure', 'diff']}, 'to': {'type': 'string'}, 'other': {'type': 'string'},
+                          'density': {'type': 'number'}}, 'required': ['file']})
+        self.register('nx_open', self.nx_open, 'Siemens NX / Simcenter 3D automation with NX Open Python journals, using nxopentse '
+                      '(149 ready functions: CAD bodies / faces / features / datums / assemblies / mass properties; CAE mesh '
+                      'collectors, loads and constraints on groups, solutions, subcases, solving, results export / combine / '
+                      'envelope, screenshots). op: find (query words) | syntax (name) | journal (calls=[{fn, args, as, '
+                      'for_each:"$name"}], part; NX constants as {"nx": "NXOpen.CAE.CaeSetGroupFilterType.GeomFace"}) -> writes the journal and runs it when NX is installed. Use only functions '
+                      'that find / syntax return.',
+                      {'type': 'object', 'properties': {'op': {'type': 'string', 'enum': ['find', 'syntax', 'journal']},
+                                                         'query': {'type': 'string'}, 'name': {'type': 'string'},
+                                                         'calls': {'type': 'array'}, 'part': {'type': 'string'},
+                                                         'out': {'type': 'string'}}, 'required': ['op']})
+        self.register('nx_rename', self.nx_rename, 'Rename a Siemens NX .prt file and update the assemblies / drawings in the same '
+                      'folder that use it (NX File Renamer with NX\'s ug_edit_part_names; Windows with NX installed).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'new_name': {'type': 'string'}},
+                       'required': ['file', 'new_name']})
+        self.register('mooring', self.mooring, 'Mooring line / chain catenary with CableDyn (free FE solver for mooring lines and '
+                      'power cables, validated against OrcaFlex): depth (m), length (m), anchor radius (horizontal distance '
+                      'fairlead-anchor, m), chain d_mm + grade (R3, R3S, R4, R4S, R5) + kind (studless | studlink), '
+                      'fairlead_z (m, 0 = at the surface, negative below), current (m/s). Gives fairlead / anchor tension, '
+                      'angle, touchdown, grounded length, MBL and the API RP 2SK check (condition intact | damaged | transient).',
+                      {'type': 'object', 'properties': {'depth': num, 'length': num, 'radius': num, 'd_mm': num, 'grade': {'type': 'string'},
+                                                         'kind': {'type': 'string'}, 'fairlead_z': num, 'current': num,
+                                                         'condition': {'type': 'string'}}, 'required': ['depth', 'length', 'radius']})
+        self.register('cable_run', self.cable_run, 'Run any CableDyn or MoorDyn v2 deck (mooring lines, dynamic power cables, lazy '
+                      'waves, bend stiffeners, waves / current / vessel motion): tensions, angles, maxima over time, static profile.',
+                      {'type': 'object', 'properties': {'deck': {'type': 'string'}}, 'required': ['deck']})
+        self.register('topology', self.topology, 'Topology optimisation of a 2D plate region with TensorMesh (differentiable FE on '
+                      'PyTorch, SIMP + MMA): where material carries the load - bracket shapes, web frame / floor lightening '
+                      'holes, gusset layouts. L, H (size), nx, ny (elements), fixed edges [left|right|bottom|top], load_at [x, y], '
+                      'force [Fx, Fy] (total), volfrac (share of material kept, 0.3-0.6), iters. Gives a picture and the stiffness kept.',
+                      {'type': 'object', 'properties': {'L': num, 'H': num, 'nx': num, 'ny': num, 'fixed': {'type': 'array'},
+                                                         'load_at': {'type': 'array'}, 'force': {'type': 'array'}, 'volfrac': num,
+                                                         'iters': num, 'E': num, 'name': {'type': 'string'}}, 'required': ['L', 'H']})
+        self.register('tensor_fem', self.tensor_fem, 'Linear-elastic static solve of a SOLID mesh (.inp/.bdf with tetra / hexa / '
+                      'wedge, e.g. from cad_mesh or fe_edit shell_to_solid) with TensorMesh on PyTorch (GPU when present). '
+                      'fixed: list of selectors like {"x": 0} or {"x": [0, 10], "z": 0}; loads: [{"at": selector, "force": [Fx, Fy, Fz]}] '
+                      '(total force spread over the selected nodes); E, nu.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'fixed': {'type': 'array'}, 'loads': {'type': 'array'},
+                                                         'E': num, 'nu': num}, 'required': ['file', 'fixed', 'loads']})
+        self.register('moose_plate', self.moose_plate, 'Plate field (between stiffeners and frames) under lateral pressure with '
+                      'MOOSE\'s shell element (Idaho National Laboratory, free): a = span, b = stiffener spacing, t = thickness '
+                      '(mm), q = pressure (MPa), clamped or simply supported edges. Gives the deflection and the comparison '
+                      'with the Navier series. Needs MOOSE (Docker image idaholab/moose or moose-opt).',
+                      {'type': 'object', 'properties': {'a': num, 'b': num, 't': num, 'q': num, 'E': num, 'nu': num,
+                                                         'clamped': {'type': 'boolean'}}, 'required': ['a', 'b', 't', 'q']})
+        self.register('moose_run', self.moose_run, 'Run any MOOSE input file (.i) - solid mechanics, contact, heat transfer, '
+                      'XFEM fracture, Navier-Stokes, porous flow, thermal hydraulics - and read its postprocessors (CSV).',
+                      {'type': 'object', 'properties': {'input': {'type': 'string'}}, 'required': ['input']})
+        self.register('trace_drawing', self.trace_drawing, 'Scanned drawing (PNG / JPG / TIFF, or a scanned PDF page) -> vectors with '
+                      'VTracer: DXF (layer TRACE) + SVG, scan noise removed. scale = drawing units per pixel (optional). Every pen '
+                      'stroke becomes its outline (good for a clean vector copy / overlay; for comparing two scans use compare_drawings, '
+                      'which overlays the pictures). mode auto (default) picks centerline for thin pen strokes and outline for filled / thick shapes; centerline (own thinning code, ideas from AutoTrace) gives ONE line along the middle '
+                      'of each thin stroke instead of an outline: best for thin line drawings, sketches, pipe diagrams.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'page': {'type': 'integer'}, 'scale': num,
+                                                         'dpi': num, 'mode': {'type': 'string', 'enum': ['auto', 'outline', 'centerline']}},
+                       'required': ['file']})
+        self.register('steel_connection', self.steel_connection, 'Steel connection from plain words, own library: end_plate '
+                      '(beam welded to an end plate bolted to the column flange; ext > 0 = extended), fin_plate (shear tab bolted to the '
+                      'beam web), base_plate (column on base plate with 4 anchor bolts, optional ribs, concrete), splice (beam splice with '
+                      'flange and web cover plates). Sections IPE / HEA / HEB or {h,b,tw,tf}; bolt "M20-8.8". Gives a 3D STEP (every plate, '
+                      'bolt, weld a named part), bill of parts and mass, EN 1993-1-8 spacing checks and clash checks. mesh: "shell" '
+                      '(mid-surface quad mesh, bolts as holes with tied rims, CalculiX input; load_kn = end load; solve = run it), '
+                      '"hex" (hexahedral meshes of the thick plates), "both". Geometry and meshes only - not a code resistance check.',
+                      {'type': 'object', 'properties': {
+                          'kind': {'type': 'string', 'enum': ['end_plate', 'fin_plate', 'base_plate', 'splice']},
+                          'beam': {'type': ['string', 'object']}, 'column': {'type': ['string', 'object']}, 'bolt': {'type': 'string'},
+                          'plate_t': num, 'ext': num, 'rows': {'type': 'integer'}, 'cols': {'type': 'integer'}, 'pitch': num, 'gauge': num,
+                          'ribs': {'type': 'boolean'}, 'beam_length': num, 'column_length': num,
+                          'mesh': {'type': 'string', 'enum': ['none', 'shell', 'hex', 'both']}, 'size': num, 'load_kn': num,
+                          'solve': {'type': 'boolean'}, 'name': {'type': 'string'}}, 'required': ['kind']})
+        self.register('bolt_group', self.bolt_group, 'Bolt GROUP loaded in its plane (shear + torsion; eccentric loads on a bracket, '
+                      'fin plate, lug) with EZbolt: elastic method and the AISC instant centre of rotation (ICR) method, any layout / load '
+                      'direction / eccentricity. Bolts: list [[x,y],...] mm or grid {width,height,nx,ny}. Forces kN, mm; vx, vy at the centroid '
+                      'of the group, ex / ey = offset of the force from the centroid (mm) or torsion directly (kN.mm). Bolt resistance: '
+                      'capacity_kn per bolt, or d (mm) and cls (8.8) for EN 1993-1-8 shear per plane. Bolt shear only (no bearing / block shear). '
+                      'For one bolt with preload / fatigue use the bolt tool.',
+                      {'type': 'object', 'properties': {'bolts': {'type': 'array'}, 'grid': {'type': 'object'}, 'vx': num, 'vy': num, 'torsion': num,
+                                                         'ex': num, 'ey': num, 'capacity_kn': num, 'd': num, 'cls': {'type': 'string'},
+                                                         'shear_planes': {'type': 'integer'}}})
+        self.register('connection_check', self.connection_check, 'AISC 360 connection design check with Osoconn (MIT, compiled on first use): '
+                      'shear_clip_angle (double clip angle shear connection), moment_end_plate (extended end plate moment connection, 4 or 8 bolts, '
+                      'column stiffener / doubler plate), vertical_brace and horizontal_brace (gusset plate brace connections). Every limit state '
+                      '(bolt shear / tension / bearing, plate yielding / rupture, welds, column flange / web / panel zone, stiffeners, block shear ...) '
+                      'is returned as an interaction ratio with the governing one and OK / NOT OK. params = Osoconn keywords e.g. SHEAR_FORCE, '
+                      'BOLT_DIAMETER (M22 or 3/4), BEAM_SECTION (AISC W310X74 / W14X30), PLATE_THICKNESS ...; units NEWTON_MM (N, mm, MPa) or KIP_IN; '
+                      'method LRFD | ASD. A missing or wrong input is reported with the allowed values: ask the user or fix it. See skill connection-check.',
+                      {'type': 'object', 'properties': {'kind': {'type': 'string', 'enum': ['shear_clip_angle', 'moment_end_plate', 'vertical_brace', 'horizontal_brace']},
+                                                         'params': {'type': 'object'}, 'units': {'type': 'string', 'enum': ['NEWTON_MM', 'KIP_IN']},
+                                                         'method': {'type': 'string', 'enum': ['LRFD', 'ASD']}, 'name': {'type': 'string'}},
+                       'required': ['kind', 'params']})
+        self.register('xc_run', self.xc_run, 'Run an XC (xcfem, GPL, https://github.com/xcfem/xc) Python script: finite element models with '
+                      'structural CODE CHECKS - reinforced concrete (Eurocode 2, ACI 318, EHE, SIA 262), steel (Eurocode 3, AISC 360, EAE), fibre '
+                      'sections, interaction diagrams, non-linear static / dynamic, construction phases. For assessments of concrete or steel '
+                      'members against a code, or when the user wants XC. First knowledge_search the xc pack for the closest worked example '
+                      '(its verification models), adapt it to the user\'s structure and loads, run it here; report what the script printed. '
+                      'Needs XC installed (Docker image engthiago/xcfem or a local install): if not, the answer says how to install it.',
+                      {'type': 'object', 'properties': {'script': {'type': 'string', 'description': 'full Python text of the XC model; it must print or write its results'},
+                                                         'name': {'type': 'string'}}, 'required': ['script']})
+        self.register('steel_cbfem', self.steel_cbfem, 'CBFEM (component-based finite element) analysis of a steel connection from plain words, '
+                      'own implementation of the published method on CalculiX (NOT IDEA StatiCa): plates as elastic-plastic shells (steel fy / fu, '
+                      'plastic strain limit 5 %), bolts as springs with EN 1993-1-8 tension and shear capacity, contact between plates, welds as shared '
+                      'nodes. Kinds: end_plate, fin_plate, base_plate (see steel_connection for the geometry words; splices are not available). Loads = member '
+                      'forces at the connection: V shear kN (downward), M moment kNm (beams: positive = hogging; column base: about the strong axis), '
+                      'N axial kN. Returns the load factor at which the first limit is hit (plastic strain 5 %, bolt tension / shear / interaction, '
+                      'collapse), whether the design load passes, bolt forces and utilisation, peak plastic strain. Takes minutes. Accuracy: '
+                      'within about +20 % / -16 % of the EN 1993-1-8 T-stub formulas: use it to find the weak plate or bolt and to compare '
+                      'variants, not as the only design check. Does not check welds, buckling or slip-critical bolts.',
+                      {'type': 'object', 'properties': {
+                          'kind': {'type': 'string', 'enum': ['end_plate', 'fin_plate', 'base_plate']},
+                          'beam': {'type': ['string', 'object']}, 'column': {'type': ['string', 'object']}, 'bolt': {'type': 'string'},
+                          'plate_t': num, 'ext': num, 'rows': {'type': 'integer'}, 'cols': {'type': 'integer'}, 'pitch': num, 'gauge': num,
+                          'ribs': {'type': 'boolean'}, 'beam_length': num, 'column_length': num, 'V': num, 'M': num, 'N': num,
+                          'fy': num, 'fu': num, 'size': num, 'lf_max': num, 'name': {'type': 'string'}}, 'required': ['kind']})
+        self.register('pipe_stress', self.pipe_stress, 'Pipe STRESS analysis (psi - Pipe Stress Infinity, GPL; ASME B31.1-1967): a pipe route '
+                      '(legs like pipe_route, or waypoints in mm), size (nps + schedule, or od_mm), operating and installation temperature (deg C), '
+                      'pressure (bar), water inside or not, supports [{"at": waypoint index (0 start, -1 end) or [x,y,z] mm, "type": anchor | rest '
+                      '(one-way vertical) | hold | guide | x | y | z}] (default: anchors at both ends), rest_spacing_m = rests every so many metres '
+                      'on horizontal legs. Returns sustained and expansion code stress against the allowables, support / anchor loads, movements. '
+                      'Material is A53 grade A only; corners are sharp joints (no bend flexibility / bend SIF yet in psi) - say so.',
+                      {'type': 'object', 'properties': {'legs': {'type': 'array'}, 'waypoints': {'type': 'array'}, 'nps': {'type': ['number', 'string']},
+                                                         'od_mm': num, 'schedule': {'type': 'string'}, 't_oper_c': num, 't_amb_c': num,
+                                                         'pressure_bar': num, 'water': {'type': 'boolean'}, 'supports': {'type': 'array'},
+                                                         'rest_spacing_m': num, 'name': {'type': 'string'}}})
+        self.register('pipe_pulsation', self.pipe_pulsation, 'Piping PULSATION and VIBRATION (OpenPulse, GPL): acoustic natural frequencies of the '
+                      'fluid column (pressure pulsation resonances; the pipe wall flexibility lowers the speed of sound) and structural natural '
+                      'frequencies of the pipe (Timoshenko pipe elements with the fluid mass), checked against pump / compressor excitation '
+                      'frequencies (excitation_hz, margin default 10 %). Route as legs or waypoints in mm (as pipe_route), od_mm, wall_mm, '
+                      'fluid water | seawater | air (or fluid_density + fluid_speed_of_sound), material steel | stainless | copper_nickel, '
+                      'supports [{"at": index, "type": anchor | pinned | rest | x | y | z}] (default anchors at both ends), open_ends = waypoint '
+                      'indexes that open into a tank / vessel / the sea (others are closed). For a reciprocating pump the excitation is '
+                      'rpm / 60 x number of plungers (and its multiples).',
+                      {'type': 'object', 'properties': {'legs': {'type': 'array'}, 'waypoints': {'type': 'array'}, 'od_mm': num, 'wall_mm': num,
+                                                         'fluid': {'type': 'string'}, 'fluid_density': num, 'fluid_speed_of_sound': num,
+                                                         'material': {'type': 'string'}, 'supports': {'type': 'array'}, 'open_ends': {'type': 'array'},
+                                                         'excitation_hz': {'type': 'array'}, 'margin': num, 'modes': {'type': 'integer'},
+                                                         'name': {'type': 'string'}}, 'required': ['od_mm', 'wall_mm']})
+        self.register('hex_mesh_algohex', self.hex_mesh_algohex, 'Frame-field HEXAHEDRAL mesh with AlgoHex (AGPL, cgg-bern; "Locally Meshable Frame '
+                      'Fields"): better shaped hexes than the voxel hex_mesh on curved parts, aligned with the surface and sharp edges. ShipBrain '
+                      'makes the tetrahedral input from its own mesher (file .step / .stl, size mm), runs AlgoHex where it is installed (the '
+                      'user\'s build or the "algohex" container image) and checks the result (hexes, inverted cells, scaled Jacobian, volume) '
+                      'and writes a CalculiX .inp. If AlgoHex is not installed it says how to install it; use hex_mesh meanwhile.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'size': num}, 'required': ['file', 'size']})
+        self.register('standard_part', self.standard_part, 'Dimensions of standard parts straight from the BOLTS library tables (no guessing): '
+                      'bolts and screws (ISO 4017/4014/4762, DIN 933/931/912 ...), nuts, washers, rolled steel sections (IPE, HEA, HEB, HEM, angles, '
+                      'channels, hollow sections; with area and moments of inertia for I-sections), pipes (ASME B36.10, DIN 11850), flanges (EN 1092), '
+                      'bearings. query in words ("hex bolt ISO 4017 M20 length 60", "IPE 300"); size and length optional. Without a size it lists the '
+                      'matching standards and their size ranges.',
+                      {'type': 'object', 'properties': {'query': {'type': 'string'}, 'size': {'type': 'string'}, 'length': num}, 'required': ['query']})
+        self.register('fvm_1d', self.fvm_1d, 'Small 1D finite volume cases by running the scripts of the Finite-Volume-Method-for-1D-CFD-Simulations repo in '
+                      'Octave (needs Octave): case diffusion (steady conduction, k, A, l, n, Ta, Tb), heat_generation (conduction with a uniform source q), '
+                      'convection_diffusion (central scheme: rho, u, K, L, n, phi_a, phi_b) or simple (1D duct pressure correction: rho, A). Returns the nodal '
+                      'values and, where an exact solution exists, the exact values and the largest error. Teaching-size 1D problems only - not a 3D CFD solver.',
+                      {'type': 'object', 'properties': {'case': {'type': 'string'}, 'params': {'type': 'object'}}, 'required': ['case']})
+        self.register('show_result', self.show_result, 'Make a PICTURE (png) of a model or an analysis result: the geometry of a STEP / STL / mesh (.inp, .bdf), or a '
+                      'result field on the mesh - von_mises stress or displacement (drawn deformed) - from the CalculiX .frd next to it; view iso / front / top / side; '
+                      'optional ParaView file (.vtu). Run the analysis first (solve_calculix / analysis_run) for a field.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'frd': {'type': 'string'}, 'field': {'type': 'string', 'enum': ['von_mises', 'displacement']},
+                                                         'view': {'type': 'string'}, 'scale': num, 'vtu': {'type': 'boolean'}}, 'required': ['file']})
+        self.register('elmer_flow', self.elmer_flow, 'CFD and FLUID-STRUCTURE INTERACTION with Elmer FEM (free, GPL; needs Elmer installed): a plate standing in a channel '
+                      'with water / seawater / air / oil flowing past (2D, metres): laminar flow or SST k-omega turbulence, rigid plate or ELASTIC plate (two-way FSI: the flow '
+                      'bends the plate, the bent plate changes the flow). Returns drag, pressure on the front and back of the plate, velocities, and for an elastic plate '
+                      'the deflection and von Mises stress, and writes pictures (velocity, pressure, displacement, stress) and a ParaView .vtu. Mesh made by ShipBrain (no gmsh). '
+                      'Lengths in metres, velocity m/s. A steady laminar solution only exists at low Reynolds numbers; the answer says whether it converged.',
+                      {'type': 'object', 'properties': {'velocity': num, 'fluid': {'type': 'string', 'enum': ['water', 'seawater', 'air', 'oil']},
+                                                         'length': num, 'height': num, 'plate_x': num, 'plate_t': num, 'plate_h': num, 'plate': {'type': 'string', 'enum': ['rigid', 'elastic']},
+                                                         'material': {'type': 'string', 'enum': ['steel', 'aluminium', 'rubber', 'plastic']}, 'E_pa': num, 'poisson': num,
+                                                         'turbulence': {'type': 'string', 'enum': ['laminar', 'sst']}, 'cell': num, 'name': {'type': 'string'}},
+                       'required': ['velocity']})
+        self.register('openfoam_flow', self.openfoam_flow, 'CFD with OpenFOAM (free, GPL; simpleFoam steady incompressible, laminar or RANS k-omega SST; needs OpenFOAM installed): '
+                      'water / seawater / air / oil flowing past a body in a channel, 2D or 3D, SI units. The body is a plate (plate_t, plate_h, plate_w) or a PART from a '
+                      'STEP / STL file in the workspace (placed on the channel floor; stair-stepped wall - rough on curved parts). Returns drag and side forces, drag coefficient, '
+                      'velocity and pressure ranges, whether it converged, and writes pictures (velocity and pressure slices). Mesh made by ShipBrain (no gmsh).',
+                      {'type': 'object', 'properties': {'velocity': num, 'fluid': {'type': 'string', 'enum': ['water', 'seawater', 'air', 'oil']}, 'body_file': {'type': 'string'},
+                                                         'length': num, 'height': num, 'width': num, 'plate_x': num, 'plate_t': num, 'plate_h': num, 'plate_w': num,
+                                                         'turbulence': {'type': 'string', 'enum': ['laminar', 'sst']}, 'cell': num, 'iterations': {'type': 'integer'},
+                                                         'name': {'type': 'string'}}, 'required': ['velocity']})
+        self.register('flow_load_stress', self.flow_load_stress, 'ONE-WAY FLUID-STRUCTURE chain for a part from a STEP file: (1) OpenFOAM flow past the part (3D, SI, water / seawater / '
+                      'air / oil, laminar or SST k-omega), (2) the pressure + shear forces on its faces become nodal forces on the part\'s shell mesh (conserved: their sum equals the '
+                      'body force), (3) CalculiX gives displacement and von Mises stress with the supports you name (fix = [{"x": -500, "dof": "123456"}] in the part\'s mm), '
+                      '(4) pictures of the flow (velocity, pressure) and of the stress and displacement. Channel size and cell default from the part size. The part is placed on the '
+                      'channel floor, flow along +x. Not two-way: the bending does not change the flow (use elmer_flow for a flexible plate).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'velocity': num, 'fluid': {'type': 'string', 'enum': ['water', 'seawater', 'air', 'oil']},
+                                                         'fix': {'type': 'array'}, 'thickness_mm': num, 'element_size': num, 'turbulence': {'type': 'string', 'enum': ['laminar', 'sst']},
+                                                         'cell': num, 'name': {'type': 'string'}}, 'required': ['file', 'velocity', 'fix']})
+        self.register('probe_result', self.probe_result, 'READ A RESULT AT A PLACE: the value of a finished analysis at coordinates x, y, z. file = a mesh .inp (structure: displacement and von Mises '
+                      'stress at the nearest node, coordinates in mm), an OpenFOAM case folder (the *_flow folder: velocity and pressure in the nearest cell, metres) or an Elmer .vtu '
+                      '(all fields at the nearest node, metres). Use it when the user asks "what is the stress / pressure / velocity at ...".',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'x': num, 'y': num, 'z': num}, 'required': ['file', 'x', 'y']})
+        self.register('cfd_export', self.cfd_export, 'Set up the CFD case for ANSYS FLUENT or STAR-CCM+ (commercial: they cannot run here and need your licence): writes the mesh in Fluent .msh format '
+                      '(made by ShipBrain\'s own grid), a plain-words setup sheet, and a PyFluent script or a STAR-CCM+ macro (written from the documented APIs, not run here). Same case arguments as '
+                      'openfoam_flow (plate or STEP part, fluid, velocity, turbulence), so the OpenFOAM run can cross-check it. Results come back as exported CSV: probe_result / show_result read them.',
+                      {'type': 'object', 'properties': {'target': {'type': 'string', 'enum': ['fluent', 'starccm']}, 'velocity': num, 'fluid': {'type': 'string', 'enum': ['water', 'seawater', 'air', 'oil']},
+                                                         'body_file': {'type': 'string'}, 'length': num, 'height': num, 'width': num, 'plate_x': num, 'plate_t': num, 'plate_h': num,
+                                                         'plate_w': num, 'turbulence': {'type': 'string', 'enum': ['laminar', 'sst']}, 'cell': num, 'name': {'type': 'string'}},
+                       'required': ['target', 'velocity']})
+        self.register('ship_hydrostatics', self.ship_hydrostatics, 'Hydrostatics and initial stability of a hull with Vessel.js (MIT, NTNU; runs in Node.js): draft, trim, heel, KB, BM, KG, GM and a hydrostatic table '
+                      '(volume, waterplane area, Cb, LCB, LCF, KB, BM at several drafts). Hull = box / wigley / a Vessel.js specification file the user uploaded (spec_file); the weights are '
+                      'point masses [{name, mass_t, cg: [x from aft, y to port, z above keel]}] in tonnes and metres; water density default 1025 (sea), 1000 for fresh. Small-angle stability only '
+                      '(GM, not the full GZ curve).',
+                      {'type': 'object', 'properties': {'hull': {'type': 'string', 'enum': ['box', 'wigley']}, 'length': num, 'beam': num, 'depth': num, 'design_draft': num,
+                                                         'weights': {'type': 'array'}, 'spec_file': {'type': 'string'}, 'drafts': {'type': 'array'}, 'density': num}, 'required': []})
+        self.register('hull_generate', self.hull_generate, 'Design a ship HULL from parameters (ShipBrain\'s own parametric generator, metres and degrees): principal dimensions L, B, D, T; midship section '
+                      '(bilge radius r_bilge, deadrise, flare); plan form (ent, run, n_ent, n_run fullness exponents, transom); optional bulb (bulb_len, bulb_b, bulb_h, bulb_z). Returns the '
+                      'coefficients (Cb, Cp, Cm, Cwp, LCB, KB, wetted area), a watertight STL, a picture, and with a KG the hydrostatics and GM through Vessel.js. target_cb solves the fullness '
+                      'for a given block coefficient. With samples = N it draws N random valid hulls and writes a CSV of their parameters and coefficients (a hull dataset).',
+                      {'type': 'object', 'properties': {k: num for k in ('L', 'B', 'D', 'T', 'r_bilge', 'deadrise', 'flare', 'ent', 'run', 'n_ent', 'n_run', 'transom', 'bulb_len', 'bulb_b', 'bulb_h',
+                                                                         'bulb_z', 'vee', 'target_cb', 'kg', 'seed')} | {'name': {'type': 'string'}, 'samples': {'type': 'integer'}, 'kind': {'type': 'string', 'enum': ['ship', 'boat']}},
+                       'required': []})
+        self.register('hull_resistance', self.hull_resistance, 'Calm-water resistance and effective power of a generated hull (hull_generate parameters) by the Holtrop-Mennen method (Vessel.js, run in Node) at speeds '
+                      'in knots or Froude numbers; method "surrogate" answers from a model trained on 2,400 generated hulls (milliseconds, ~2 % mean error against Holtrop, measured on unseen hulls). '
+                      'Valid only inside Holtrop\'s range (0.55 <= Cp <= 0.85, 3.9 <= L/B <= 14.9, 2.1 <= B/T <= 4.0, Fn <= 0.45): outside it the tool refuses. An estimate for ordinary displacement ships (about +-10-20 % '
+                      'against real ships), not a CFD result.',
+                      {'type': 'object', 'properties': {k: num for k in ('L', 'B', 'D', 'T', 'r_bilge', 'deadrise', 'flare', 'ent', 'run', 'n_ent', 'n_run', 'transom', 'bulb_len', 'bulb_b', 'bulb_h',
+                                                                         'bulb_z', 'vee', 'target_cb')} | {'speeds_kn': {'type': 'array'}, 'froude': {'type': 'array'}, 'method': {'type': 'string', 'enum': ['holtrop', 'surrogate']}},
+                       'required': ['L', 'B', 'D', 'T']})
+        self.register('catamaran_hull', self.catamaran_hull, 'Slender CATAMARAN demihull with the FAST-SHIPS hull generator (NTNU, GPL): from L/B, B/T, Tt/T (transom draft over maximum draft) and the displacement volume '
+                      'of one demihull (m3) or its waterline length (m). Returns the demihull STL (metres, keel at z = 0, waterline at z = draft) and, with separation (m between the centre planes), the '
+                      'catamaran STL, plus the generator\'s data; analyse them with stl_stability. Needs numba.',
+                      {'type': 'object', 'properties': {'l_to_b': num, 'b_to_t': num, 'tt_to_t': num, 'volume_m3': num, 'lwl': num, 'separation': num, 'name': {'type': 'string'}},
+                       'required': ['l_to_b', 'b_to_t', 'tt_to_t']})
+        self.register('openhcm_read', self.openhcm_read, 'Read an OpenHCM (Hull Condition Model, the open ship-structure XML format of class societies and CAD vendors) file in the workspace: counts of plates and '
+                      'stiffeners, thicknesses, areas, mass, compartments, stiffener types; with mesh = true the flat plates and the stiffeners become a CalculiX shell mesh (element_size mm, coordinates assumed mm).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'mesh': {'type': 'boolean'}, 'element_size': num, 'name': {'type': 'string'}}, 'required': ['file']})
+        self.register('pynite_fea', self.pynite_fea, 'Frame, truss and plate finite-element analysis with PyNite (MIT; pip install PyNiteFEA): 3D beams with releases, nodal and member loads, load combinations, '
+                      'rectangular plate meshes with pressure and simply supported / clamped edges. model = {materials: {name: {E, nu}}, sections: {name: {A, Iy, Iz, J}}, nodes: {name: [x, y, z]}, members: '
+                      '[{name, i, j, material, section, releases?}], supports: {node: fixed | pinned | roller_y | [6 flags]}, node_loads: [{node, dir FX|FY|FZ|MX|MY|MZ, value}], member_loads: [{member, dir '
+                      'Fy|Fz|Fx, w1, w2}], plates: [{name, width, height, t, mesh, material, pressure, edges: {left|right|bottom|top: simple|clamped}}]}. Units are yours, kept consistent (N, mm, MPa). Returns '
+                      'displacements, reactions, member forces and plate deflection.',
+                      {'type': 'object', 'properties': {'model': {'type': 'object'}}, 'required': ['model']})
+        self.register('gz_curve', self.gz_curve, 'Righting-lever (GZ) curve and the IMO intact-stability criteria (IS Code 2.2: areas 0-30, 0-40, 30-40 degrees, GZ at 30 degrees, angle of maximum GZ, GM) of a generated '
+                      'hull (hull_generate parameters, metres) at a given KG and displacement or draft, optional free-surface loss of slack tanks and flooding angle. Level keel, hull up to the deck. '
+                      'Returns the curve, pass / fail per criterion and a picture. Concept-level: a real ship needs the approved stability program with the actual loading conditions and openings.',
+                      {'type': 'object', 'properties': {k: num for k in ('L', 'B', 'D', 'T', 'r_bilge', 'deadrise', 'flare', 'ent', 'run', 'n_ent', 'n_run', 'transom', 'bulb_len', 'bulb_b', 'bulb_h',
+                                                                         'bulb_z', 'vee', 'kg', 'mass_t', 'draft', 'free_surface_m', 'flooding_angle_deg')} | {'name': {'type': 'string'}},
+                       'required': ['L', 'B', 'D', 'T', 'kg']})
+        self.register('stl_stability', self.stl_stability, 'Hydrostatics, GZ curve (trim optimised at every heel angle) and intact-stability criteria of ANY hull given as an STL file in the workspace '
+                      '(from hull_generate, catamaran_hull or an uploaded hull surface; metres, x along the hull, y across, z up, keel at z = 0; scale converts mm) with NavalToolbox (AGPL, Rust, pip install navaltoolbox). '
+                      'Give the draft or the displacement (t), the KG, optionally LCG / TCG; rule = is_code_2008_general (default) | is_code_2008_complete | div222_intact_stability. Returns the hydrostatics, the GZ curve, '
+                      'pass / fail per criterion and a picture.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'kg': num, 'draft': num, 'displacement_t': num, 'lcg': num, 'tcg': num, 'density': num, 'scale': num,
+                                                         'rule': {'type': 'string'}, 'name': {'type': 'string'}}, 'required': ['file', 'kg']})
+        self.register('hull_motions', self.hull_motions, 'Natural periods (roll by the IMO formula, heave, pitch) and a simple regular-wave response (heave in head waves, roll in beam waves) of a generated hull '
+                      '(hull_generate parameters, metres) at a KG: closed-form teaching estimates, no strip theory, no forward speed - NOT a seakeeping program. wave_period_s gives the response in one regular wave; '
+                      'resonance is flagged. The damping ratios are assumptions you can change.',
+                      {'type': 'object', 'properties': {k: num for k in ('L', 'B', 'D', 'T', 'r_bilge', 'deadrise', 'flare', 'ent', 'run', 'n_ent', 'n_run', 'transom', 'bulb_len', 'bulb_b', 'bulb_h',
+                                                                         'bulb_z', 'vee', 'kg', 'wave_period_s', 'wave_amplitude_m', 'zeta_heave', 'zeta_roll', 'draft')},
+                       'required': ['L', 'B', 'D', 'T', 'kg']})
+        self.register('dbb_blocks', self.dbb_blocks, 'Design building blocks for early ship design: blocks {name, group, shape box|cylinder|sphere or volume, size [m], density t/m3, cg [x, y, z], fullness} '
+                      'summed to weight and centre of gravity per block and group, linked to requirements {name, metric weight|volume|area|total_weight|length|beam|height, direction at_least|at_most, shall, '
+                      'should, blocks | group} with red (shall not met) / green / orange (beyond the should) status; returns the weights list that ship_hydrostatics and gz_curve take.',
+                      {'type': 'object', 'properties': {'blocks': {'type': 'array'}, 'requirements': {'type': 'array'}, 'hull': {'type': 'object'}}, 'required': ['blocks']})
+        self.register('propeller_bem', self.propeller_bem, 'Open-water performance of a screw propeller by blade-element-momentum theory (ShipBrain\'s own teaching-level code): thrust and torque coefficients KT, KQ '
+                      'and efficiency against the advance ratio J, and at an operating point (diameter, rpm, speed in knots) the thrust, torque, power, actuator-disk ideal efficiency and the cavitation number at '
+                      '0.7R for a given shaft immersion. Inputs: blades Z, pitch ratio P/D, expanded area ratio, hub ratio, section drag. Not a design program (constant pitch, elliptical chord, no skew / rake / camber '
+                      'distribution): efficiency is optimistic by about 10 %.',
+                      {'type': 'object', 'properties': {k: num for k in ('D', 'rpm', 'speed_kn', 'Z', 'pitch_ratio', 'ear', 'hub_ratio', 'cd', 'immersion_m')} | {'name': {'type': 'string'}}, 'required': ['D', 'pitch_ratio']})
+        self.register('propeller_design', self.propeller_design, 'Optimum-circulation propeller design (Epps lifting-line, PythonProp / OpenProp, GPL-3): from blades Z, rpm, diameter, required thrust (N) and ship speed (m/s), with or without a duct, '
+                      'it returns the design KT, KQ, efficiency, torque, power, the radial circulation, the off-design curve KT / KQ / efficiency against J and the blade pitch, chord and camber distribution; '
+                      'blade_stl=true also writes the 3D blade (BladeX sections) as an STL. Use propeller_bem for a quick open-water curve of a given pitch ratio; this tool finds the pitch for a thrust.',
+                      {'type': 'object', 'properties': {k: num for k in ('Z', 'rpm', 'D', 'thrust_N', 'speed_ms', 'hub_d', 'tau')} | {'duct': {'type': 'boolean'}, 'blade_stl': {'type': 'boolean'}, 'name': {'type': 'string'}}, 'required': ['rpm', 'D', 'thrust_N', 'speed_ms']})
+        self.register('blade_geometry', self.blade_geometry, 'Propeller blade 3D geometry with BladeX (MIT): radii, chord lengths, pitch, rake, skew angles (deg) per radius and a NACA 4-digit section (naca, or nacas per radius) -> '
+                      'the suction / pressure surface points and a closed STL (tip and root capped) with its volume; units as given.',
+                      {'type': 'object', 'properties': {k: {'type': 'array', 'items': {'type': 'number'}} for k in ('radii', 'chord_lengths', 'pitch', 'rake', 'skew_angles')} | {'naca': {'type': 'string'}, 'nacas': {'type': 'array'}, 'name': {'type': 'string'}}, 'required': ['radii', 'chord_lengths', 'pitch']})
+        self.register('nastran_read', self.nastran_read, 'Read a Nastran file with pyNastran: a bulk data deck (.bdf / .nas / .dat): nodes, elements, element types, properties, materials, loads, supports, mass, centre of mass, '
+                      'bounding box, solution type; or an OP2 result file: largest displacement and largest shell von Mises stress per subcase (file in the work folder).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
+        self.register('nastran_plate_deck', self.nastran_plate_deck, 'Write a Nastran bulk data deck (SOL 101, CQUAD4 / PSHELL / MAT1 / SPC1 / FORCE) of a cantilever plate: length L, width W, thickness t, mesh nx x ny, '
+                      'E, nu, rho (SI: m, N, Pa, kg/m3), end force in N and direction 1|2|3. Runs in any Nastran-format solver; ShipBrain checks it with CalculiX when asked.',
+                      {'type': 'object', 'properties': {k: num for k in ('L', 'W', 't', 'nx', 'ny', 'E', 'nu', 'rho', 'force_N', 'direction')} | {'name': {'type': 'string'}}, 'required': ['L', 'W', 't']})
+        self.register('pipe_flow', self.pipe_flow, 'Pipe hydraulics for ship systems (seawater cooling, ballast, bilge, fire main, fuel, '
+                      'lube oil, fresh water) with ProcessPi: pressure drop, head, velocity, Reynolds, pump power. flow_m3h; '
+                      'segments in series [{d_mm (inner), length_m, rise_m, material CS|SS|Copper|PVC, fittings {type: count}}]; '
+                      'branches: parallel pipes at the end [[{d_mm, length_m, fittings}], ...]; fluid seawater | fresh water | mgo | '
+                      'hfo | lube oil | hydraulic oil, or density + viscosity_cst; pump_efficiency. Fitting types: '
+                      'standard_elbow_90_deg, standard_elbow_45_deg, long_radius_90_deg, gate_valve, globe_valve, ball_valve, '
+                      'angle_valve, swing_check_valve, lift_check_valve, plug_valve_straightway, standard_tee_through_flow, '
+                      'standard_tee_through_branch, entrance_sharp, entrance_rounded, exit, sudden_expansion, sudden_contraction.',
+                      {'type': 'object', 'properties': {'flow_m3h': num, 'segments': {'type': 'array'}, 'branches': {'type': 'array'},
+                                                         'fluid': {'type': 'string'}, 'density': num, 'viscosity_cst': num,
+                                                         'pump_efficiency': num}, 'required': ['flow_m3h', 'segments']})
+        self.register('hex_mesh', self.hex_mesh, 'Hexahedral (brick) mesh of a SOLID part - castings, foundations, shaft brackets, lugs, thick '
+                      'plates - with ShipBrain\'s own mesher: voxel grid whose boundary nodes are snapped onto the true surface, '
+                      'sharp edges and corners, every brick checked (scaled Jacobian). file: .step/.stp/.brep/.stl; size = cell size '
+                      '(mm; about a third of the thinnest wall at most); to: inp (CalculiX / Abaqus) | bdf (Nastran) | fem (OptiStruct); '
+                      'E, nu; feature_angle (deg, default 35). Reports volume against the exact volume and the quality.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'size': num, 'to': {'type': 'string'}, 'E': num,
+                                                         'nu': num, 'feature_angle': num}, 'required': ['file', 'size']})
+        self.register('dxf_draw', self.dxf_draw, 'Draw a 2D drawing from the user\'s description -> DXF (layers OUTLINE, HOLES, STIFFENER, FRAME, CENTER, DIM, '
+                      'TEXT, TITLE; dimensions, centre lines, title block) + PNG preview. parts (mm, x / y from the part\'s lower-left corner): '
+                      '{"type":"plate","length","width","thickness","corner_radius","holes":[{"x","y","d"}],"hole_grid":{"x0","y0","nx","ny","dx","dy","d"},'
+                      '"slots":[{"x","y","length","width"}]} | {"type":"panel","length","width","thickness","stiffeners":{"spacing","profile","direction":"x|y"},'
+                      '"frames":{"spacing"}} | {"type":"flange","od","id","thickness","bolt_circle","n_bolts","bolt_d"} | {"type":"shapes","lines":[...],'
+                      '"circles":[{"x","y","d"}],"rects":[{"x","y","w","h"}],"texts":[{"x","y","text"}],"polylines":[{"points","closed"}]}. '
+                      'title, sheet A4..A0, scale (20 = 1:20, automatic if omitted), notes [..], dims (default true).',
+                      {'type': 'object', 'properties': {'parts': {'type': 'array'}, 'title': {'type': 'string'}, 'sheet': {'type': 'string'},
+                                                         'scale': num, 'notes': {'type': 'array'}, 'dims': {'type': 'boolean'},
+                                                         'name': {'type': 'string'}}, 'required': ['parts']})
+        self.register('dxf_check', self.dxf_check, 'Drafting-quality check of a DXF drawing: units, layers (everything on layer 0), linetypes, '
+                      'zero-length and duplicate entities, gaps in outlines, 3D leftovers, dimension text typed over the measured value, '
+                      'stray entities. (drawing_check reads the arithmetic written on a drawing.)',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
+        self.register('pipe_route', self.pipe_route, 'A pipe route from plain words -> 3D pipe solid (STEP, exact circular bends) + length, net rise, '
+                      'bends, mass and the input for pipe_flow. legs [{"dir": east|west|north|south|up|down|+x|-y.., "length": mm}] from start [x,y,z] '
+                      '(or waypoints [[x,y,z],..]); od, wall (mm; wall omitted = solid rod); bend "LR" (1.5 x OD, default) | "SR" (1.0 x OD) | radius mm. '
+                      'Checked against an independent kernel and the analytic volume.',
+                      {'type': 'object', 'properties': {'legs': {'type': 'array'}, 'waypoints': {'type': 'array'}, 'od': num, 'wall': num,
+                                                         'bend': {'type': ['string', 'number']}, 'start': {'type': 'array'},
+                                                         'name': {'type': 'string'}}, 'required': ['od']})
+        self.register('reverse_cad', self.reverse_cad, 'Mesh (STL scan / 3D-print / mesh export) -> STEP AP242 solid with ReverseCAD '
+                      '(non-commercial licence): watertight B-Rep, volume, area, centre of mass, inertia, mass for a material, '
+                      'recognised holes / ISO threads / fillets / chamfers / slots / cavities, and its own verification of the STEP '
+                      'against the mesh (Hausdorff distance, 5 gates). material: steel | aluminum | pla | petg | abs | glass. '
+                      'Use it when the user wants the features or the verification; stl_to_step fits exact curved faces.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'material': {'type': 'string'},
+                                                         'heatmap': {'type': 'boolean'}}, 'required': ['file']})
+        self.register('fatigue_mesh', self.fatigue_mesh, 'Fatigue hot-spot local model: cut a box around the hot spot from a plate assembly, '
+                      'mesh it t x t, give the read-out points at 0.5t / 1.5t; with solve=true also run CalculiX and return the '
+                      'extrapolated hot-spot stress (1.5 s(0.5t) - 0.5 s(1.5t)).',
+                      {'type': 'object', 'properties': {'plates': {'type': 'array'}, 'hotspot': {'type': 'array'}, 'size': {'type': 'number'},
+                                                         't': {'type': 'number'}, 'loads': {'type': 'array'}, 'solve': {'type': 'boolean'},
+                                                         'name': {'type': 'string'}}, 'required': ['plates', 'hotspot']})
+        self.register('compare_drawings', self.compare_drawings, 'Compare two drawings (PDF page, PNG/JPG, DXF, DWG via the free ODA '
+                      'File Converter): overlay, then for vector drawings every change numbered (lines, texts by meaning, blocks + '
+                      'attributes, dimensions, hatches, circles, layers) in revision clouds, written as <a>_vs_<b>_changes.dxf '
+                      '(open in AutoCAD) + .csv. ignore: ["text", "dimensions", "hatches", "blocks", "attributes", "circles", '
+                      '"layers", "lines"]; ignore_layers: names or patterns; tolerance in drawing units.',
+                      {'type': 'object', 'properties': {'a': {'type': 'string'}, 'b': {'type': 'string'}, 'page_a': {'type': 'integer'},
+                                                         'page_b': {'type': 'integer'}, 'ignore': {'type': 'array'},
+                                                         'ignore_layers': {'type': 'array'}, 'tolerance': {'type': 'number'}},
+                       'required': ['a', 'b']})
+        self.register('compare_mesh_drawing', self.compare_mesh_drawing, 'Check an FE mesh against a drawing (plan view at a height): share of '
+                      'mesh lines on drawn lines, coverage, best shift (calibration error), overlay image. box = ship mm window the drawing shows.',
+                      {'type': 'object', 'properties': {'mesh': {'type': 'string'}, 'drawing': {'type': 'string'},
+                                                         'box': {'type': 'array', 'description': '[x0, x1, y0, y1] mm'}, 'level': {'type': 'number'},
+                                                         'axis': {'type': 'string'}, 'page': {'type': 'integer'}}, 'required': ['mesh', 'drawing', 'box']})
+        self.register('drawing_to_3d', self.drawing_to_3d, 'Turn a DXF structural plan into a 3D model: outline/opening layers -> plate, '
+                      'girder/web layers -> vertical plates, stiffener layers -> 1D beams. Writes a STEP and (mesh=true) a 1D+2D FE mesh.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'z': {'type': 'number'}, 't_plate': {'type': 'number'},
+                                                         'layers': {'type': 'object'}, 'mesh': {'type': 'boolean'}, 'element_size': {'type': 'number'}},
+                       'required': ['file']})
+        self.register('drawing_check', self.drawing_check, 'Check the arithmetic written on a drawing (PDF, DXF, image with OCR): '
+                      'products and sums like "24 x 101.6 = 2438.4", "6 @ 800 = 4800", "1200 + 800 = 2000"; lists the ones that do '
+                      'not add up and counts numbers by class (plate thickness, weld size, section size ...).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'page': {'type': 'integer'}}, 'required': ['file']})
+        self.register('cad_view_check', self.cad_view_check, 'Check a 3D model (STEP in the workspace) against a 2D drawing view: '
+                      'projects the model (front / top / side ...), compares lines both ways and proportions -> PASS / WARN / FAIL '
+                      'with hints (missing hole, extra feature, wrong size) and an overlay. crop = [x0,y0,x1,y1] pixels of the view.',
+                      {'type': 'object', 'properties': {'model': {'type': 'string'}, 'drawing': {'type': 'string'},
+                                                         'views': {'type': 'array', 'description': '["front","top","side"]'},
+                                                         'page': {'type': 'integer'}, 'crops': {'type': 'object', 'description': '{"front": [x0,y0,x1,y1]}'}},
+                       'required': ['model', 'drawing']})
+        self.register('build_structure', self.build_structure, 'Build a ship structure from a SHORT program of building blocks (preferred '
+                      'over plates_mesh: far fewer numbers to write). One line per block, "name key=value": deck L B t; opening x y w h; '
+                      'girder y h t; web x h t; bulkhead x h t; lbulkhead y h t; stiffeners spacing profile(FB150x12|HP200x10|'
+                      'T400x10/150x15|L250x90x10/12) dir; bracket x y size t; load p; fix x=0|x=L|y=0|y=B|edges. Makes the 1D+2D mesh '
+                      '(and STEP with step=true).',
+                      {'type': 'object', 'properties': {'program': {'type': 'string'}, 'name': {'type': 'string'}, 'element_size': {'type': 'number'},
+                                                         'step': {'type': 'boolean'}}, 'required': ['program']})
+        self.register('choose_engine', self.choose_engine, 'FIRST step for any analysis question: classifies it (static, natural '
+                      'frequencies, buckling, ultimate/plastic, contact, impact/collision, fatigue, fracture, CFD, heat, CAD, mesh) and '
+                      'names the best engine installed on this PC (CalculiX, Nastran/ANSYS/Abaqus decks, MoFEM, OpenCourant, OpenFOAM, '
+                      'Code_Aster, Elmer, CadQuery ...) and the ShipBrain tool to call next.',
+                      {'type': 'object', 'properties': {'question': {'type': 'string'}}, 'required': ['question']})
+        self.register('setup_check', self.setup_check, 'What free software ShipBrain can use on THIS PC (solvers, DWG converter, '
+                      'Node.js, Rust, OCR, Python packages ...): installed or not, why it is needed and the download link. Use when '
+                      'the user asks what to install or how to set up a PC.',
+                      {'type': 'object', 'properties': {'only_missing': {'type': 'boolean'}}})
+        self.register('find_solvers', self.find_solvers, 'List the FE / CFD solvers installed on THIS workstation (CalculiX, MSC / NX '
+                      'Nastran, MYSTRAN, ANSYS, Abaqus, OpenFOAM, Code_Aster) with their paths, so the user can choose one.',
+                      {'type': 'object', 'properties': {}})
+        self.register('remember_solver', self.remember_solver, 'Add a solver installed in an unusual folder: name (calculix | nastran | '
+                      'mystran | ansys | abaqus | openfoam) and the full path of its executable.',
+                      {'type': 'object', 'properties': {'name': {'type': 'string'}, 'path': {'type': 'string'}}, 'required': ['name', 'path']})
+        self.register('solve', self.solve, 'Run an analysis of a ShipBrain model (.inp / .bdf in the workspace) with the solver the user '
+                      'chose (found on this PC): writes that solver\'s input, runs it in batch, reads the results back. '
+                      'analysis: static | modal | buckling.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'solver': {'type': 'string'},
+                                                         'analysis': {'type': 'string', 'enum': ['static', 'modal', 'buckling']},
+                                                         'n_modes': {'type': 'integer'}}, 'required': ['file', 'solver']})
+        self.register('analysis_run', self.analysis_run, 'Run an analysis of a mesh file in the workspace (.inp written by ShipBrain) '
+                      'with CalculiX: "static" (displacement, von Mises), "modal" (natural frequencies in Hz), "buckling" (load '
+                      'factors for the loads in the model).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'analysis': {'type': 'string', 'enum': ['static', 'modal', 'buckling']},
+                                                         'n_modes': {'type': 'integer'}}, 'required': ['file', 'analysis']})
+        self.register('drawing_to_model', self.drawing_to_model, 'Read a SHIP structural drawing (PDF deck plans / elevations / sections) '
+                      'into a member model XML with the ship drawing reader (frame / OFF C.L / deck-height calibration, line-style and '
+                      'label rules); optional coverage score against a reference XML. Takes minutes.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'reference': {'type': 'string'}, 'settings': {'type': 'string'},
+                                                         'pages': {'type': 'string'}, 'raster': {'type': 'boolean'}}, 'required': ['file']})
+        self.register('compare_structures', self.compare_structures, 'Compare two structure models. method "coverage" (default): '
+                      'stiffener length and plate area found in the other model with the same section / thickness, both ways, and where '
+                      'the gaps are - works when members are split differently (drawing-read vs yard model). method "members": '
+                      'one-to-one changes between two versions of one model (same / changed / moved / added / removed). '
+                      'Reads structure JSON, OCX (.3docx) or ship XML.',
+                      {'type': 'object', 'properties': {'a': {'type': 'string'}, 'b': {'type': 'string'}, 'tol': {'type': 'number'},
+                                                         'move_tol': {'type': 'number'}}, 'required': ['a', 'b']})
+        self.register('ocx_syntax', self.ocx_syntax, 'OCX (open 3D class exchange, .3docx ship structure standard) library: the exact '
+                      'syntax of any OCX element / type / enumeration in any schema version 2.8.6 ... 3.2.0 (attributes, required '
+                      'children in order, allowed values, where used, which versions have it, XML example). name = an element '
+                      '(Plate, Stiffener, BarSection, FunctionTypeValue ...) or words to search ("bulb", "watertight"). '
+                      'changes_from = an older version: what changed from it to version.',
+                      {'type': 'object', 'properties': {'name': {'type': 'string'}, 'version': {'type': 'string'},
+                                                         'changes_from': {'type': 'string'}}})
+        self.register('ocx_read', self.ocx_read, 'Read an OCX ship model (.3docx, any schema version): panels, plates (thickness), '
+                      'stiffeners (sections), brackets, pillars, seams, holes, frame tables, catalogues; saves it as a structure '
+                      'JSON for compare_structures / structure_to_mesh.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
+        self.register('ocx_query', self.ocx_query, 'Find members in an OCX model: by name (part of it), kind (panel / plate / '
+                      'stiffener / bracket), panel function (DECK, BULKHEAD, SHELL ...) or plate thickness range (mm); each with '
+                      'thickness, material, section, size, weight. No filter = the list of panels.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'name': {'type': 'string'}, 'kind': {'type': 'string'},
+                                                         'function': {'type': 'string'}, 'min_thk': {'type': 'number'},
+                                                         'max_thk': {'type': 'number'}}, 'required': ['file']})
+        self.register('ocx_validate', self.ocx_validate, 'Check an OCX file against the official schema of its version (XSD) and '
+                      'the OCX library: valid or the list of problems with their place in the file.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
+        self.register('ocx_write', self.ocx_write, 'Write a structure model (structure JSON, OCX or ship XML) as an OCX 3.2.0 '
+                      'file made with the official OCX classes, then check it against the official XSD.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'out': {'type': 'string'},
+                                                         'name': {'type': 'string'}}, 'required': ['file']})
+        self.register('ocx_to_step', self.ocx_to_step, 'OCX model -> STEP 3D CAD (OCXReader when built, else ShipBrain plates + stiffeners).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file']})
+        self.register('class_rule', self.class_rule, 'Class society rules (ships and offshore). action "longitudinal": IACS UR S11 / S7 hull '
+                      'girder strength from L, B (m), Cb [Ms_hog, Ms_sag kN m, yield MPa, x/L, Z_deck, Z_bottom cm3, I cm4] - wave '
+                      'moments, minimum Z and I, permissible stress, required Z, PASS/FAIL; "k": material factor; "search": the '
+                      'rule texts of IACS / DNV / ABS / BV / LR / ClassNK / KR / CCS ... (query, society) with document, section '
+                      'and page; "societies": which rule books are on this PC and how to get the others.',
+                      {'type': 'object', 'properties': {'action': {'type': 'string', 'enum': ['longitudinal', 'k', 'search', 'societies']},
+                                                         'query': {'type': 'string'}, 'society': {'type': 'string'},
+                                                         'L': {'type': 'number'}, 'B': {'type': 'number'}, 'Cb': {'type': 'number'},
+                                                         'Ms_hog': {'type': 'number'}, 'Ms_sag': {'type': 'number'}, 'yield_mpa': {'type': 'number'},
+                                                         'x': {'type': 'number'}, 'Z_deck': {'type': 'number'}, 'Z_bottom': {'type': 'number'},
+                                                         'I': {'type': 'number'}}, 'required': ['action']})
+        self.register('drawing_to_step', self.drawing_to_step, 'A 2D CAD drawing (picture or PDF) of a PART -> 3D STEP with cad3dify\'s '
+                      'loop on ShipBrain\'s own model: write CadQuery code from the drawing, run it, render the 3D result, compare '
+                      'with the drawing and correct the code (refinements rounds). For machine parts and simple brackets / plates.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'refinements': {'type': 'integer'},
+                                                         'out': {'type': 'string'}}, 'required': ['file']})
+        self.register('process_sim', self.process_sim, 'Chemical / process simulation with DWSIM (free, built in): action "run": load and '
+                      'solve a DWSIM flowsheet (.dwxml / .dwxmz) -> every stream (T, P, flow, phases, composition) and unit operation; '
+                      '"flash": compounds + mass fractions + T (C) + P (bar) [+ flow kg/h, property package] -> phases, densities, '
+                      'composition; "packages": the property packages. For building whole flowsheets use mcp_call server "dwsim".',
+                      {'type': 'object', 'properties': {'action': {'type': 'string', 'enum': ['run', 'flash', 'packages']},
+                                                         'file': {'type': 'string'}, 'compounds': {'type': 'array', 'items': {'type': 'string'}},
+                                                         'mass_fractions': {'type': 'array', 'items': {'type': 'number'}}, 'T_C': {'type': 'number'},
+                                                         'P_bar': {'type': 'number'}, 'flow_kg_h': {'type': 'number'}, 'package': {'type': 'string'}},
+                       'required': ['action']})
+        self.register('dexpi', self.dexpi, 'DEXPI P&ID files (DEXPI 2.0 XML/JSON, Proteus XML) with pyDEXPI: action "summary" (equipment '
+                      'with tags, instruments, piping), "validate" (every DEXPI rule), "tables" (equipment / line / instrument / valve '
+                      'lists, xlsx or csv), "drawing" (PNG + SVG), "diff" (file vs other: what changed).',
+                      {'type': 'object', 'properties': {'action': {'type': 'string', 'enum': ['summary', 'validate', 'tables', 'drawing', 'diff']},
+                                                         'file': {'type': 'string'}, 'other': {'type': 'string'}, 'format': {'type': 'string'}},
+                       'required': ['action', 'file']})
+        self.register('serving_sim', self.serving_sim, 'How fast an LLM server answers many users at once (Simthesizer, no GPU needed): users, '
+                      'requests per second, prompt and answer length (tokens) -> time to first word, tokens/s per user, answer time, '
+                      'total throughput, for its measured model + GPU set-ups (list them with action "scenarios").',
+                      {'type': 'object', 'properties': {'action': {'type': 'string', 'enum': ['simulate', 'scenarios']},
+                                                         'users': {'type': 'integer'}, 'rate_per_s': {'type': 'number'},
+                                                         'input_tokens': {'type': 'integer'}, 'output_tokens': {'type': 'integer'},
+                                                         'scenario': {'type': 'string'}}})
+        self.register('parse_document', self.parse_document, 'Read a document (PDF, Word, Excel, PowerPoint, picture) into markdown with '
+                      'LiteParse (local, fast): headings, tables, reading order; says which pages are scanned / need OCR; ocr=true '
+                      'reads those too (Tesseract). Saves <name>.md for knowledge_search / the chat.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'ocr': {'type': 'boolean'},
+                                                         'pages': {'type': 'string'}}, 'required': ['file']})
+        self.register('bolt', self.bolt, 'Bolted joint (metric ISO thread, VDI 2230 / ISO 898-1): size d (mm), property class (4.6 5.6 8.8 '
+                      '10.9 12.9 A2-70 A4-80), friction mu_G / mu_K -> stress area, assembly preload, tightening torque, preload '
+                      'scatter of the tightening method; with an axial working load F_A (N) and load factor Phi: bolt stress, '
+                      'fatigue (alternating stress vs endurance limit) and the clamping force left. Inch bolts: d as "1/2", "#10" ..., '
+                      'thread UNC / UNF, cls = SAE grade 2 / 5 / 8 or A325 / A490 -> stress area, preload, nut-factor torque.',
+                      {'type': 'object', 'properties': {'d': {'type': ['number', 'string']}, 'thread': {'type': 'string'},
+                                                         'nut_factor': {'type': 'number'}, 'c': {'type': 'number'}, 'cls': {'type': 'string'}, 'mu_G': {'type': 'number'},
+                                                         'mu_K': {'type': 'number'}, 'pitch': {'type': 'number'}, 'method': {'type': 'string'},
+                                                         'F_A': {'type': 'number'}, 'Phi': {'type': 'number'}, 'F_Kerf': {'type': 'number'}},
+                       'required': ['d']})
+        self.register('drawing_takeoff', self.drawing_takeoff, 'Construction drawings (electrical / architectural / P&ID) read into '
+                      'a CIR file (.cir / .json): quantity takeoff - counts per item with MasterFormat / IFC codes, items to '
+                      'review, connections (conductors, home runs, feeders), lengths / areas when a scale is known. '
+                      'ConstructDrawingAI engine (non-commercial licence).',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'min_confidence': {'type': 'number'}},
+                       'required': ['file']})
+        self.register('drawing_detect', self.drawing_detect, 'Electrical drawing PICTURE (png / jpg / pdf page) -> symbols found by '
+                      'ConstructDrawingAI\'s trained detector -> a CIR file (for drawing_takeoff / drawing_qa) and the takeoff.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'discipline': {'type': 'string'},
+                                                         'min_confidence': {'type': 'number'}}, 'required': ['file']})
+        self.register('drawing_qa', self.drawing_qa, 'Ask a question about a construction drawing set (CIR file): counts '
+                      '("how many receptacles on E-101"), lists ("list the panels"), sheets, disciplines - answered from the '
+                      'data with evidence. action "rfi" drafts RFIs for unclear / low-confidence items.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'question': {'type': 'string'},
+                                                         'action': {'type': 'string', 'enum': ['qa', 'rfi']}}, 'required': ['file']})
+        self.register('structure_to_mesh', self.structure_to_mesh, 'Make a global 1D+2D FE mesh from a structure model (structure JSON or '
+                      'ship XML through your plugin): plates with thickness and openings -> shells, stiffeners -> beams with their sections. '
+                      'Also writes the plates/beams JSON and (if CadQuery is installed) a STEP.',
+                      {'type': 'object', 'properties': {'file': {'type': 'string'}, 'element_size': {'type': 'number'},
+                                                         'merge_tol': {'type': 'number', 'description': 'snap tolerance for near-misses, mm (default 10)'},
+                                                         'step': {'type': 'boolean'}}, 'required': ['file']})
+        self.register('list_files', self.list_files, 'List the files in the workspace (uploads and results).', {'type': 'object', 'properties': {}})
+        if self.allow_code:
+            self.register('python_run', self.python_run, 'Run a short Python script on this PC (numpy, scipy, matplotlib, pandas and the installed libraries are available) in the workspace folder: '
+                          'for calculations that need a loop, a table or a plot, for reading or converting data files, for batch jobs. Print the results. Returns the printed output, the new or changed '
+                          'files and any error. Not for CAD (use cadquery_build) and not for a single formula (use calc).',
+                          {'type': 'object', 'properties': {'code': {'type': 'string'}, 'timeout_s': {'type': 'number'}, 'name': {'type': 'string'}}, 'required': ['code']})
+            self.register('cadquery_build', self.cadquery_build,
+                          'Run a CadQuery script that sets `result` (a cq.Workplane); exports STEP + STL. Returns bbox, volume, n_solids, valid '
+                          'and PASS/FAIL against expect (put the user\'s sizes there). Then cad_mesh the .step for FE.',
+                          {'type': 'object', 'properties': {'code': {'type': 'string'}, 'name': {'type': 'string'},
+                                                             'expect': {'type': 'object', 'description': '{"bbox": [x,y,z] mm, "volume": mm3, "n_solids": n, "tol": 0.01}'}},
+                           'required': ['code']})
+
+    # ------------------------------------------------------------------ implementations
+    def knowledge_search(self, query, k=5, scope=None):
+        k = int(k)
+        bases = [b for b in (self.kb, self.repo_kb) if b is not None and len(b)]
+        if scope and self.repo_kb is not None and ('repo' in scope.lower() or any(scope.lower() in str(s_.get('name', '') if isinstance(s_, dict) else s_).lower() for s_ in getattr(self.repo_kb, 'packs', []) or [])):
+            bases = [self.repo_kb]
+        if not bases:
+            return {'results': [], 'note': 'knowledge folder is empty - start the app with --knowledge DIR'}
+        hits = sorted((h for b in bases for h in b.search(query, k, scope=scope)), key=lambda h: -h['score'])[:k]
+        return {'results': [{'id': h['id'], 'source': h['source'], 'title': h['title'], 'text': h['text'][:700], 'score': h['score']}
+                            for h in hits]}
+
+    def _mem(self):
+        if self.memory is None:
+            from .memory import Memory
+            self.memory = Memory(os.path.join(self.workdir, '.memory'))
+        return self.memory
+
+    def remember(self, text, tags=None):
+        return self._mem().remember(text, tags)
+
+    def recall(self, query):
+        return {'memories': [{'id': m['id'], 'text': m['text'], 'likes': m.get('likes', 0)} for m in self._mem().recall(query, 5, 0.5)]}
+
+    def memory_feedback(self, id, good=True, forget=False):
+        return self._mem().forget(id) if forget else self._mem().feedback(id, good)
+
+    def panel_mesh(self, **spec):
+        spec.setdefault('name', 'panel_%s' % time.strftime('%H%M%S'))
+        spec['name'] = re.sub(r'[^A-Za-z0-9_\-]', '_', str(spec['name']))[:40]
+        m, info = _mesh.build_panel(spec, self.workdir)
+        self.last_mesh = _mesh.viewer_data(m)
+        info['files'] = {k: os.path.basename(v) for k, v in info['files'].items()}
+        info['viewer'] = 'mesh shown in the 3D view'
+        return info
+
+    def _mesh_result(self, m, info):
+        self.last_mesh = _mesh.viewer_data(m)
+        info['files'] = {k: os.path.basename(v) for k, v in info['files'].items()}
+        info['viewer'] = 'mesh shown in the 3D view'
+        return info
+
+    def plates_mesh(self, plates, name=None, element_size=100.0, loads=None, fix=None, material=None, beams=None, clean=True):
+        from . import geoclean
+        actions = []
+        if clean:
+            plates, actions = geoclean.clean_plates(plates, merge_tol=max(1.0, float(element_size) / 50))
+        spec = {'name': re.sub(r'[^A-Za-z0-9_\-]', '_', str(name or 'assembly_%s' % time.strftime('%H%M%S')))[:40],
+                'plates': plates, 'element_size': element_size, 'loads': loads or [], 'fix': fix or [], 'beams': beams or []}
+        if material:
+            spec['material'] = material
+        out = self._mesh_result(*_pm.build_plates(spec, self.workdir))
+        out['cleaning'] = actions
+        return out
+
+    def cad_mesh(self, file, element_size=100.0, default_t=10.0, loads=None, fix=None):
+        from . import cadplates
+        return self._mesh_result(*cadplates.mesh_cad(self._path(file), element_size, default_t, self.workdir, loads=loads, fix=fix))
+
+    def file_info(self, file):
+        from .fileinfo import file_info
+        return file_info(self._path(file))
+
+    def fe_convert(self, file, to=('bdf', 'inp', 'mac')):
+        from .femodel import FEModel
+        m = FEModel.read(self._path(file))
+        base = os.path.join(self.workdir, os.path.splitext(os.path.basename(file))[0] + '_conv')
+        files = [os.path.basename(m.write(base + '.' + ext)) for ext in to]
+        if 'mac' in to:
+            files += [os.path.basename(x) for x in m.write_drivers(base)]
+        s = m.summary()
+        return {'files': files, 'model': s, 'plain_english': f"Converted {file} ({s['nodes']} nodes, {s['elements']} elements) to " + ', '.join(files) + '.'}
+
+    def fe_edit(self, file, ops, out=None):
+        from .femodel import FEModel
+        m = FEModel.read(self._path(file))
+        log = []
+        for o in ops:
+            o = dict(o)
+            name = o.pop('op')
+            if name == 'merge':
+                o = {'other': FEModel.read(self._path(o.pop('file'))), **o}
+            if name == 'delete' and 'types' in o and isinstance(o['types'], str):
+                o['types'] = [o['types']]
+            fn = getattr(m, name, None)
+            if name.startswith('_') or not callable(fn) or name in ('read', 'write', 'copy', 'summary', 'check'):
+                raise ValueError(f'unknown edit op {name}')
+            log.append({name: fn(**o)})
+        out = out or os.path.splitext(os.path.basename(file))[0] + '_edited' + os.path.splitext(file)[1]
+        m.write(self._path(out))
+        c = m.check()
+        return {'file': out, 'steps': log, 'model': m.summary(), 'check': c.get('verdict', 'n/a'),
+                'parts': c.get('all_elements_parts')}
+
+    def repair_model(self, file, request=None, holes_below=None, fillets_below=None, chamfers_below=None, faces_below=None,
+                     bosses_below=None, sew=None, mesh_size=None, min_elements=5):
+        """CAD defeaturing / repair or FE mesh repair, driven by the user's words and/or explicit sizes"""
+        base, ext = os.path.splitext(os.path.basename(file))
+        ext = ext.lower()
+        if ext in ('.bdf', '.dat', '.nas', '.inp'):
+            from .femodel import FEModel
+            m = FEModel.read(self._path(file))
+            before = m.summary()
+            steps = m.repair(min_elements=min_elements)
+            out = base + '_repaired' + ext
+            m.write(self._path(out))
+            c = m.check()
+            s = m.summary()
+            pe = (f"Repaired {file}: merged {steps['equivalence']['merged_nodes']} coincident nodes, removed "
+                  f"{steps['degenerate']['degenerate_or_duplicate_removed']} bad/duplicate elements, turned "
+                  f"{steps['degenerate']['inverted_solids_fixed']} inside-out solids, flipped {steps['normals']['shells_flipped']} shell "
+                  f"normals, deleted {steps['small_parts'].get('elements_removed', 0)} element(s) in small loose parts. "
+                  f"{before['elements']} -> {s['elements']} elements, {c.get('all_elements_parts')} connected part(s). Saved {out}.")
+            return {'file': out, 'steps': steps, 'model': s, 'check': c.get('verdict', 'n/a'), 'plain_english': pe}
+        from . import geofix
+        from .cadplates import import_cad
+        import cadquery as cq
+        args, assumed = geofix.args_from_text(request) if request else ({}, [])
+        for k, v in (('holes_below', holes_below), ('fillets_below', fillets_below), ('chamfers_below', chamfers_below),
+                     ('faces_below', faces_below), ('bosses_below', bosses_below), ('sew', sew)):
+            if v is not None:
+                args[k] = v
+        shp, actions, summ = geofix.repair(import_cad(self._path(file)), **args)
+        out = base + '_repaired.step'
+        cq.exporters.export(cq.Workplane().add(shp), self._path(out))
+        res = {'file': out, 'settings': args, 'actions': actions, 'summary': summ,
+               'plain_english': ' '.join(actions) + f" Faces {summ['faces_before']} -> {summ['faces_after']}, volume change "
+                                f"{summ['volume_change_pct']} %, valid solid: {'yes' if summ['valid'] else 'NO'}. Saved {out}."
+                                + (f" Assumed: {', '.join(assumed)} mm." if assumed else '')}
+        if mesh_size:
+            res['mesh'] = self.cad_mesh(out, element_size=mesh_size)
+        return res
+
+    def surface_extract(self, file, kind='mid', max_thickness=60.0, round_to=0.5, mesh_size=None):
+        from . import surfex
+        from .cadplates import import_cad
+        kind = 'outer' if str(kind).lower().startswith('out') else 'mid'
+        groups, rep = surfex.extract(import_cad(self._path(file)), kind, max_t=float(max_thickness), round_to=float(round_to))
+        if not groups:
+            raise ValueError('no thin solids found (no face pairs closer than max_thickness): ' + '; '.join(rep['not_thin'][:5]))
+        out = os.path.splitext(os.path.basename(file))[0] + f'_{kind}_surface.step'
+        surfex.save_groups(groups, self._path(out), kind)
+        nt = len(rep['not_thin'])
+        rep['not_thin'] = rep['not_thin'][:10]
+        res = {'file': out, 'report': rep,
+               'plain_english': f"Extracted {rep['surfaces']} {kind} surface(s) from {rep['thin_solids']} of {rep['solids']} solids, "
+                                f"grouped by thickness: " + ', '.join(f'{k}: {v}' for k, v in rep['thickness_groups'].items()) + '. '
+                                + (f'{nt} solid(s) are not thin (blocks, castings) and were left out. ' if nt else '') + f'Saved {out}.'}
+        if mesh_size:
+            plates = surfex.groups_to_plates(groups, float(mesh_size))
+            if plates:
+                res['mesh'] = self.plates_mesh(plates, name=os.path.splitext(out)[0], element_size=float(mesh_size))
+        return res
+
+    def pipe_extract(self, file, schedule='SCH40', element_size=200.0, to=('bdf', 'inp')):
+        from . import surfex
+        from .cadplates import import_cad
+        found = surfex.pipes(import_cad(self._path(file)), schedule=schedule)
+        r = found['report']
+        if not (found['straights'] or found['bends']):
+            raise ValueError('no pipes found (no outward cylinders or tori that go all the way round)')
+        m = surfex.pipe_fe_model(found, float(element_size))
+        base = os.path.splitext(os.path.basename(file))[0] + '_piping'
+        files = [os.path.basename(m.write(self._path(base + '.' + e))) for e in to]
+        with open(self._path(base + '.json'), 'w') as fh:
+            json.dump({k: v for k, v in found.items()}, fh, indent=1)
+        sizes = ', '.join(f'{d:g}' for d in r['sizes'][:10])
+        c = m.check()
+        return {'files': files + [base + '.json'], 'report': r, 'straights': found['straights'][:12], 'bends': found['bends'][:8],
+                'runs': [len(x) for x in found['runs'][:12]],
+                'plain_english': f"Found {r['straight_pipes']} straight pipe(s) and {r['bends']} bend(s) in {r['runs']} connected run(s), "
+                                 f"total {r['total_length_m']} m; outside diameters {sizes} mm. 1D FE model: {m.summary()['elements']} pipe "
+                                 f"beams in {c.get('all_elements_parts')} part(s), saved as {', '.join(files)}."}
+
+    def surrogate_build(self, ranges, name='plate_surrogate', n=30, max_runs=None, edge='clamped', template=None):
+        from . import cae_ai
+        name = re.sub(r'[^A-Za-z0-9_\-]', '_', str(name))[:40]
+        ranges = {k: [float(v[0]), float(v[1])] for k, v in ranges.items()}
+        tpl = template or cae_ai.plate_template(edge)
+        if not template:
+            miss = [k for k in ('L', 'B', 't', 'p') if k not in ranges]
+            if miss:
+                raise ValueError('plate surrogate needs ranges for L, B, t, p; missing: ' + ', '.join(miss))
+        t0 = time.time()
+        s = cae_ai.build(tpl, ranges, int(n), self.workdir, name, log=None, max_runs=int(max_runs) if max_runs else None)
+        s.save(self._path(name + '.npz'))
+        s.export_cpp(self._path(name + '.hpp'))
+        loo = s.meta['loo']
+        return {'files': [name + '.npz', name + '.hpp'], 'runs': len(s.runs), 'adaptive_runs': s.meta['adaptive_runs'],
+                'accuracy_leave_one_out': loo, 'pod_modes': {f: m['n_modes'] for f, m in s.models.items()},
+                'seconds_per_solve': s.meta['seconds_per_solve'],
+                'plain_english': f"Trained a surrogate on {len(s.runs)} real CalculiX runs ({s.meta['adaptive_runs']} added where it was least "
+                                 f"accurate) in {time.time() - t0:.0f} s. Checked by leaving each run out: peak stress within "
+                                 f"{loo['vm_peak']['mean_pct']} % on average (worst {loo['vm_peak']['max_pct']} %), peak displacement within "
+                                 f"{loo['umag_peak']['mean_pct']} %. A prediction takes about 1 ms instead of {s.meta['seconds_per_solve']} s. "
+                                 f"Saved {name}.npz and the C++ header {name}.hpp."}
+
+    def surrogate_predict(self, name, params, tol_pct=5.0, fallback=True):
+        from . import cae_ai
+        from .solver import ccx_path
+        path = self._path(re.sub(r'\.npz$', '', str(name)) + '.npz')
+        s = cae_ai.Surrogate.load(path)
+        miss = [k for k in s.keys if k not in params]
+        if miss:
+            raise ValueError('missing parameter(s): ' + ', '.join(miss))
+        p = {k: float(params[k]) for k in s.keys}
+        pr = s.predict(p, float(tol_pct))
+        base = os.path.splitext(os.path.basename(path))[0]
+        if not pr['confident'] and fallback and ccx_path() and s.meta.get('template'):
+            res = cae_ai.solve_case(s.meta['template'], p, os.path.join(self.workdir, base + '_runs'), f'{base}_{len(s.runs):03d}')
+            s.add(p, res)
+            if pr['inside_range']:
+                s.fit()
+                s.save(path)
+                s.export_cpp(path[:-4] + '.hpp')
+            vtk = cae_ai.write_vtk(self._path(base + '_check.vtk'), res['xyz'], {'von_mises_MPa': res['vm'], 'displacement_mm': res['umag']})
+            why = 'outside the trained range' if not pr['inside_range'] else f"estimated error {pr['error_estimate_pct']} % > {tol_pct} %"
+            return {'source': 'real solver (CalculiX)', 'max_von_mises_MPa': round(float(res['vm'].max()), 2),
+                    'max_displacement_mm': round(float(res['umag'].max()), 4), 'surrogate_said': {'vm': round(pr['vm_max'], 2),
+                    'umag': round(pr['umag_max'], 4)}, 'files': [os.path.basename(vtk)],
+                    'plain_english': f"The surrogate was not sure here ({why}), so I ran the real solver: max von Mises "
+                                     f"{float(res['vm'].max()):.2f} MPa, max displacement {float(res['umag'].max()):.4f} mm (surrogate guess "
+                                     f"{pr['vm_max']:.2f} MPa)." + (' The run was added to the surrogate, so it is better here next time.'
+                                                                    if pr['inside_range'] else '')}
+        X = s.runs[0]['xyz']
+        vtk = cae_ai.write_vtk(self._path(base + '_prediction.vtk'), X, {'von_mises_MPa': pr['vm'], 'displacement_mm': pr['umag']})
+        return {'source': 'surrogate', 'max_von_mises_MPa': round(pr['vm_max'], 2), 'max_displacement_mm': round(pr['umag_max'], 4),
+                'error_estimate_pct': pr['error_estimate_pct'], 'inside_range': pr['inside_range'], 'confident': pr['confident'],
+                'files': [os.path.basename(vtk)],
+                'plain_english': f"Surrogate prediction: max von Mises {pr['vm_max']:.2f} MPa, max displacement {pr['umag_max']:.4f} mm "
+                                 f"(estimated error {pr['error_estimate_pct']} %"
+                                 + ('' if pr['confident'] else ', NOT confident: check with the real solver') + '). '
+                                 f"Field saved as {os.path.basename(vtk)} for ParaView."}
+
+    def result_insight(self, file, yield_MPa=235.0, safety_factor=1.0, baseline=None):
+        from . import cae_ai
+        r = cae_ai.insight(self._path(file), float(yield_MPa), float(safety_factor), self._path(baseline) if baseline else None)
+        r['vtk'] = os.path.basename(r['vtk'])
+        r['plain_english'] = r.pop('report_draft') + f" Fields saved as {r['vtk']} for ParaView."
+        return r
+
+    @property
+    def skills(self):
+        from .skills import Skills
+        folder = os.path.join(self.workdir, 'skills')
+        if getattr(self, '_skills', None) is None or self._skills_folder != folder:
+            self._skills, self._skills_folder = Skills([folder] + list(getattr(self, 'skill_dirs', []))), folder
+        return self._skills
+
+    def add_skill(self, name, description, steps, when=''):
+        path = self.skills.add(os.path.join(self.workdir, 'skills'), name, description, steps, when)
+        nm = os.path.splitext(os.path.basename(path))[0]
+        return {'skill': nm, 'file': os.path.relpath(path, self.workdir),
+                'plain_english': f'Saved the skill "{nm}". When a question matches it, I will follow these steps. '
+                                 f'You can edit {os.path.relpath(path, self.workdir)} at any time.'}
+
+    def list_skills(self):
+        items = [{'name': k, 'description': v['description'], 'own': not v['source'].startswith(
+            os.path.dirname(os.path.abspath(__file__)))} for k, v in sorted(self.skills.items.items())]
+        return {'skills': items, 'plain_english': f"{len(items)} skills: " + '; '.join(
+            f"{i['name']} ({'yours' if i['own'] else 'built in'}): {i['description']}" for i in items)}
+
+    def hook(self, event, *args):
+        """run the plugins' hooks for an event -> list of notes (text) for the model"""
+        out = []
+        for fn in getattr(self, 'hooks', {}).get(event, []):
+            try:
+                r = fn(*args)
+                if r:
+                    out.append(str(r)[:1500])
+            except Exception as e:
+                out.append(f'(hook {getattr(fn, "__name__", "?")} failed: {type(e).__name__}: {e})')
+        return out
+
+    @property
+    def profile(self):
+        from .userprofile import Profile
+        if getattr(self, '_profile', None) is None or self._profile.path != os.path.join(self.workdir, 'profile.json'):
+            self._profile = Profile(self.workdir)
+        return self._profile
+
+    def set_profile(self, **kw):
+        ch = self.profile.update(**kw)
+        return {'saved': ch, 'profile': dict(self.profile.data),
+                'plain_english': 'Saved: ' + ', '.join(f'{k} = {v}' for k, v in ch.items()) + '. I will use this in every answer from now on.'}
+
+    def convert_units(self, values):
+        from .userprofile import convert_many
+        out = convert_many(values)
+        return {'converted': out, 'plain_english': '; '.join(f"{v['value']:g} {v['from']} = {v['result']:g} {v['to']}" for v in out)}
+
+    def frame_solve(self, nodes=None, members=None, supports=None, loads=None, combinations=None, file=None, name=None,
+                    divisions=10):
+        from . import awatif, frame3d
+        if file:
+            from .femodel import FEModel
+            sup = supports if isinstance(supports, list) else [{'node': k, 'type': v} for k, v in (supports or {}).items()]
+            model = frame3d.from_femodel(FEModel.read(self._path(file)), sup, loads or {}, combinations)
+            divisions = 1
+        else:
+            if not (nodes and members):
+                raise ValueError('give nodes + members (+ supports, loads), or file = a 1D beam / pipe model')
+            model = {'nodes': nodes, 'members': members, 'supports': supports or {}, 'loads': loads or {},
+                     **({'combinations': combinations} if combinations else {})}
+        if not model.get('supports'):
+            raise ValueError('no supports given: the frame would fly away')
+        out = awatif.analyse(model, divisions=int(divisions))
+        base = re.sub(r'[^A-Za-z0-9_\-]', '_', str(name or (os.path.splitext(os.path.basename(file))[0] if file else 'frame')))[:40]
+        rep = base + '_frame_report.md'
+        with open(self._path(rep), 'w', encoding='utf-8') as fh:
+            fh.write(frame3d.report(out, f'{base}: frame check') + f"\n\nSolver: {out.get('solver', '')}\n")
+        short = {k: {'max_displacement_mm': v['max_displacement_mm'], 'at_node': v['at_node'], 'sum_reactions': v['sum_reactions'],
+                     'members': dict(list(v['members'].items())[:8])} for k, v in out['combinations'].items()}
+        return {'governing': out['governing'], 'combinations': short, 'combination_factors': out['combination_factors'],
+                'solver': out.get('solver'), 'files': [rep], 'plain_english': out['plain_english'] + f' Report: {rep}.'}
+
+    def code_functions(self, repo=None, query=None):
+        from . import polyglot
+        if not repo:
+            rs = polyglot.repos()
+            more = [n for n in polyglot.DOWNLOADABLE if n not in rs]
+            return {'repos': rs, 'downloadable': more, 'plain_english': 'Copied repos (whole, unchanged): ' + ', '.join(rs) + '.'
+                    + (f" Also usable once you download them: {', '.join(more)}." if more else '')}
+        fs = polyglot.list_functions(repo, query, limit=60)
+        langs = sorted({f['language'] for f in fs})
+        return {'functions': fs[:40], 'count': len(fs),
+                'plain_english': f"{len(fs)} function(s) in {repo}" + (f" matching '{query}'" if query else '') + f" ({', '.join(langs)})."}
+
+    def code_folder(self, name, folder):
+        from . import polyglot
+        d = polyglot.remember_repo(name, folder)
+        fs = polyglot.list_functions(name, None, limit=100000)
+        langs = sorted({f['language'] for f in fs})
+        need = ' MATLAB-language files run in GNU Octave (free: https://octave.org/download) - not found on this PC yet.' \
+            if 'octave' in langs and not polyglot.octave_exe() else ''
+        return {'repo': name, 'folder': d, 'functions': len(fs),
+                'plain_english': f"Using {d} as '{name}': {len(fs)} functions ({', '.join(langs)}). Ask for a calculation and I "
+                                 f"will find and run the right function.{need}"}
+
+    def code_call(self, repo, file, function, args=None):
+        from . import polyglot
+        t0 = time.time()
+        res = polyglot.call(repo, file, function, args if args is not None else [])
+        txt = json.dumps(res, default=str)
+        return {'result': res if len(txt) < 20000 else txt[:20000] + ' ...(cut)', 'seconds': round(time.time() - t0, 2),
+                'plain_english': f'Ran {function} from {repo}/{file} in its own language ({time.time() - t0:.1f} s).'}
+
+    def pid_kg(self, action, pdf=None, pages=None, plant_name=None, work=None, command='stats', args=None, equipment=False,
+               variable=None, on=None, format='graphml'):
+        from . import polyglot
+        repo, sk = 'PID-to-Knowledge-Graph', 'skills/pid-to-kg/scripts/'
+        name = plant_name or (os.path.splitext(os.path.basename(pdf))[0] if pdf else None)
+        work = work or ('work/' + re.sub(r'[^A-Za-z0-9_\-]+', '_', name).strip('_').lower() if name else None)
+        if not work:
+            raise ValueError('give work (the plant work folder, e.g. work/plant_a) or pdf / plant_name')
+        wd = self._path(work)
+
+        def run(script, *a):
+            r = polyglot.run_script(repo, sk + script, list(a), cwd=self.workdir)
+            if r['returncode']:
+                raise RuntimeError((r['stderr'] or r['stdout']).strip()[-1500:])
+            return r['stdout'].strip()
+        if action == 'probe':
+            if not pdf:
+                raise ValueError('probe needs the pdf')
+            out = run('probe_pdf.py', self._path(pdf), '--work', wd, '--plant-name', name, *(['--pages', pages] if pages else []))
+        elif action == 'render':
+            out = run('render_pages.py', wd, *(['--pages', pages] if pages else []))
+        elif action == 'hints':
+            out = run('make_hints.py', wd, *(['--pages', pages] if pages else []))
+        elif action == 'build':
+            out = run('build_kg.py', wd, *(['--plant-name', plant_name] if plant_name else []))
+        elif action == 'query':
+            flags = (['--equipment'] if equipment else []) + (['--variable', variable] if variable else []) + (['--on', on] if on else [])
+            out = run('kg_query.py', os.path.join(wd, 'kg'), command, *[str(x) for x in (args or [])], *flags)
+        elif action == 'export':
+            out = run('export.py', os.path.join(wd, 'kg'), format)
+        elif action == 'tags':                                   # tags found on each sheet (hints), read with pid-to-kg's ISA parser
+            import glob
+            sys.path.insert(0, os.path.join(polyglot.repo_dir(repo), 'skills', 'pid-to-kg', 'scripts'))
+            from pidkg.isa import parse_isa_tag
+            lines = []
+            for f in sorted(glob.glob(os.path.join(wd, 'hints', 'page_*.json'))):
+                h = json.load(open(f, encoding='utf-8'))
+                if pages and str(h.get('page')) not in re.split(r'[,\s]+', str(pages)):
+                    continue
+                eq, ins = [], []
+                for t in h.get('tag_candidates', []):
+                    p_ = parse_isa_tag(t['text'])
+                    if p_ is not None and not t.get('equipment_like'):
+                        ins.append(f"{t['text']} ({getattr(p_, 'variable', '') or '?'} {getattr(p_, 'role', '') or ''})".replace('  ', ' '))
+                    else:
+                        eq.append(t['text'])
+                lines.append(f"page {h.get('page')} ({h.get('page_class')}, text from {h.get('source')}): "
+                             f"equipment / lines: {', '.join(sorted(set(eq))) or '-'}; read as ISA instruments (check on the drawing): {', '.join(sorted(set(ins))) or '-'}")
+            out = '\n'.join(lines) or 'no hints yet: run probe, render and hints first'
+        elif action == 'read':                                   # the model reads each sheet into extract/page_NN.json
+            out = self._pid_read(repo, wd, pages)
+        elif action == 'status':
+            pages_dir, ext = os.path.join(wd, 'pages'), os.path.join(wd, 'extract')
+            rendered = sorted(os.listdir(pages_dir)) if os.path.isdir(pages_dir) else []
+            extracted = sorted(os.listdir(ext)) if os.path.isdir(ext) else []
+            kg = os.path.exists(os.path.join(wd, 'kg', 'graph.json'))
+            out = (f'{len(rendered)} page(s) rendered, {len(extracted)} sheet extraction(s) written, graph built: {"yes" if kg else "no"}.'
+                   + ('' if extracted or not rendered else ' Next: read each sheet (pages/page_NN/ tiles) and write extract/page_NN.json '
+                      '- pid_kg action read does it with the model\'s vision (or Claude); the format is in '
+                      'vendor/PID-to-Knowledge-Graph/repo/skills/pid-to-kg/references/extraction_procedure.md.'))
+        else:
+            raise ValueError('action: probe | render | hints | status | build | query | export')
+        files = []
+        if action == 'build':
+            files = [os.path.relpath(os.path.join(wd, 'kg', f), self.workdir) for f in ('summary.md', 'qa_report.md', 'graph.json', 'graph.duckdb')
+                     if os.path.exists(os.path.join(wd, 'kg', f))]
+        return {'work': work, 'output': out[-6000:], 'files': files,
+                'plain_english': (out.splitlines()[0] if action == 'build' and out else f'pid-to-kg {action} done.') +
+                                 ('' if action != 'query' else ' Answer from the graph: ' + out[:600])}
+
+    def _pid_read(self, repo, wd, pages=None):
+        """read rendered sheets with the vision model; each result is checked with pid-to-kg's own PageExtraction model"""
+        import glob
+        from . import polyglot
+        root = polyglot.repo_dir(repo)
+        sys.path.insert(0, os.path.join(root, 'skills', 'pid-to-kg', 'scripts'))
+        from pidkg.models import PageExtraction
+        example = open(os.path.join(root, 'tests', 'fixtures', 'mini_plant', 'extract', 'page_01.json'), encoding='utf-8').read()
+        want = {int(x) for x in re.findall(r'\d+', str(pages))} if pages else None
+        os.makedirs(os.path.join(wd, 'extract'), exist_ok=True)
+        done = []
+        for pdir in sorted(glob.glob(os.path.join(wd, 'pages', 'page_*'))):
+            n = int(re.findall(r'\d+', os.path.basename(pdir))[-1])
+            if want and n not in want:
+                continue
+            img = os.path.join(pdir, 'overview.png') if os.path.exists(os.path.join(pdir, 'overview.png')) else os.path.join(pdir, 'page.png')
+            hints = os.path.join(wd, 'hints', f'page_{n:02d}.json')
+            tags = ''
+            if os.path.exists(hints):
+                tags = ', '.join(t['text'] for t in json.load(open(hints, encoding='utf-8')).get('tag_candidates', []))[:1500]
+            prompt = pid_read_prompt(n, tags, example)
+            err, data = None, None
+            for attempt in range(2):
+                txt = _strip_think(self.ask_vision([img], prompt + (f'\nYour last answer was invalid: {err}. Fix it.' if err else ''),
+                                                   max_tokens=6000))
+                m = re.search(r'\{.*\}', txt, re.S)
+                try:
+                    data = json.loads(m.group(0) if m else txt)
+                    data['page'] = n
+                    PageExtraction.model_validate(data)
+                    err = None
+                    break
+                except Exception as e:
+                    err = str(e)[:600]
+            if err:
+                done.append(f'page {n}: could not read a valid sheet ({err[:200]})')
+                continue
+            with open(os.path.join(wd, 'extract', f'page_{n:02d}.json'), 'w', encoding='utf-8') as fh:
+                json.dump(data, fh, indent=1)
+            done.append(f"page {n}: {len(data.get('equipment', []))} equipment, {len(data.get('components', []))} components, "
+                        f"{len(data.get('instruments', []))} instruments, {len(data.get('lines', []))} lines (draft: check with build QA)")
+        return '\n'.join(done) or 'no rendered pages: run probe and render first'
+
+    def _image_url(self, path, page=None, max_px=1280):
+        """picture or PDF page -> data URL (PNG), long edge max_px"""
+        import base64, io
+        from PIL import Image
+        if path.lower().endswith('.pdf'):
+            import pypdfium2
+            pdf = pypdfium2.PdfDocument(path)
+            pg = pdf[max(0, int(page or 1) - 1)]
+            w, h = pg.get_size()
+            im = pg.render(scale=max_px / max(w, h)).to_pil()
+            pdf.close()
+        else:
+            im = Image.open(path)
+        im = im.convert('RGB')
+        im.thumbnail((max_px, max_px))
+        buf = io.BytesIO()
+        im.save(buf, 'PNG')
+        return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
+
+    def ask_vision(self, image_paths, prompt, max_tokens=3000, page=None):
+        """one question with pictures to the running model -> its answer text"""
+        llm = getattr(self, 'llm', None)
+        if llm is None:
+            raise RuntimeError('no model is running to look at the picture (start ShipBrain with the model)')
+        content = [{'type': 'image_url', 'image_url': {'url': self._image_url(p, page)}} for p in image_paths]
+        content.append({'type': 'text', 'text': prompt})
+        old = getattr(llm, 'max_tokens', None)
+        try:
+            if old is not None:
+                llm.max_tokens = max_tokens
+            return ''.join(llm.stream([{'role': 'user', 'content': content}]))
+        except Exception as e:
+            if 'image' in str(e).lower() or '400' in str(e) or '500' in str(e):
+                raise RuntimeError('the running model cannot see pictures: start ShipBrain with the vision model and its '
+                                   'image part (the shipbrain-mmproj-*.gguf file next to the model)') from e
+            raise
+        finally:
+            if old is not None:
+                llm.max_tokens = old
+
+    def look(self, file, question='Describe this drawing: what it shows, the main items and their labels.', page=None):
+        ans = _strip_think(self.ask_vision([self._path(file)], question, page=page)).strip()
+        return {'answer': ans, 'plain_english': ans}
+
+    def physics_lab(self, action, scenario=None, changes=None, query=None):
+        from . import openphysics
+        if action == 'list':
+            sc = openphysics.scenarios(query)
+            return {'scenarios': sc[:60], 'count': len(sc),
+                    'plain_english': f"{len(sc)} example scenario(s)" + (f" for '{query}'" if query else '') + ': ' +
+                                     '; '.join(f"{x['name']} ({x['domain']})" for x in sc[:25])}
+        if action == 'get':
+            d = openphysics.scenario(scenario)
+            return {'scenario': d, 'plain_english': f"{scenario}: {d.get('title', '')} (domain {d.get('domain')})."}
+        if action != 'run':
+            raise ValueError('action: list | get | run')
+        if not scenario:
+            raise ValueError('run needs a scenario (example name or a scenario dict)')
+        t0 = time.time()
+        rec = openphysics.run(scenario, changes, out_dir=os.path.join(self.workdir, 'physics'))
+        diag = rec.get('diagnostics', {})
+        last = {k: (v[-1] if isinstance(v, list) and v and not isinstance(v[-1], (list, dict)) else v) for k, v in diag.items()
+                if not isinstance(v, (dict,)) and not (isinstance(v, list) and v and isinstance(v[-1], (list, dict)))}
+        shown = ', '.join(f'{k} = {v}' for k, v in list(last.items())[:10])
+        files = [os.path.relpath(p, self.workdir) for p in (rec.get('result'), rec.get('scenario_file')) if p and os.path.exists(p)]
+        return {'domain': rec.get('domain'), 'diagnostics': diag, 'report': rec.get('report', '')[-1500:], 'files': files,
+                'wall_s': rec.get('wall_s'),
+                'plain_english': f"Ran {scenario if isinstance(scenario, str) else 'the scenario'} ({rec.get('domain')}) with "
+                                 f"OpenPhysicsAI in {time.time() - t0:.1f} s. Results (last step): {shown}."}
+
+    def mcp_tools(self, server='openphysics', query=None):
+        from . import mcp_client
+        ts = mcp_client.client(server, self.workdir).tools()
+        if query:
+            ts = [t for t in ts if any(w in (t['name'] + ' ' + t.get('description', '')).lower() for w in query.lower().split())]
+        return {'server': server, 'tools': [{'name': t['name'], 'description': t.get('description', '')[:200],
+                                             'arguments': list((t.get('inputSchema') or {}).get('properties', {}))} for t in ts[:40]],
+                'count': len(ts), 'plain_english': f"{len(ts)} operation(s) on {server}: " + ', '.join(t['name'] for t in ts[:40])}
+
+    def mcp_call(self, tool, arguments=None, server='openphysics'):
+        from . import mcp_client
+        r = mcp_client.client(server, self.workdir).call(tool, arguments or {})
+        if r['is_error']:
+            raise RuntimeError(f'{server}.{tool}: ' + json.dumps(r['result'], default=str)[:1500])
+        return {'result': r['result'], 'plain_english': f'{server}.{tool} done.'}     # the agent shortens it for the model
+
+    def stl_to_step(self, file, unit='mm'):
+        import collections
+        from . import brep
+        import cadquery as cq
+        step, report = brep.stl_to_step(self._path(file), unit=unit)
+        s = cq.importers.importStep(step).val()
+        kinds = collections.Counter(f.geomType() for f in s.Faces())
+        out = os.path.relpath(step, self.workdir)
+        return {'file': out, 'solids': len(s.Solids()), 'faces': dict(kinds), 'volume_mm3': round(s.Volume(), 1), 'valid': s.isValid(),
+                'report': report[-1500:],
+                'plain_english': f"Converted {file} to {out}: {len(s.Solids())} solid(s), {len(s.Faces())} faces ("
+                                 + ', '.join(f'{v} {k.lower()}' for k, v in kinds.most_common()) + f"), volume {s.Volume():.0f} mm3, "
+                                 f"valid: {'yes' if s.isValid() else 'NO'}."}
+
+    def native_cad(self, file, op='convert', to='step', other=None, density=None):
+        r = self._native_cad(file, op, to, other, density)
+        w = os.path.abspath(self.workdir)                  # results name files as the user sees them, never local folders
+        return json.loads(json.dumps(r).replace(w + os.sep, '').replace(w, '.'))
+
+    def _native_cad(self, file, op, to, other, density):
+        from . import cadmpeg
+        src = self._path(file)
+        if op == 'convert' and src.lower().endswith('.3dm') and not str(to).lower().startswith('ig'):
+            from . import rhino                         # Rhino: exact NURBS with McNeel's rhino3dm, layers and blocks kept
+            try:
+                r = rhino.to_step(src)
+                r['file'] = os.path.relpath(r['file'], self.workdir)
+                return r
+            except RuntimeError:
+                pass                                    # rhino3dm missing: cadmpeg below
+        if op == 'convert':
+            out = os.path.splitext(src)[0] + ('.igs' if str(to).lower().startswith('ig') else '.step')
+            if os.path.abspath(out) == os.path.abspath(src):
+                out = os.path.splitext(src)[0] + '_cadmpeg' + os.path.splitext(out)[1]
+            r = cadmpeg.to_step(src, out)
+            r['file'] = os.path.relpath(r['file'], self.workdir)
+            return r
+        if op == 'inspect':
+            return cadmpeg.inspect(src)
+        if op == 'check':
+            return cadmpeg.check(src)
+        if op == 'measure':
+            return cadmpeg.measure(src, density=density)
+        if op == 'diff':
+            if not other:
+                raise ValueError('diff needs other=<second file>')
+            return cadmpeg.diff(src, self._path(other))
+        raise ValueError('op: convert | inspect | check | measure | diff')
+
+    def nx_open(self, op, query=None, name=None, calls=None, part=None, out=None):
+        from . import nxopen
+        if op == 'find':
+            hits = nxopen.find(query or name or '')
+            return {'functions': hits, 'plain_english': (f"{len(hits)} nxopentse functions match: " + '; '.join(
+                f"{h['call']} - {h['what']}" for h in hits[:6])) if hits else 'No nxopentse function matches; say so.'}
+        if op == 'syntax':
+            return nxopen.syntax(name or query)
+        if op == 'journal':
+            out = re.sub(r'[^A-Za-z0-9_.\-]', '_', out or 'shipbrain_journal.py')
+            path = nxopen.journal(calls or [], part=part, out=self._path(out))
+            r = nxopen.run(path, self._path(part) if part and os.path.exists(self._path(part)) else part)
+            text = open(path, encoding='utf-8').read()
+            body = text[text.index('def main'):] if 'def main' in text else text
+            return {'journal': out, 'ran': r['ran'], 'output': r.get('output'), 'code': body[:4000],
+                    'plain_english': f"Wrote the NX Open journal {out} ({len(calls or [])} step(s)). " + r['plain_english']}
+        raise ValueError('op: find | syntax | journal')
+
+    def nx_rename(self, file, new_name):
+        from . import nxopen
+        r = nxopen.rename(self._path(file), new_name)
+        r['file'] = os.path.relpath(r['file'], self.workdir)
+        return r
+
+    def mooring(self, depth, length, radius, d_mm=84, grade='R3', kind='studless', fairlead_z=0.0, current=None,
+                condition='intact'):
+        from . import cabledyn
+        name = f'mooring_{int(depth)}m_{int(length)}m'
+        r = cabledyn.mooring(depth, length, radius, d_mm=d_mm, grade=grade, kind=kind, fairlead_z=fairlead_z, current=current,
+                             condition=condition, workdir=self.workdir, name=name)
+        w = os.path.abspath(self.workdir)
+        return json.loads(json.dumps(r).replace(w + os.sep, '').replace(w, '.'))
+
+    def cable_run(self, deck):
+        from . import cabledyn
+        r = cabledyn.run(self._path(deck))
+        r.pop('static_profile', None)
+        last, mx = r.get('last', {}), r.get('max', {})
+        ten = {k: v for k, v in (mx or last).items() if 'Ten' in k}
+        r['plain_english'] = (f"CableDyn ran {os.path.basename(deck)} ({r['steps']} output step(s)). "
+                              + ('; '.join(f"{'max ' if mx else ''}{k} = {v / 1e3:,.1f} kN" for k, v in ten.items())
+                                 or 'Channels: ' + ', '.join(r['channels'][1:12])) + '.')
+        w = os.path.abspath(self.workdir)
+        return json.loads(json.dumps(r).replace(w + os.sep, '').replace(w, '.'))
+
+    def topology(self, L, H, nx=None, ny=None, fixed=('left',), load_at=None, force=(0.0, -1000.0), volfrac=0.5, iters=40,
+                 E=206000.0, name='topology'):
+        from . import tensorfem
+        nx = int(nx or max(20, min(120, round(60 * L / max(L, H)))))
+        ny = int(ny or max(10, min(120, round(nx * H / L))))
+        png = re.sub(r'[^A-Za-z0-9_\-]', '_', name)[:40] + '.png'
+        r = tensorfem.topology(L, H, nx, ny, fixed=tuple(fixed), load_at=load_at, force=tuple(force), volfrac=volfrac,
+                               iters=int(iters), E=E, png=self._path(png))
+        r['png'] = png
+        r.pop('density', None)
+        r['history'] = r['history'][::max(1, len(r['history']) // 10)]
+        return r
+
+    def tensor_fem(self, file, fixed, loads, E=206000.0, nu=0.3):
+        from . import tensorfem
+        return tensorfem.solid_static(self._path(file), fixed, loads, E=E, nu=nu)
+
+    def moose_plate(self, a, b, t, q, E=206000.0, nu=0.3, clamped=False):
+        from . import moose
+        r = moose.plate(a, b, t, q, E=E, nu=nu, clamped=clamped, workdir=self.workdir, name=f'moose_plate_{int(a)}x{int(b)}x{t:g}')
+        r['input'], r['mesh'] = os.path.basename(r['input']), os.path.basename(r['mesh'])
+        return r
+
+    def moose_run(self, input):
+        from . import moose
+        r = moose.run(self._path(input))
+        pp = r.get('postprocessors', {})
+        r['plain_english'] = (f"MOOSE ran {os.path.basename(input)}" + (': ' + ', '.join(f'{k} = {v:.5g}' for k, v in pp.items() if k != 'time')
+                                                                       if pp else ' (no postprocessor CSV: add [Outputs] csv = true)') + '.')
+        return r
+
+    def trace_drawing(self, file, page=0, scale=None, dpi=200, mode='auto'):
+        from . import vectorize
+        mode = str(mode or 'auto').lower()
+        if mode == 'auto':
+            mode = vectorize.suggest_mode(self._path(file), page=int(page), dpi=dpi)
+        if mode in ('centerline', 'centreline', 'center', 'centre', 'lines'):
+            r = vectorize.trace_centerline(self._path(file), page=int(page), scale=scale, dpi=dpi)
+            r['dxf'] = os.path.basename(r['dxf'])
+            return r
+        r = vectorize.trace(self._path(file), page=int(page), scale=scale, dpi=dpi)
+        r['svg'], r['dxf'] = os.path.basename(r['svg']), os.path.basename(r['dxf'])
+        return r
+
+    @staticmethod
+    def _connection_kwargs(K, kind, plate_t, ext, rows, cols, pitch, gauge, ribs, beam_length, column_length):
+        kd = K.kind_of(kind)
+        kw = {}
+        if plate_t:
+            kw['tp'] = float(plate_t) if kd in ('end_plate', 'fin_plate', 'base_plate') else None
+        if kd == 'splice':
+            kw = {}
+            if plate_t:
+                kw['tp_f'] = float(plate_t)
+            if rows:
+                kw['rows'] = int(rows)
+        if kd == 'end_plate':
+            kw.update(ext=float(ext or 0), gauge=gauge, rows=None if not rows else [float(r) for r in (rows if isinstance(rows, list) else [])] or None)
+        if kd == 'fin_plate':
+            kw.update(rows=int(rows) if isinstance(rows, (int, float)) and rows else 3, cols=int(cols or 1), pitch=pitch)
+        if kd == 'base_plate':
+            kw.update(ribs=bool(ribs))
+        if beam_length:
+            kw['Lb'] = float(beam_length)
+        if column_length:
+            kw['Lc'] = float(column_length)
+        if kd == 'base_plate' and 'Lb' in kw:
+            kw['Lc'] = kw.pop('Lb')
+        if kd == 'splice' and 'Lc' in kw:
+            kw.pop('Lc')
+        if kd == 'base_plate' and 'Lb' in kw:
+            kw.pop('Lb')
+        kw = {k: v for k, v in kw.items() if v is not None}
+        return kd, kw
+
+    def steel_connection(self, kind, beam=None, column=None, bolt='M20-8.8', plate_t=None, ext=0.0, rows=None, cols=None, pitch=None,
+                         gauge=None, ribs=False, beam_length=None, column_length=None, mesh='none', size=None, load_kn=None,
+                         solve=False, name=None):
+        from . import connections as K
+        import csv
+        kd, kw = self._connection_kwargs(K, kind, plate_t, ext, rows, cols, pitch, gauge, ribs, beam_length, column_length)
+        nm = re.sub(r'[^A-Za-z0-9_\-]', '_', name or kd)[:40]
+        step = os.path.join(self.workdir, nm + '.step')
+        c = K.build(kd, beam=beam, column=column, bolt_spec=bolt, out=step, name=nm, **kw)
+        s = K.summary(c)
+        with open(os.path.join(self.workdir, nm + '_parts.csv'), 'w', newline='') as f:
+            w = csv.DictWriter(f, fieldnames=['part', 'role', 'volume_mm3', 'mass_kg'])
+            w.writeheader()
+            w.writerows(c.table)
+        res = {'kind': kd, 'bolt': c.bolt['name'], 'hole_mm': c.bolt['d0'], 'details': c.info, 'parts': s['parts'], 'parts_by_role': s['parts_by_role'],
+               'steel_mass_kg': s['steel_mass_kg'], 'spacing_warnings': c.warnings, 'clashes': c.clashes,
+               'step': nm + '.step', 'bill_of_parts': nm + '_parts.csv'}
+        sentence = (f"Built {'an' if kd.startswith('end') else 'a'} {kd.replace('_', ' ')} with {c.info.get('bolts', len(c.bolts))} {c.bolt['name']} bolts (holes {c.bolt['d0']:g} mm): "
+                    f"{s['parts']} parts, steel mass {s['steel_mass_kg']:.0f} kg, saved as {nm}.step with every part named. ")
+        sentence += ('Spacing checks (EN 1993-1-8): ' + ('all pass. ' if not c.warnings else '; '.join(c.warnings) + '. ')
+                     + ('No clashes between parts. ' if not c.clashes else 'CLASHES: ' + '; '.join(c.clashes) + '. '))
+        if mesh in ('shell', 'both'):
+            h = float(size or 25)
+            info = K.shell_mesh(c, h, self.workdir, name=nm + '_shell', load_kn=load_kn)
+            res['shell'] = {k: info[k] for k in ('nodes', 'elements', 'quads', 'trias', 'bolts_tied', 'bolts_tied_nearest_node', 'tied_node_pairs', 'loaded_nodes')}
+            res['shell']['file'] = os.path.basename(info['files']['inp'])
+            res['shell']['check'] = info['check'].get('verdict') if isinstance(info['check'], dict) else info['check']
+            sentence += (f"Shell mesh ({h:g} mm): {info['elements']:,} elements, "
+                         + (f"{info['bolts_tied']} bolts tied through their hole rims" if info['bolts_tied'] else
+                            'the anchor bolts hold the base plate in x and y and the concrete supports it in z') + f", written to {res['shell']['file']} (CalculiX). ")
+            if load_kn is None:
+                sentence += 'No load was given, so the input has supports only: tell me the load (kN) to add it. '
+            if solve:
+                r = self.solve_calculix(res['shell']['file'])
+                res['solve'] = {k: r.get(k) for k in ('max_displacement', 'max_von_mises', 'max_disp', 'max_stress') if k in r} or {k: v for k, v in r.items() if k != 'frd'}
+                sentence += f"CalculiX ran: max displacement {r.get('max_displacement_mm')} mm, max von Mises {r.get('max_von_mises_MPa')} MPa (shell nodal maxima, local at the load and bolts). "
+                if load_kn and kd in ('end_plate', 'base_plate'):
+                    ref = K.cantilever_reference(c, load_kn)
+                    res['beam_theory'] = ref
+                    sentence += (f"Beam theory with a perfectly rigid joint gives {ref['tip_deflection_mm']:g} mm at the tip; the model is more flexible "
+                                 f"because the joint rotates (plate and flange bending, bolts), shear deformation and local effects at the load. ")
+        if mesh in ('hex', 'both'):
+            hx = K.hex_meshes(c, self.workdir, size=size)
+            res['hex'] = hx
+            ok = [x for x in hx if 'error' not in x]
+            sentence += (f"Hex meshes: {len(ok)} thick parts meshed ({sum(x['cells'] for x in ok):,} bricks), smallest Jacobian "
+                         f"{min((x['min_scaled_jacobian'] for x in ok), default=0):.2f}; thin I-section walls are not hex-meshed (use the shell mesh for them). ")
+            bad = [x for x in hx if 'error' in x]
+            if bad:
+                sentence += f"{len(bad)} part(s) could not be meshed: " + '; '.join(f"{x['part']}: {x['error']}" for x in bad[:3]) + '. '
+        res['plain_english'] = sentence.strip()
+        return res
+
+    def bolt_group(self, bolts=None, grid=None, vx=0.0, vy=0.0, torsion=0.0, ex=0.0, ey=0.0, capacity_kn=None, d=None, cls=None, shear_planes=1):
+        from . import bolt_group as BG
+        return BG.solve(Vx=float(vx), Vy=float(vy), torsion=float(torsion), capacity_kn=capacity_kn, bolts=bolts, grid=grid, d=d, cls=cls,
+                        shear_planes=int(shear_planes), ex=float(ex), ey=float(ey))
+
+    def connection_check(self, kind, params, units='NEWTON_MM', method='LRFD', name=None):
+        from . import osoconn
+        r = osoconn.run(kind, params, method=method, units=units, workdir=self.workdir, name=name)
+        return r
+
+    def xc_run(self, script, name='xc_model'):
+        from . import xcfem
+        return xcfem.run(script, self.workdir, name)
+
+    def steel_cbfem(self, kind, beam=None, column=None, bolt='M20-8.8', plate_t=None, ext=0.0, rows=None, cols=None, pitch=None, gauge=None,
+                    ribs=False, beam_length=None, column_length=None, V=0.0, M=0.0, N=0.0, fy=355.0, fu=0.0, size=30.0, lf_max=2.0, name=None):
+        from . import connections as K, cbfem
+        kd, kw = self._connection_kwargs(K, kind, plate_t, ext, rows, cols, pitch, gauge, ribs, beam_length, column_length)
+        nm = re.sub(r'[^A-Za-z0-9_\-]', '_', name or kd + '_cbfem')[:40]
+        c = K.build(kd, beam=beam, column=column, bolt_spec=bolt, name=nm, **kw)
+        spec = cbfem.from_connection(c, V=float(V), M=float(M), N=float(N), size=float(size), fy=float(fy), fu=float(fu), lf_max=float(lf_max))
+        r = cbfem.run(spec, self.workdir, nm)
+        r['kind'], r['details'] = kd, c.info
+        r['curve'] = r['curve'][::max(1, len(r['curve']) // 20)]
+        worst = max(r['at_design_load']['bolts'], key=lambda b: b['utilisation_interaction'], default=None)
+        cap = r['capacity_factor']
+        sentence = (f"CBFEM of the {kd.replace('_', ' ')} ({c.info.get('beam', c.info.get('column'))}, {c.bolt['name']} bolts, steel fy {fy:g} MPa), design loads "
+                    f"V {V:g} kN, M {M:g} kNm, N {N:g} kN: ")
+        if cap is None:
+            sentence += f"no limit reached up to {r['lf_reached']:.2f} times the design load (plastic strain 5 %, bolt capacities): the connection passes with at least that reserve. "
+        else:
+            sentence += (f"the first limit is {r['limit']} at {cap:.2f} times the design load, so the connection "
+                         f"{'passes' if cap >= 1 else 'FAILS'} the design load" + (f" with a reserve of {(cap - 1) * 100:.0f} %" if cap >= 1 else '') + '. ')
+        sentence += f"At the design load the peak plastic strain is {r['at_design_load']['max_plastic_strain_percent']:.2f} % (limit 5 %)"
+        if worst:
+            sentence += (f" and the most loaded bolt ({worst['bolt']}) carries {worst['tension_kN']:g} kN tension and {worst['shear_kN']:g} kN shear "
+                         f"(utilisation {worst['utilisation_interaction']:.2f}).")
+        sentence += (' This is ShipBrain\'s own CBFEM, checked within about +20 % / -16 % of the EN 1993-1-8 T-stub formulas: use it to find the weak part and compare variants. '
+                     'Welds, buckling and slip-critical bolts are not checked.')
+        r['plain_english'] = sentence
+        return r
+
+    def pipe_stress(self, legs=None, waypoints=None, nps=None, od_mm=None, schedule='40', t_oper_c=20.0, t_amb_c=21.1, pressure_bar=0.0,
+                    water=True, supports=None, rest_spacing_m=None, name='pipe_stress'):
+        from . import pipestress
+        return pipestress.analyse(legs=legs, waypoints=waypoints, nps=nps, od_mm=od_mm, schedule=schedule, t_oper_c=float(t_oper_c),
+                                  t_amb_c=float(t_amb_c), pressure_bar=float(pressure_bar), water=bool(water), supports=supports,
+                                  rest_spacing_m=rest_spacing_m, workdir=self.workdir, name=name)
+
+    def pipe_pulsation(self, od_mm, wall_mm, legs=None, waypoints=None, fluid='water', fluid_density=None, fluid_speed_of_sound=None,
+                       material='steel', supports=None, open_ends=None, excitation_hz=None, margin=0.1, modes=10, name='pulsation'):
+        from . import pulsation
+        return pulsation.analyse(legs=legs, waypoints=waypoints, od_mm=float(od_mm), wall_mm=float(wall_mm), fluid=fluid,
+                                 fluid_density=fluid_density, fluid_speed_of_sound=fluid_speed_of_sound, material=material,
+                                 supports=supports, open_ends=open_ends, excitation_hz=excitation_hz, margin=float(margin),
+                                 modes=int(modes), workdir=self.workdir, name=name)
+
+    def hex_mesh_algohex(self, file, size):
+        from . import algohex as AH
+        src = self._path(file)
+        base = os.path.splitext(src)[0]
+        prep = AH.prepare(src, float(size), base + '_tets.vtk')
+        out = AH.run(prep['tet_file'], base + '_algohex.ovm')
+        rep = AH.report(out, exact_volume=prep.get('exact_volume'))
+        inp = AH.to_inp(out, base + '_algohex.inp')
+        rep.update({'input_tets': prep['tets'], 'inp': os.path.basename(inp), 'tet_file': os.path.basename(prep['tet_file'])})
+        rep['plain_english'] = (f"AlgoHex turned {prep['tets']:,} tetrahedra into {rep.get('hexahedra', 0):,} hexahedra "
+                                f"(smallest scaled Jacobian {rep.get('min_scaled_jacobian', 0):.2f}, {rep.get('inverted', 0)} inverted"
+                                + (f", volume {rep['volume_error_percent']:+.2f} % against the exact" if 'volume_error_percent' in rep else '')
+                                + f") and ShipBrain wrote {rep['inp']} (CalculiX C3D8)."
+                                + (f" WARNING: {rep['inverted']} hexahedra are inverted or folded (smallest scaled Jacobian {rep['min_scaled_jacobian']:.2f}): "
+                                   "repair or remesh those cells before running an analysis; the other cells are fine." if rep.get('inverted') else ''))
+        return rep
+
+    def standard_part(self, query, size=None, length=None):
+        from . import parts
+        q = str(query)
+        hits = parts.find(q)
+        if not hits:
+            return {'error': 'no standard part in the BOLTS tables matches "' + q + '"; try the standard (ISO 4017, DIN 933, IPE, EN 1092) or a name (hex nut, plain washer)'}
+        top = hits[0]
+        toks = re.split(r'[\s,;]+', q)
+        norm = lambda x: re.sub(r'[^a-z0-9.]', '', str(x).lower())
+        cls = next(e for e in parts.index() if e['id'] == top['class'])
+        if size is None:
+            names = {norm(k): k for k in cls['keys']}
+            cand = toks + [a + b for a, b in zip(toks, toks[1:])]
+            size = next((names[norm(t)] for t in cand if norm(t) in names), None)
+        if length is None:
+            m = re.search(r'(?:length|long|l\s*=|x)\s*(\d+(?:\.\d+)?)', q.lower())
+            length = float(m.group(1)) if m else None
+        if size is None:
+            m = re.search(r'\b(M\d+(?:\.\d+)?)\b', q, re.I) if cls['keys'] and cls['keys'][0].startswith('M') else None
+            if m:
+                return {'error': f"{m.group(1)} is not in the table of {top['class']}; its sizes run from {cls['keys'][0]} to {cls['keys'][-1]}"}
+            return {'matches': hits, 'plain_english': 'Matching standard parts: ' + '; '.join(
+                f"{h['name'] or h['class']} ({', '.join(h['standards'][:2]) or h['class']}) sizes {h['sizes']}" for h in hits[:5])
+                    + '. Tell me the size (for example M20 or IPE300) to get the dimensions.'}
+        kw = {'l': length} if length is not None and 'l' in cls['free'] else {}
+        try:
+            row = parts.get(top['class'], size, **kw)
+        except (KeyError, ValueError) as e:
+            return {'error': str(e).strip('\'"')}
+        out = dict(row)
+        if all(k in row for k in ('h', 'b', 'tw', 'tf', 'r')):
+            out['properties'] = parts.section_properties(row)
+        dims = ', '.join(f'{k} {v:g}' for k, v in row.items() if isinstance(v, (int, float)))
+        out['plain_english'] = (f"{top['name'] or top['class']} {', '.join(row['standards'][:2])} {size}: {dims} {'(inches in the standard, mm added as *_mm)' if 'inch' in row['units'] else 'mm'} (BOLTS table)."
+                                + (f" Area {out['properties']['A_mm2']:g} mm2, Iy {out['properties']['Iy_mm4']:.4g} mm4, Wel,y {out['properties']['Wel_y_mm3']:g} mm3, "
+                                   f"{out['properties']['mass_kg_per_m']:g} kg/m." if 'properties' in out else ''))
+        return out
+
+    def fvm_1d(self, case, params=None):
+        from . import fvm1d
+        r = fvm1d.run(case, workdir=self.workdir, **(params or {}))
+        if case == 'simple':
+            r['plain_english'] = (f"1D duct, pressure-correction step: velocity {r['velocity_m_s']} m/s, mass flow {r['mass_flow_kg_s']} kg/s - the same at every "
+                                  "section, so continuity holds (n = 4 and the initial guess are fixed in the repo script).")
+        else:
+            r['plain_english'] = (f"{case.replace('_', ' ')} with {r['nodes']} cells of {r['cell_size_m'] * 1000:g} mm: largest difference from the exact solution "
+                                  f"{r['max_error']:g}. Values at the cell centres and both ends: {r['values']}.")
+        return r
+
+    def show_result(self, file, frd=None, field=None, view='iso', scale=None, vtu=False):
+        from . import viz
+        src = self._path(file)
+        if src.lower().endswith(('.csv', '.tsv', '.txt')):
+            from . import tabfield
+            out = os.path.splitext(src)[0] + '_' + re.sub(r'[^A-Za-z0-9]+', '_', field or 'field') + '.png'
+            info = tabfield.render(src, out, field=field)
+            info['png'] = os.path.basename(out)
+            info['files'] = [info['png']]
+            info['plain_english'] = f"Picture {info['png']}: {info['field']} from {info['min']:.4g} to {info['max']:.4g} in the {info['plane']} plane."
+            return info
+        base = os.path.splitext(src)[0]
+        if field and not frd:
+            cand = base + '.frd'
+            if not os.path.exists(cand):
+                return {'error': 'no result file next to ' + file + ': run the analysis first (solve_calculix or analysis_run)'}
+            frd = cand
+        out = base + ('_' + field if field else '_view') + '.png'
+        info = viz.render(src, out, frd=self._path(frd) if frd else None, field=field, view=view, scale=scale)
+        info['png'] = os.path.basename(out)
+        files = [info['png']]
+        if vtu:
+            files.append(os.path.basename(viz.export_vtu(src, base + '.vtu', frd=self._path(frd) if frd else None)))
+        info['files'] = files
+        if field and frd and src.lower().endswith(('.inp', '.bdf')):
+            info['viewer'] = {'file': os.path.basename(src), 'frd': os.path.basename(self._path(frd))}
+        info['plain_english'] = (f"Picture {info['png']}: " + (f"{field.replace('_', ' ')} from {info['min']:.3g} to {info['max']:.3g} {info['units']}"
+                                 + (f", drawn deformed x{info['deformation_scale']:g}" if field == 'displacement' else '') if field else f"{info['faces']} faces, view {view}")
+                                 + (f". ParaView file {files[-1]}." if vtu else '.'))
+        return info
+
+    def elmer_flow(self, velocity, fluid='water', length=2.0, height=1.0, plate_x=0.5, plate_t=0.02, plate_h=0.4, plate='rigid', material='steel',
+                   E_pa=None, poisson=0.3, turbulence='laminar', cell=0.02, name='flow'):
+        from . import elmer, viz
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        kw = dict(length=float(length), height=float(height), plate_x=float(plate_x), plate_t=float(plate_t), plate_h=float(plate_h), velocity=float(velocity),
+                  fluid=fluid, cell=float(cell), plate=plate, turbulence=turbulence)
+        if plate == 'elastic':
+            E, nu, rho = elmer.MATERIALS[material]
+            kw['structure'] = (float(E_pa) if E_pa else E, float(poisson) if E_pa else nu, rho)
+        r = elmer.solve_plate(self.workdir, name, **kw)
+        vtu = os.path.join(self.workdir, r['vtu'])
+        files = [r['vtu']]
+        fields = ['velocity', 'pressure'] + (['displacement', 'vonmises'] if plate == 'elastic' else [])
+        for f in fields:
+            png = os.path.join(self.workdir, f'{name}_{f}.png')
+            viz.render_flow(vtu, png, field=f, scale=(None if f in ('velocity', 'pressure') else 'auto') if plate == 'elastic' else None)
+            files.append(os.path.basename(png))
+        r['files'] = files
+        r['viewer'] = {'kind': 'slice', 'file': r['vtu']}
+        s = (f"{fluid} at {velocity:g} m/s past a {'flexible ' + material if plate == 'elastic' else 'rigid'} plate {plate_h:g} m high (Reynolds number "
+             f"{r['reynolds_plate_height']:.3g}, {turbulence}): pressure {r['pressure_front_avg_pa']:.4g} Pa on the front face and {r['pressure_back_avg_pa']:.4g} Pa on the back, "
+             f"pressure drag {r['pressure_drag_n_per_m']:.4g} N per metre of plate width (Cd {r['drag_coefficient_pressure']}), highest velocity {r['max_velocity_m_s']:.4g} m/s.")
+        if plate == 'elastic':
+            s += (f" The plate bends {r['plate_tip_displacement_m'] * 1000:.4g} mm at the tip; highest von Mises stress {r.get('plate_max_von_mises_pa', 0) / 1e6:.4g} MPa"
+                  f" (coupling converged in {r['fsi_iterations']} iterations).")
+        if r.get('converged') is False:
+            s += (f" WARNING: the steady solution did not converge (last change {r['last_relative_change']:.2g}): treat the numbers as indicative; "
+                  "at this Reynolds number the real flow is unsteady (vortex shedding) and needs a transient run.")
+        r['plain_english'] = s + ' Pictures: ' + ', '.join(files[1:]) + '.'
+        return r
+
+    def openfoam_flow(self, velocity, fluid='water', body_file=None, length=2.0, height=1.0, width=None, plate_x=0.5, plate_t=0.02, plate_h=0.4, plate_w=None,
+                      turbulence='laminar', cell=0.02, iterations=None, name='of_flow'):
+        from . import openfoam, viz
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        kw = dict(velocity=float(velocity), fluid=fluid, length=float(length), height=float(height), width=float(width) if width else None, plate_x=float(plate_x),
+                  plate_t=float(plate_t), plate_h=float(plate_h), plate_w=float(plate_w) if plate_w else None, turbulence=turbulence, cell=float(cell),
+                  end_iter=int(iterations) if iterations else None)
+        if body_file:
+            kw['body_file'] = self._path(body_file)
+        out, res, info = openfoam.solve(self.workdir, name, **kw)
+        files = []
+        for f in ('velocity', 'pressure'):
+            png = os.path.join(self.workdir, f'{name}_{f}.png')
+            viz.render_slice(res, info['grid'], png, field=f)
+            files.append(os.path.basename(png))
+        out['files'] = files
+        out['viewer'] = {'kind': 'slice', 'file': name}
+        s = (f"{fluid} at {velocity:g} m/s past the {'part ' + os.path.basename(body_file) if body_file else 'plate'} ({'2D' if out['two_d'] else '3D'}, {out['cells']:,} cells, "
+             f"{turbulence}): drag {out['drag_n']:.4g} N (Cd {out['drag_coefficient']} on the {out['frontal_area_m2']:g} m2 frontal area), side force {out['side_force_y_n']:.3g} N up, "
+             f"pressure from {out['pressure_min_pa']:.4g} to {out['pressure_max_pa']:.4g} Pa, highest velocity {out['max_velocity_m_s']:.4g} m/s.")
+        if not out['converged']:
+            s += (f" WARNING: not converged after {out['iterations']} iterations (pressure residual {out['last_pressure_residual']:.2g}): the numbers are indicative; "
+                  "run more iterations, refine, or use a transient run.")
+        if body_file:
+            s += ' The part wall is stair-stepped on the grid: forces on curved parts are approximate.'
+        out['plain_english'] = s + ' Pictures: ' + ', '.join(files) + '.'
+        return out
+
+    def flow_load_stress(self, file, velocity, fix, fluid='water', thickness_mm=10.0, element_size=50.0, turbulence='sst', cell=None, name='fls'):
+        from . import openfoam, flowload, cadplates, viz, solver as _s
+        from .femodel import FEModel
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        src = self._path(file)
+        _, (bx0, by0, bz0, bx1, by1, bz1) = openfoam._voxel_body(src, 'mm')
+        D = max(bx1 - bx0, by1 - by0, bz1 - bz0)
+        cell = float(cell) if cell else round(D / 10, 3)
+        out, res, info = openfoam.solve(self.workdir, name + '_flow', velocity=float(velocity), fluid=fluid, length=6 * D, height=max(2 * D, 2.5 * (by1 - by0)), width=3 * D,
+                                        plate_x=1.5 * D, body_file=src, turbulence=turbulence, cell=cell)
+        m, minfo = cadplates.mesh_cad(src, float(element_size), float(thickness_mm), self.workdir, name=name + '_fe', fix=fix)
+        inp = os.path.join(self.workdir, name + '_fe.inp')
+        F = flowload.nodal_forces(FEModel.read(inp), res['body_faces'], info['offset'])
+        flowload.write_cload(inp, F)
+        fsum = sum(F.values())
+        sol = _s.run_calculix(inp)
+        files = []
+        for f in ('velocity', 'pressure'):
+            png = os.path.join(self.workdir, f'{name}_{f}.png')
+            viz.render_slice(res, info['grid'], png, field=f)
+            files.append(os.path.basename(png))
+        pics = {}
+        for f in ('von_mises', 'displacement'):
+            png = os.path.join(self.workdir, f'{name}_{f}.png')
+            pics[f] = viz.render(inp, png, frd=sol['frd'], field=f)
+            files.append(os.path.basename(png))
+        r = {'flow': {k: out[k] for k in ('cells', 'converged', 'iterations', 'drag_n', 'side_force_y_n', 'drag_coefficient', 'max_velocity_m_s', 'pressure_min_pa', 'pressure_max_pa')},
+             'force_applied_n': [round(float(x), 4) for x in fsum], 'max_displacement_mm': sol['max_displacement_mm'], 'max_von_mises_MPa': sol['max_von_mises_MPa'],
+             'shell_elements': minfo['elements'], 'files': files, 'viewer': {'file': name + '_fe.inp', 'frd': os.path.basename(sol['frd'])}, 'flow_viewer': {'kind': 'slice', 'file': name + '_flow'}}
+        s = (f"{fluid} at {velocity:g} m/s past {os.path.basename(file)} ({out['cells']:,} flow cells, {turbulence}): drag {out['drag_n']:.4g} N, vertical force "
+             f"{out['side_force_y_n']:.3g} N. Those forces ({fsum[0]:.4g}, {fsum[1]:.4g}, {fsum[2]:.3g} N - equal to the flow force) loaded the {minfo['elements']:,}-element shell model: "
+             f"max displacement {sol['max_displacement_mm']} mm, max von Mises {sol['max_von_mises_MPa']} MPa (shell nodal maximum). Pictures: {', '.join(files)}.")
+        if not out['converged']:
+            s += ' WARNING: the flow solution did not fully converge: treat the loads as indicative.'
+        s += ' The flow sees the part stair-stepped on a coarse grid and the structure is one-way coupled: an engineering estimate, check with a finer grid.'
+        r['plain_english'] = s
+        return r
+
+    def probe_result(self, file, x, y, z=0.0):
+        from . import viz, openfoam, elmer
+        src = self._path(file)
+        if os.path.isdir(src):
+            r = openfoam.probe(src, x, y, z)
+            r['plain_english'] = (f"At the cell nearest ({x:g}, {y:g}, {z:g}) m [{r['distance_m']} m away]: velocity {r['speed_m_s']} m/s {r['velocity_m_s']}, pressure {r['pressure_pa']} Pa.")
+        elif src.lower().endswith(('.csv', '.txt', '.tsv', '.dat', '.xy')):
+            from . import tabfield
+            r = tabfield.probe(src, x, y, z)
+            r['plain_english'] = (f"Nearest point of the table ({r['distance']:.4g} from where you asked): at {r['at']}: " + ', '.join(f'{k} = {v:.6g}' for k, v in list(r['values'].items())[:8]) + '.')
+        elif src.lower().endswith('.vtu'):
+            v = elmer.read_vtu(src)
+            X = v['points']
+            P = np.array([x, y, z if X.shape[1] > 2 else 0.0])[:X.shape[1]]
+            j = int(np.argmin(np.linalg.norm(X - P, axis=1)))
+            vals = {k: (np.round(a[j], 6).tolist() if np.ndim(a[j]) else round(float(a[j]), 6)) for k, a in v['fields'].items()}
+            r = {'x': float(X[j][0]), 'y': float(X[j][1]), 'fields': vals}
+            r['plain_english'] = f"At the node nearest ({x:g}, {y:g}) m ({X[j][0]:.4g}, {X[j][1]:.4g}): " + ', '.join(f'{k} {val}' for k, val in vals.items() if k in ('velocity', 'pressure', 'displacement', 'vonmises')) + '.'
+        else:
+            frd = os.path.splitext(src)[0] + '.frd'
+            if not os.path.exists(frd):
+                return {'error': 'no result (.frd) next to ' + file + ': run the analysis first'}
+            r = viz.probe(src, frd, x, y, z)
+            r['plain_english'] = (f"At node {r['node']} ({r['x']:.4g}, {r['y']:.4g}, {r['z']:.4g}) mm, {r['distance_mm']} mm from the point you gave: von Mises {r['von_mises_MPa']} MPa, "
+                                  f"displacement {r['displacement_magnitude_mm']} mm {r['displacement_mm']}.")
+        return r
+
+    def cfd_export(self, target, velocity, fluid='water', body_file=None, length=2.0, height=1.0, width=None, plate_x=0.5, plate_t=0.02, plate_h=0.4, plate_w=None,
+                   turbulence='laminar', cell=0.02, name='cfd_case'):
+        from . import cfdexport
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        kw = dict(velocity=float(velocity), fluid=fluid, length=float(length), height=float(height), width=float(width) if width else None, plate_x=float(plate_x),
+                  plate_t=float(plate_t), plate_h=float(plate_h), plate_w=float(plate_w) if plate_w else None, turbulence=turbulence, cell=float(cell))
+        if body_file:
+            kw['body_file'] = self._path(body_file)
+        r = cfdexport.export(target, self.workdir, name, **kw)
+        prog = {'fluent': 'ANSYS Fluent', 'starccm': 'STAR-CCM+'}[target]
+        how = (f"python {name}_fluent.py  (needs Fluent and `pip install ansys-fluent-core`)" if target == 'fluent' else f"starccm+ -batch {name}_starccm.java  (or File > Play Macro)")
+        r['plain_english'] = (f"Case for {prog} written: {', '.join(r['files'])} ({r['cells']:,} hexahedral cells; Fluent .msh, metres). Run it with {how}. I could not run or compile the script here (no {prog}); "
+                              f"the mesh was checked by reading it back with OpenFOAM's Fluent importer. Export the solution as CSV and upload it: I can read the value at any place and draw it. "
+                              f"The same case runs in OpenFOAM here (openfoam_flow) for a cross-check.")
+        return r
+
+    def ship_hydrostatics(self, hull='box', length=None, beam=None, depth=None, design_draft=None, weights=None, spec_file=None, drafts=None, density=1025.0):
+        from . import vesselbridge as VB
+        if spec_file:
+            spec = json.load(open(self._path(spec_file), encoding='utf-8'))
+            hull_a = spec['structure']['hull']['attributes']
+            ds = drafts or [round(hull_a['Depth'] * f, 3) for f in (0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8)]
+            out = VB.run(spec, drafts=ds)
+            st = out['stability']
+            out['summary'] = {'mass_t': round(st['mass_kg'] / 1000, 3), 'draft_m': round(st['T'], 4), 'KB_m': round(st['KB'], 4), 'BMt_m': round(st['BMt'], 4), 'KG_m': round(st['KG'], 4),
+                              'GMt_m': round(st['GMt'], 4), 'GMl_m': round(st['GMl'], 3), 'trim_deg': round(st['trim_deg'], 4), 'draft_fwd_m': st['draftfp'], 'draft_aft_m': st['draftap'],
+                              'heel_offset_m': st['heel_m'], 'LCG_m': round(st['cg']['x'], 4), 'rho_kg_m3': 1025.0}
+        else:
+            miss = [n for n, v in (('length', length), ('beam', beam), ('depth', depth)) if not v]
+            if miss or not weights:
+                return {'error': 'I need ' + ', '.join(miss + ([] if weights else ['the weights (mass in t and centre of gravity [x from aft, y, z above keel] in m)'])) + ' - or upload a Vessel.js specification (spec_file)'}
+            out = VB.analyse(float(length), float(beam), float(depth), hull, weights, T_design=design_draft, drafts=drafts, rho=float(density))
+        s = out['summary']
+        out['table'] = [{k: round(h[k], 4) for k in ('T', 'Vs', 'displacement_t', 'Awp', 'Cb', 'Cwp', 'LCB', 'LCF', 'KB', 'BMt', 'BMl') if k in h} for h in out['hydrostatics']] if out.get('hydrostatics') else []
+        verdict = ('GM is NEGATIVE: the ship is unstable (it capsizes or lolls) at this loading.' if s['GMt_m'] < 0 else
+                   (f"GM {s['GMt_m']} m is below 0.15 m, the usual minimum for initial stability (the full intact-stability criteria also need the GZ curve)." if s['GMt_m'] < 0.15 else
+                    f"GM {s['GMt_m']} m is positive (the usual minimum for initial stability is 0.15 m; the full criteria also need the GZ curve, which this tool does not compute)."))
+        trim = f", trimmed {s['trim_deg']:.3g} degrees (draft forward {s['draft_fwd_m']:.3f} m, aft {s['draft_aft_m']:.3f} m)" if s.get('draft_fwd_m') is not None and abs(s['trim_deg']) > 1e-3 else ''
+        out['plain_english'] = (f"Floating at {s['mass_t']:g} t the hull sits at a draft of {s['draft_m']} m{trim}. KB {s['KB_m']} m, BM {s['BMt_m']} m, KG {s['KG_m']} m, so GM = KB + BM - KG = {s['GMt_m']} m. "
+                                + verdict + ' (Vessel.js, small angles, sea water ' + str(round(s['rho_kg_m3'])) + ' kg/m3.)')
+        return out
+
+    def hull_generate(self, name='hull', samples=None, kind='ship', seed=0, target_cb=None, kg=None, **hp):
+        import csv, random
+        from . import hullgen as HG, viz, intake
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        if samples:
+            rng = random.Random(int(seed))
+            rows = []
+            for _ in range(min(int(samples), 2000)):
+                q = HG.random_hull(rng, kind)
+                c = HG.coefficients(q, nx=201, nz=61)
+                rows.append(dict(q, **{k: round(v, 5) for k, v in c.items() if not isinstance(v, dict)}))
+            path = os.path.join(self.workdir, name + '_dataset.csv')
+            with open(path, 'w', newline='') as f:
+                w = csv.DictWriter(f, fieldnames=list(rows[0]))
+                w.writeheader()
+                w.writerows(rows)
+            cb = [r['Cb'] for r in rows]
+            return {'file': os.path.basename(path), 'files': [os.path.basename(path)], 'hulls': len(rows), 'Cb_range': [min(cb), max(cb)],
+                    'plain_english': f"{len(rows)} random valid {kind} hulls written to {os.path.basename(path)}: their parameters and Cb, Cp, Cm, Cwp, LCB, KB, volume and wetted area. Block coefficients run from {min(cb):.3f} to {max(cb):.3f}."}
+        p = HG.params(**{k: v for k, v in hp.items() if v is not None})
+        if target_cb:
+            p = HG.solve_cb(p, float(target_cb))
+        c = HG.coefficients(p)
+        stl = os.path.join(self.workdir, name + '.stl')
+        HG.write_stl(p, stl)
+        png = os.path.join(self.workdir, name + '.png')
+        viz.render(stl, png, view='iso', units='m')
+        info, _ = intake.describe_stl(stl)
+        out = {'parameters': p, 'coefficients': {k: round(v, 5) for k, v in c.items() if not isinstance(v, dict)}, 'section_area_curve': c['section_area_curve'],
+               'files': [name + '.stl', name + '.png'], 'stl': {'triangles': info['triangles'], 'closed': info['closed']}}
+        say = (f"Hull {p['L']:g} x {p['B']:g} x {p['D']:g} m, draft {p['T']:g} m: Cb {c['Cb']:.3f}, Cp {c['Cp']:.3f}, Cm {c['Cm']:.3f}, Cwp {c['Cwp']:.3f}, LCB {c['LCB_percent_L']:+.2f} % of L from midships, "
+               f"displacement {c['volume_m3'] * 1.025:,.0f} t in sea water, wetted area {c['wetted_area_m2']:,.0f} m2." + (f" Fullness exponents solved for Cb {target_cb}: n = {p['n_ent']:.3g}." if target_cb else ''))
+        if kg is not None:
+            try:
+                from . import vesselbridge as VB
+                tab, bmax = HG.vessel_table(p)
+                r = VB.analyse(HG.loa(p), bmax, p['D'], 'box', [{'name': 'ship', 'mass_t': c['volume_m3'] * 1.025, 'cg': [c['LCB_m'], 0, float(kg)]}], table=tab, drafts=[p['T']])
+                sm = r['summary']
+                out['hydrostatics'] = sm
+                say += f" With KG {float(kg):g} m (Vessel.js on this hull): KB {sm['KB_m']} m, BM {sm['BMt_m']} m, GM {sm['GMt_m']} m, draft {sm['draft_m']} m."
+            except Exception as e:
+                say += f" (Vessel.js hydrostatics not run: {str(e)[:120]})"
+        if p['bulb_len'] > 0:
+            say += ' The STL holds the hull and the bulb as two closed shells that overlap at the stem.'
+        out['plain_english'] = say + ' Files: ' + ', '.join(out['files']) + '.'
+        return out
+
+    def hull_resistance(self, speeds_kn=None, froude=None, method='holtrop', target_cb=None, **hp):
+        from . import hullgen as HG, hullresist as HR
+        p = HG.params(**{k: v for k, v in hp.items() if v is not None})
+        if target_cb:
+            p = HG.solve_cb(p, float(target_cb))
+        c = HG.coefficients(p)
+        if method == 'surrogate':
+            rows, meta, outside = HR.predict(p, fns=froude, speeds_kn=speeds_kn)
+            note = f"surrogate trained on {meta['hulls']:,} generated hulls: mean error {meta['mean_error_percent']} % (95 % of hulls within {meta['p95_error_percent']} %) against Holtrop on hulls it had not seen"
+            if outside:
+                note += '; this hull is at the edge of the training range, so the error can be larger - use method holtrop'
+        else:
+            rows = HR.holtrop(p, speeds_kn=speeds_kn, fns=froude, c=c)
+            note = 'Holtrop-Mennen method, Vessel.js'
+        out = {'hull': {'L': p['L'], 'B': p['B'], 'T': p['T'], 'Cb': round(c['Cb'], 4), 'Cp': round(c['Cp'], 4)}, 'results': rows, 'method': method, 'parameters': p}
+        out['plain_english'] = (f"Hull {p['L']:g} x {p['B']:g} m, draft {p['T']:g} m, Cb {c['Cb']:.3f}, Cp {c['Cp']:.3f} ({note}): " + '; '.join(
+            f"{r['speed_kn']:.1f} kn (Fn {r['Fn']:.2f}): resistance {r['Rt_kN']:,.0f} kN, effective power {r['Pe_kW']:,.0f} kW" for r in rows)
+            + '. Calm water, bare hull estimate for an ordinary displacement ship (Holtrop is good to roughly +-10-20 % against real ships); shaft power needs the propulsive efficiency, and wind, waves and fouling add to it.')
+        return out
+
+    def catamaran_hull(self, l_to_b, b_to_t, tt_to_t, volume_m3=None, lwl=None, separation=None, name='demihull'):
+        from . import catamaran as CM, intake
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        d = CM.demihull(float(l_to_b), float(b_to_t), float(tt_to_t), volume_m3=float(volume_m3) if volume_m3 else None, lwl=float(lwl) if lwl else None)
+        files = [os.path.basename(CM.write_stl(d['points'], d['faces'], os.path.join(self.workdir, name + '.stl')))]
+        say = (f"Demihull: waterline length {d['lwl']:.2f} m, beam {d['b']:.2f} m, draft {d['T']:.3f} m, displacement {d['volume_m3']:.1f} m3 each. STL {files[0]} (metres, keel at z = 0, waterline at z = {d['T']:.3f} m).")
+        if separation:
+            P, F = CM.catamaran(d['points'], d['faces'], float(separation))
+            files.append(os.path.basename(CM.write_stl(P, F, os.path.join(self.workdir, name + '_catamaran.stl'))))
+            say += f" Catamaran with the centre planes {float(separation):g} m apart: {files[-1]} ({2 * d['volume_m3']:.0f} m3). Give it to stl_stability with the draft {d['T']:.3f} m and the KG for hydrostatics and the GZ curve."
+        return {'demihull': {k: d[k] for k in ('lwl', 'b', 'T', 'volume_m3')}, 'files': files, 'plain_english': say}
+
+    def openhcm_read(self, file, mesh=False, element_size=100.0, name='openhcm'):
+        from . import openhcm as OH
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        m = OH.read(self._path(file))
+        sm = OH.summary(m)
+        out = {'summary': sm, 'compartment_names': m['compartments'][:50]}
+        say = (f"OpenHCM model: {sm['plates']} plates ({sm['plates_with_contour']} with contours, {sm['plates_with_triangle_mesh']} as triangle meshes), {sm['stiffeners']} stiffeners "
+               f"({', '.join(sm['stiffener_types']) or 'no types'}), {sm['compartments']} compartments, plate thicknesses {sm['thicknesses'][:8]}. If the coordinates are mm: plate area {sm['plate_area_m2_if_mm']} m2, "
+               f"plate steel {sm['plate_mass_t_if_mm']} t, stiffener length {sm['stiffener_length_m_if_mm']} m.")
+        if mesh:
+            from .platemesh import build_plates
+            spec, rep = OH.to_plate_spec(m, float(element_size), name)
+            if not spec['plates']:
+                return {**out, 'error': 'no flat contour plates to mesh: ' + '; '.join(rep['plates_skipped'][:3])}
+            mm_, info = build_plates(spec, self.workdir)
+            out.update({'mesh': {k: info[k] for k in ('nodes', 'elements') if k in info}, 'conversion': rep, 'files': [name + '.inp']})
+            say += f" Shell mesh {name}.inp written: {info.get('nodes')} nodes, {info.get('elements')} elements" + (f"; {len(rep['plates_skipped'])} plate(s) skipped ({rep['plates_skipped'][0]})" if rep['plates_skipped'] else '') + '.'
+        out['plain_english'] = say
+        return out
+
+    def pynite_fea(self, model):
+        from . import pynite_bridge as PB
+        r = PB.analyse(model)
+        r.pop('model', None)
+        say = [f"PyNite solved the model (combination {r['combo']}): largest displacement {r['max_displacement']:.4g}."]
+        for n, rx in list(r['reactions'].items())[:6]:
+            say.append(f"reaction at {n}: FX {rx['FX']:.5g}, FY {rx['FY']:.5g}, FZ {rx['FZ']:.5g}, MZ {rx['MZ']:.5g}.")
+        for n, mem in list(r['members'].items())[:6]:
+            say.append(f"member {n}: moment about z {mem['min_M_z']:.5g} to {mem['max_M_z']:.5g}, shear {mem['min_V_y']:.5g} to {mem['max_V_y']:.5g}, deflection {mem['min_deflection_y']:.5g} to {mem['max_deflection_y']:.5g}.")
+        for n, pl in r['plates'].items():
+            say.append(f"plate {n}: largest deflection {pl['max_deflection']:.5g} ({pl['elements']} elements).")
+        r['plain_english'] = ' '.join(say) + ' Linear elastic; units are the ones you gave.'
+        return r
+
+    def gz_curve(self, kg, mass_t=None, draft=None, free_surface_m=0.0, flooding_angle_deg=None, name='gz', **hp):
+        from . import hullgen as HG, stability as ST
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        p = HG.params(**{k: v for k, v in hp.items() if v is not None})
+        res = ST.gz_curve(p, float(kg), mass_t=float(mass_t) if mass_t else None, draft=float(draft) if draft else None, free_surface_m=float(free_surface_m or 0.0))
+        cr = ST.criteria(res, float(flooding_angle_deg) if flooding_angle_deg else None)
+        png = os.path.join(self.workdir, name + '.png')
+        ST.plot(res, cr, png, f"GZ curve: {p['L']:g} x {p['B']:g} x {p['D']:g} m, KG {float(kg):g} m")
+        table = [{'heel_deg': r['heel_deg'], 'GZ_m': round(r['GZ_m'], 4)} for r in res['curve'] if r['heel_deg'] % 5 == 0]
+        bad = [c['criterion'] for c in cr['criteria'] if not c['pass']]
+        say = (f"At {res['mass_t']:,.0f} t and KG {float(kg):g} m the initial GM is {res['GM_from_slope_m']:.2f} m; GZ peaks at {cr['max_GZ_m']:.2f} m at {cr['angle_of_max_GZ_deg']:g} degrees"
+               + (f", the lee deck edge goes under at {cr['deck_edge_immersion_deg']:g} degrees" if cr['deck_edge_immersion_deg'] is not None else '')
+               + (f" and the curve vanishes at {cr['angle_of_vanishing_stability_deg']:.0f} degrees" if cr['angle_of_vanishing_stability_deg'] else '') + '. '
+               + ('All six IMO intact criteria are met.' if cr['all_pass'] else 'NOT met: ' + '; '.join(bad) + '.')
+               + ' (Level keel, hull to the deck; the criteria need your approved loading conditions, the down-flooding angle and the weather criterion too.)')
+        return {'curve': table, 'GM_m': res['GM_from_slope_m'], 'mass_t': res['mass_t'], **cr, 'files': [name + '.png'], 'plain_english': say}
+
+    def stl_stability(self, file, kg, draft=None, displacement_t=None, lcg=None, tcg=0.0, density=1025.0, scale=1.0, rule='is_code_2008_general', name='stl_gz'):
+        from . import navalbridge as NB
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        if draft is None and displacement_t is None:
+            return {'error': 'give the draft (m) or the displacement (t) of the loading condition'}
+        r = NB.analyse(self._path(file), float(kg), draft=float(draft) if draft is not None else None, displacement_t=float(displacement_t) if displacement_t is not None else None,
+                       lcg=float(lcg) if lcg is not None else None, tcg=float(tcg or 0.0), rho=float(density), rule=rule, scale=float(scale))
+        png = os.path.join(self.workdir, name + '.png')
+        NB.plot(r, png, f'GZ curve - {os.path.basename(file)}')
+        h = r['hydrostatics']
+        gz = r['GZ_m']
+        i = max(range(len(gz)), key=lambda k: gz[k])
+        bad = [c['criterion'] for c in r['criteria'] if c['status'] != 'PASS']
+        r['files'] = [name + '.png']
+        r['plain_english'] = (f"At a draft of {h['draft_m']:.2f} m ({h['displacement_t']:,.0f} t) the hull has KB {h['cob'][2]:.2f} m, BMt {h['BMt_m']:.2f} m and GMt {h['GMt_m']:.2f} m at KG {float(kg):g} m. "
+                              f"GZ peaks at {gz[i]:.2f} m at {r['heels_deg'][i]:g} degrees (trim optimised at each angle). Rule {rule}: "
+                              + ('all criteria pass.' if r['overall_pass'] else 'NOT met - ' + '; '.join(bad) + '.')
+                              + ' Hull as given in the STL: openings, tanks and the approved loading conditions are not in this check, so it is a design check, not class approval.')
+        return r
+
+    def hull_motions(self, kg, wave_period_s=None, wave_amplitude_m=1.0, zeta_heave=0.2, zeta_roll=0.07, draft=None, **hp):
+        from . import hullgen as HG, seakeeping as SK
+        p = HG.params(**{k: v for k, v in hp.items() if v is not None})
+        if wave_period_s:
+            r = SK.response(p, float(kg), float(wave_period_s), float(wave_amplitude_m), draft=float(draft) if draft else None, zeta_heave=float(zeta_heave), zeta_roll=float(zeta_roll))
+            per = r['periods']
+        else:
+            r = None
+            per = SK.periods(p, float(kg), float(draft) if draft else None)
+        say = (f"Hull {p['L']:g} x {p['B']:g} m, draft {per['draft_m']:g} m, KG {float(kg):g} m: GM {per['GMt_m']:.2f} m. Natural periods: roll "
+               + (f"{per['roll_period_imo_s']:.1f} s (IMO formula; {per['roll_period_k04B_s']:.1f} s with k = 0.4 B)" if per['roll_period_imo_s'] else 'none - GM is negative, the ship is unstable')
+               + f", heave {per['heave_period_s']:.1f} s, pitch {per['pitch_period_s']:.1f} s.")
+        if r:
+            say += f" In a regular wave of {wave_period_s:g} s ({r['wavelength_m']:.0f} m long, amplitude {wave_amplitude_m:g} m): heave amplitude {r['heave']['amplitude_m']:.2f} m (head waves)"
+            if 'roll' in r:
+                say += f", roll amplitude {r['roll']['amplitude_deg']:.1f} degrees (beam waves, wave slope {r['roll']['wave_slope_deg']:.1f} degrees)"
+            if r['heave']['near_resonance'] or r.get('roll', {}).get('near_resonance'):
+                say += '. Near resonance: the answer depends on the damping you assume'
+            say += '.'
+        say += ' Closed-form teaching estimates, no forward speed, not a seakeeping program and not checked against model tests.'
+        return {'periods': per, 'response': r, 'plain_english': say}
+
+    def dbb_blocks(self, blocks, requirements=None, hull=None):
+        from . import dbb
+        r = dbb.analyse(blocks, requirements or [], hull)
+        red = [q['name'] for q in r['requirements'] if q['status'] == 'red']
+        orange = [q['name'] for q in r['requirements'] if q['status'] == 'orange']
+        r['plain_english'] = (f"{len(r['blocks'])} blocks in {len(r['groups'])} groups: total weight {r['total_weight_t']:,.1f} t, centre of gravity ({r['cg'][0]:.2f}, {r['cg'][1]:.2f}, {r['cg'][2]:.2f}) m. "
+                              + (f"Requirements not met (shall): {', '.join(red)}. " if red else ('All shall requirements are met. ' if r['requirements'] else ''))
+                              + (f"Beyond the should (an excess): {', '.join(orange)}. " if orange else '')
+                              + 'The weights list can go straight into ship_hydrostatics or gz_curve (mass and centre of gravity of every block).')
+        return r
+
+    def propeller_bem(self, D, pitch_ratio, rpm=None, speed_kn=None, Z=4, ear=0.6, hub_ratio=0.2, cd=0.03, immersion_m=None, name='propeller'):
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        from . import propeller as PR
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        kw = dict(Z=int(Z), pitch_ratio=float(pitch_ratio), ear=float(ear), hub_ratio=float(hub_ratio), cd=float(cd))
+        Js = [round(0.1 * k, 2) for k in range(0, int(float(pitch_ratio) * 10) + 3)]
+        rows = [PR.bem(J, **kw) for J in Js]
+        fig, ax = plt.subplots(figsize=(7, 4.5))
+        ax.plot(Js, [r['KT'] for r in rows], 'b-o', ms=3, label='KT')
+        ax.plot(Js, [10 * r['KQ'] for r in rows], 'r-o', ms=3, label='10 KQ')
+        ax.plot(Js, [r['eta0'] for r in rows], 'g-o', ms=3, label='eta0')
+        ax.set_xlabel('J = V / (n D)'); ax.grid(alpha=0.3); ax.legend(); ax.set_ylim(0, None); ax.set_title(f'Open-water curve, Z {int(Z)}, P/D {float(pitch_ratio):g}, EAR {float(ear):g} (BEM)')
+        fig.tight_layout(); png = os.path.join(self.workdir, name + '.png'); fig.savefig(png, dpi=120); plt.close(fig)
+        out = {'open_water': [{k: round(v, 4) for k, v in r.items()} for r in rows], 'files': [name + '.png']}
+        best = max(rows, key=lambda r: r['eta0'])
+        say = (f"Open-water curve (blade-element-momentum, teaching level): KT(0) {rows[0]['KT']:.3f}, KT falls to zero at J = {float(pitch_ratio):g}; best efficiency eta0 {best['eta0']:.2f} at J = {best['J']:g} "
+               "(optimistic by about 10 % against real propellers).")
+        if rpm and speed_kn:
+            op = PR.performance(float(D), float(rpm), float(speed_kn), immersion_m=float(immersion_m) if immersion_m is not None else None, **kw)
+            out['operating_point'] = {k: (round(v, 4) if isinstance(v, float) else v) for k, v in op.items() if k != 'actuator_disk'}
+            say += (f" At {float(rpm):g} rpm and {float(speed_kn):g} knots (J = {op['J']:.2f}): thrust {op['thrust_kN']:.0f} kN, torque {op['torque_kNm']:.0f} kN m, power {op['power_kW']:.0f} kW, open-water efficiency {op['eta0']:.2f}"
+                    + (f", ideal (actuator disk) efficiency {op['actuator_disk']['ideal_efficiency']:.2f}" if 'actuator_disk' in op else '')
+                    + (f". Cavitation number at 0.7R {op['cavitation_number_07R']:.2f} (low values, below about 0.5, mean cavitation is likely: check with a cavitation tunnel or the class)" if 'cavitation_number_07R' in op else '') + '.')
+        out['plain_english'] = say
+        return out
+
+    def propeller_design(self, rpm, D, thrust_N, speed_ms, Z=4, hub_d=None, duct=False, tau=0.9, blade_stl=False, name='propeller_design'):
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        from . import propdesign as PD
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        r = PD.design(int(Z), float(rpm), float(D), float(thrust_N), float(speed_ms), hub_d=float(hub_d) if hub_d else None, duct=bool(duct), tau=float(tau))
+        pt = r.pop('_pt')
+        g = pt['geometry']
+        r['sections'] = [{'r_over_R': round(float(a), 3), 'c_over_D': round(float(b), 4), 'P_over_D': round(float(c), 4), 't_over_c': round(float(d), 4), 'f_over_c': round(float(e), 4)}
+                         for a, b, c, d, e in list(zip(*[np.ravel(g[k]) for k in ('RG', 'CoD', 'PoD', 't0oc', 'f0oc')]))[::4]]
+        r.pop('geometry_keys', None)
+        fig, ax = plt.subplots(figsize=(7, 4.5))
+        c = r['curve']
+        ax.plot([x['J'] for x in c], [x['KT'] for x in c], 'b-o', ms=3, label='KT'); ax.plot([x['J'] for x in c], [10 * x['KQ'] for x in c], 'r-o', ms=3, label='10 KQ')
+        ax.plot([x['J'] for x in c], [max(x['eta'], 0) for x in c], 'g-o', ms=3, label='efficiency'); ax.axvline(r['design_J'], color='k', ls=':')
+        ax.set_xlabel('J'); ax.grid(alpha=0.3); ax.legend(); ax.set_ylim(0, None); ax.set_title(f"Designed propeller, Z {int(Z)}, {'ducted' if duct else 'open'} (design point dotted)")
+        fig.tight_layout(); fig.savefig(os.path.join(self.workdir, name + '.png'), dpi=120); plt.close(fig)
+        r['files'] = [name + '.png']
+        if blade_stl:
+            from . import bladex_bridge as BB
+            up, dn = PD.blade_from_design(pt)
+            BB.write_stl(up, dn, os.path.join(self.workdir, name + '_blade.stl'), name)
+            r['files'].append(name + '_blade.stl')
+        r['plain_english'] = (f"Designed a {int(Z)}-blade {'ducted ' if duct else ''}propeller of {float(D):g} m at {float(rpm):g} rpm for {float(thrust_N) / 1000:.0f} kN at {float(speed_ms):g} m/s (J = {r['design_J']:.2f}): "
+                              f"KT {r['design_KT']:.3f} (matches the required thrust), KQ {r['design_KQ']:.4f}, efficiency {r['design_efficiency']:.2f} against the ideal {r['actuator_disk_efficiency']:.2f} of an actuator disk, "
+                              f"torque {r['torque_Nm'] / 1000:.1f} kN m, power {r['power_kW']:.0f} kW. Lifting-line design: cavitation, strength and the final section shape still need checks.")
+        for k in ('radius_fraction', 'circulation_G'):
+            r[k] = r[k][::4]
+        return r
+
+    def blade_geometry(self, radii, chord_lengths, pitch, rake=None, skew_angles=None, naca='0012', nacas=None, name='blade'):
+        from . import bladex_bridge as BB
+        n = len(radii)
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        up, dn = BB.blade(radii, chord_lengths, pitch, rake or [0.0] * n, skew_angles or [0.0] * n, naca=str(naca), nacas=nacas)
+        p = BB.write_stl(up, dn, os.path.join(self.workdir, name + '.stl'), name)
+        from . import intake
+        d = intake.describe_stl(p)[0]
+        return {'files': [name + '.stl'], 'sections': n, 'points_per_face': int(up.shape[1]), 'stl': d,
+                'plain_english': f"Blade surface built from {n} radial sections (BladeX): closed STL with {d.get('triangles')} triangles, volume {d.get('volume')} (cubic of the length unit given)."}
+
+    def nastran_read(self, file):
+        from . import nastran_bridge as NB
+        path = self._path(file)
+        if path.lower().endswith('.op2'):
+            r = NB.read_op2(path)
+            d = list(r['displacement'].items())
+            vm = r['von_mises']
+            say = 'Nastran results: ' + '; '.join(f"subcase {k}: largest displacement {v['max']:.4g} at node {v['node']}" + (f", largest von Mises {vm[k]['max']:.4g}" if k in vm else '') for k, v in d) + ' (model units).'
+        else:
+            r = NB.read_bdf(path)
+            say = (f"Nastran model: {r['nodes']} nodes, {r['elements']} elements ({', '.join(r['element_types'])}), {r['materials']} material(s), {r['loads']} load card(s), {r['spcs']} support set(s)"
+                   + (f", mass {r['mass']:.6g}" if r['mass'] else '') + f", SOL {r['sol']}.")
+        r['plain_english'] = say
+        return r
+
+    def nastran_plate_deck(self, L, W, t, nx=20, ny=10, E=210e9, nu=0.3, rho=7850.0, force_N=1000.0, direction=3, name='plate'):
+        from . import nastran_bridge as NB
+        name = re.sub(r'[^A-Za-z0-9_]', '_', str(name))[:30]
+        p = NB.write_plate(os.path.join(self.workdir, name + '.bdf'), float(L), float(W), float(t), int(nx), int(ny), float(E), float(nu), float(rho), float(force_N), int(direction))
+        r = NB.read_bdf(p)
+        r['files'] = [name + '.bdf']
+        r['plain_english'] = f"Wrote {name}.bdf: {r['nodes']} nodes, {r['elements']} CQUAD4, clamped at x = 0, {float(force_N):g} N at x = {float(L):g} in direction {int(direction)}, mass {r['mass']:.4g} kg (SI units)."
+        return r
+
+    def pipe_flow(self, flow_m3h, segments, branches=None, fluid='seawater', density=None, viscosity_cst=None, pump_efficiency=0.7):
+        from . import pipeflow
+        return pipeflow.line(flow_m3h, segments, fluid=fluid, density=density, viscosity_cst=viscosity_cst,
+                             pump_efficiency=pump_efficiency, branches=branches)
+
+    def hex_mesh(self, file, size, to='inp', E=206000.0, nu=0.3, feature_angle=35.0):
+        from . import hexmesh
+        ext = {'inp': '.inp', 'bdf': '.bdf', 'fem': '.fem'}.get(str(to).lower().strip('.'), '.inp')
+        out = os.path.splitext(self._path(file))[0] + '_hex' + ext
+        r = hexmesh.write(self._path(file), float(size), out, E=float(E), nu=float(nu), feature_angle=float(feature_angle))
+        r['file'] = os.path.basename(out)
+        r.pop('volume', None)
+        return {k: (round(v, 4) if isinstance(v, float) else v) for k, v in r.items()}
+
+    def dxf_draw(self, parts, title=None, sheet=None, scale=None, notes=None, dims=True, name='drawing'):
+        from . import dxfdraw
+        name = re.sub(r'[^A-Za-z0-9_\-]', '_', str(name or 'drawing'))[:40]
+        r = dxfdraw.draw(parts, os.path.join(self.workdir, name + '.dxf'), title=title, sheet=sheet, scale=scale, notes=notes, dims=dims)
+        r['file'] = os.path.basename(r.pop('file'))
+        r['png'] = os.path.basename(r['png'])
+        return r
+
+    def dxf_check(self, file):
+        from . import dxfdraw
+        return dxfdraw.check(self._path(file))
+
+    def pipe_route(self, od, legs=None, waypoints=None, wall=None, bend='LR', start=(0.0, 0.0, 0.0), name='pipe_route'):
+        from . import piperoute
+        name = re.sub(r'[^A-Za-z0-9_\-]', '_', str(name or 'pipe_route'))[:40]
+        out = os.path.join(self.workdir, name + '.step')
+        r = piperoute.route(legs=legs, waypoints=waypoints, od=float(od), wall=float(wall) if wall else None, bend=bend, start=start, out=out)
+        r['file'] = os.path.basename(out)
+        return r
+
+    def reverse_cad(self, file, material=None, heatmap=False):
+        from . import reversecad
+        src = self._path(file)
+        out_dir = os.path.join(self.workdir, os.path.splitext(os.path.basename(file))[0] + '_reversecad')
+        r = reversecad.convert(src, out_dir, emit='step,summary,report' + (',heatmap' if heatmap else ''), material=material)
+        r['files'] = {k: os.path.relpath(v, self.workdir) for k, v in r['files'].items()}
+        return r
+
+    def geometry_clean(self, plates=None, file=None, merge_tol=2.0):
+        from . import geoclean
+        if file:
+            from .cadplates import import_cad
+            import cadquery as cq
+            shp, act = geoclean.clean_shape(import_cad(self._path(file)))
+            out = os.path.splitext(os.path.basename(file))[0] + '_clean.step'
+            cq.exporters.export(cq.Workplane().add(shp), self._path(out))
+            return {'file': out, 'actions': act}
+        clean, act = geoclean.clean_plates(plates or [], merge_tol=merge_tol)
+        return {'plates': clean, 'actions': act}
+
+    def fatigue_mesh(self, plates, hotspot, size=None, t=None, loads=None, solve=False, name='hotspot'):
+        from . import fatigue
+        m, info = fatigue.fatigue_mesh(plates, hotspot, size, t, self.workdir, re.sub(r'[^A-Za-z0-9_\-]', '_', name)[:40], loads)
+        out = self._mesh_result(m, info)
+        if solve:
+            r = _solver.run_calculix(os.path.join(self.workdir, out['files']['inp']))
+            out['hot_spot'] = fatigue.hotspot_stress(r['frd'], info['readout_points'])
+        return out
+
+    def compare_drawings(self, a, b, page_a=0, page_b=0, ignore=None, ignore_layers=None, tolerance=None):
+        from . import drawings
+        from .dwg import drawing_file
+        base = os.path.join(self.workdir, f'compare_{os.path.splitext(os.path.basename(a))[0]}_vs_{os.path.splitext(os.path.basename(b))[0]}')
+        A, B = drawing_file(self._path(a)), drawing_file(self._path(b))          # DWG -> DXF with the free ODA converter
+        r = drawings.compare_drawings(A, B, base + '.png', page_a, page_b)
+        r['overlay'] = os.path.basename(base + '.png')
+        try:                                                # vector drawings: also say WHAT changed, numbered, with clouds
+            from .drawdiff import compare_full
+            ign = [ignore] if isinstance(ignore, str) else ignore
+            ilay = [ignore_layers] if isinstance(ignore_layers, str) else ignore_layers
+            v = compare_full(A, B, page_a, page_b, tol=tolerance, ignore=ign or (), ignore_layers=ilay or (), out_base=base)
+            if v['changes']:
+                r['semantic'] = {k: v[k] for k in ('lines', 'texts', 'by_kind', 'clouds')}
+                r['changes'] = v['changes'][:40]
+                r['files'] = [os.path.basename(f) for f in v['files']]
+                r['plain_english'] += ' ' + v['plain_english'] + (f" Open {os.path.basename(v['files'][0])} in AutoCAD: red = "
+                                                                   'removed, green = added, yellow = changed, magenta clouds numbered as in '
+                                                                   f"{os.path.basename(v['files'][1])}." if v['files'] else '')
+        except Exception as ex:
+            r['semantic'] = f'not available ({type(ex).__name__}: scanned drawing or unreadable vector content)'
+        return r
+
+    def compare_mesh_drawing(self, mesh, drawing, box, level=0.0, axis='z', page=0):
+        from . import drawings
+        out = os.path.join(self.workdir, f'mesh_vs_{os.path.splitext(os.path.basename(drawing))[0]}.png')
+        r = drawings.compare_mesh_drawing(self._path(mesh), self._path(drawing), box, level, axis, out, page)
+        r['overlay'] = os.path.basename(out)
+        return r
+
+    def drawing_to_3d(self, file, z=0.0, t_plate=12.0, layers=None, mesh=True, element_size=200.0):
+        from . import drawings
+        r = drawings.dxf_to_plates(self._path(file), z, t_plate, layers)
+        base = os.path.splitext(os.path.basename(file))[0]
+        out = {'report': r['report'], 'plates': len(r['plates']), 'beams': len(r['beams'])}
+        try:
+            out['step'] = os.path.basename(drawings.plates_to_step(r['plates'], self._path(base + '_3d.step'), r['beams'])['step'])
+        except ImportError:
+            out['step'] = 'not written (CadQuery not installed)'
+        json.dump({'plates': r['plates'], 'beams': r['beams']}, open(self._path(base + '_plates.json'), 'w'), indent=1)
+        out['spec'] = base + '_plates.json'
+        if mesh:
+            out['mesh'] = self.plates_mesh(r['plates'], base + '_mesh', element_size, beams=r['beams'])
+        return out
+
+    def drawing_check(self, file, page=0):
+        from .drawdiff import check_dimensions
+        fix = self.t.get('ocr_fix')                      # ship plugin: repair misread labels before checking numbers
+        return check_dimensions(self._path(file), int(page), fix=(lambda t: fix[0](t).get('text', t)) if fix else None)
+
+    def load_ship_tools(self):
+        """the built-in ship tools (shiptools/): rule search, member checks, XML read/write, OCR label fixes ..."""
+        d = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'shiptools')
+        return self.load_plugin(d) if os.path.exists(os.path.join(d, 'ship_mcp.py')) else 0
+
+    def cad_view_check(self, model, drawing, views=('front',), page=0, crops=None):
+        from .cadview import compare_view
+        out, crops = [], crops or {}
+        for v in views:
+            png = os.path.join(self.workdir, f'view_{os.path.splitext(os.path.basename(model))[0]}_{v}.png')
+            r = compare_view(self._path(model), self._path(drawing), v, int(page), crops.get(v), png)
+            r['overlay'] = os.path.basename(png)
+            out.append(r)
+        worst = min(out, key=lambda r: r['score'])
+        return {'views': out, 'verdict': worst['verdict'] if all(r['verdict'] != 'FAIL' for r in out) else 'FAIL',
+                'overlay': worst['overlay'], 'plain_english': ' '.join(r['plain_english'] for r in out)}
+
+    def class_rule(self, action, query=None, society=None, L=None, B=None, Cb=None, Ms_hog=None, Ms_sag=None, yield_mpa=235, x=0.5,
+                   Z_deck=None, Z_bottom=None, I=None):
+        from . import classrules
+        if action == 'longitudinal':
+            if not (L and B and Cb):
+                return {'error': 'longitudinal needs L, B (m) and Cb'}
+            return classrules.ur_s11(float(L), float(B), float(Cb), Ms_hog, Ms_sag, float(yield_mpa or 235), float(x or 0.5), Z_deck, Z_bottom, I)
+        if action == 'k':
+            k = classrules.k_factor(float(yield_mpa or 235))
+            return {'k': round(k, 3), 'plain_english': f'The material factor k for steel with a minimum yield stress of {float(yield_mpa or 235):g} '
+                                                        f'N/mm2 is {k:.2f} (IACS UR S4); scantling formulas multiply by k or use 235/k.'}
+        packs = [p_ for p_ in (getattr(self.repo_kb, 'packs', None) or []) if str(p_.get('name', '') if isinstance(p_, dict) else p_).startswith('class_rules_')]
+        names = sorted({(p_.get('name') if isinstance(p_, dict) else str(p_)).replace('class_rules_', '') for p_ in packs})
+        how = ('Get the rule books once: python -m shipbrain.classrules download --out <folder> (free rule pages of IACS, DNV, ABS, '
+               'BV, LR, ClassNK, KR, CCS, RINA, IRS, PRS, CRS, TL; some need a free login - save those PDFs into <folder>/<society>), '
+               'then python -m shipbrain.classrules build --pdfs <folder> and restart ShipBrain.')
+        if action == 'societies':
+            allsoc = [s_[0] for s_ in classrules.SOURCES]
+            return {'installed': names, 'known': allsoc, 'plain_english': (f"Rule books on this PC: {', '.join(names)}. " if names else
+                                                                            'No class rule books on this PC yet. ') + how}
+        if not query:
+            return {'error': 'search needs a query'}
+        if not names:
+            return {'results': [], 'plain_english': 'No class rule books are loaded yet, so I cannot quote the rules. ' + how}
+        scope = 'class_rules_' + society if society and society.upper() in [n.upper() for n in names] else 'class_rules_'
+        res = self.knowledge_search(query, 5, scope=scope)
+        hits = res.get('results', [])
+        if not hits:
+            return {'results': [], 'plain_english': f"Nothing about '{query}' found in the {society or 'class'} rules on this PC."}
+        top = hits[0]
+        return {'results': hits, 'plain_english': f"The closest rule text is {top['title']}: " + re.sub(r'\s+', ' ', top['text'])[:600]
+                + ' ...' + (f" Also see: {'; '.join(h['title'] for h in hits[1:4])}." if len(hits) > 1 else '')}
+
+    def drawing_to_step(self, file, refinements=2, out=None):
+        from . import cad3dify
+        llm = getattr(self, 'llm', None)
+        if llm is None or not getattr(llm, 'base', None):
+            return {'error': 'drawing_to_step needs the ShipBrain model running (start the app with --model or --url)'}
+        out = out or os.path.splitext(os.path.basename(file))[0] + '.step'
+        r = cad3dify.run(self._path(file), self._path(out), llm.base, refinements, model=getattr(llm, 'model', 'local'),
+                         api_key=getattr(llm, 'key', None))
+        import cadquery as cq
+        s = cq.importers.importStep(r['step']).val()
+        bb = s.BoundingBox()
+        return {'step': os.path.basename(r['step']), 'rounds': r['rounds'], 'volume_mm3': round(s.Volume(), 1),
+                'size_mm': [round(bb.xlen, 1), round(bb.ylen, 1), round(bb.zlen, 1)],
+                'plain_english': f"Made {os.path.basename(r['step'])} from the drawing in {r['rounds']} round(s) (cad3dify): "
+                                 f"{bb.xlen:.0f} x {bb.ylen:.0f} x {bb.zlen:.0f} mm, volume {s.Volume() / 1000:.1f} cm3. "
+                                 'Check it against the drawing (cad_view_check) before use.'}
+
+    def drawing_takeoff(self, file, min_confidence=0.0):
+        from . import construct
+        return construct.takeoff(self._path(file), min_confidence)
+
+    def bolt(self, d, cls='8.8', mu_G=0.12, mu_K=None, pitch=None, method='torque wrench', F_A=None, Phi=0.2, F_Kerf=None,
+             thread=None, nut_factor=None, c=None):
+        from . import bolts
+        if isinstance(d, str) and (d.strip().replace('"', '') in bolts.INCH or thread):
+            return bolts.inch_joint(d, thread or 'UNC', cls if cls != '8.8' else '5', float(c or 0.75), float(nut_factor or 0.20),
+                                    F_ext_lbf=F_A)
+        return bolts.joint(float(d), str(cls), float(mu_G), float(mu_K if mu_K is not None else mu_G), pitch=pitch, method=method,
+                           F_A=F_A, Phi=float(Phi or 0.2), F_Kerf=F_Kerf)
+
+    def parse_document(self, file, ocr=False, pages=None):
+        try:
+            import liteparse
+        except ImportError:
+            raise ModuleNotFoundError("No module named 'liteparse'")
+        src = self._path(file)
+        kw = dict(output_format='markdown', ocr_enabled=bool(ocr), quiet=True, include_complexity=True)
+        if pages:
+            kw['target_pages'] = str(pages)
+        try:
+            r = liteparse.LiteParse(**kw).parse(src)
+        except Exception as e:
+            if 'tessdata' in str(e):
+                return {'error': 'OCR needs its language data from the internet once (Tesseract eng.traineddata); try again online, '
+                                 'or read without ocr'}
+            if 'LibreOffice' in str(e) or 'soffice' in str(e):
+                return {'error': 'Word / Excel / PowerPoint files need LibreOffice (free, https://www.libreoffice.org/download/) '
+                                 'to be converted first'}
+            raise
+        md = '\n\n'.join(f'<!-- page {i} -->\n' + re.sub(r'!\[[^\]]*\]\([^)]*\)\s*', '', pg.markdown or '').strip()
+                         for i, pg in enumerate(r.pages, 1))
+        out = os.path.splitext(os.path.basename(file))[0] + '.md'
+        open(self._path(out), 'w', encoding='utf-8').write(md)
+        need = [pg.page_num if hasattr(pg, 'page_num') else i for i, pg in enumerate(r.pages, 1)
+                if getattr(getattr(pg, 'complexity', None), 'needs_ocr', False)]
+        tables = md.count('\n|---') + md.count('\n| ---')
+        heads = [ln.lstrip('# ').strip() for ln in md.splitlines() if re.match(r'#{1,3} ', ln)][:8]
+        pe = (f"Read {os.path.basename(file)}: {len(r.pages)} page(s) -> {out} ({len(md):,} characters"
+              + (f', {tables} table(s)' if tables else '') + ')' + (f"; headings: {'; '.join(heads)}" if heads else '') + '.'
+              + (f" Pages {', '.join(map(str, need[:15]))} look scanned or mostly pictures"
+                 + (' and were read with OCR.' if ocr else ': ask again with ocr=true to read them.') if need else ''))
+        return {'markdown_file': out, 'pages': len(r.pages), 'needs_ocr_pages': need, 'tables': tables,
+                'preview': md[:1500], 'plain_english': pe}
+
+    def serving_sim(self, action='simulate', users=50, rate_per_s=2.0, input_tokens=600, output_tokens=300, scenario=None):
+        from . import serving
+        if action == 'scenarios':
+            sc = serving.scenarios()
+            return {'scenarios': sc, 'plain_english': 'Measured set-ups (GPU--model--workload): ' + ', '.join(sc) + '.'}
+        return serving.simulate(scenario, None, int(users or 50), float(rate_per_s or 2), int(input_tokens or 600), int(output_tokens or 300))
+
+    def process_sim(self, action, file=None, compounds=None, mass_fractions=None, T_C=None, P_bar=None, flow_kg_h=1000.0,
+                    package='Peng-Robinson (PR)'):
+        from . import dwsim
+        if action == 'run':
+            if not file:
+                return {'error': 'run needs a DWSIM flowsheet file'}
+            return dwsim.run(self._path(file))
+        if action == 'packages':
+            fid = dwsim._call('dwsim_flowsheet_create', {'name': 'list'})['flowsheet_id']
+            pp = dwsim._call('dwsim_thermo_list_property_packages', {'flowsheet_id': fid}).get('property_packages', [])
+            dwsim._call('dwsim_flowsheet_close', {'flowsheet_id': fid})
+            return {'packages': pp, 'plain_english': f"DWSIM has {len(pp)} property packages, e.g. {', '.join(pp[:12])}."}
+        if not (compounds and mass_fractions and T_C is not None and P_bar is not None):
+            return {'error': 'flash needs compounds, mass_fractions, T_C and P_bar'}
+        return dwsim.flash(compounds, mass_fractions, float(T_C), float(P_bar), float(flow_kg_h or 1000), package or 'Peng-Robinson (PR)')
+
+    def dexpi(self, action, file, other=None, format='xlsx'):
+        from . import dexpi as dx
+        src = self._path(file)
+        base = os.path.splitext(os.path.basename(file))[0]
+        if action == 'summary':
+            return dx.summary(src)
+        if action == 'validate':
+            return dx.validate(src)
+        if action == 'tables':
+            r = dx.tables(src, self._path(base + '_lists'), fmt=format if format in ('xlsx', 'csv', 'json') else 'xlsx')
+            r['files'] = [os.path.basename(f) for f in r['files']]
+            return r
+        if action == 'drawing':
+            png = dx.png(src, self._path(base + '.png'), scale=3.0)
+            return {'png': os.path.basename(png), 'svg': base + '.svg', 'overlay': os.path.basename(png),
+                    'plain_english': f'Drew the P&ID: {os.path.basename(png)} (and {base}.svg).'}
+        if action == 'diff':
+            if not other:
+                return {'error': 'diff needs other (the second revision)'}
+            return dx.diff(src, self._path(other))
+        return {'error': f'unknown action {action}'}
+
+    def drawing_detect(self, file, discipline='electrical', min_confidence=0.25):
+        from . import construct
+        src = self._path(file)
+        if src.lower().endswith('.pdf'):
+            from .drawings import load_image
+            from PIL import Image
+            png = os.path.splitext(src)[0] + '_page1.png'
+            Image.fromarray(load_image(src, 0, dpi=150).clip(0, 255).astype('uint8')).convert('RGB').save(png)
+            src = png
+        t = construct.detect(src, discipline, float(min_confidence))
+        items = '; '.join(f"{ln['item']} {ln['qty']}" for ln in t['lines'][:15])
+        return {'cir': os.path.basename(t['cir']), 'total': t['total_count'], 'lines': t['lines'],
+                'plain_english': f"Found {t['total_count']} symbols on the drawing: {items or 'none'}. "
+                                 + (f"{t['total_needs_review']} of them are uncertain (below confidence 0.5) - please check those. " if t['total_needs_review'] else '')
+                                 + f"Saved as {os.path.basename(t['cir'])}: ask drawing_takeoff or drawing_qa about it."}
+
+    def drawing_qa(self, file, question=None, action='qa'):
+        from . import construct
+        if action == 'rfi':
+            return construct.rfi(self._path(file))
+        if not question:
+            i = construct.info(self._path(file))
+            return {'sheets': i['sheets'], 'plain_english': 'Sheets: ' + '; '.join(f"{x['number']} {x['title'] or ''} ({x['discipline']}, "
+                                                                                 f"{x['entities']} items)" for x in i['sheets']) + '.'}
+        return construct.qa(self._path(file), question)
+
+    def ocx_syntax(self, name=None, version=None, changes_from=None):
+        from . import ocx
+        if changes_from:
+            return ocx.changes(changes_from, version or ocx.LATEST)
+        if not name:
+            vs = ocx.versions()
+            return {'versions': vs, 'plain_english': f"OCX schema versions I know: {', '.join(vs)} (newest {vs[-1]}). Ask for any "
+                                                     f"element, e.g. Plate, Stiffener, BarSection."}
+        out = ocx.syntax(name, version)
+        if 'error' in out:
+            hits = ocx.find(name, version)
+            return {'matches': hits, 'plain_english': f"OCX {ocx._resolve(version)} classes for '{name}': "
+                                                      + '; '.join(f"{h['name']} ({h['doc'][:80]})" for h in hits[:8])}
+        return out
+
+    def ocx_read(self, file):
+        from . import ocx
+        r = ocx.read(self._path(file))
+        base = re.sub(r'[^A-Za-z0-9_\-]', '_', os.path.splitext(os.path.basename(file))[0])[:40]
+        out = self._path(base + '_structure.json')
+        json.dump(r['model'], open(out, 'w', encoding='utf-8'))
+        return {'summary': r['summary'], 'structure_json': os.path.basename(out),
+                'plain_english': r['plain_english'] + f' Saved as {os.path.basename(out)} for comparing and meshing.'}
+
+    def ocx_query(self, file, name=None, kind=None, function=None, min_thk=None, max_thk=None):
+        from . import ocx
+        return ocx.query(self._path(file), name, kind, function, min_thk, max_thk)
+
+    def ocx_validate(self, file):
+        from . import ocx
+        return ocx.validate(self._path(file))
+
+    def ocx_write(self, file, out=None, name=None):
+        from . import ocx, members
+        model = members.load(self._path(file), self.converters)
+        out = out or os.path.splitext(os.path.basename(file))[0] + '.3docx'
+        res = ocx.write(model, self._path(out), name=name or 'ShipBrain model')
+        v = ocx.validate(self._path(out))
+        res.update(file=os.path.basename(out), valid=v['valid'], problems=v['errors'][:5],
+                   plain_english=f"Wrote {os.path.basename(out)} (OCX {res['version']}): {res['panels']} panels, {res['plates']} plates, "
+                                 f"{res['stiffeners']} stiffeners, {res['sections']} sections, {res['materials']} materials. " + v['plain_english'])
+        return res
+
+    def ocx_to_step(self, file):
+        from . import ocx
+        r = ocx.to_step(self._path(file))
+        return {'step': os.path.basename(r['step']), 'by': r['by'],
+                'plain_english': f"STEP written: {os.path.basename(r['step'])} (made by {r['by']})." + (f" {r['note']}." if r.get('note') else '')}
+
+    def compare_structures(self, a, b, tol=None, move_tol=300.0, method='coverage'):
+        """coverage (default): stiffener length / plate area found in the other model - works when the two models split
+        members differently (drawing-read vs yard model). members: one-to-one member matching (two versions of ONE model)."""
+        from . import members
+        A, B = members.load(self._path(a), self.converters), members.load(self._path(b), self.converters)
+        if method == 'members':
+            return members.compare(A, B, tol or 5.0, move_tol)
+        return members.coverage(A, B, tol or 50.0)
+
+    def build_structure(self, program, name='structure', element_size=None, step=False):
+        from . import shipprog
+        name = re.sub(r'[^A-Za-z0-9_\-]', '_', str(name))[:40]
+        spec, desc = shipprog.build(program, name, element_size)
+        out = self.plates_mesh(spec['plates'], name, spec['element_size'], spec['loads'], spec['fix'], beams=spec['beams'])
+        if step and 'error' not in out:
+            from .drawings import plates_to_step
+            out['step'] = os.path.basename(plates_to_step(spec['plates'], self._path(name + '.step'), spec['beams'])['step'])
+        c = out.get('check', {})
+        out['plain_english'] = (f"Built {desc}. Mesh: {out.get('nodes')} nodes, {out.get('elements')} elements "
+                                f"({out.get('quads')} shells, {out.get('bars')} beams), {c.get('parts')} connected piece(s); "
+                                f"check: {c.get('verdict')}.")
+        return out
+
+    def choose_engine(self, question):
+        from . import engines, installs
+        out = engines.choose(question)
+        for p in out['plan']:
+            best = p['engines'][0] if p['engines'] else None
+            if best and not best['installed']:
+                i = installs.for_engine(best['engine'])
+                if i:
+                    i['message'] = installs.message(i)
+                    out.setdefault('install', i)
+                    out['plain_english'] += f" To run it here, install {i['name']}: {i['link']}"
+        return out
+
+    def setup_check(self, only_missing=False):
+        from . import installs
+        return installs.setup_check(only_missing)
+
+    def find_solvers(self):
+        from . import solvers
+        f = solvers.find()
+        txt = ('Solvers on this PC: ' + '; '.join(f"{x['solver']} ({x['path']})" for x in f) + '.') if f else \
+              'No solver was found on this PC. Tell me where one is installed (remember_solver), or install CalculiX (free).'
+        return {'solvers': f, 'plain_english': txt}
+
+    def remember_solver(self, name, path):
+        from . import solvers
+        return solvers.remember(name, path)
+
+    def solve(self, file, solver, analysis='static', n_modes=10):
+        from . import solvers
+        r = solvers.run(self._path(file), solver.lower(), analysis, int(n_modes))
+        for k in ('frd', 'f06'):
+            if k in r:
+                r[k] = os.path.basename(r[k])
+        return r
+
+    def analysis_run(self, file, analysis='static', n_modes=10):
+        r = _solver.run_analysis(self._path(file), analysis, int(n_modes))
+        if 'frd' in r:
+            r['frd'] = os.path.basename(r['frd'])
+        return r
+
+    def drawing_to_model(self, file, settings=None, reference=None, pages=None, raster=False):
+        """ship drawing (PDF) -> member model XML with the ship drawing reader (its rules + calibration); optional coverage
+        score against a reference XML. Takes minutes for a full drawing."""
+        import subprocess, glob as _g
+        d = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'shiptools', 'deckrules_tool')
+        out = os.path.join(self.workdir, os.path.splitext(os.path.basename(file))[0] + '_read')
+        cmd = [sys.executable, '-m', 'deckrules.build_ship', self._path(file), '--out', out, '--no-verify',
+               '--settings', self._path(settings) if settings else os.path.join(d, 'settings_new_drawing.json')]
+        if pages:
+            cmd += ['--pages', str(pages)]
+        if raster:
+            cmd.append('--raster')
+        r = subprocess.run(cmd, cwd=d, capture_output=True, text=True, timeout=7200)
+        xmls = sorted(_g.glob(os.path.join(out, '*_moulded.xml')), key=os.path.getsize)
+        if not xmls:
+            raise RuntimeError('the drawing reader made no model: ' + (r.stderr or r.stdout)[-600:])
+        questions = [l[10:] for l in r.stdout.splitlines() if l.startswith('QUESTION:')]
+        res = {'model_xml': os.path.relpath(xmls[-1], self.workdir), 'report': os.path.relpath(os.path.join(out, 'BUILD_REPORT.md'), self.workdir),
+               'open_questions': questions[:30],
+               'plain_english': f'Read the drawing into a member model ({os.path.basename(xmls[-1])}). The reader left '
+                                f'{len(questions)} open question(s) for an engineer instead of guessing.'}
+        if reference:
+            c = self.compare_structures(reference, res['model_xml'])
+            res['vs_reference'] = c
+            res['plain_english'] += ' Against the reference (A = reference, B = from the drawing): ' + c['plain_english']
+        return res
+
+    def structure_to_mesh(self, file, element_size=300.0, merge_tol=10.0, step=False):
+        from . import members, geoclean
+        r = members.to_plates(members.load(self._path(file), self.converters))
+        base = os.path.splitext(os.path.basename(file))[0]
+        json.dump(r, open(self._path(base + '_plates.json'), 'w'))
+        plates, act = geoclean.clean_plates(r['plates'], merge_tol=merge_tol)
+        spec = {'name': base + '_fem', 'plates': plates, 'beams': r['beams'], 'element_size': element_size}
+        out = self._mesh_result(*_pm.build_plates(spec, self.workdir))
+        out['cleaning'] = act[:30] + ([f'... and {len(act) - 30} more'] if len(act) > 30 else [])
+        out['notes'] = r['notes']
+        if step:
+            from .drawings import plates_to_step
+            out['step'] = os.path.basename(plates_to_step(plates, self._path(base + '.step'), r['beams'])['step'])
+        c = out['check']
+        out['plain_english'] = (f"Made a global mesh of {base}: {out['nodes']} nodes, {out['elements']} elements "
+                                f"({out['quads']} shells, {out['bars']} beams). {c['parts']} connected piece(s)"
+                                + (f", the largest has {c['part_sizes'][0]} elements" if c['parts'] > 1 else '') + '. '
+                                + ('Mesh check: ok.' if c['verdict'] == 'ok' else 'Mesh check found: ' + c['verdict'] + '.'))
+        return out
+
+    def mesh_check(self, file):
+        return _mc.check_file(self._path(file))
+
+    def fe_quality(self, file, criteria=None, mesh_size=None):
+        from . import elemquality
+        r = elemquality.check_file(self._path(file), criteria, mesh_size)
+        if r.get('failed_sets_file'):
+            r['failed_sets_file'] = os.path.basename(r['failed_sets_file'])
+        r['quality'].pop('failed_ids', None)
+        return r
+
+    def solve_calculix(self, inp):
+        r = _solver.run_calculix(self._path(inp))
+        r['frd'] = os.path.basename(r['frd'])
+        return r
+
+    def list_files(self):
+        return {'files': sorted(f for f in os.listdir(self.workdir) if not f.startswith('.'))}
+
+    def python_run(self, code, timeout_s=60, name='script'):
+        import subprocess, time as _t
+        name = re.sub(r'[^A-Za-z0-9_\-]', '_', str(name))[:30] or 'script'
+        timeout_s = max(1, min(float(timeout_s), 300.0))
+        before = {f: os.path.getmtime(os.path.join(self.workdir, f)) for f in os.listdir(self.workdir) if os.path.isfile(os.path.join(self.workdir, f))}
+        path = os.path.join(self.workdir, f'_{name}.py')
+        open(path, 'w', encoding='utf-8').write(code)
+        env = dict(os.environ, MPLBACKEND='Agg', PYTHONUNBUFFERED='1')
+        try:
+            r = subprocess.run([sys.executable, '-I', path], cwd=self.workdir, capture_output=True, text=True, timeout=timeout_s, env=env)
+            out, err, rc = r.stdout, r.stderr, r.returncode
+        except subprocess.TimeoutExpired as e:
+            out, err, rc = (e.stdout or b'').decode('utf-8', 'ignore') if isinstance(e.stdout, bytes) else (e.stdout or ''), f'stopped: the script ran longer than {timeout_s:g} s', -1
+        new = sorted(f for f in os.listdir(self.workdir) if os.path.isfile(os.path.join(self.workdir, f)) and f != os.path.basename(path)
+                     and (f not in before or os.path.getmtime(os.path.join(self.workdir, f)) > before[f]))
+        wd = self.workdir.rstrip('/\\')
+        out, err = out.replace(wd, '.'), err.replace(wd, '.')                       # the folder name is not shown
+        res = {'exit_code': rc, 'output': out[-4000:], 'files': new}
+        if err.strip():
+            res['error_text'] = err.strip()[-1500:]
+        res['plain_english'] = ('The script finished' if rc == 0 else 'The script failed') + (f" and wrote {', '.join(new)}" if new else '') + '.' + (f" Error: {err.strip().splitlines()[-1][:200]}" if rc != 0 and err.strip() else '')
+        return res
+
+    def cadquery_build(self, code, name='part', expect=None):
+        from . import cadrun
+        name = re.sub(r'[^A-Za-z0-9_\-]', '_', name)[:40]
+        return cadrun.run(code, self.workdir, name, expect)
+
+    # ------------------------------------------------------------------ plugins (e.g. your private ship_mcp.py)
+    def load_plugin(self, path):
+        """a Python file (or folder with ship_mcp.py) exposing TOOLS = {name: (fn, description, schema)}"""
+        if os.path.isdir(path):
+            path = os.path.join(path, 'ship_mcp.py')
+        sys.path.insert(0, os.path.dirname(os.path.abspath(path)))
+        spec = importlib.util.spec_from_file_location(os.path.splitext(os.path.basename(path))[0], path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        n = 0
+        conv = getattr(mod, 'xml_to_members', None)
+        if conv is None:                                  # plugin folder that also holds an XML kit module
+            for cand in ('ship_xml_kit',):
+                if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(path)), cand + '.py')):
+                    try:
+                        conv = getattr(importlib.import_module(cand), 'xml_to_members', None)
+                    except Exception:
+                        conv = None
+        if conv:
+            self.converters.append(conv)
+        if not hasattr(self, 'hooks'):
+            self.hooks = {}
+        for ev, fn in getattr(mod, 'HOOKS', {}).items():            # question | tool_result | compact
+            self.hooks.setdefault(ev, []).append(fn)
+        for name, (fn, desc, schema) in getattr(mod, 'TOOLS', {}).items():
+            if name not in self.t:
+                self.register(name, fn, desc, schema)
+                n += 1
+        return n
+
+    # ------------------------------------------------------------------ dispatch
+    def call(self, name, args):
+        if name not in self.t:
+            return {'error': f'unknown tool {name}; tools: {", ".join(self.t)}'}
+        fn = self.t[name][0]
+        try:
+            args = args if isinstance(args, dict) else json.loads(args or '{}')
+            res = fn(**args)
+        except Exception as e:
+            res = {'error': f'{type(e).__name__}: {e}'}
+        from . import installs                               # missing program / package -> what to install + link
+        return installs.attach(res)
+
+    def describe(self):
+        return '\n'.join(f'- {n}: {d}\n  args: {json.dumps(s.get("properties", {}), separators=(",", ":"))}'
+                         for n, (_, d, s) in self.t.items())
+
+
+# ====================================================================== prompt
+SYSTEM = """You are ShipBrain, an engineering assistant for CAD, FE meshing, FEA, CFD set-up and drawings, for any field
+(ships and offshore are a specialty). Tools work in mm, N, MPa, tonne (1 m sea-water head = 0.01005 MPa); if the user
+works in other units (see the user profile or the question), convert with convert_units before and after the tools.
+
+Rules:
+0. Write in plain, simple words, in the user's language (English unless the profile or the question says otherwise): short sentences, everyday words, explain an engineering term the first time you use it,
+   always give units. When a tool result has a "plain_english" text, use it. If the user asks about an uploaded file,
+   call file_info first and explain what you found.
+1. Numbers, meshes and files come from tools, never from memory. Use calc for arithmetic.
+2. For rules, methods or yard practice, call knowledge_search first and cite the ids/sources you used.
+3. To call a tool, reply with ONLY one block:
+```tool
+{{"name": "<tool>", "args": {{...}}}}
+```
+   You will get back a message starting with TOOL_RESULT. Then answer, or call the next tool.
+4. If a needed value is missing, choose a sensible default, say which one you assumed, and continue.
+5. Finish with a short answer: what was done, key numbers, files written, checks/warnings.
+6. Answer every technical question in natural language: explain in sentences what the result means, give the value with
+   units and where it comes from (the formula, the class society rule and section), then the numbers. Never answer with
+   only JSON, code or a bare number unless the user asks for that.
+7. Class rules and their formulas: use class_rule (calculators) or knowledge_search (the rule texts) and cite the rule
+   and section; never quote a class rule from memory.
+8. If a tool result has "install", something is not installed: tell the user what to install, why, and give the
+   download link and the steps exactly as written there. Never guess another link.
+
+Tools:
+{tools}
+"""
+
+
+SYSTEM_COMPACT = """You are ShipBrain, an engineering assistant for CAD, meshing, FEA, CFD set-up and drawings (any field; ships a specialty).
+Tools use mm, N, MPa; other units: convert_units in and out, answer in the user\'s units. Follow the user profile.
+Write plain simple words (the user's language), explain terms, give units; use a result's plain_english text. Ask file_info first about uploaded files.
+Numbers/meshes/files only from tools; use calc for arithmetic; cite [ids] of retrieved knowledge or memory.
+Call a tool with ONLY:
+```tool
+{{"name": "<tool>", "args": {{...}}}}
+```
+then wait for TOOL_RESULT. A KEY input missing (size, load, geometry, file): ask one short question naming what you need.
+Only a secondary value missing (friction, fluid, material grade): assume a sensible one and say so.
+A tool error: read it, fix the input and call again, or tell the user what to decide. End with a short answer: done, key numbers, files, warnings.
+Result with "install": tell the user what to install and give its link and steps exactly as written.
+Every technical answer in natural language: what it means in sentences, the result with units, where it comes from (formula,
+class society rule + section), then the numbers. Never only JSON, code or a bare number unless asked.
+Class rules / formulas: class_rule (calculators) or knowledge_search (rule texts); never quote a rule from memory.
+Tools: {tools}
+"""
+
+
+CORE_TOOLS = ('knowledge_search', 'file_info', 'calc', 'convert_units', 'recall', 'remember', 'list_files', 'choose_engine')
+EXT_TOOLS = {'.3dm': ('native_cad', 'file_info'), '.sldprt': ('native_cad',), '.catpart': ('native_cad',), '.ipt': ('native_cad',),
+             '.f3d': ('native_cad',), '.fcstd': ('native_cad',), '.prt': ('native_cad', 'nx_open'), '.igs': ('native_cad',),
+             '.iges': ('native_cad',), '.stl': ('reverse_cad', 'stl_to_step'), '.step': ('cad_mesh', 'repair_model', 'surface_extract'),
+             '.stp': ('cad_mesh', 'repair_model'), '.bdf': ('fe_quality', 'mesh_check', 'fe_convert', 'fe_edit', 'analysis_run'),
+             '.fem': ('fe_quality', 'fe_convert', 'fe_edit'), '.inp': ('fe_quality', 'mesh_check', 'fe_convert', 'analysis_run'),
+             '.dxf': ('compare_drawings', 'drawing_check', 'drawing_to_model'), '.dwg': ('compare_drawings', 'drawing_check'),
+             '.pdf': ('compare_drawings', 'parse_document', 'drawing_check', 'trace_drawing'), '.png': ('trace_drawing', 'look', 'compare_drawings'),
+             '.jpg': ('trace_drawing', 'look'), '.tif': ('trace_drawing',), '.3docx': ('ocx_read', 'ocx_validate'),
+             '.dwxml': ('process_sim',), '.dwxmz': ('process_sim',), '.dat': ('cable_run',), '.i': ('moose_run',), '.sim': ('nx_open',),
+             '.msh': ('file_info', 'mesh_check', 'analysis_run'), '.vtk': ('file_info', 'show_result'), '.vtu': ('file_info', 'probe_result', 'show_result'),
+             '.unv': ('file_info', 'mesh_check'), '.med': ('file_info',), '.cgns': ('file_info',), '.obj': ('file_info', 'reverse_cad'), '.ply': ('file_info', 'reverse_cad'),
+             '.frd': ('show_result', 'probe_result', 'file_info'), '.zip': ('file_info',), '.tgz': ('file_info',), '.pptx': ('file_info', 'parse_document', 'look'),
+             '.docx': ('file_info', 'parse_document'), '.xlsx': ('file_info', 'parse_document'), '.csv': ('file_info', 'calc'), '.sif': ('file_info', 'elmer_flow'),
+             '.op2': ('file_info',), '.rst': ('file_info',), '.odb': ('file_info',), '.comm': ('file_info',)}
+
+
+KEYWORD_TOOLS = [   # strong words in a request -> the tools it almost always needs
+    (r'chain|mooring|fairlead|anchor|catenary|touch ?down|\bR[345]S?\b|riser|umbilical|power cable|lazy.?wave', ('mooring', 'cable_run')),
+    (r'pipe|piping|m3/h|m3/s|gpm|l/s|head loss|pressure (drop|loss)|pump|ballast|bilge|cooling (water|line)|fire main|fuel (oil|line)|lube', ('pipe_flow',)),
+    (r'pulsation|pressure pulse|acoustic (resonance|mode|natural)|pipe vibration|piping vibration|natural frequenc(y|ies) of (the |my |a )?pip|reciprocating (pump|compressor)|plunger pump', ('pipe_pulsation', 'pipe_route')),
+    (r'pipe stress|piping stress|stress analysis of (the |a |my )?pip|thermal expansion|expansion loop|anchor (load|force)s?|support loads?|b31\.?[13]|flexibility analysis|nozzle load', ('pipe_stress', 'pipe_route')),
+    (r'rout(e|ing)|pipe run|run of pipe|isometric|\bbends?\b|elbow|east|west|north|south|go(es)? up|then up', ('pipe_route', 'pipe_flow')),
+    (r'plate|plating|panel|psi|kpa|bar\b|pressure|stress|deflect|head of|thick', ('plate_check', 'plate_buckling', 'moose_plate')),
+    (r'stiffen|stiffner|profile|\bfb ?\d|\bhp ?\d|t-?bar|l-?bar|angle|section modulus|longitudinal', ('stiffener_check', 'section_props')),
+    (r'bolt|torque|preload|\bm\d{1,2}\b|unc|unf|8\.8|10\.9|12\.9|thread', ('bolt',)),
+    (r'mixture|composition|phase|flash|stream|flowsheet|dwsim|distillation|vapou?r|dew|bubble|mol(e|ar)? ?%|mass ?%', ('process_sim',)),
+    (r'p&id|\bpid\b|dexpi|pumps?, tanks|equipment list|instrument', ('dexpi', 'pid_kg')),
+    (r'\.stp\b|\.step\b|\.iges?\b|sldprt|catpart|solidworks|catia|inventor|fusion|rhino|freecad|\.prt\b|native', ('native_cad', 'file_info')),
+    (r'\.stl\b|scan(ned)? (part|mesh)|reverse', ('reverse_cad', 'stl_to_step')),
+    (r'\bpicture\b|\bimage\b|visuali[sz]|show (me )?(the )?(stress|result|model|plot)|contour|render|screenshot of (the )?(model|mesh)|plot (the )?(stress|displacement)|paraview|\.vtu', ('show_result',)),
+    (r'\bcfd\b|\bfsi\b|fluid.structure|\belmer\b|flow (past|around|over|on)|drag|(water|air|wind|current) (at|of) [0-9.]+ ?m/s|navier|turbulen|k-?omega|pressure distribution|wave load|openfoam|simplefoam', ('elmer_flow', 'openfoam_flow', 'flow_load_stress', 'physics_lab')),
+    (r'(stress|pressure|velocity|displacement|value|temperature)s? (at|in|near|on) (the )?(point|node|location|position|x ?=|\()|at (x|coordinate)|probe|read (the )?(value|result)', ('probe_result',)),
+    (r'fluent|star-?ccm|simcenter star|ansys cfd|abaqus cfd|\bccm\b', ('cfd_export', 'find_solvers', 'probe_result')),
+    (r'hydrostatic|stability|metacentr|\bgm\b|\bkb\b|\bkg\b|freeboard|displacement of (the )?(hull|vessel|ship|barge)|draft (of|at|for)|trim and|vessel\.?js|loading condition', ('ship_hydrostatics',)),
+    (r'hull (form|shape|design|generat|param)|parametric hull|design (a |the )?hull|block coefficient|\bcb\b|bulb|hull dataset|ship-?d\b|prismatic coeff|waterplane coeff|section area curve', ('hull_generate', 'ship_hydrostatics')),
+    (r'resistance of (the |a |my )?(hull|ship|vessel)|(ship|hull) resistance|effective power|holtrop|\bpe\b|propulsion power|power (needed|required) (at|for)|knots?\b.*(power|resistance)|(power|resistance).*knots?\b', ('hull_resistance', 'hull_generate')),
+    (r'\bgz\b|righting (lever|arm)|stability (curve|criteria)|imo (intact|stability)|is code|angle of (vanishing|maximum)|dynamic stability|area under (the )?gz|capsiz', ('gz_curve', 'stl_stability', 'ship_hydrostatics')),
+    (r'catamaran|demihull|slender hull|fast ?ships|twin.?hull|multi.?hull', ('catamaran_hull', 'stl_stability')),
+    (r'pynite|space frame|portal frame|truss analysis|continuous beam|plate bending|beam on elastic|\bp-?delta\b|load combination', ('pynite_fea', 'frame_solve')),
+    (r'openhcm|hull condition model|\bhcm\b|\.hcm\b', ('openhcm_read', 'structure_to_mesh')),
+    (r'roll period|natural period|heave|pitch(ing)? period|seakeeping|ship motions?|resonan|rao\b', ('hull_motions', 'gz_curve')),
+    (r'building block|\bdbb\b|weight (estimate|budget)|requirements? .*(shall|should)|shall.*should|centre of gravity of the (ship|vessel|blocks)', ('dbb_blocks', 'ship_hydrostatics')),
+    (r'nastran|pynastran|\bbdf\b|\bop2\b|\bf06\b', ('nastran_read', 'nastran_plate_deck', 'fe_convert')),
+    (r'propeller|screw|open.water (curve|diagram)|\bkt\b|\bkq\b|advance ratio|bollard|thrust coefficient|cavitation number', ('propeller_bem', 'propeller_design', 'blade_geometry', 'hull_resistance')),
+    (r'finite[- ]volume|\bfvm\b|1d (cfd|diffusion|convection|conduction)|\btdma\b|simple algorithm|upwind|central differenc', ('fvm_1d',)),
+    (r'iso ?\d{4}|din ?\d{3,5}|\bipe ?\d|\bhe[abm] ?\d|hex (bolt|nut|screw)|washer|\bnuts?\b|bolt (size|dimension|head)|across flats|standard (part|section|profile)|flange dimension|nominal pipe size|schedule \d', ('standard_part',)),
+    (r'algohex|frame.?field|hex.?dominant|all.?hex(ahedral)? mesh|better hex', ('hex_mesh_algohex', 'hex_mesh')),
+    (r'\bxc\b|xcfem|reinforced concrete|rebar|eurocode ?[23]|\bEC[23]\b|\bEHE\b|ACI ?318|fibre? section|code check|limit state|interaction diagram|construction phase', ('xc_run', 'knowledge_search')),
+    (r'cbfem|component.based|plastic strain|connection (capacity|resistance)|bolt(s)? (tension|prying)|prying|t-?stub', ('steel_cbfem', 'steel_connection')),
+    (r'aisc|clip angle|gusset|brace|bracing|interaction ratio|resistance|strong enough|passes?|bolt group|bolt pattern|eccentric|bracket|lug|connection|joint|end ?plate|fin ?plate|shear tab|base ?plate|anchor bolt|splice|cover plate|moment connection', ('steel_connection', 'bolt', 'bolt_group', 'connection_check')),
+    (r'scan|trace|cent(er|re) ?line|vector(ise|ize)|raster|photo of', ('trace_drawing',)),
+    (r'compare|revision|rev\b|what changed|difference between', ('compare_drawings', 'compare_structures')),
+    (r'quality|jacobian|warpage|skew|aspect|element check', ('fe_quality', 'mesh_check')),
+    (r'topology|lightening|lighten|material layout|bracket shape|optimi[sz]e .*(bracket|shape|layout)', ('topology',)),
+    (r'class|iacs|\bur s\d|hull girder|rule|dnv|abs\b|lloyd|\bbv\b|classnk|\bkr\b|\bccs\b', ('class_rule',)),
+    (r'\bnx\b|journal|simcenter|nx open|\.sim\b', ('nx_open', 'nx_rename')),
+    (r'moose|\.i\b|multiphysics', ('moose_plate', 'moose_run')),
+    (r'ocx|3docx', ('ocx_read', 'ocx_syntax', 'ocx_validate', 'ocx_write')),
+    (r'hex(a|ahedral)?\b|hexahedr|brick (mesh|element)|solid mesh|casting|forging|foundation|shaft bracket|lug\b|thick plate', ('hex_mesh', 'cad_mesh')),
+    (r'\bdraw\b|drawing of|sketch|dxf|title block|general arrangement|plan view|dimensioned|\ba[0-4] sheet|drafting', ('dxf_draw', 'dxf_check')),
+    (r'mesh|element size|fea|fe model', ('cad_mesh', 'panel_mesh', 'plates_mesh', 'analysis_run')),
+    (r'frame|beam|portal|truss|column|pipe support', ('frame_solve',)),
+    (r'fatigue|hot ?spot|weld toe', ('fatigue_mesh',)),
+    (r'convert|inch|feet|\bft\b|psi|lbf|kgf', ('convert_units',)),
+    # --- tools that had no routing rule: code, CadQuery and the rest (each request now offers the right tool in full)
+    (r'python|script|write (a )?(code|program)|loop over|for each|numpy|pandas|csv|plot|matplotlib|calculate with code|automate', ('python_run', 'cadquery_build', 'calc')),
+    (r'cadquery|parametric|3d model|3d cad|make a (3d )?(step|stl)|\bflange\b|bracket|extrude|revolve|fillet|chamfer', ('cadquery_build', 'cad_mesh', 'native_cad')),
+    (r'matlab|octave|vibrationdata|copied (repo|package)|call (a )?function|\.m file|my (code )?folder', ('code_folder', 'code_functions', 'code_call')),
+    (r'\bmcp\b|mcp server|external tool|connected tool', ('mcp_tools', 'mcp_call')),
+    (r'surrogate|train (a )?(small )?model|predict (instantly|fast)|response surface|metamodel', ('surrogate_build', 'surrogate_predict')),
+    (r'my units|prefer(red)? units|units (i|we) use|set (my )?profile|always (use|show) (mm|m|inch)', ('set_profile', 'convert_units')),
+    (r'\bskill|workflow|save (this|these) steps|teach you (a )?(way|workflow)', ('add_skill', 'list_skills')),
+    (r'forget|wrong memory|that is (wrong|correct)|good answer|bad answer|you remembered', ('memory_feedback', 'recall', 'remember')),
+    (r'calculix|\bccx\b|run (the )?(analysis|inp)|solve (the |my )?(inp|mesh|model)|linear static', ('solve_calculix', 'analysis_run', 'solve')),
+    (r'clean (up )?(the )?(geometry|cad|step)|heal|sliver|small faces|repair (the )?(step|cad|geometry)', ('geometry_clean', 'repair_model')),
+    (r'pipe (centre|center)?lines?|extract (the )?pipes?|pipes? from (the )?(cad|step|mesh)', ('pipe_extract', 'pipe_route')),
+    (r'insight|explain (the )?results?|what does (this|the) result mean|interpret|summar(y|ise|ize) (the )?results?', ('result_insight', 'show_result', 'probe_result')),
+    (r'tensor|gpu fem|fast fem solve', ('tensor_fem', 'topology')),
+    (r'compare (the )?mesh (with|to|against) (the )?drawing|mesh (vs|against) drawing', ('compare_mesh_drawing', 'drawing_check')),
+    (r'drawing (to|into) (a )?(3d|step|model)|make (a )?3d (model )?(from|of) (this |the |a )?(2d )?drawing|2d drawing.{0,20}(3d|step)', ('drawing_to_3d', 'drawing_to_step', 'drawing_to_model')),
+    (r'check (the )?(cad )?(model|views?) (against|with) (the )?(drawing|picture)|cad view', ('cad_view_check', 'look')),
+    (r'electrical|symbol|takeoff|take.?off|receptacle|panel schedule|count (the )?(lights|outlets|symbols)', ('drawing_detect', 'drawing_takeoff', 'drawing_qa')),
+    (r'build (a )?structure|structure model|setup check|check (the )?set.?up|before (i )?(run|solve)', ('build_structure', 'setup_check', 'solve')),
+    (r'installed (in|at) (a |an )?(different|unusual)|path (of|to) (the )?(calculix|nastran|ansys|abaqus|openfoam)|remember (the )?solver', ('remember_solver', 'find_solvers')),
+    (r'\bocx\b|class (society )?xml|3docx', ('ocx_read', 'ocx_query', 'ocx_to_step', 'ocx_validate', 'ocx_syntax')),
+    (r'how many users|latency|tokens? per second|server speed|time to first|concurrent users', ('serving_sim',)),
+    (r'\.docx|\.pdf|\.pptx|\.xlsx|document|read (the |this )?(pdf|report|spec)|parse', ('parse_document', 'look', 'file_info')),
+    (r'look at|picture|photo|image|screenshot|sketch|scan', ('look', 'drawing_detect', 'file_info')),
+    (r'column foot|column base|base ?plate|anchor bolts?|end ?plate|fin ?plate|shear tab|beam splice|moment connection', ('steel_connection', 'bolt_group', 'connection_check')),
+    (r'(make|create|draw|give me) (the |a )?(2d )?(drawing|dxf|sheet)|draw (it|this|the)|dxf', ('dxf_draw', 'dxf_check')),
+    # --- phrasings found by the recall check over all training data
+    (r'drawing plate|plate .{0,40}(holes?|slots?) .{0,60}(drawing|dxf|dimension)|(dimension(ed)?|detail) drawing|\bdxf\b|draw (a|the|me)|drawing of|drawing ?[:,]|\w+ drawing\b', ('dxf_draw', 'dxf_check')),
+    (r'\bas a table\b|table of|for (each|all) (of )?(the )?(thickness|diameter|length|size|load|case|value)|for thicknesses|for diameters|for loads|compare (the )?(weights?|stress|values)|loop|batch|weights? of (a )?steel plate', ('python_run',)),
+    (r'(and|then|also) (solve|run|analy[sz]e)( it)?|solve it|show (me )?(the )?(stress|displacement)|stress (picture|plot|result)|largest (stress|displacement)|run (it|the analysis)', ('solve_calculix', 'show_result', 'probe_result')),
+    (r'structural plan|plan\.dxf|\.dxf.{0,40}(3d|model|mesh|step)|(3d|fe) (model|mesh) from (the )?(plan|dxf)|girder.{0,20}stiffener layers', ('drawing_to_3d', 'drawing_check')),
+    (r'my own (python )?(folder|functions?|code|calculations?|scripts?)|use my (functions?|folder|code|calculations?)|python folder', ('code_folder', 'code_functions', 'code_call')),
+    (r'remember|memory|keep it|that is (correct|wrong)|mark it', ('remember', 'recall', 'memory_feedback')),
+    (r'cantilever|simply supported|section area|moment of inertia|\biy\b|\biz\b|point load|udl|reaction|beam .{0,30}(deflection|reaction)', ('pynite_fea', 'frame_solve')),
+    (r'fin plate|end plate|shear tab|splice|column (foot|base)|base ?plate|anchor bolts?|bolt rows?|rows? of m\d+|(heb|hea|ipe)\s?\d{2,3}', ('steel_connection', 'steel_cbfem', 'bolt_group', 'connection_check')),
+    (r'1d (simple|duct|flow|cfd|channel)|simple duct|finite.volume|\bsimple\b.{0,20}(duct|pipe)|duct example', ('fvm_1d', 'openfoam_flow')),
+    (r'outer (skin|surface)|mid.?surfaces?|skin of|\bskid\b|list (all )?(the )?pipes?|pipes? and elbows|elbows', ('surface_extract', 'pipe_extract', 'native_cad')),
+]
+
+
+def select_tools(tools, question, k=20):
+    """the tools worth showing in full for this question: core ones, strong keyword and file-type hits, the best word
+    matches with tool names / descriptions, then the routed engine's tools (a small model chooses far better from ~16
+    than from 85; every other tool is still listed by name)"""
+    q = (question or '').lower()
+    names = list(tools.t)
+    pick = [n for n in CORE_TOOLS if n in tools.t]
+    for rx, tl in KEYWORD_TOOLS:
+        if re.search(rx, q):
+            pick += [n for n in tl if n in tools.t]
+    for ext, tl in EXT_TOOLS.items():
+        if re.search(re.escape(ext) + r'\b', q):
+            pick += [n for n in tl if n in tools.t]
+    words = set(re.findall(r'[a-z][a-z0-9]{2,}', q)) - {'the', 'and', 'for', 'with', 'what', 'how', 'this', 'that', 'from', 'can',
+                                                          'you', 'please', 'give', 'check', 'make', 'need', 'want', 'is', 'are'}
+    scored = []
+    for n in names:
+        d = tools.t[n][1].lower()
+        sc = 3 * len(words & set(n.split('_'))) + sum(1 for w in words if w in d[:400])
+        if sc >= 2:
+            scored.append((sc, n))
+    for _, n in sorted(scored, key=lambda x: (-x[0], x[1]))[:6]:
+        pick.append(n)
+    try:
+        from . import engines
+        for kind in engines.classify(question or ''):
+            for e in engines.ENGINES:
+                caps = e[1]
+                if kind in (caps if isinstance(caps, (set, dict)) else ()):
+                    pick += [n for n in names if re.search(r'\b' + re.escape(n) + r'\(', e[3] or '')]
+    except Exception:
+        pass
+    return list(dict.fromkeys(pick))[:max(k, len(CORE_TOOLS) + 6)]
+
+
+def system_prompt(tools, compact=True, question=None, only=None):
+    """compact (default): tool names + argument names only (~4x fewer tokens -> much faster first answer on a CPU);
+    the fine-tuned model learns the details from the training data. compact=False: full descriptions (untrained models).
+    question / only: show only the relevant tools in full (select_tools), and every other tool by name in one line."""
+    if not compact:
+        return SYSTEM.format(tools=tools.describe())
+    sel = list(only) if only is not None else (select_tools(tools, question) if question else None)
+    items = []
+    for n, (_, d, sch) in tools.t.items():
+        if sel is not None and n not in sel:
+            continue
+        req = set(sch.get('required', []))
+        args = ','.join(k if k in req else k + '?' for k in sch.get('properties', {}))
+        first = re.split(r'(?<=[.:])\s', d, 1)[0][:70].rstrip('.:')
+        items.append(f'{n}({args}) {first}')
+    text = '; '.join(items)
+    if sel is not None:
+        rest = [n for n in tools.t if n not in sel]
+        text += '\nOther tools (call by name when needed): ' + ', '.join(rest)
+    return SYSTEM_COMPACT.format(tools=text)
+
+
+def compact_result(res, limit=2500):
+    """shorter tool results for the model (CPU prompt time): lists cut to 12 items, floats rounded, total capped"""
+    def c(x, depth=0):
+        if isinstance(x, float):
+            return float(f'{x:.5g}')
+        if isinstance(x, dict):
+            return {k: c(v, depth + 1) for k, v in x.items() if k not in ('xyz', 'edges')}
+        if isinstance(x, (list, tuple)):
+            out = [c(v, depth + 1) for v in x[:12]]
+            if len(x) > 12:
+                out.append(f'... {len(x) - 12} more')
+            return out
+        return x
+    txt = json.dumps(c(res), default=str, separators=(',', ':'))
+    return txt if len(txt) <= limit else txt[:limit] + '...(cut)'
+
+
+
+def parse_tool_call(text):
+    m = TOOL_RE.search(text or '')
+    if not m:
+        return None
+    raw = m.group(1).strip()
+    try:
+        d = json.loads(raw)
+    except json.JSONDecodeError:
+        try:
+            d = ast.literal_eval(raw)                         # small models sometimes write python dicts
+        except Exception:
+            return {'name': '__bad__', 'args': {}, 'raw': raw}
+    if not isinstance(d, dict):
+        return {'name': '__bad__', 'args': {}, 'raw': raw}
+    return {'name': d.get('name') or d.get('tool'), 'args': d.get('args') or d.get('arguments') or {}}
+
+
+# ====================================================================== LLM client (OpenAI-compatible)
+class LLM:
+    def __init__(self, base_url, model='local', temperature=0.2, max_tokens=1500, api_key=None, timeout=900):
+        self.base = base_url.rstrip('/')
+        if self.base.endswith('/v1'):
+            self.base = self.base[:-3]
+        self.model, self.temperature, self.max_tokens, self.key, self.timeout = model, temperature, max_tokens, api_key, timeout
+
+    def _req(self, path, body=None):
+        h = {'Content-Type': 'application/json'}
+        if self.key:
+            h['Authorization'] = 'Bearer ' + self.key
+        return urllib.request.Request(self.base + path, data=json.dumps(body).encode() if body is not None else None, headers=h)
+
+    def count_tokens(self, text):
+        """exact number of tokens with the model's own tokenizer (llama-server /tokenize; raises if not supported)"""
+        with urllib.request.urlopen(self._req('/tokenize', {'content': text}), timeout=20) as r:
+            return len(json.loads(r.read())['tokens'])
+
+    def ok(self):
+        try:
+            with urllib.request.urlopen(self._req('/v1/models'), timeout=3) as r:
+                return r.status == 200
+        except Exception:
+            return False
+
+    def stream(self, messages):
+        """yield text pieces"""
+        body = {'model': self.model, 'messages': messages, 'temperature': self.temperature, 'max_tokens': self.max_tokens, 'stream': True,
+                'cache_prompt': True}          # llama.cpp: re-use the already-read system prompt (others ignore it)
+        with urllib.request.urlopen(self._req('/v1/chat/completions', body), timeout=self.timeout) as r:
+            for raw in r:
+                line = raw.decode('utf-8', 'replace').strip()
+                if not line.startswith('data:'):
+                    continue
+                data = line[5:].strip()
+                if data == '[DONE]':
+                    break
+                try:
+                    ch = json.loads(data)['choices'][0]
+                except (ValueError, KeyError, IndexError):
+                    continue
+                piece = (ch.get('delta') or {}).get('content') or (ch.get('message') or {}).get('content')
+                if piece:
+                    yield piece
+
+
+# ====================================================================== the loop
+def pid_read_prompt(n, tags, example):
+    """the one question used to read a P&ID sheet - at run time (pid_kg read) and in the training data (synth_pid)"""
+    return (f'You read P&ID sheet (page {n}). Write ONE JSON object in exactly the format of the example: schema_version, page, '
+            'sheet, equipment, components, instruments, lines (with from/to and the components in order), signals '
+            '(from -> to, type, purpose), off_page_connectors, boundaries, unreadable. Record only what is drawn; give each item '
+            'a bbox [x0, y0, x1, y1] as fractions of the sheet (0,0 = top left) and a confidence when unsure; never invent tags. '
+            + (f'Tags found by text / OCR on this sheet: {tags}. ' if tags else '')
+            + f'Example of the format (another plant):\n{example}\nAnswer with the JSON only. page = {n}.')
+
+
+def _strip_think(t):
+    return re.sub(r'<think>.*?</think>', '', t, flags=re.S)
+
+
+CAD_WORDS = re.compile(r'\b(cad|cadquery|step|stl|solid|3d|3-d|part|extrude)\b|model of|make a model|3d model', re.I)
+
+
+RAG_BUDGET_CHARS = 1800      # retrieved text per question (~500 tokens). On a CPU every retrieved token is READ before the
+                             # first word (~20-60 tokens/s for a 4B model), so this budget is the main lever on waiting time
+
+
+def retrieve(tools, question, k=3, min_score=3.0, budget=None):
+    """RAG within a budget: the most personal and most reliable parts first, each cut to its share -
+    profile, matching skill, the user's memory, one verified CAD example (CAD requests), rule book / notes, repo text"""
+    budget = RAG_BUDGET_CHARS if budget is None else budget
+    cands = []                                                  # (priority group, text, id, max chars)
+    prof = getattr(tools, 'profile', None)
+    if prof is not None and prof.context():
+        cands.append((prof.context(), 'profile', 300))
+    sk = getattr(tools, 'skills', None)
+    if sk is not None:
+        from .skills import context as _skill_ctx
+        for x in sk.match(question, 1):
+            cands.append((_skill_ctx(x), 'skill:' + x['name'], 700))
+    if tools.memory is not None:
+        for m in tools.memory.recall(question, 2):
+            if m.get('kind') == 'correction':                  # a worked example from a thumbs-down with a correction
+                t = (f"[memory {m['id']}] Earlier a similar request (\"{m.get('question', '')[:160]}\") was answered wrongly"
+                     + (f" (\"{m['wrong'][:160]}\")" if m.get('wrong') else '') + f"; the user corrected it: {m['correction']}"
+                     + (f" (corrected {m['count']} times)" if m.get('count', 1) > 1 else '')
+                     + (". NOTE: this correction does not match what the tool computed then - follow the tool's result "
+                        "and ask the user if it matters." if m.get('disagrees_with_tool') else '. Do it this way now.'))
+                cands.append((t, 'memory:' + m['id'], 500))
+            else:
+                cands.append((f"[memory {m['id']}] (taught by the user) {m['text']}", 'memory:' + m['id'], 300))
+    cad = CAD_WORDS.search(question) and not re.search(r'\bmesh', question, re.I)
+    if tools.examples is not None and cad:
+        for e in tools.examples.search(question, 1):
+            cands.append((f"[example {e['name']}] verified {e.get('metrics', {})}\n```python\n{e['code'][:1100]}\n```",
+                          'example:' + e['name'], 1300))
+    if tools.kb is not None and len(tools.kb):
+        for h in tools.kb.search(question, k):
+            if h['score'] >= min_score or getattr(tools.kb, 'embedder', None):
+                cands.append((f"[{h['id']}] ({h['source']}) {h['text']}", h['id'], 450))
+    rk = getattr(tools, 'repo_kb', None)
+    names = [str(n.get('name', '') if isinstance(n, dict) else n).lower() for n in (getattr(rk, 'packs', None) or [])]
+    if rk is not None and len(rk) and (CAD_WORDS.search(question) or any(n in question.lower() for n in names)):
+        for h in rk.search(question, 1):
+            if h['score'] >= 3 * min_score:                       # repo text only when clearly relevant
+                cands.append((f"[{h['id']}] ({h['source']}) {h['text']}", h['id'], 400))
+    parts, used, left = [], [], budget
+    for text, cid, cap in cands:
+        if left < 120:
+            break
+        piece = text[:min(cap, left)]
+        if len(piece) < len(text):
+            piece = piece.rsplit(' ', 1)[0] + ' ...'
+        parts.append(piece)
+        used.append(cid)
+        left -= len(piece) + 2
+    if not parts:
+        return None, []
+    return ('Retrieved context (use it if relevant, cite the [ids]; it may be incomplete):\n\n' + '\n\n'.join(parts)), used
+
+
+def attach_context(msgs, ctx, index=-1):
+    """put the retrieved knowledge INTO the newest user message (at the end of the prompt), not in a system message
+    before the chat: the system prompt and the earlier turns then stay one fixed prefix that llama.cpp's prompt cache
+    reuses, so each turn only reads its new tokens (much faster on a CPU). Used at run time AND in the training data."""
+    if not ctx:
+        return msgs
+    msgs = list(msgs)
+    users = [i for i, m in enumerate(msgs) if m['role'] == 'user' and not str(m['content']).startswith('TOOL_RESULT')]
+    if not users:
+        return msgs
+    i = users[index]
+    msgs[i] = dict(msgs[i], content=f"{ctx}\n\n---\nQuestion: {msgs[i]['content']}")
+    return msgs
+
+
+def _install_note(text, shown):
+    """the model must give the download link; if a small model forgot it, add it under its answer"""
+    miss = [i for link, i in shown.items() if link not in text]
+    return ''.join('\n\n**Install needed:** ' + i['message'] for i in miss)
+
+
+def run(llm, tools, history, max_steps=MAX_STEPS):
+    """history: [{'role','content'}] of the chat so far (user last). Yields UI events (dicts)."""
+    tools.llm = llm                                          # look / pid_kg read show pictures to this same model
+    first_q = next((h['content'] for h in history if h['role'] == 'user' and isinstance(h['content'], str)), '')
+    focus = (first_q + '\n' + history[-1]['content']) if isinstance(history[-1]['content'], str) else first_q
+    msgs = [{'role': 'system', 'content': system_prompt(tools, PROMPT_COMPACT, question=focus)}]
+    ctx, used = retrieve(tools, history[-1]['content'])
+    for h in tools.hook('question', history[-1]['content']) if hasattr(tools, 'hook') else []:
+        ctx = (ctx + '\n\n' if ctx else '') + '[hook] ' + h
+        used.append('hook')
+    if ctx:
+        yield {'type': 'context', 'sources': used}
+    from . import chatstate                                  # long chat: oldest turns -> notes made by code (never lost)
+    if chatstate.COUNTER is None and not getattr(llm, '_count_tried', False) and hasattr(llm, 'count_tokens'):
+        llm._count_tried = True                              # exact token counts from the model's own tokenizer, once set up
+        chatstate.use_counter(llm.count_tokens, msgs[0]['content'])
+    fixed = sum(chatstate.tokens(m['content']) for m in msgs)
+    history, note = chatstate.compact(list(history), getattr(tools, 'workdir', None), fixed_tokens=fixed)
+    if note:
+        for h in tools.hook('compact', note) if hasattr(tools, 'hook') else []:
+            note += '\n\n[hook] ' + h
+        msgs.append({'role': 'system', 'content': note})
+        yield {'type': 'context', 'sources': ['chat notes']}
+    msgs += attach_context(list(history), ctx)           # knowledge at the end: the chat so far stays a cached prefix
+    seen, shown = set(), {}                                  # shown: install notices (link -> block) in this turn
+    for step in range(max_steps):
+        text = ''
+        for piece in llm.stream(msgs):
+            text += piece
+            yield {'type': 'text', 'delta': piece}
+        text = _strip_think(text)
+        call = parse_tool_call(text)
+        msgs.append({'role': 'assistant', 'content': text})
+        if not call:
+            yield {'type': 'done', 'content': text + _install_note(text, shown)}
+            return
+        if call['name'] == '__bad__':
+            res = {'error': 'the tool block is not valid JSON: ' + call['raw'][:200] + ' - write it again as JSON'}
+        else:
+            key = call['name'] + json.dumps(call['args'], sort_keys=True, default=str)
+            if key in seen:                                   # stall guard: same call again -> stop looping
+                res = {'error': 'this exact call was already made; change the arguments or answer with what you have'}
+                if step >= 2:
+                    yield {'type': 'done', 'content': text + '\n\n(stopped: the model repeated the same tool call)'}
+                    return
+            else:
+                seen.add(key)
+                yield {'type': 'tool_call', 'name': call['name'], 'args': call['args']}
+                res = tools.call(call['name'], call['args'])
+        ev = {'type': 'tool_result', 'name': call['name'], 'result': res}
+        if call['name'] in MESH_TOOLS and 'error' not in res and tools.last_mesh:
+            ev['mesh'] = tools.last_mesh
+        yield ev
+        if isinstance(res, dict) and res.get('install') and res['install']['link'] not in shown:
+            shown[res['install']['link']] = res['install']
+            yield {'type': 'install', **res['install']}
+        extra = tools.hook('tool_result', call['name'], call['args'], res) if hasattr(tools, 'hook') else []
+        msgs.append({'role': 'user', 'content': f"TOOL_RESULT {call['name']}: " + compact_result(res)
+                     + ''.join('\n[hook] ' + h for h in extra)})
+    yield {'type': 'done', 'content': '(stopped after %d tool steps)' % max_steps}
+
+
+def run_offline(tools, history):
+    """no model connected: '/tool name {json}' runs a tool; anything else searches the knowledge base"""
+    q = history[-1]['content'].strip()
+    m = re.match(r'/(?:tool\s+)?(\w+)\s*(\{.*\})?\s*$', q, re.S)
+    if m and m.group(1) in tools.t:
+        name, args = m.group(1), json.loads(m.group(2) or '{}')
+        yield {'type': 'tool_call', 'name': name, 'args': args}
+        res = tools.call(name, args)
+        ev = {'type': 'tool_result', 'name': name, 'result': res}
+        if name in MESH_TOOLS and 'error' not in res:
+            ev['mesh'] = tools.last_mesh
+        yield ev
+        if isinstance(res, dict) and res.get('install'):
+            yield {'type': 'install', **res['install']}
+        yield {'type': 'done', 'content': ''}
+        return
+    res = tools.knowledge_search(q)
+    txt = '**No model connected** - showing the best matches from the knowledge folder. ' \
+          'Run tools directly with `/panel_mesh {"length": 4800, "width": 3200}` etc.\n\n'
+    txt += '\n\n'.join(f"**{r['id']}** ({r['source']}): {r['text'][:400]}" for r in res['results']) or res.get('note', 'nothing found')
+    yield {'type': 'text', 'delta': txt}
+    yield {'type': 'done', 'content': txt}

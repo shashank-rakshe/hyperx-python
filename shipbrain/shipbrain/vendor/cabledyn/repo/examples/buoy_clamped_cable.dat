@@ -1,0 +1,81 @@
+--------------------- CableDyn Input File ------------------------------------
+Floating Rigid6 buoy on three taut legs with a finite-EI cable clamped at its keel, swell
+-- A surface-piercing 6-DOF buoy (80 t, 113 m^3 displaced, hydrostatic heave, roll, and pitch
+-- restoring) in 100 m of water is held by three taut polyester legs at 120 deg. A finite-EI
+-- dynamic cable leaves the keel point (Body1 point, 4 m below the waterline) and runs in -X to a
+-- seabed anchor with a touchdown. END CONNECTIONS clamps the cable End A (Rigid) at 60 deg below
+-- horizontal in the body frame; a pinned cable would hang off at about 82 deg. The direction
+-- turns with the buoy and the clamp moment BendMom4N1 is returned to it, in the static solve
+-- (bodyIC static) and in the dynamics. The first 10 m of cable use 0.25 m elements to resolve the
+-- bending boundary layer at the clamp. Body1My is the net external pitch moment on the buoy
+-- (zero at rest). 30 s of 1 m, 14 s Airy swell with an 8 s start-up ramp.
+--------------------- LINE TYPES ---------------------------------------------
+TypeName   Diam     MassDenInAir   EA         BA/-zeta   EI       Cd_n  Cd_t  Ca_n  Ca_t
+(-)        (m)      (kg/m)         (N)        (N-s/-)    (N-m^2)  (-)   (-)   (-)   (-)
+poly       0.12     15.0           5.0e7      -1.0       0.0      1.2   0.2   1.0   0.0
+cable      0.20     60.0           5.0e8      -1.0       2.0e4    1.2   0.0   1.0   0.0
+--------------------- BODIES -------------------------------------------------
+ID  Type    X    Y    Z    Roll  Pitch  Yaw   Mass    Vol    C33     C44     C55     CdA   Ca   Ixx     Iyy     Izz
+(-) (-)     (m)  (m)  (m)  (deg) (deg)  (deg) (kg)    (m3)   (N/m)   (Nm/rad) (Nm/rad) (m2) (-) (kgm2) (kgm2) (kgm2)
+1   Rigid6  0.0  0.0  0.0  0.0   0.0    0.0   8.0e4   113.1  2.84e5  2.0e6   2.0e6   24.0  1.0  4.0e5   4.0e5   3.6e5
+--------------------- POINTS -------------------------------------------------
+ID    Type      X          Y          Z         Mass    Vol     CdA    Ca
+(-)   (-)       (m)        (m)        (m)       (kg)    (m^3)   (m^2)  (-)
+1     Body1     3.0        0.0        -4.0      0       0       0      0
+2     Body1     -1.5       2.598      -4.0      0       0       0      0
+3     Body1     -1.5       -2.598     -4.0      0       0       0      0
+4     Body1     0.0        0.0        -4.0      0       0       0      0
+5     Fixed     60.0       0.0        -100.0    0       0       0      0
+6     Fixed     -30.0      51.962     -100.0    0       0       0      0
+7     Fixed     -30.0      -51.962    -100.0    0       0       0      0
+8     Fixed     -60.0      0.0        -100.0    0       0       0      0
+--------------------- LINES --------------------------------------------------
+ID    NodeA   NodeB   Outputs
+(-)   (-)     (-)     (-)
+1     1       5       -
+2     2       6       -
+3     3       7       -
+4     4       8       -
+--------------------- SECTIONS -----------------------------------------------
+LineID   LineType   Length   NumSegs
+(-)      (-)        (m)      (-)
+1        poly       111.4    20
+2        poly       111.4    20
+3        poly       111.4    20
+4        cable      10.0     40
+4        cable      120.0    60
+--------------------- END CONNECTIONS ----------------------------------------
+LineID  End  Stiffness  EzX        EzY  EzZ
+(-)     (-)  (N-m/rad)  (-)        (-)  (-)
+4       A    Rigid      -0.5       0.0  -0.86603
+--------------------- OPTIONS ------------------------------------------------
+9.80665              g         - Gravitational acceleration (m/s^2) [default: 9.80665]
+1025.0               rhoW      - Water density (kg/m^3) [default: 1025]
+100.0                WtrDpth   - Water depth (m) [default: absent standalone; host-owned OpenFAST]
+1.0e5                kBot      - Seabed penalty stiffness base (Pa/m) [default: 1.0e5]
+1.0e4                cBot      - Seabed normal damping base (Pa-s/m) [default: 1.0e4]
+0.05                 dtM       - CableDyn internal time step (s) [default: omitted standalone; the glue DT in OpenFAST]
+30.0                 TMax      - Standalone simulation duration (s) [default: omitted standalone; host-owned OpenFAST]
+static    bodyIC           - Free Rigid6 body / rod start {static=equilibrium; deck=deck pose} [default: static]
+monolithic bodyScheme      - Body time integration {monolithic; staggered}; a clamped End A needs monolithic [default: monolithic]
+0.4       rhoInf           - Generalised-alpha spectral radius {0<=rhoInf<=1} [default: 0.4]
+False     modified_newton  - Tangent-reuse mode {False=full Newton; True=guarded reuse} [default: False]
+False     adaptive_mesh    - Automatic finite-EI refinement {False; True} [default: False]
+dynamic_solver 1.0e-8 1.0e-14 30 12 - Relative tolerance, absolute tolerance, max iterations, backtracks [defaults shown]
+none      frictionMu       - Seabed friction coefficient {none; value>=0} [default: none]
+none                 current   - Current model and X/Y/Z velocity (m/s) {none; uniform; profile} [default: none]
+airy 1.0 14.0 0.0    waves     - Wave model, height, period, and direction (m, s, deg) {none; airy; jonswap} [default: none]
+8.0                  rampTime  - Half-cosine start-up ramp of the wave amplitudes (s) [default: 0]
+0         WaterKin          - Water-kinematics source {0/none; file; SEASTATE coupled only} [default: no policy]
+-- Complete option/default reference: cabledyn_options_reference.dat and doc/options.rst.
+--------------------- OUTPUTS ------------------------------------------------
+"FairTen1"
+"FairTen4"
+"AnchTen4"
+"Body1Px"
+"Body1Pz"
+"Body1Ry"
+"Body1My"
+"BendMom4N1"
+"Curv4N1"
+--------------------- need this line -----------------------------------------

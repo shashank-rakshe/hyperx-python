@@ -1,0 +1,15 @@
+diff --git a/modules/openfast-library/src/FAST_Solver.f90 b/modules/openfast-library/src/FAST_Solver.f90
+index dd5b1a672..70a6507e3 100644
+--- a/modules/openfast-library/src/FAST_Solver.f90
++++ b/modules/openfast-library/src/FAST_Solver.f90
+@@ -138,7 +138,8 @@ subroutine FAST_SolverInit(p_FAST, p, m, GlueModData, GlueModMaps, Turbine, ErrS
+                  pack(modInds, ModIDs == Module_AD .and. p_FAST%MHK /= MHK_None), &
+                  pack(modInds, ModIDs == Module_HD), &
+                  pack(modInds, ModIDs == Module_Orca), &
+-                 pack(modInds, ModIDs == Module_MD)]
++                 pack(modInds, ModIDs == Module_MD), &
++                 pack(modInds, ModIDs == Module_CD)]
+ 
+    ! Indices of Option 2 modules
+    p%iModOpt2 = [pack(modInds, ModIDs == Module_SrvD), &
+

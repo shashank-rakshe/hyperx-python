@@ -1,0 +1,9 @@
+--------------------- MoorDyn Waves grid File ----------------------------------
+List of grid points, in 3 blocks (x, y, z): 1 = list of coordinates, 2 = first last n
+Grid points (m)
+1
+-10.0 0.0 10.0 20.0
+1
+-5.0 0.0 5.0
+2
+-50.0 2.0 209

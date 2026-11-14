@@ -1,0 +1,11 @@
+# Offline wheel set (P6, 2026-10-26): exact versions the tool and its 58 tests + 1005 benchmark were run with.
+pymupdf==2.0
+shapely==2.2.0
+numpy==2.5.3
+lxml==6.1.3            # XML read/write: assemble, build_ship, connect, framevfd, gapaudit, overlap, roomwalls, verify5, xmlclean
+scipy==1.18.1
+matplotlib==3.11.2     # review pictures
+pytest==9.1.1
+# raster / scan front end only (vector PDFs do not need these):
+opencv-python-headless==5.0.0.93
+rapidocr-onnxruntime==1.2.3

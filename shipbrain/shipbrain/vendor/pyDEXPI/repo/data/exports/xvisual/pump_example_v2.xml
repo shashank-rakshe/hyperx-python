@@ -1,0 +1,2339 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<PlantModel xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="XMpLantSchema.xsd">
+  <PlantInformation SchemaVersion="4.0.1" CompanyName="XVisual Technologies GmbH" Date="2026-08-31+02:00" Time="13:38:36.6293526+02:00" OriginatingSystem="PlantEngineer" Units="mm" Discipline="PID" Is3D="no" ProjectName="Kennwort" ProjectDescription="" ProjectCode="11111">
+    <UnitsOfMeasure Angle="deg" Distance="Millimetre" />
+  </PlantInformation>
+  <Extent>
+    <Min X="0" Y="0" Z="0" />
+    <Max X="1189" Y="840.99999999999989" Z="0" />
+  </Extent>
+  <Drawing Name="DEXPI.vsdx" Title="" Type="PID">
+    <Presentation R="1" G="1" B="1" />
+    <Extent>
+      <Min X="0" Y="0" Z="0" />
+      <Max X="1189" Y="840.99999999999989" Z="0" />
+    </Extent>
+    <GenericAttributes Number="73" Set="XVTAttributes">
+      <GenericAttribute Name="DWG_ORIGINAL" Format="string" Value="Original" />
+      <GenericAttribute Name="STATE_LIST" Format="string" Value="" />
+      <GenericAttribute Name="MEDIA_COLORSET" Format="string" Value="DIN 2403" />
+      <GenericAttribute Name="DWG_SHOW_STATE" Format="string" Value="Normal" />
+      <GenericAttribute Name="DWG_DRAWING_TYPE" Format="string" Value="P&amp;I Diagram" />
+      <GenericAttribute Name="DWG_DOUBLING_CHECK" Format="string" Value="Komplett" />
+      <GenericAttribute Name="DWG_STATE" Format="string" Value="IN PROGRESS" />
+      <GenericAttribute Name="DWG_PROJECT_STATE" Format="string" Value="Design" />
+      <GenericAttribute Name="DWG_DOC_PART" Format="string" Value="001" />
+      <GenericAttribute Name="DWG_FORMAT" Format="string" Value="DIN A0" />
+      <GenericAttribute Name="DWG_FACTOR_WITH" Format="string" Value="1,0000" />
+      <GenericAttribute Name="DWG_REVISION" Format="string" Value="" />
+      <GenericAttribute Name="DWG_VERSION" Format="string" Value="0" />
+      <GenericAttribute Name="CONTRACT_NO" Format="string" Value="11111" />
+      <GenericAttribute Name="DWG_CONTRACT_NAME" Format="string" Value="Kennwort" />
+      <GenericAttribute Name="DWG_CUSTOMER" Format="string" Value="Kunde" />
+      <GenericAttribute Name="IDENT_NUMBER" Format="string" Value="T10000" />
+      <GenericAttribute Name="CIDENT_NUMBER" Format="string" Value="" />
+      <GenericAttribute Name="DWG_PLANT_NAME" Format="string" Value="Teilanlage" />
+      <GenericAttribute Name="DWG_PLANT_NAME_1" Format="string" Value="" />
+      <GenericAttribute Name="DRAWING_NUMBER" Format="string" Value="Z123456" />
+      <GenericAttribute Name="DRAWING_CNUMBER" Format="string" Value="" />
+      <GenericAttribute Name="DRAWING_CONTENT" Format="string" Value="" />
+      <GenericAttribute Name="DWG_CREATION_DATE" Format="string" Value="" />
+      <GenericAttribute Name="DWG_CREATOR" Format="string" Value="" />
+      <GenericAttribute Name="DWG_CHECKED_DATE" Format="string" Value="" />
+      <GenericAttribute Name="DWG_CHECKED_BY" Format="string" Value="" />
+      <GenericAttribute Name="DWG_RELEASED_DATE" Format="string" Value="" />
+      <GenericAttribute Name="DWG_RELEASED_BY" Format="string" Value="" />
+      <GenericAttribute Name="DWG_REPLACED_FOR" Format="string" Value="" />
+      <GenericAttribute Name="DWG_REPLACED_WITH" Format="string" Value="" />
+      <GenericAttribute Name="DWG_DOCUMENT_TYPE" Format="string" Value="" />
+      <GenericAttribute Name="DWG_MATERIAL_NO" Format="string" Value="" />
+      <GenericAttribute Name="DWG_VIEW_FCT_NO" Format="string" Value="Funktionsnummer" />
+      <GenericAttribute Name="DWG_MULTIPLICATOR" Format="string" Value="" />
+      <GenericAttribute Name="Anlagenbezeichnung3" Format="string" Value="" />
+      <GenericAttribute Name="DWG_PRINTED_DATE" Format="string" Value="" />
+      <GenericAttribute Name="DWG_PRINTED_BY" Format="string" Value="" />
+      <GenericAttribute Name="PEHIDETAGS" Format="string" Value="Keine" />
+      <GenericAttribute Name="DWG_PP_SYSTEM_DESCRIPT" Format="string" Value="" />
+      <GenericAttribute Name="DWG_PP_FUNC_DESCRIPT" Format="string" Value="" />
+      <GenericAttribute Name="DWG_PP_DESIGN_PARAM" Format="string" Value="" />
+      <GenericAttribute Name="DWG_PP_OP_DATA" Format="string" Value="" />
+      <GenericAttribute Name="DWG_PP_OP_INST" Format="string" Value="" />
+      <GenericAttribute Name="DWG_PP_COMM_REPORT" Format="string" Value="" />
+      <GenericAttribute Name="DWG_PP_RISK_ANALYSIS" Format="string" Value="" />
+      <GenericAttribute Name="TMPL_DWG_PP_SYSTEM_DESCRIPT" Format="string" Value="TA_SB" />
+      <GenericAttribute Name="TMPL_DWG_PP_FUNC_DESCRIPT" Format="string" Value="TA_FB" />
+      <GenericAttribute Name="TMPL_DWG_PP_DESIGN_PARAM" Format="string" Value="TA_AUSL" />
+      <GenericAttribute Name="TMPL_DWG_PP_OP_DATA" Format="string" Value="TA_BETR" />
+      <GenericAttribute Name="TMPL_DWG_PP_OP_INST" Format="string" Value="TA_BA" />
+      <GenericAttribute Name="TMPL_DWG_PP_COMM_REPORT" Format="string" Value="TA_IBNB" />
+      <GenericAttribute Name="TMPL_DWG_PP_RISK_ANALYSIS" Format="string" Value="TA_RISK" />
+      <GenericAttribute Name="DWG_PRJ_SYSTEM_DESCRIPT" Format="string" Value="" />
+      <GenericAttribute Name="DWG_PRJ_FUNC_DESCRIPT" Format="string" Value="" />
+      <GenericAttribute Name="DWG_PRJ_DESIGN_PARAM" Format="string" Value="" />
+      <GenericAttribute Name="DWG_PRJ_OP_DATA" Format="string" Value="" />
+      <GenericAttribute Name="DWG_PRJ_OP_INST" Format="string" Value="" />
+      <GenericAttribute Name="DWG_PRJ_COMM_REPORT" Format="string" Value="" />
+      <GenericAttribute Name="DWG_PRJ_RISK_ANALYSIS" Format="string" Value="" />
+      <GenericAttribute Name="TMPL_DWG_PRJ_SYSTEM_DESCRIPT" Format="string" Value="" />
+      <GenericAttribute Name="TMPL_DWG_PRJ_FUNC_DESCRIPT" Format="string" Value="" />
+      <GenericAttribute Name="TMPL_DWG_PRJ_DESIGN_PARAM" Format="string" Value="" />
+      <GenericAttribute Name="TMPL_DWG_PRJ_OP_INST" Format="string" Value="" />
+      <GenericAttribute Name="TMPL_DWG_PRJ_OP_DATA" Format="string" Value="PRJ_BETR" />
+      <GenericAttribute Name="TMPL_DWG_PRJ_COMM_REPORT" Format="string" Value="" />
+      <GenericAttribute Name="TMPL_DWG_PRJ_RISK_ANALYSIS" Format="string" Value="" />
+      <GenericAttribute Name="SH_COMP_STATE" Format="string" Value="" />
+      <GenericAttribute Name="DWG_PRJ_ASSEMBLY_REPORT" Format="string" Value="" />
+      <GenericAttribute Name="DWG_PRJ_ASSEMBLY_INST" Format="string" Value="" />
+      <GenericAttribute Name="DWG_PRJ_CUSTOMER_LOGO" Format="string" Value="" />
+      <GenericAttribute Name="TMPL_DWG_PRJ_ASSEMBLY_REPORT" Format="string" Value="" />
+      <GenericAttribute Name="TMPL_DWG_PRJ_ASSEMBLY_INST" Format="string" Value="" />
+    </GenericAttributes>
+  </Drawing>
+  <ShapeCatalogue Name="Symbols">
+    <Equipment ID="XVT_252" ComponentName="XVT_252" ComponentClass="Pump">
+      <Extent>
+        <Min X="-7.4999999999999991" Y="-7.4999999999999991" Z="0" />
+        <Max X="7.4999999999999991" Y="7.4999999999999991" Z="0" />
+      </Extent>
+      <Position>
+        <Location X="0" Y="0" Z="0" />
+        <Axis X="0" Y="0" Z="1" />
+        <Reference X="1" Y="0" Z="0" />
+      </Position>
+      <TrimmedCurve StartAngle="180.24852338080026" EndAngle="359.75147661919971">
+        <Ellipse PrimaryAxis="14.999969999999998" SecondaryAxis="14.999969999999998">
+          <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.499999" />
+          <Extent>
+            <Min X="-7.4999294444444411" Y="-7.4689495871943681" Z="0" />
+            <Max X="7.5000405555555565" Y="7.5310204128056295" Z="0" />
+          </Extent>
+          <Position>
+            <Location X="5.5555555557695868E-05" Y="0.03103541280563045" Z="0" />
+            <Axis X="0" Y="0" Z="1" />
+            <Reference X="1" Y="0" Z="0" />
+          </Position>
+        </Ellipse>
+      </TrimmedCurve>
+      <TrimmedCurve StartAngle="0.24852338080029313" EndAngle="179.75147661919971">
+        <Ellipse PrimaryAxis="14.999969999999998" SecondaryAxis="14.999969999999998">
+          <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.499999" />
+          <Extent>
+            <Min X="-7.4999294444444411" Y="-7.53401374613895" Z="0" />
+            <Max X="7.5000405555555565" Y="7.465956253861048" Z="0" />
+          </Extent>
+          <Position>
+            <Location X="5.5555555557695868E-05" Y="-0.03402874613895053" Z="0" />
+            <Axis X="0" Y="0" Z="1" />
+            <Reference X="1" Y="0" Z="0" />
+          </Position>
+        </Ellipse>
+      </TrimmedCurve>
+      <Line>
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.499999" />
+        <Extent>
+          <Min X="5.5555555557695868E-05" Y="-7.5015522222222151" Z="0" />
+          <Max X="7.5001111111111145" Y="-0.0014966666666600403" Z="0" />
+        </Extent>
+        <Coordinate X="5.5555555557695868E-05" Y="-7.5015522222222151" Z="0" />
+        <Coordinate X="7.5001111111111145" Y="-0.0014966666666600403" Z="0" />
+      </Line>
+      <Line>
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.499999" />
+        <Extent>
+          <Min X="7.5001111111111145" Y="-0.0014966666666600403" Z="0" />
+          <Max X="5.5555555557695868E-05" Y="7.4985588888888914" Z="0" />
+        </Extent>
+        <Coordinate X="7.5001111111111145" Y="-0.0014966666666600403" Z="0" />
+        <Coordinate X="5.5555555557695868E-05" Y="7.4985588888888914" Z="0" />
+      </Line>
+    </Equipment>
+    <Nozzle ID="XVT_627" ComponentName="XVT_627" ComponentClass="Nozzle" ComponentClassURI="http://posccaesar.org/rdl/RDS415214">
+      <Extent>
+        <Min X="-1.2500000000000315" Y="-1.25" Z="0" />
+        <Max X="1.2500000000000315" Y="1.25" Z="0" />
+      </Extent>
+      <Position>
+        <Location X="0" Y="0" Z="0" />
+        <Axis X="0" Y="0" Z="1" />
+        <Reference X="1" Y="0" Z="0" />
+      </Position>
+      <Line>
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.249999852777778" />
+        <Extent>
+          <Min X="1.2511944444444127" Y="0.066391688888889355" Z="0" />
+          <Max X="-1.2500000000000315" Y="0.062863911111112891" Z="0" />
+        </Extent>
+        <Coordinate X="1.2511944444444127" Y="0.066391688888889355" Z="0" />
+        <Coordinate X="-1.2500000000000315" Y="0.062863911111112891" Z="0" />
+      </Line>
+      <Line>
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.249999852777778" />
+        <Extent>
+          <Min X="1.2511944444444127" Y="-1.2494694222222211" Z="0" />
+          <Max X="1.2511944444444127" Y="1.2517250222222236" Z="0" />
+        </Extent>
+        <Coordinate X="1.2511944444444127" Y="-1.2494694222222211" Z="0" />
+        <Coordinate X="1.2511944444444127" Y="1.2517250222222236" Z="0" />
+      </Line>
+    </Nozzle>
+    <PipingComponent ID="XVT_614" ComponentName="XVT_614" ComponentClass="Flange">
+      <Extent>
+        <Min X="-2.5" Y="-2.5" Z="0" />
+        <Max X="2.5" Y="2.5" Z="0" />
+      </Extent>
+      <Position>
+        <Location X="0" Y="0" Z="0" />
+        <Axis X="0" Y="0" Z="1" />
+        <Reference X="1" Y="0" Z="0" />
+      </Position>
+      <Line>
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.249999852777778" />
+        <Extent>
+          <Min X="-0.62675000000000014" Y="-2.5012671777777751" Z="0" />
+          <Max X="-0.62675000000000014" Y="2.5011217111111126" Z="0" />
+        </Extent>
+        <Coordinate X="-0.62675000000000014" Y="-2.5012671777777751" Z="0" />
+        <Coordinate X="-0.62675000000000014" Y="2.5011217111111126" Z="0" />
+      </Line>
+      <Line>
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.249999852777778" />
+        <Extent>
+          <Min X="0.62561111111111067" Y="-2.5012671777777751" Z="0" />
+          <Max X="0.62561111111111067" Y="2.5011217111111126" Z="0" />
+        </Extent>
+        <Coordinate X="0.62561111111111067" Y="-2.5012671777777751" Z="0" />
+        <Coordinate X="0.62561111111111067" Y="2.5011217111111126" Z="0" />
+      </Line>
+    </PipingComponent>
+    <PipingComponent ID="XVT_609" ComponentName="XVT_609" ComponentClass="Strainer">
+      <Extent>
+        <Min X="-5.0000000000000373" Y="-5.0000000000000373" Z="0" />
+        <Max X="5.0000000000000373" Y="5.0000000000000373" Z="0" />
+      </Extent>
+      <Position>
+        <Location X="0" Y="0" Z="0" />
+        <Axis X="0" Y="0" Z="1" />
+        <Reference X="1" Y="0" Z="0" />
+      </Position>
+      <Line>
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.249999852777778" />
+        <Extent>
+          <Min X="7.6282097222221843" Y="1.248649766666631" Z="0" />
+          <Max X="12.627070833333295" Y="1.248649766666631" Z="0" />
+        </Extent>
+        <Coordinate X="7.6282097222221843" Y="1.248649766666631" Z="0" />
+        <Coordinate X="12.627070833333295" Y="1.248649766666631" Z="0" />
+      </Line>
+      <Line>
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.249999852777778" />
+        <Extent>
+          <Min X="12.627070833333295" Y="1.248649766666631" Z="0" />
+          <Max X="12.627070833333295" Y="11.24989976666663" Z="0" />
+        </Extent>
+        <Coordinate X="12.627070833333295" Y="1.248649766666631" Z="0" />
+        <Coordinate X="12.627070833333295" Y="11.24989976666663" Z="0" />
+      </Line>
+      <Line>
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.249999852777778" />
+        <Extent>
+          <Min X="12.627070833333295" Y="11.24989976666663" Z="0" />
+          <Max X="7.6282097222221843" Y="11.24989976666663" Z="0" />
+        </Extent>
+        <Coordinate X="12.627070833333295" Y="11.24989976666663" Z="0" />
+        <Coordinate X="7.6282097222221843" Y="11.24989976666663" Z="0" />
+      </Line>
+      <Line>
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.249999852777778" />
+        <Extent>
+          <Min X="7.6282097222221843" Y="11.24989976666663" Z="0" />
+          <Max X="7.6282097222221843" Y="1.248649766666631" Z="0" />
+        </Extent>
+        <Coordinate X="7.6282097222221843" Y="11.24989976666663" Z="0" />
+        <Coordinate X="7.6282097222221843" Y="1.248649766666631" Z="0" />
+      </Line>
+      <Line>
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.249999852777778" />
+        <Extent>
+          <Min X="12.627070833333295" Y="1.248649766666631" Z="0" />
+          <Max X="11.378237499999962" Y="3.7498442111110766" Z="0" />
+        </Extent>
+        <Coordinate X="12.627070833333295" Y="1.248649766666631" Z="0" />
+        <Coordinate X="11.378237499999962" Y="3.7498442111110766" Z="0" />
+      </Line>
+      <Line>
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.249999852777778" />
+        <Extent>
+          <Min X="10.877293055555521" Y="4.75173309999996" Z="0" />
+          <Max X="9.5014597222221848" Y="7.4998719888888505" Z="0" />
+        </Extent>
+        <Coordinate X="10.877293055555521" Y="4.75173309999996" Z="0" />
+        <Coordinate X="9.5014597222221848" Y="7.4998719888888505" Z="0" />
+      </Line>
+      <Line>
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.249999852777778" />
+        <Extent>
+          <Min X="8.877043055555518" Y="8.748705322222186" Z="0" />
+          <Max X="7.6282097222221843" Y="11.24989976666663" Z="0" />
+        </Extent>
+        <Coordinate X="8.877043055555518" Y="8.748705322222186" Z="0" />
+        <Coordinate X="7.6282097222221843" Y="11.24989976666663" Z="0" />
+      </Line>
+    </PipingComponent>
+    <PipingComponent ID="XVT_17" ComponentName="XVT_17" ComponentClass="Pipe reducer">
+      <Extent>
+        <Min X="-5" Y="-5" Z="0" />
+        <Max X="5" Y="5" Z="0" />
+      </Extent>
+      <Position>
+        <Location X="0" Y="0" Z="0" />
+        <Axis X="0" Y="0" Z="1" />
+        <Reference X="1" Y="0" Z="0" />
+      </Position>
+      <Line>
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.249999852777778" />
+        <Extent>
+          <Min X="-5" Y="-2.5001432888888893" Z="0" />
+          <Max X="-5" Y="2.4987178222222219" Z="0" />
+        </Extent>
+        <Coordinate X="-5" Y="-2.5001432888888893" Z="0" />
+        <Coordinate X="-5" Y="2.4987178222222219" Z="0" />
+      </Line>
+      <Line>
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.249999852777778" />
+        <Extent>
+          <Min X="-5" Y="2.4987178222222219" Z="0" />
+          <Max X="5.0012500000000006" Y="0.0010511555555545726" Z="0" />
+        </Extent>
+        <Coordinate X="-5" Y="2.4987178222222219" Z="0" />
+        <Coordinate X="5.0012500000000006" Y="0.0010511555555545726" Z="0" />
+      </Line>
+      <Line>
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.249999852777778" />
+        <Extent>
+          <Min X="5.0012500000000006" Y="0.0010511555555545726" Z="0" />
+          <Max X="-5" Y="-2.5001432888888893" Z="0" />
+        </Extent>
+        <Coordinate X="5.0012500000000006" Y="0.0010511555555545726" Z="0" />
+        <Coordinate X="-5" Y="-2.5001432888888893" Z="0" />
+      </Line>
+    </PipingComponent>
+  </ShapeCatalogue>
+  <Equipment ID="E_1" TagName="6" ComponentName="XVT_252" ComponentClass="Pump">
+    <Extent>
+      <Min X="200.00000000000003" Y="97.5" Z="0" />
+      <Max X="215.00000000000003" Y="112.5" Z="0" />
+    </Extent>
+    <Position>
+      <Location X="207.50000000000003" Y="105" Z="0" />
+      <Axis X="0" Y="0" Z="1" />
+      <Reference X="1" Y="0" Z="0" />
+    </Position>
+    <Scale X="1" Y="1" Z="1" />
+    <GenericAttributes Number="3" Set="DexpiAttributes">
+      <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+      <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="6" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+      <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+    </GenericAttributes>
+    <GenericAttributes Number="173" Set="XVTAttributes">
+      <GenericAttribute Name="OSPOSITION" Format="string" Value="" />
+      <GenericAttribute Name="AUTOMATION_ISCM" Format="string" Value="Ja" />
+      <GenericAttribute Name="FNO" Format="string" Value="6" />
+      <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+      <GenericAttribute Name="FULL_FNO" Format="string" Value="T10000-FG000-6" />
+      <GenericAttribute Name="INSTALLATION_STATE" Format="string" Value="" />
+      <GenericAttribute Name="COMM_STATE" Format="string" Value="" />
+      <GenericAttribute Name="MAINT_STATE" Format="string" Value="" />
+      <GenericAttribute Name="REPAIR_STATE" Format="string" Value="" />
+      <GenericAttribute Name="OPER_STATE" Format="string" Value="" />
+      <GenericAttribute Name="CHECK_INSTALLED" Format="string" Value="Nein" />
+      <GenericAttribute Name="IDENT" Format="string" Value="" />
+      <GenericAttribute Name="CHECK_CABLE_CON" Format="string" Value="Nein" />
+      <GenericAttribute Name="CHECK_IO_CHECKED_BY" Format="string" Value="Nein" />
+      <GenericAttribute Name="CHECK_INST_DATE" Format="string" Value="Nein" />
+      <GenericAttribute Name="CHECK_FCT_CHECK_BY" Format="string" Value="Nein" />
+      <GenericAttribute Name="CHECK_LABEL_INST" Format="string" Value="Nein" />
+      <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+      <GenericAttribute Name="CLASS" Format="string" Value="Fluid pump" />
+      <GenericAttribute Name="SUB_CLASS" Format="string" Value="General" />
+      <GenericAttribute Name="DIRECTION" Format="string" Value="--------&gt;" />
+      <GenericAttribute Name="SCOPE_OF_SUPPLY" Format="string" Value="" />
+      <GenericAttribute Name="VPE_EQ_STATUS" Format="string" Value="" />
+      <GenericAttribute Name="ERP_EQ_STATUS" Format="string" Value="" />
+      <GenericAttribute Name="SM" Format="string" Value="Nein" />
+      <GenericAttribute Name="FN_INAME" Format="string" Value="" />
+      <GenericAttribute Name="CFGR" Format="string" Value="" />
+      <GenericAttribute Name="CUSTOM_NO" Format="string" Value="" />
+      <GenericAttribute Name="FN_CNAME" Format="string" Value="" />
+      <GenericAttribute Name="FN_LOCATION" Format="string" Value="" />
+      <GenericAttribute Name="VPE_EQ_MNFCT" Format="string" Value="" />
+      <GenericAttribute Name="ERP_EQ_MNFCT" Format="string" Value="" />
+      <GenericAttribute Name="VPE_EQ_TYPE" Format="string" Value="" />
+      <GenericAttribute Name="ERP_EQ_TYPE" Format="string" Value="" />
+      <GenericAttribute Name="VPE_EQ_ARTICLE" Format="string" Value="" />
+      <GenericAttribute Name="EQ_SUPPLIER" Format="string" Value="" />
+      <GenericAttribute Name="ERP_EQ_ARTICLE" Format="string" Value="" />
+      <GenericAttribute Name="VPE_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+      <GenericAttribute Name="ERP_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+      <GenericAttribute Name="VPE_SPECIAL" Format="string" Value="" />
+      <GenericAttribute Name="ERP_SPECIAL" Format="string" Value="" />
+      <GenericAttribute Name="EQ_SERIAL_NUMBER" Format="string" Value="" />
+      <GenericAttribute Name="EQ_ORDER_NO" Format="string" Value="" />
+      <GenericAttribute Name="EQ_ORDER_DATE" Format="string" Value="" />
+      <GenericAttribute Name="EQ_MNFCT_IDENTCODE" Format="string" Value="" />
+      <GenericAttribute Name="LABEL_LINE_1" Format="string" Value="" />
+      <GenericAttribute Name="LABEL_LINE_2" Format="string" Value="" />
+      <GenericAttribute Name="LABEL_LINE_3" Format="string" Value="" />
+      <GenericAttribute Name="VPE_WHOLESALE_PRICE" Format="string" Value="" />
+      <GenericAttribute Name="ERP_WHOLESALE_PRICE" Format="string" Value="" />
+      <GenericAttribute Name="DOC_REQUIREMENT_SHEET_LNK" Format="string" Value="" />
+      <GenericAttribute Name="DIM_DRAWING_LNK" Format="string" Value="" />
+      <GenericAttribute Name="MANUAL_LNK" Format="string" Value="" />
+      <GenericAttribute Name="VPE_PROTECTION_CLASS" Format="string" Value="" />
+      <GenericAttribute Name="ERP_PROTECTION_CLASS" Format="string" Value="" />
+      <GenericAttribute Name="VPE_EX_PROTECTION_CLASS" Format="string" Value="" />
+      <GenericAttribute Name="ERP_EX_PROTECTION_CLASS" Format="string" Value="" />
+      <GenericAttribute Name="VPE_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+      <GenericAttribute Name="ERP_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+      <GenericAttribute Name="VPE_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+      <GenericAttribute Name="ERP_MASS_FlOW_RATE" Format="string" Value="" />
+      <GenericAttribute Name="ERP_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+      <GenericAttribute Name="ERP_VOLUME_FlOW_RATE" Format="string" Value="" />
+      <GenericAttribute Name="VPE_TEMP_DESIGN_MIN" Format="string" Value="" />
+      <GenericAttribute Name="ERP_TEMP_DESIGN_MIN" Format="string" Value="" />
+      <GenericAttribute Name="VPE_TEMP_DESIGN_MAX" Format="string" Value="" />
+      <GenericAttribute Name="ERP_TEMP_DESIGN_MAX" Format="string" Value="" />
+      <GenericAttribute Name="VPE_LENGTH_OR_DIAMETER" Format="string" Value="" />
+      <GenericAttribute Name="ERP_LENGTH_OR_DIAMETER" Format="string" Value="" />
+      <GenericAttribute Name="VPE_WIDTH" Format="string" Value="" />
+      <GenericAttribute Name="ERP_WIDTH" Format="string" Value="" />
+      <GenericAttribute Name="VPE_HEIGHT" Format="string" Value="" />
+      <GenericAttribute Name="ERP_HEIGHT" Format="string" Value="" />
+      <GenericAttribute Name="VPE_EMPTY_WEIGHT" Format="string" Value="" />
+      <GenericAttribute Name="ERP_EMPTY_WEIGHT" Format="string" Value="" />
+      <GenericAttribute Name="VPE_OPERATING_WEIGHT" Format="string" Value="" />
+      <GenericAttribute Name="ERP_OPERATING_WEIGHT" Format="string" Value="" />
+      <GenericAttribute Name="VPE_SOUND_LEVEL" Format="string" Value="" />
+      <GenericAttribute Name="ERP_SOUND_LEVEL" Format="string" Value="" />
+      <GenericAttribute Name="VPE_MAT_PARTS_MEDIA_CONTACT" Format="string" Value="" />
+      <GenericAttribute Name="ERP_MAT_PARTS_MEDIA_CONTACT" Format="string" Value="" />
+      <GenericAttribute Name="VPE_MAX_TEST_PRESSURE" Format="string" Value="" />
+      <GenericAttribute Name="ERP_MAX_TEST_PRESSURE" Format="string" Value="" />
+      <GenericAttribute Name="VPE_MASS_FlOW_RATE" Format="string" Value="" />
+      <GenericAttribute Name="VPE_VOLUME_FlOW_RATE" Format="string" Value="" />
+      <GenericAttribute Name="ERP_FLOW_RATE_MIN" Format="string" Value="" />
+      <GenericAttribute Name="VPE_FLOW_RATE_MIN" Format="string" Value="" />
+      <GenericAttribute Name="ERP_FLOW_RATE_MAX" Format="string" Value="" />
+      <GenericAttribute Name="VPE_FLOW_RATE_MAX" Format="string" Value="" />
+      <GenericAttribute Name="ERP_SUCTION_HEAD_MIN" Format="string" Value="" />
+      <GenericAttribute Name="VPE_SUCTION_HEAD_MIN" Format="string" Value="" />
+      <GenericAttribute Name="VPE_FLOW" Format="string" Value="" />
+      <GenericAttribute Name="ERP_FLOW" Format="string" Value="" />
+      <GenericAttribute Name="VPE_PMP_DIS_HEIGHT" Format="string" Value="" />
+      <GenericAttribute Name="ERP_PMP_DIS_HEIGHT" Format="string" Value="" />
+      <GenericAttribute Name="VPE_PMP_POSITIVE_SUC_HEAD" Format="string" Value="" />
+      <GenericAttribute Name="ERP_PMP_POSITIVE_SUC_HEAD" Format="string" Value="" />
+      <GenericAttribute Name="VPE_PMP_CONNECT_TYPE" Format="string" Value="" />
+      <GenericAttribute Name="ERP_PMP_CONNECT_TYPE" Format="string" Value="" />
+      <GenericAttribute Name="OPP_VOLUME_FLOW_RATE" Format="string" Value="" />
+      <GenericAttribute Name="OPP_MASS_FlOW_RATE" Format="string" Value="" />
+      <GenericAttribute Name="OPP_PRESSURE" Format="string" Value="" />
+      <GenericAttribute Name="OPP_OPERATING_WEIGHT" Format="string" Value="" />
+      <GenericAttribute Name="OPP_TEMPERATURE" Format="string" Value="" />
+      <GenericAttribute Name="CHECK_NOISE" Format="string" Value="Nein" />
+      <GenericAttribute Name="CHECK_SHAFT_SEAL" Format="string" Value="Nein" />
+      <GenericAttribute Name="CHECK_STATIC_SEALS_LEAKAGES" Format="string" Value="Nein" />
+      <GenericAttribute Name="CHECK_ROLLING_ELEMENT_BEARINGS_NOISE" Format="string" Value="Nein" />
+      <GenericAttribute Name="CHECK_AUXILIARY_CONNECTION" Format="string" Value="Nein" />
+      <GenericAttribute Name="CHECK_STANDBY_PUMP" Format="string" Value="Nein" />
+      <GenericAttribute Name="CHECK_BEARING_TEMP" Format="string" Value="Nein" />
+      <GenericAttribute Name="CHECK_GREASE" Format="string" Value="Nein" />
+      <GenericAttribute Name="CHECK_OIL" Format="string" Value="Nein" />
+      <GenericAttribute Name="ELEC_CONSUMER" Format="string" Value="aAsAAB+LCAAAAAAABACtVktvozAQ/ivI98bJ7i0CKgTeBm0CCEgfJ8SCmyCBnQWzSf/92ryaAIfKKQfkeX3zwDOD+ngpcuUfLquMEg2sFkugVCwmaZxTgjXwgSvwqCuqkaYZ4ypxbsUs1tVLta6SIy5iJUs1cCsFCscklQa6w/rCz0fGTmsIz+fz4vxzQcsD/LFcruDrbhs0OL1uUaUcQgN1SToP1UORJSWt6Dt7SGix5noPrRZo4sA5LjBhCokLPA2l1VzblSADzDTAyhoP/H2Fzbosuf2WJnGOO3EDzJ2dcnwJP064pY80S7BSZMRNkrrkSfFiFfGlp2ryh9YkxelcXDxRawh5jFzhvzUmCZ6xs60hVqNm1CZJ2YhHedzIAoz5R1kBhXEHGuCYGWFgFDiccdbVyCvpCZfsQ/geICpWZuTwFZQwPkhaPnsoMl0n2O+QH4VvHpJCQb73DSjm1ggC6SwMM7JM6ejlrYXvZ3cbGk/ytbvHXvj33BfkS3uXtxa+fSNEVmTufR85oXQM96OIWILQ8MMOREDarnRA3wTV9lcQeRv7js6Stx+qcm973w2yeYlshyNsXfO3FEBzTaPA3fsmiiTHHXdubKPgxQ7NDZKbNT6y9o5lOOZb9MswQ1euc4znp8j1UHOxnCi0d3JFbSrq8JR8tDP8L9UV3mw/ON6N8NNHJ2128Iwmp2uScaB+fFPCncZ88a1At2NznDBaKpdTzI4aWEDY7+QumfcM52kvFp+0i6/FnQmm/T/R1Q5HV21LX6mQv9XJJtVXS/7wlwqnMrVZmToyuXV7VCerUEQz2WyCOaybXmMgrpZBL7sih1HdywZiMkh7jQlzfsz16vOSqyH0mdNAjkeE7lAVTpjqeAgI0+uebsxuGOqoY4XFbQMKzqSfBHPaHoI7uu3NbRluAhz9MP8HIL4Tn2gLAAA=" />
+      <GenericAttribute Name="VPE_CONSUMER_TYPE" Format="string" Value="" />
+      <GenericAttribute Name="ERP_CONSUMER_TYPE" Format="string" Value="" />
+      <GenericAttribute Name="VPE_AC_DC" Format="string" Value="" />
+      <GenericAttribute Name="ERP_AC_DC" Format="string" Value="" />
+      <GenericAttribute Name="VPE_VOLTAGE" Format="string" Value="" />
+      <GenericAttribute Name="ERP_VOLTAGE" Format="string" Value="" />
+      <GenericAttribute Name="VPE_POWER" Format="string" Value="" />
+      <GenericAttribute Name="ERP_POWER" Format="string" Value="" />
+      <GenericAttribute Name="VPE_RATED_CURRENT" Format="string" Value="" />
+      <GenericAttribute Name="ERP_RATED_CURRENT" Format="string" Value="" />
+      <GenericAttribute Name="VPE_STARTCURRENT_RATIO" Format="string" Value="" />
+      <GenericAttribute Name="ERP_STARTCURRENT_RATIO" Format="string" Value="" />
+      <GenericAttribute Name="VPE_COS_PHI" Format="string" Value="" />
+      <GenericAttribute Name="ERP_COS_PHI" Format="string" Value="" />
+      <GenericAttribute Name="VPE_STARTER_TYPE" Format="string" Value="No" />
+      <GenericAttribute Name="ERP_STARTER_TYPE" Format="string" Value="" />
+      <GenericAttribute Name="HW_INTERLOCK" Format="string" Value="No" />
+      <GenericAttribute Name="POWER_SOURCE_ID" Format="string" Value="" />
+      <GenericAttribute Name="LOCAL_SWITCHES" Format="string" Value="" />
+      <GenericAttribute Name="REDUNDANCY_FACTOR" Format="string" Value="" />
+      <GenericAttribute Name="AVG_OPERATION_TIME" Format="string" Value="" />
+      <GenericAttribute Name="INTERNAL_REMARK" Format="string" Value="" />
+      <GenericAttribute Name="MEDIUM_DS" Format="string" Value="XwcAAB+LCAAAAAAABAClVVGPojAQ/iuk71rdzb4YYEPE3JET3FjucvdkujCrJNBybTnx318FiqvysMEX0unM983XdmawX+sit/6BkBlnDppPZ8iSirKU5pyBg04g0atr2V6aZkqH0Nynirp2LRcyOUBBrSx10LUXWZqTSQd1i0Wt1welygXGx+NxenyecrHHT7PZHP8O16ThMbGFTDWFgyrBugxyUmSJ4JJ/qEnCi4WOm7RRqNEBORTAlMVoAfdS2shFIM8mAeUgJSro939KWFZCaPyaJzSHzt0Q62RlDnV8KqG1DzxLwCoytkmSSuhD6csqaG2sir3ziqWQDukKV/4uiLxwNcwt4W8FLIEBZOD3ar1K8YAlonHfnOTKRwD0s8yRpXQCB2nOjCl0Ix0PJOtu6U3wEoQ6nXP3FFKJjO2/whLT/Ujk5ZrGopdrj5DdA+mXD6UnsRePR8er8G239aJv4ynK7w8SEG8dREH8ZzSBv4rII/hfAVluHmIgm3Xgk9FwL4o2+hmDTTSaYrsKve2Pr8DxVffj29mAL/Sdt5lCA5HarlimiToZS850Uqobf466GZNDoriw6pKqg4OmGH9qt/YkHxnkqQk4N1GnsGUekNPOaNfumVw78N25jfXXvpsm7rMe+i8vNr732M3QcEMNbVcXyrOIvjON0TSaMS59Y3ZMG/ThXVUbuytSY/Y118c3JWSsS0WYnfaBm+v5dHR885/8D9TglkRfBwAA" />
+      <GenericAttribute Name="MED_INAME" Format="string" Value="" />
+      <GenericAttribute Name="MED_CNAME" Format="string" Value="" />
+      <GenericAttribute Name="MED_STATE" Format="string" Value="" />
+      <GenericAttribute Name="MED_TEMP_RANGE" Format="string" Value="" />
+      <GenericAttribute Name="MED_pH_RANGE" Format="string" Value="" />
+      <GenericAttribute Name="MED_SALINITY" Format="string" Value="" />
+      <GenericAttribute Name="MED_DENSITY" Format="string" Value="" />
+      <GenericAttribute Name="MED_VISCOSITY" Format="string" Value="" />
+      <GenericAttribute Name="MED_SOLIDS" Format="string" Value="" />
+      <GenericAttribute Name="MED_ANNOTATION" Format="string" Value="" />
+      <GenericAttribute Name="MED_REMARK" Format="string" Value="" />
+      <GenericAttribute Name="MED_CLASS_ID" Format="string" Value="" />
+      <GenericAttribute Name="ANNOTATION" Format="string" Value="" />
+      <GenericAttribute Name="PICTURE" Format="string" Value="" />
+      <GenericAttribute Name="NORM" Format="string" Value="DIN EN ISO 10628-2:2013-04" />
+      <GenericAttribute Name="STANDARD_GROUP" Format="string" Value="15.1" />
+      <GenericAttribute Name="STANDARD_REGNO" Format="string" Value="2301" />
+      <GenericAttribute Name="IDENTIFICATIONLETTER" Format="string" Value="PL" />
+      <GenericAttribute Name="LAST_EDIT_DATE" Format="string" Value="2026-08-31T11:05:14" />
+      <GenericAttribute Name="LAST_EDIT_BY" Format="string" Value="Thoralf Schmidt" />
+      <GenericAttribute Name="VERSION" Format="string" Value="5.1" />
+      <GenericAttribute Name="MTP_ANA_DRV" Format="string" Value="No" />
+      <GenericAttribute Name="MTP_ANA_DRV_RPM_SCL_MIN" Format="string" Value="" />
+      <GenericAttribute Name="MTP_ANA_DRV_RPM_SCL_MAX" Format="string" Value="" />
+      <GenericAttribute Name="MTP_ANA_DRV_RPM_UNIT" Format="string" Value="" />
+      <GenericAttribute Name="MTP_ANA_DRV_RPM_MIN" Format="string" Value="" />
+      <GenericAttribute Name="MTP_ANA_DRV_RPM_MAX" Format="string" Value="" />
+      <GenericAttribute Name="MTP_ANA_DRV_POS_SAFE" Format="string" Value="0 = close" />
+      <GenericAttribute Name="MTP_BIN_DRV" Format="string" Value="No" />
+      <GenericAttribute Name="MTP_BIN_DRV_POS_SAFE" Format="string" Value="0 = close" />
+      <GenericAttribute Name="MTP_BASE_HMI" Format="string" Value="No" />
+      <GenericAttribute Name="MTP_BASE_HMI_ECLASS" Format="string" Value="" />
+      <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+      <GenericAttribute Name="MTP_BASE_HMI_TAG_NAME" Format="string" Value="" />
+      <GenericAttribute Name="OSXML" Format="string" Value="" />
+      <GenericAttribute Name="MTP_BASE_HMI_DESCRIPTION" Format="string" Value="" />
+    </GenericAttributes>
+    <Nozzle ID="N_2" TagName="" ComponentName="XVT_627" ComponentClass="Nozzle" ComponentClassURI="http://posccaesar.org/rdl/RDS415214">
+      <Extent>
+        <Min X="197.49999999999994" Y="103.75" Z="0" />
+        <Max X="200" Y="106.25" Z="0" />
+      </Extent>
+      <Position>
+        <Location X="198.74999999999997" Y="105" Z="0" />
+        <Axis X="0" Y="0" Z="1" />
+        <Reference X="-1" Y="6.783798783133177E-15" Z="0" />
+      </Position>
+      <Scale X="1" Y="1" Z="1" />
+      <GenericAttributes Number="3" Set="DexpiAttributes">
+        <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+        <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+        <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+      </GenericAttributes>
+      <GenericAttributes Number="83" Set="XVTAttributes">
+        <GenericAttribute Name="AUTOMATION_ISCM" Format="string" Value="Nein" />
+        <GenericAttribute Name="FNO" Format="string" Value="" />
+        <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+        <GenericAttribute Name="FULL_FNO" Format="string" Value="" />
+        <GenericAttribute Name="INSTALLATION_STATE" Format="string" Value="" />
+        <GenericAttribute Name="COMM_STATE" Format="string" Value="" />
+        <GenericAttribute Name="MAINT_STATE" Format="string" Value="" />
+        <GenericAttribute Name="REPAIR_STATE" Format="string" Value="" />
+        <GenericAttribute Name="OPER_STATE" Format="string" Value="" />
+        <GenericAttribute Name="IDENT" Format="string" Value="" />
+        <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+        <GenericAttribute Name="CLASS" Format="string" Value="Nozzle" />
+        <GenericAttribute Name="SUB_CLASS" Format="string" Value="Nozzle, General" />
+        <GenericAttribute Name="SCOPE_OF_SUPPLY" Format="string" Value="" />
+        <GenericAttribute Name="VPE_EQ_STATUS" Format="string" Value="" />
+        <GenericAttribute Name="ERP_EQ_STATUS" Format="string" Value="" />
+        <GenericAttribute Name="FN_INAME" Format="string" Value="" />
+        <GenericAttribute Name="CFGR" Format="string" Value="" />
+        <GenericAttribute Name="CUSTOM_NO" Format="string" Value="" />
+        <GenericAttribute Name="FN_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="FN_LOCATION" Format="string" Value="" />
+        <GenericAttribute Name="VPE_EQ_MNFCT" Format="string" Value="" />
+        <GenericAttribute Name="ERP_EQ_MNFCT" Format="string" Value="" />
+        <GenericAttribute Name="MAT_CLASS_ID" Format="string" Value="" />
+        <GenericAttribute Name="VPE_EQ_TYPE" Format="string" Value="" />
+        <GenericAttribute Name="ERP_EQ_TYPE" Format="string" Value="" />
+        <GenericAttribute Name="VPE_EQ_ARTICLE" Format="string" Value="" />
+        <GenericAttribute Name="EQ_SUPPLIER" Format="string" Value="" />
+        <GenericAttribute Name="ERP_EQ_ARTICLE" Format="string" Value="" />
+        <GenericAttribute Name="VPE_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+        <GenericAttribute Name="ERP_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+        <GenericAttribute Name="VPE_SPECIAL" Format="string" Value="" />
+        <GenericAttribute Name="ERP_SPECIAL" Format="string" Value="" />
+        <GenericAttribute Name="EQ_SERIAL_NUMBER" Format="string" Value="" />
+        <GenericAttribute Name="EQ_ORDER_NO" Format="string" Value="" />
+        <GenericAttribute Name="EQ_ORDER_DATE" Format="string" Value="" />
+        <GenericAttribute Name="EQ_MNFCT_IDENTCODE" Format="string" Value="" />
+        <GenericAttribute Name="LABEL_LINE_1" Format="string" Value="" />
+        <GenericAttribute Name="LABEL_LINE_2" Format="string" Value="" />
+        <GenericAttribute Name="LABEL_LINE_3" Format="string" Value="" />
+        <GenericAttribute Name="VPE_WHOLESALE_PRICE" Format="string" Value="" />
+        <GenericAttribute Name="ERP_WHOLESALE_PRICE" Format="string" Value="" />
+        <GenericAttribute Name="DOC_REQUIREMENT_SHEET_LNK" Format="string" Value="" />
+        <GenericAttribute Name="DIM_DRAWING_LNK" Format="string" Value="" />
+        <GenericAttribute Name="MANUAL_LNK" Format="string" Value="" />
+        <GenericAttribute Name="VPE_NOMINAL_DIAMETER_1" Format="string" Value="" />
+        <GenericAttribute Name="ERP_NOMINAL_DIAMETER_1" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_INAME" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAT_INAME" Format="string" Value="" />
+        <GenericAttribute Name="MAT_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_CONNECT_PN" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAT_CONNECT_PN" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="VPE_TEMP_DESIGN_MIN" Format="string" Value="" />
+        <GenericAttribute Name="ERP_TEMP_DESIGN_MIN" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="VPE_TEMP_DESIGN_MAX" Format="string" Value="" />
+        <GenericAttribute Name="ERP_TEMP_DESIGN_MAX" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_GASKET" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_PRESS_RATING" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAT_PRESS_RATING" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAX_TEST_PRESSURE" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAX_TEST_PRESSURE" Format="string" Value="" />
+        <GenericAttribute Name="ELEC_CONSUMER" Format="string" Value="" />
+        <GenericAttribute Name="ANNOTATION" Format="string" Value="" />
+        <GenericAttribute Name="PICTURE" Format="string" Value="" />
+        <GenericAttribute Name="NORM" Format="string" Value="" />
+        <GenericAttribute Name="STANDARD_GROUP" Format="string" Value="" />
+        <GenericAttribute Name="STANDARD_REGNO" Format="string" Value="" />
+        <GenericAttribute Name="IDENTIFICATIONLETTER" Format="string" Value="N" />
+        <GenericAttribute Name="LAST_EDIT_DATE" Format="string" Value="" />
+        <GenericAttribute Name="LAST_EDIT_BY" Format="string" Value="" />
+        <GenericAttribute Name="VERSION" Format="string" Value="5.1" />
+        <GenericAttribute Name="MTP_BASE_HMI" Format="string" Value="No" />
+        <GenericAttribute Name="MTP_BASE_HMI_ECLASS" Format="string" Value="" />
+        <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+        <GenericAttribute Name="MTP_BASE_HMI_TAG_NAME" Format="string" Value="" />
+        <GenericAttribute Name="OSXML" Format="string" Value="" />
+        <GenericAttribute Name="MTP_BASE_HMI_DESCRIPTION" Format="string" Value="" />
+      </GenericAttributes>
+    </Nozzle>
+    <Nozzle ID="N_3" TagName="" ComponentName="XVT_627" ComponentClass="Nozzle" ComponentClassURI="http://posccaesar.org/rdl/RDS415214">
+      <Extent>
+        <Min X="215.00000000000003" Y="103.75" Z="0" />
+        <Max X="217.50000000000009" Y="106.25" Z="0" />
+      </Extent>
+      <Position>
+        <Location X="216.25000000000006" Y="105" Z="0" />
+        <Axis X="0" Y="0" Z="1" />
+        <Reference X="1" Y="0" Z="0" />
+      </Position>
+      <Scale X="1" Y="1" Z="1" />
+      <GenericAttributes Number="3" Set="DexpiAttributes">
+        <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+        <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+        <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+      </GenericAttributes>
+      <GenericAttributes Number="83" Set="XVTAttributes">
+        <GenericAttribute Name="AUTOMATION_ISCM" Format="string" Value="Nein" />
+        <GenericAttribute Name="FNO" Format="string" Value="" />
+        <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+        <GenericAttribute Name="FULL_FNO" Format="string" Value="" />
+        <GenericAttribute Name="INSTALLATION_STATE" Format="string" Value="" />
+        <GenericAttribute Name="COMM_STATE" Format="string" Value="" />
+        <GenericAttribute Name="MAINT_STATE" Format="string" Value="" />
+        <GenericAttribute Name="REPAIR_STATE" Format="string" Value="" />
+        <GenericAttribute Name="OPER_STATE" Format="string" Value="" />
+        <GenericAttribute Name="IDENT" Format="string" Value="" />
+        <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+        <GenericAttribute Name="CLASS" Format="string" Value="Nozzle" />
+        <GenericAttribute Name="SUB_CLASS" Format="string" Value="Nozzle, General" />
+        <GenericAttribute Name="SCOPE_OF_SUPPLY" Format="string" Value="" />
+        <GenericAttribute Name="VPE_EQ_STATUS" Format="string" Value="" />
+        <GenericAttribute Name="ERP_EQ_STATUS" Format="string" Value="" />
+        <GenericAttribute Name="FN_INAME" Format="string" Value="" />
+        <GenericAttribute Name="CFGR" Format="string" Value="" />
+        <GenericAttribute Name="CUSTOM_NO" Format="string" Value="" />
+        <GenericAttribute Name="FN_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="FN_LOCATION" Format="string" Value="" />
+        <GenericAttribute Name="VPE_EQ_MNFCT" Format="string" Value="" />
+        <GenericAttribute Name="ERP_EQ_MNFCT" Format="string" Value="" />
+        <GenericAttribute Name="MAT_CLASS_ID" Format="string" Value="" />
+        <GenericAttribute Name="VPE_EQ_TYPE" Format="string" Value="" />
+        <GenericAttribute Name="ERP_EQ_TYPE" Format="string" Value="" />
+        <GenericAttribute Name="VPE_EQ_ARTICLE" Format="string" Value="" />
+        <GenericAttribute Name="EQ_SUPPLIER" Format="string" Value="" />
+        <GenericAttribute Name="ERP_EQ_ARTICLE" Format="string" Value="" />
+        <GenericAttribute Name="VPE_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+        <GenericAttribute Name="ERP_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+        <GenericAttribute Name="VPE_SPECIAL" Format="string" Value="" />
+        <GenericAttribute Name="ERP_SPECIAL" Format="string" Value="" />
+        <GenericAttribute Name="EQ_SERIAL_NUMBER" Format="string" Value="" />
+        <GenericAttribute Name="EQ_ORDER_NO" Format="string" Value="" />
+        <GenericAttribute Name="EQ_ORDER_DATE" Format="string" Value="" />
+        <GenericAttribute Name="EQ_MNFCT_IDENTCODE" Format="string" Value="" />
+        <GenericAttribute Name="LABEL_LINE_1" Format="string" Value="" />
+        <GenericAttribute Name="LABEL_LINE_2" Format="string" Value="" />
+        <GenericAttribute Name="LABEL_LINE_3" Format="string" Value="" />
+        <GenericAttribute Name="VPE_WHOLESALE_PRICE" Format="string" Value="" />
+        <GenericAttribute Name="ERP_WHOLESALE_PRICE" Format="string" Value="" />
+        <GenericAttribute Name="DOC_REQUIREMENT_SHEET_LNK" Format="string" Value="" />
+        <GenericAttribute Name="DIM_DRAWING_LNK" Format="string" Value="" />
+        <GenericAttribute Name="MANUAL_LNK" Format="string" Value="" />
+        <GenericAttribute Name="VPE_NOMINAL_DIAMETER_1" Format="string" Value="" />
+        <GenericAttribute Name="ERP_NOMINAL_DIAMETER_1" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_INAME" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAT_INAME" Format="string" Value="" />
+        <GenericAttribute Name="MAT_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_CONNECT_PN" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAT_CONNECT_PN" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="VPE_TEMP_DESIGN_MIN" Format="string" Value="" />
+        <GenericAttribute Name="ERP_TEMP_DESIGN_MIN" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="VPE_TEMP_DESIGN_MAX" Format="string" Value="" />
+        <GenericAttribute Name="ERP_TEMP_DESIGN_MAX" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_GASKET" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_PRESS_RATING" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAT_PRESS_RATING" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAX_TEST_PRESSURE" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAX_TEST_PRESSURE" Format="string" Value="" />
+        <GenericAttribute Name="ELEC_CONSUMER" Format="string" Value="ywkAAB+LCAAAAAAABACtlk2PmzAQhv8K8j1x0t4iYIWMu0ElgIAk3ROi4E2QwE5t02T/fc1HUuXjsHI2B2RnZp53PNgezJdTUxt/CRcVoxaYT2fAEDKnZV4zSizwQQR4sQ3TKctKKpe8dnOZ2+ZJLESxJ01uVKUFrq3AUEwqLDAOFic13kt5WEB4PB6nx+9Txnfw22w2h79WftJzzr6NKBXCAi2no4KYNFXBmWDvclKwZqH8JoMX6PMgNWkIlQbNG3KfyuC58EQ3TYi0gOQtufy/FgS1nKt4nxV5TUZzD1Zih5qc0o8DGeZ7VhXEaCoaFkXL1aJUsZr8dJ619DdraUnKR3lhH6MMhUGyXuH4MV+QPy2hBXkQ7bmXjJ1WMo8WvDffrObKlhCiXs0cGFIJWEAxKyrBTfrwgdhYqYizA+Hyo9O+IITkFd19hpLmO83ITYQvlcrStwhrUXAcfQEF+U6SaK/CQZmLtLPXj+60N6GfOq/6tXsmvtOPwq3a6Lrq+tGdduyk2M3QOo5xkGrn8DylyyVJnTgdIR3SC7UT+iLUcL6SLFp6T5ws/fhLVZ493k9DltvMCxTBD9FPLUC/TbMkXMcIZ5rXnRJ3/CzZeilaYr27JsbuOnCdAL1lPxyUhnonx9m8ZmGE+40VZKm30itqX9FALSnGKyf+VF3hVfeDt70R/tcYrX0nfuCp5i2tFOh8fTOqRHPV+OZg7LE1KSTjxumQy70FphBed+ZxSe8VqcuzU/dixywH+oOUhm8V27yi2abn2nMTqqd511Xt+Uz91MOE9zazb582Rip6GJrwBg1vvsn+AUJ1gp7LCQAA" />
+        <GenericAttribute Name="ANNOTATION" Format="string" Value="" />
+        <GenericAttribute Name="PICTURE" Format="string" Value="" />
+        <GenericAttribute Name="NORM" Format="string" Value="" />
+        <GenericAttribute Name="STANDARD_GROUP" Format="string" Value="" />
+        <GenericAttribute Name="STANDARD_REGNO" Format="string" Value="" />
+        <GenericAttribute Name="IDENTIFICATIONLETTER" Format="string" Value="N" />
+        <GenericAttribute Name="LAST_EDIT_DATE" Format="string" Value="" />
+        <GenericAttribute Name="LAST_EDIT_BY" Format="string" Value="" />
+        <GenericAttribute Name="VERSION" Format="string" Value="5.1" />
+        <GenericAttribute Name="MTP_BASE_HMI" Format="string" Value="No" />
+        <GenericAttribute Name="MTP_BASE_HMI_ECLASS" Format="string" Value="" />
+        <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+        <GenericAttribute Name="MTP_BASE_HMI_TAG_NAME" Format="string" Value="" />
+        <GenericAttribute Name="OSXML" Format="string" Value="" />
+        <GenericAttribute Name="MTP_BASE_HMI_DESCRIPTION" Format="string" Value="" />
+      </GenericAttributes>
+    </Nozzle>
+    <ConnectionPoints FlowIn="1" FlowOut="2" NumPoints="4">
+      <Node ID="E_1_0" Name="1" Type="process">
+        <Position>
+          <Location X="200" Y="105" />
+          <Axis X="0" Y="0" Z="1" />
+          <Reference X="1" Y="0" Z="0" />
+        </Position>
+      </Node>
+      <Node ID="E_1_1" Name="2" Type="process">
+        <Position>
+          <Location X="215.00000000000003" Y="105" />
+          <Axis X="0" Y="0" Z="1" />
+          <Reference X="1" Y="0" Z="0" />
+        </Position>
+      </Node>
+      <Node ID="E_1_2" Name="3" Type="process">
+        <Position>
+          <Location X="207.50000000000003" Y="97.5" />
+          <Axis X="0" Y="0" Z="1" />
+          <Reference X="1" Y="0" Z="0" />
+        </Position>
+      </Node>
+      <Node ID="E_1_3" Name="4" Type="process">
+        <Position>
+          <Location X="207.50000000000003" Y="112.5" />
+          <Axis X="0" Y="0" Z="1" />
+          <Reference X="1" Y="0" Z="0" />
+        </Position>
+      </Node>
+    </ConnectionPoints>
+  </Equipment>
+  <PipingNetworkSystem ID="PNS_3" ComponentClass="PipingNetworkSystem" ComponentClassURI="http://data.posccaesar.org/rdl/RDS270359">
+    <PipingNetworkSegment ID="Pipe_5" TagName="" ComponentName="XVT_63" ComponentClass="PipingNetworkSegment" ComponentClassURI="http://data.posccaesar.org/rdl/RDS267704">
+      <Extent>
+        <Min X="100" Y="102.5" Z="0" />
+        <Max X="121.875" Y="107.5" Z="0" />
+      </Extent>
+      <GenericAttributes Number="3" Set="DexpiAttributes">
+        <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+        <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+        <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="￼" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+      </GenericAttributes>
+      <GenericAttributes Number="22" Set="XVTAttributes">
+        <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+        <GenericAttribute Name="MEDIA_COLOR" Format="string" Value="" />
+        <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+        <GenericAttribute Name="SYSTEM" Format="string" Value="" />
+        <GenericAttribute Name="CLASS" Format="string" Value="Piping" />
+        <GenericAttribute Name="SUB_CLASS" Format="string" Value="Main pipe" />
+        <GenericAttribute Name="DIRECTION" Format="string" Value="--------&gt;" />
+        <GenericAttribute Name="PIPENO" Format="string" Value="" />
+        <GenericAttribute Name="PIPE_INAME" Format="string" Value="" />
+        <GenericAttribute Name="NOMINAL_DIAMETER" Format="string" Value="" />
+        <GenericAttribute Name="MAT_INAME" Format="string" Value="" />
+        <GenericAttribute Name="PIPE_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="MAT_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PIPE_LENGTH" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PIPE_LENGTH" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PIPE_WALL_THICKNESS" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PIPE_WALL_THICKNESS" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="HIDE_TAG" Format="string" Value="Hide" />
+        <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+        <GenericAttribute Name="OSXML" Format="string" Value="" />
+      </GenericAttributes>
+      <Connection ToID="PC_4" ToNode="1" />
+      <CenterLine NumPoints="2" ID="Pipe_5">
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.0001" />
+        <Extent>
+          <Min X="100" Y="104.99970431111112" Z="0" />
+          <Max X="121.87361976902778" Y="104.99970431111112" Z="0" />
+        </Extent>
+        <Coordinate X="100" Y="104.99970431111112" Z="0" />
+        <Coordinate X="121.87361976902778" Y="104.99970431111112" Z="0" />
+      </CenterLine>
+      <PolyLine NumPoints="2">
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="1.00000152777778" />
+        <Extent>
+          <Min X="100" Y="104.99970431111112" Z="0" />
+          <Max X="116.2066111111111" Y="104.99970431111112" Z="0" />
+        </Extent>
+        <Coordinate X="100" Y="104.99970431111112" Z="0" />
+        <Coordinate X="116.2066111111111" Y="104.99970431111112" Z="0" />
+      </PolyLine>
+      <PipingComponent ID="PC_4" TagName="1" ComponentName="XVT_614" ComponentClass="Flange">
+        <Extent>
+          <Min X="120.00000000000001" Y="102.5" Z="0" />
+          <Max X="125.00000000000001" Y="107.5" Z="0" />
+        </Extent>
+        <Position>
+          <Location X="122.50000000000001" Y="105" Z="0" />
+          <Axis X="0" Y="0" Z="1" />
+          <Reference X="1" Y="0" Z="0" />
+        </Position>
+        <Scale X="1" Y="1" Z="1" />
+        <GenericAttributes Number="3" Set="DexpiAttributes">
+          <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+          <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="1" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+          <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+        </GenericAttributes>
+        <GenericAttributes Number="113" Set="XVTAttributes">
+          <GenericAttribute Name="AUTOMATION_ISCM" Format="string" Value="Nein" />
+          <GenericAttribute Name="FNO" Format="string" Value="1" />
+          <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="FULL_FNO" Format="string" Value="T10000-FG000-1" />
+          <GenericAttribute Name="INSTALLATION_STATE" Format="string" Value="" />
+          <GenericAttribute Name="COMM_STATE" Format="string" Value="" />
+          <GenericAttribute Name="MAINT_STATE" Format="string" Value="" />
+          <GenericAttribute Name="REPAIR_STATE" Format="string" Value="" />
+          <GenericAttribute Name="OPER_STATE" Format="string" Value="" />
+          <GenericAttribute Name="IDENT" Format="string" Value="" />
+          <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+          <GenericAttribute Name="CLASS" Format="string" Value="Flange" />
+          <GenericAttribute Name="SUB_CLASS" Format="string" Value="Flange, general" />
+          <GenericAttribute Name="CONNECTION_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="SCOPE_OF_SUPPLY" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="FN_INAME" Format="string" Value="" />
+          <GenericAttribute Name="CFGR" Format="string" Value="" />
+          <GenericAttribute Name="CUSTOM_NO" Format="string" Value="" />
+          <GenericAttribute Name="FN_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="FN_LOCATION" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_MNFCT" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_MNFCT" Format="string" Value="" />
+          <GenericAttribute Name="MAT_CLASS_ID" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_ARTICLE" Format="string" Value="" />
+          <GenericAttribute Name="EQ_SUPPLIER" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_ARTICLE" Format="string" Value="" />
+          <GenericAttribute Name="VPE_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+          <GenericAttribute Name="ERP_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+          <GenericAttribute Name="VPE_SPECIAL" Format="string" Value="" />
+          <GenericAttribute Name="ERP_SPECIAL" Format="string" Value="" />
+          <GenericAttribute Name="EQ_SERIAL_NUMBER" Format="string" Value="" />
+          <GenericAttribute Name="EQ_ORDER_NO" Format="string" Value="" />
+          <GenericAttribute Name="EQ_ORDER_DATE" Format="string" Value="" />
+          <GenericAttribute Name="EQ_MNFCT_IDENTCODE" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_1" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_2" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_3" Format="string" Value="" />
+          <GenericAttribute Name="VPE_WHOLESALE_PRICE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_WHOLESALE_PRICE" Format="string" Value="" />
+          <GenericAttribute Name="DOC_REQUIREMENT_SHEET_LNK" Format="string" Value="" />
+          <GenericAttribute Name="DIM_DRAWING_LNK" Format="string" Value="" />
+          <GenericAttribute Name="MANUAL_LNK" Format="string" Value="" />
+          <GenericAttribute Name="SPLIT_PIPE_SYSTEM" Format="string" Value="Nein" />
+          <GenericAttribute Name="VPE_NOMINAL_DIAMETER_1" Format="string" Value="" />
+          <GenericAttribute Name="ERP_NOMINAL_DIAMETER_1" Format="string" Value="" />
+          <GenericAttribute Name="VPE_NOMINAL_DIAMETER_2" Format="string" Value="" />
+          <GenericAttribute Name="ERP_NOMINAL_DIAMETER_2" Format="string" Value="" />
+          <GenericAttribute Name="VPE_NOMINAL_DIAMETER_3" Format="string" Value="" />
+          <GenericAttribute Name="ERP_NOMINAL_DIAMETER_3" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_INAME" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_INAME" Format="string" Value="" />
+          <GenericAttribute Name="MAT_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_CONNECT_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="VPE_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_CONNECT_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_CONNECT_PN" Format="string" Value="" />
+          <GenericAttribute Name="VPE_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_CONNECT_PN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_MAIN_MATERIAL" Format="string" Value="" />
+          <GenericAttribute Name="VPE_TEMP_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_MAIN_MATERIAL" Format="string" Value="" />
+          <GenericAttribute Name="ERP_TEMP_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_INTERNALS" Format="string" Value="" />
+          <GenericAttribute Name="VPE_TEMP_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_INTERNALS" Format="string" Value="" />
+          <GenericAttribute Name="ERP_TEMP_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_GASKET" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_GASKET" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_PRESS_RATING" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_PRESS_RATING" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAX_TEST_PRESSURE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAX_TEST_PRESSURE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_SPINDLE_MAT" Format="string" Value="" />
+          <GenericAttribute Name="VPE_SPINDLE_MAT" Format="string" Value="" />
+          <GenericAttribute Name="ERP_LUBRICANT_WET" Format="string" Value="" />
+          <GenericAttribute Name="VPE_LUBRICANT_WET" Format="string" Value="" />
+          <GenericAttribute Name="ERP_FLOW_COEFFICIENT" Format="string" Value="" />
+          <GenericAttribute Name="VPE_FLOW_COEFFICIENT" Format="string" Value="" />
+          <GenericAttribute Name="ELEC_CONSUMER" Format="string" Value="ywkAAB+LCAAAAAAABACtlk2PmzAQhv8K8j1x0t4iYIWMu0ElgIAk3ROi4E2QwE5t02T/fc1HUuXjsHI2B2RnZp53PNgezJdTUxt/CRcVoxaYT2fAEDKnZV4zSizwQQR4sQ3TKctKKpe8dnOZ2+ZJLESxJ01uVKUFrq3AUEwqLDAOFic13kt5WEB4PB6nx+9Txnfw22w2h79WftJzzr6NKBXCAi2no4KYNFXBmWDvclKwZqH8JoMX6PMgNWkIlQbNG3KfyuC58EQ3TYi0gOQtufy/FgS1nKt4nxV5TUZzD1Zih5qc0o8DGeZ7VhXEaCoaFkXL1aJUsZr8dJ619DdraUnKR3lhH6MMhUGyXuH4MV+QPy2hBXkQ7bmXjJ1WMo8WvDffrObKlhCiXs0cGFIJWEAxKyrBTfrwgdhYqYizA+Hyo9O+IITkFd19hpLmO83ITYQvlcrStwhrUXAcfQEF+U6SaK/CQZmLtLPXj+60N6GfOq/6tXsmvtOPwq3a6Lrq+tGdduyk2M3QOo5xkGrn8DylyyVJnTgdIR3SC7UT+iLUcL6SLFp6T5ws/fhLVZ493k9DltvMCxTBD9FPLUC/TbMkXMcIZ5rXnRJ3/CzZeilaYr27JsbuOnCdAL1lPxyUhnonx9m8ZmGE+40VZKm30itqX9FALSnGKyf+VF3hVfeDt70R/tcYrX0nfuCp5i2tFOh8fTOqRHPV+OZg7LE1KSTjxumQy70FphBed+ZxSe8VqcuzU/dixywH+oOUhm8V27yi2abn2nMTqqd511Xt+Uz91MOE9zazb582Rip6GJrwBg1vvsn+AUJ1gp7LCQAA" />
+          <GenericAttribute Name="MEDIUM_DS" Format="string" Value="VwcAAB+LCAAAAAAABAClVU2PmzAQ/SvI98RJV3uJgBUKUYsayCqmVXuKXJhNkMCmtmnIv68DNlE+DityQR7PzJs3tufhvrVV6fwDIQvOPDSfzpAjFWU5LTkDD51AojffcYM8L5QOoWVIFfXdVi5kdoCKOkXuoWsvcjQmkx4yi0Wr1wel6gXGx+NxenyZcrHHX2azOf4Vr0mHY2MrmWsIDzWCmQpyUhWZ4JJ/qEnGq4WOm/RRqOMBJVTAlMNoBfdU+shFJM8mAeUhJRoY9n9IWDZC6Pw1z2gJxt0B62J1CW16qqG3D7zIwKkKtsmyRuim9GFVtLVWw/7whuWQP+KlGw0HyrfIEv42wDJ4kBeFA9egUTximejcN31c+QiAvpQ5cpQu4CGNWTCFbojjB8XMGb0LXoNQp3PtAUIqUbD9Z1BSuh+ZGa/CXZQE8Wp09nIdELJ7ovzyqfIkDdLx2ekqft9tg+TreIj625MAJFhHSZT+Hg0QrhLyTP7PiCw3TyGQzToKyej0IEk2+hqjTTIaYruKg+33z6Tjq+nHt9qAL/DG22nQg0htN6zQQIbGkjNdlOrBnyOjMSVkigunrak6eGiKsdUk08dHAWVu3ecRMvx63Adken32XYPju1Hoz12sv+6dkvgvWu5fX11873E7wfBjndqv3EEHzhSGqbRGN2TWuMyM3bEjMISbF21t80CtOby3Ib57Pta6vAa7019udzhD4/jm//gffZSjAlcHAAA=" />
+          <GenericAttribute Name="MED_INAME" Format="string" Value="" />
+          <GenericAttribute Name="MED_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="MED_STATE" Format="string" Value="" />
+          <GenericAttribute Name="MED_TEMP_RANGE" Format="string" Value="" />
+          <GenericAttribute Name="MED_pH_RANGE" Format="string" Value="" />
+          <GenericAttribute Name="MED_SALINITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_DENSITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_VISCOSITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_SOLIDS" Format="string" Value="" />
+          <GenericAttribute Name="MED_ANNOTATION" Format="string" Value="" />
+          <GenericAttribute Name="MED_REMARK" Format="string" Value="" />
+          <GenericAttribute Name="MED_CLASS_ID" Format="string" Value="" />
+          <GenericAttribute Name="ANNOTATION" Format="string" Value="" />
+          <GenericAttribute Name="PICTURE" Format="string" Value="" />
+          <GenericAttribute Name="NORM" Format="string" Value="DIN EN ISO 10628-2:2013-04" />
+          <GenericAttribute Name="STANDARD_GROUP" Format="string" Value="24.16" />
+          <GenericAttribute Name="STANDARD_REGNO" Format="string" Value="511" />
+          <GenericAttribute Name="IDENTIFICATIONLETTER" Format="string" Value="X" />
+          <GenericAttribute Name="LAST_EDIT_DATE" Format="string" Value="2026-08-31T10:53:00" />
+          <GenericAttribute Name="LAST_EDIT_BY" Format="string" Value="Thoralf Schmidt" />
+          <GenericAttribute Name="VERSION" Format="string" Value="5.1" />
+          <GenericAttribute Name="MTP_BASE_HMI" Format="string" Value="No" />
+          <GenericAttribute Name="MTP_BASE_HMI_ECLASS" Format="string" Value="" />
+          <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+          <GenericAttribute Name="MTP_BASE_HMI_TAG_NAME" Format="string" Value="" />
+          <GenericAttribute Name="OSXML" Format="string" Value="" />
+          <GenericAttribute Name="MTP_BASE_HMI_DESCRIPTION" Format="string" Value="" />
+        </GenericAttributes>
+        <ConnectionPoints FlowIn="1" FlowOut="2" NumPoints="4">
+          <Node ID="PC_4_0" Name="1" Type="process">
+            <Position>
+              <Location X="121.87500000000001" Y="105" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_4_1" Name="2" Type="process">
+            <Position>
+              <Location X="123.12500000000003" Y="105" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_4_2" Name="3" Type="process">
+            <Position>
+              <Location X="122.50000000000001" Y="102.5" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_4_3" Name="4" Type="process">
+            <Position>
+              <Location X="122.50000000000001" Y="107.49999999999999" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+        </ConnectionPoints>
+      </PipingComponent>
+    </PipingNetworkSegment>
+    <PipingNetworkSegment ID="Pipe_7" TagName="" ComponentName="XVT_63" ComponentClass="PipingNetworkSegment" ComponentClassURI="http://data.posccaesar.org/rdl/RDS267704">
+      <Extent>
+        <Min X="123.12500000000004" Y="102.5" Z="0" />
+        <Max X="137.50000000000003" Y="107.5" Z="0" />
+      </Extent>
+      <GenericAttributes Number="3" Set="DexpiAttributes">
+        <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+        <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+        <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="￼" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+      </GenericAttributes>
+      <GenericAttributes Number="22" Set="XVTAttributes">
+        <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+        <GenericAttribute Name="MEDIA_COLOR" Format="string" Value="" />
+        <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+        <GenericAttribute Name="SYSTEM" Format="string" Value="" />
+        <GenericAttribute Name="CLASS" Format="string" Value="Piping" />
+        <GenericAttribute Name="SUB_CLASS" Format="string" Value="Main pipe" />
+        <GenericAttribute Name="DIRECTION" Format="string" Value="--------&gt;" />
+        <GenericAttribute Name="PIPENO" Format="string" Value="" />
+        <GenericAttribute Name="PIPE_INAME" Format="string" Value="" />
+        <GenericAttribute Name="NOMINAL_DIAMETER" Format="string" Value="" />
+        <GenericAttribute Name="MAT_INAME" Format="string" Value="" />
+        <GenericAttribute Name="PIPE_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="MAT_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PIPE_LENGTH" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PIPE_LENGTH" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PIPE_WALL_THICKNESS" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PIPE_WALL_THICKNESS" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="HIDE_TAG" Format="string" Value="Hide" />
+        <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+        <GenericAttribute Name="OSXML" Format="string" Value="" />
+      </GenericAttributes>
+      <Connection FromID="PC_4" FromNode="2" ToID="PC_6" ToNode="1" />
+      <CenterLine NumPoints="2" ID="Pipe_7">
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.0001" />
+        <Extent>
+          <Min X="123.12500000000004" Y="104.99970431111112" Z="0" />
+          <Max X="137.49856421347226" Y="104.99970431111112" Z="0" />
+        </Extent>
+        <Coordinate X="123.12500000000004" Y="104.99970431111112" Z="0" />
+        <Coordinate X="137.49856421347226" Y="104.99970431111112" Z="0" />
+      </CenterLine>
+      <PolyLine NumPoints="2">
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="1.00000152777778" />
+        <Extent>
+          <Min X="123.12500000000004" Y="104.99970431111112" Z="0" />
+          <Max X="131.83155555555561" Y="104.99970431111112" Z="0" />
+        </Extent>
+        <Coordinate X="123.12500000000004" Y="104.99970431111112" Z="0" />
+        <Coordinate X="131.83155555555561" Y="104.99970431111112" Z="0" />
+      </PolyLine>
+      <PipingComponent ID="PC_6" TagName="2" ComponentName="XVT_609" ComponentClass="Strainer">
+        <Extent>
+          <Min X="135" Y="99.999999999999972" Z="0" />
+          <Max X="145.00000000000006" Y="110.00000000000006" Z="0" />
+        </Extent>
+        <Position>
+          <Location X="140.00000000000003" Y="105.00000000000001" Z="0" />
+          <Axis X="0" Y="0" Z="1" />
+          <Reference X="1" Y="0" Z="0" />
+        </Position>
+        <Scale X="1" Y="1" Z="1" />
+        <GenericAttributes Number="3" Set="DexpiAttributes">
+          <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+          <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="2" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+          <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+        </GenericAttributes>
+        <GenericAttributes Number="118" Set="XVTAttributes">
+          <GenericAttribute Name="AUTOMATION_ISCM" Format="string" Value="Nein" />
+          <GenericAttribute Name="FNO" Format="string" Value="2" />
+          <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="FULL_FNO" Format="string" Value="T10000-FG000-2" />
+          <GenericAttribute Name="INSTALLATION_STATE" Format="string" Value="" />
+          <GenericAttribute Name="COMM_STATE" Format="string" Value="" />
+          <GenericAttribute Name="MAINT_STATE" Format="string" Value="" />
+          <GenericAttribute Name="REPAIR_STATE" Format="string" Value="" />
+          <GenericAttribute Name="OPER_STATE" Format="string" Value="" />
+          <GenericAttribute Name="CHECK_INSTALLED" Format="string" Value="Nein" />
+          <GenericAttribute Name="IDENT" Format="string" Value="" />
+          <GenericAttribute Name="CHECK_CABLE_CON" Format="string" Value="Nein" />
+          <GenericAttribute Name="CHECK_INST_DATE" Format="string" Value="Nein" />
+          <GenericAttribute Name="CHECK_FCT_CHECK_BY" Format="string" Value="Nein" />
+          <GenericAttribute Name="CHECK_LABEL_INST" Format="string" Value="Nein" />
+          <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+          <GenericAttribute Name="CLASS" Format="string" Value="Strainer" />
+          <GenericAttribute Name="SUB_CLASS" Format="string" Value="General" />
+          <GenericAttribute Name="CONNECTION_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="SCOPE_OF_SUPPLY" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="FN_INAME" Format="string" Value="" />
+          <GenericAttribute Name="CFGR" Format="string" Value="" />
+          <GenericAttribute Name="CUSTOM_NO" Format="string" Value="" />
+          <GenericAttribute Name="FN_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="FN_LOCATION" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_MNFCT" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_MNFCT" Format="string" Value="" />
+          <GenericAttribute Name="MAT_CLASS_ID" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_ARTICLE" Format="string" Value="" />
+          <GenericAttribute Name="EQ_SUPPLIER" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_ARTICLE" Format="string" Value="" />
+          <GenericAttribute Name="VPE_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+          <GenericAttribute Name="ERP_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+          <GenericAttribute Name="VPE_SPECIAL" Format="string" Value="" />
+          <GenericAttribute Name="ERP_SPECIAL" Format="string" Value="" />
+          <GenericAttribute Name="EQ_SERIAL_NUMBER" Format="string" Value="" />
+          <GenericAttribute Name="EQ_ORDER_NO" Format="string" Value="" />
+          <GenericAttribute Name="EQ_ORDER_DATE" Format="string" Value="" />
+          <GenericAttribute Name="EQ_MNFCT_IDENTCODE" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_1" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_2" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_3" Format="string" Value="" />
+          <GenericAttribute Name="VPE_WHOLESALE_PRICE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_WHOLESALE_PRICE" Format="string" Value="" />
+          <GenericAttribute Name="DOC_REQUIREMENT_SHEET_LNK" Format="string" Value="" />
+          <GenericAttribute Name="DIM_DRAWING_LNK" Format="string" Value="" />
+          <GenericAttribute Name="MANUAL_LNK" Format="string" Value="" />
+          <GenericAttribute Name="SPLIT_PIPE_SYSTEM" Format="string" Value="Nein" />
+          <GenericAttribute Name="VPE_NOMINAL_DIAMETER_1" Format="string" Value="" />
+          <GenericAttribute Name="ERP_NOMINAL_DIAMETER_1" Format="string" Value="" />
+          <GenericAttribute Name="VPE_NOMINAL_DIAMETER_2" Format="string" Value="" />
+          <GenericAttribute Name="ERP_NOMINAL_DIAMETER_2" Format="string" Value="" />
+          <GenericAttribute Name="VPE_NOMINAL_DIAMETER_3" Format="string" Value="" />
+          <GenericAttribute Name="ERP_NOMINAL_DIAMETER_3" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_INAME" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_INAME" Format="string" Value="" />
+          <GenericAttribute Name="MAT_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="VPE_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_CONNECT_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_CONNECT_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_CONNECT_PN" Format="string" Value="" />
+          <GenericAttribute Name="VPE_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_CONNECT_PN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_MAIN_MATERIAL" Format="string" Value="" />
+          <GenericAttribute Name="VPE_TEMP_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_MAIN_MATERIAL" Format="string" Value="" />
+          <GenericAttribute Name="ERP_TEMP_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_INTERNALS" Format="string" Value="" />
+          <GenericAttribute Name="VPE_TEMP_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_INTERNALS" Format="string" Value="" />
+          <GenericAttribute Name="ERP_TEMP_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_GASKET" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_GASKET" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_PRESS_RATING" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_PRESS_RATING" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAX_TEST_PRESSURE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAX_TEST_PRESSURE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_SPINDLE_MAT" Format="string" Value="" />
+          <GenericAttribute Name="VPE_SPINDLE_MAT" Format="string" Value="" />
+          <GenericAttribute Name="ERP_LUBRICANT_WET" Format="string" Value="" />
+          <GenericAttribute Name="VPE_LUBRICANT_WET" Format="string" Value="" />
+          <GenericAttribute Name="ERP_FLOW_COEFFICIENT" Format="string" Value="" />
+          <GenericAttribute Name="VPE_FLOW_COEFFICIENT" Format="string" Value="" />
+          <GenericAttribute Name="ELEC_CONSUMER" Format="string" Value="ywkAAB+LCAAAAAAABACtlk2PmzAQhv8K8j1x0t4iYIWMu0ElgIAk3ROi4E2QwE5t02T/fc1HUuXjsHI2B2RnZp53PNgezJdTUxt/CRcVoxaYT2fAEDKnZV4zSizwQQR4sQ3TKctKKpe8dnOZ2+ZJLESxJ01uVKUFrq3AUEwqLDAOFic13kt5WEB4PB6nx+9Txnfw22w2h79WftJzzr6NKBXCAi2no4KYNFXBmWDvclKwZqH8JoMX6PMgNWkIlQbNG3KfyuC58EQ3TYi0gOQtufy/FgS1nKt4nxV5TUZzD1Zih5qc0o8DGeZ7VhXEaCoaFkXL1aJUsZr8dJ619DdraUnKR3lhH6MMhUGyXuH4MV+QPy2hBXkQ7bmXjJ1WMo8WvDffrObKlhCiXs0cGFIJWEAxKyrBTfrwgdhYqYizA+Hyo9O+IITkFd19hpLmO83ITYQvlcrStwhrUXAcfQEF+U6SaK/CQZmLtLPXj+60N6GfOq/6tXsmvtOPwq3a6Lrq+tGdduyk2M3QOo5xkGrn8DylyyVJnTgdIR3SC7UT+iLUcL6SLFp6T5ws/fhLVZ493k9DltvMCxTBD9FPLUC/TbMkXMcIZ5rXnRJ3/CzZeilaYr27JsbuOnCdAL1lPxyUhnonx9m8ZmGE+40VZKm30itqX9FALSnGKyf+VF3hVfeDt70R/tcYrX0nfuCp5i2tFOh8fTOqRHPV+OZg7LE1KSTjxumQy70FphBed+ZxSe8VqcuzU/dixywH+oOUhm8V27yi2abn2nMTqqd511Xt+Uz91MOE9zazb582Rip6GJrwBg1vvsn+AUJ1gp7LCQAA" />
+          <GenericAttribute Name="MEDIUM_DS" Format="string" Value="XwcAAB+LCAAAAAAABAClVVGPojAQ/iuk71rdzb4YYEPE3JET3FjucvdkujCrJNBybTnx318FiqvysMEX0unM983XdmawX+sit/6BkBlnDppPZ8iSirKU5pyBg04g0atr2V6aZkqH0Nynirp2LRcyOUBBrSx10LUXWZqTSQd1i0Wt1welygXGx+NxenyecrHHT7PZHP8O16ThMbGFTDWFgyrBugxyUmSJ4JJ/qEnCi4WOm7RRqNEBORTAlMVoAfdS2shFIM8mAeUgJSro939KWFZCaPyaJzSHzt0Q62RlDnV8KqG1DzxLwCoytkmSSuhD6csqaG2sir3ziqWQDukKV/4uiLxwNcwt4W8FLIEBZOD3ar1K8YAlonHfnOTKRwD0s8yRpXQCB2nOjCl0Ix0PJOtu6U3wEoQ6nXP3FFKJjO2/whLT/Ujk5ZrGopdrj5DdA+mXD6UnsRePR8er8G239aJv4ynK7w8SEG8dREH8ZzSBv4rII/hfAVluHmIgm3Xgk9FwL4o2+hmDTTSaYrsKve2Pr8DxVffj29mAL/Sdt5lCA5HarlimiToZS850Uqobf466GZNDoriw6pKqg4OmGH9qt/YkHxnkqQk4N1GnsGUekNPOaNfumVw78N25jfXXvpsm7rMe+i8vNr732M3QcEMNbVcXyrOIvjON0TSaMS59Y3ZMG/ThXVUbuytSY/Y118c3JWSsS0WYnfaBm+v5dHR885/8D9TglkRfBwAA" />
+          <GenericAttribute Name="MED_INAME" Format="string" Value="" />
+          <GenericAttribute Name="MED_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="MED_STATE" Format="string" Value="" />
+          <GenericAttribute Name="MED_TEMP_RANGE" Format="string" Value="" />
+          <GenericAttribute Name="MED_pH_RANGE" Format="string" Value="" />
+          <GenericAttribute Name="MED_SALINITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_DENSITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_VISCOSITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_SOLIDS" Format="string" Value="" />
+          <GenericAttribute Name="MED_ANNOTATION" Format="string" Value="" />
+          <GenericAttribute Name="MED_REMARK" Format="string" Value="" />
+          <GenericAttribute Name="MED_CLASS_ID" Format="string" Value="" />
+          <GenericAttribute Name="ANNOTATION" Format="string" Value="" />
+          <GenericAttribute Name="PICTURE" Format="string" Value="" />
+          <GenericAttribute Name="NORM" Format="string" Value="DIN EN ISO 10628-2:2013-04" />
+          <GenericAttribute Name="STANDARD_GROUP" Format="string" Value="24.6" />
+          <GenericAttribute Name="STANDARD_REGNO" Format="string" Value="C8090" />
+          <GenericAttribute Name="IDENTIFICATIONLETTER" Format="string" Value="VF" />
+          <GenericAttribute Name="LAST_EDIT_DATE" Format="string" Value="2026-08-31T10:48:24" />
+          <GenericAttribute Name="LAST_EDIT_BY" Format="string" Value="Thoralf Schmidt" />
+          <GenericAttribute Name="VERSION" Format="string" Value="5.1" />
+          <GenericAttribute Name="MTP_BASE_HMI" Format="string" Value="No" />
+          <GenericAttribute Name="MTP_BASE_HMI_ECLASS" Format="string" Value="" />
+          <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+          <GenericAttribute Name="MTP_BASE_HMI_TAG_NAME" Format="string" Value="" />
+          <GenericAttribute Name="OSXML" Format="string" Value="" />
+          <GenericAttribute Name="MTP_BASE_HMI_DESCRIPTION" Format="string" Value="" />
+        </GenericAttributes>
+        <ConnectionPoints FlowIn="1" FlowOut="2" NumPoints="4">
+          <Node ID="PC_6_0" Name="1" Type="process">
+            <Position>
+              <Location X="137.5" Y="105.00000000000001" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_6_1" Name="2" Type="process">
+            <Position>
+              <Location X="142.50000000000003" Y="105.00000000000001" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_6_2" Name="3" Type="process">
+            <Position>
+              <Location X="140.00000000000003" Y="99.999999999999986" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_6_3" Name="4" Type="process">
+            <Position>
+              <Location X="140.00000000000003" Y="110.00000000000006" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+        </ConnectionPoints>
+      </PipingComponent>
+    </PipingNetworkSegment>
+    <PipingNetworkSegment ID="Pipe_12" TagName="" ComponentName="XVT_63" ComponentClass="PipingNetworkSegment" ComponentClassURI="http://data.posccaesar.org/rdl/RDS267704">
+      <Extent>
+        <Min X="142.50000000000003" Y="107.5" Z="0" />
+        <Max X="151.23213869135012" Y="102.5" Z="0" />
+      </Extent>
+      <GenericAttributes Number="3" Set="DexpiAttributes">
+        <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+        <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+        <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="￼" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+      </GenericAttributes>
+      <GenericAttributes Number="22" Set="XVTAttributes">
+        <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+        <GenericAttribute Name="MEDIA_COLOR" Format="string" Value="" />
+        <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+        <GenericAttribute Name="SYSTEM" Format="string" Value="" />
+        <GenericAttribute Name="CLASS" Format="string" Value="Piping" />
+        <GenericAttribute Name="SUB_CLASS" Format="string" Value="Main pipe" />
+        <GenericAttribute Name="DIRECTION" Format="string" Value="--------&gt;" />
+        <GenericAttribute Name="PIPENO" Format="string" Value="" />
+        <GenericAttribute Name="PIPE_INAME" Format="string" Value="" />
+        <GenericAttribute Name="NOMINAL_DIAMETER" Format="string" Value="" />
+        <GenericAttribute Name="MAT_INAME" Format="string" Value="" />
+        <GenericAttribute Name="PIPE_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="MAT_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PIPE_LENGTH" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PIPE_LENGTH" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PIPE_WALL_THICKNESS" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PIPE_WALL_THICKNESS" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="HIDE_TAG" Format="string" Value="Hide" />
+        <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+        <GenericAttribute Name="OSXML" Format="string" Value="" />
+      </GenericAttributes>
+      <Connection FromID="PC_6" FromNode="2" ToID="PC_11" ToNode="1" />
+      <CenterLine NumPoints="2" ID="Pipe_12">
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.0001" />
+        <Extent>
+          <Min X="142.50000000000003" Y="105.0008432" Z="0" />
+          <Max X="151.23264754680559" Y="105.0008432" Z="0" />
+        </Extent>
+        <Coordinate X="142.50000000000003" Y="105.0008432" Z="0" />
+        <Coordinate X="151.23264754680559" Y="105.0008432" Z="0" />
+      </CenterLine>
+      <PolyLine NumPoints="2">
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="1.00000152777778" />
+        <Extent>
+          <Min X="142.50000000000003" Y="105.0008432" Z="0" />
+          <Max X="145.56563888888891" Y="105.0008432" Z="0" />
+        </Extent>
+        <Coordinate X="142.50000000000003" Y="105.0008432" Z="0" />
+        <Coordinate X="145.56563888888891" Y="105.0008432" Z="0" />
+      </PolyLine>
+      <PipingComponent ID="PC_11" TagName="3" ComponentName="XVT_614" ComponentClass="Flange">
+        <Extent>
+          <Min X="149.35713869135012" Y="102.5" Z="0" />
+          <Max X="154.35713869135012" Y="107.5" Z="0" />
+        </Extent>
+        <Position>
+          <Location X="151.85713869135012" Y="105" Z="0" />
+          <Axis X="0" Y="0" Z="1" />
+          <Reference X="1" Y="0" Z="0" />
+        </Position>
+        <Scale X="1" Y="1" Z="1" />
+        <GenericAttributes Number="3" Set="DexpiAttributes">
+          <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+          <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="3" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+          <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+        </GenericAttributes>
+        <GenericAttributes Number="113" Set="XVTAttributes">
+          <GenericAttribute Name="AUTOMATION_ISCM" Format="string" Value="Nein" />
+          <GenericAttribute Name="FNO" Format="string" Value="3" />
+          <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="FULL_FNO" Format="string" Value="T10000-FG000-3" />
+          <GenericAttribute Name="INSTALLATION_STATE" Format="string" Value="" />
+          <GenericAttribute Name="COMM_STATE" Format="string" Value="" />
+          <GenericAttribute Name="MAINT_STATE" Format="string" Value="" />
+          <GenericAttribute Name="REPAIR_STATE" Format="string" Value="" />
+          <GenericAttribute Name="OPER_STATE" Format="string" Value="" />
+          <GenericAttribute Name="IDENT" Format="string" Value="" />
+          <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+          <GenericAttribute Name="CLASS" Format="string" Value="Flange" />
+          <GenericAttribute Name="SUB_CLASS" Format="string" Value="Flange, general" />
+          <GenericAttribute Name="CONNECTION_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="SCOPE_OF_SUPPLY" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="FN_INAME" Format="string" Value="" />
+          <GenericAttribute Name="CFGR" Format="string" Value="" />
+          <GenericAttribute Name="CUSTOM_NO" Format="string" Value="" />
+          <GenericAttribute Name="FN_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="FN_LOCATION" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_MNFCT" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_MNFCT" Format="string" Value="" />
+          <GenericAttribute Name="MAT_CLASS_ID" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_ARTICLE" Format="string" Value="" />
+          <GenericAttribute Name="EQ_SUPPLIER" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_ARTICLE" Format="string" Value="" />
+          <GenericAttribute Name="VPE_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+          <GenericAttribute Name="ERP_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+          <GenericAttribute Name="VPE_SPECIAL" Format="string" Value="" />
+          <GenericAttribute Name="ERP_SPECIAL" Format="string" Value="" />
+          <GenericAttribute Name="EQ_SERIAL_NUMBER" Format="string" Value="" />
+          <GenericAttribute Name="EQ_ORDER_NO" Format="string" Value="" />
+          <GenericAttribute Name="EQ_ORDER_DATE" Format="string" Value="" />
+          <GenericAttribute Name="EQ_MNFCT_IDENTCODE" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_1" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_2" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_3" Format="string" Value="" />
+          <GenericAttribute Name="VPE_WHOLESALE_PRICE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_WHOLESALE_PRICE" Format="string" Value="" />
+          <GenericAttribute Name="DOC_REQUIREMENT_SHEET_LNK" Format="string" Value="" />
+          <GenericAttribute Name="DIM_DRAWING_LNK" Format="string" Value="" />
+          <GenericAttribute Name="MANUAL_LNK" Format="string" Value="" />
+          <GenericAttribute Name="SPLIT_PIPE_SYSTEM" Format="string" Value="Nein" />
+          <GenericAttribute Name="VPE_NOMINAL_DIAMETER_1" Format="string" Value="" />
+          <GenericAttribute Name="ERP_NOMINAL_DIAMETER_1" Format="string" Value="" />
+          <GenericAttribute Name="VPE_NOMINAL_DIAMETER_2" Format="string" Value="" />
+          <GenericAttribute Name="ERP_NOMINAL_DIAMETER_2" Format="string" Value="" />
+          <GenericAttribute Name="VPE_NOMINAL_DIAMETER_3" Format="string" Value="" />
+          <GenericAttribute Name="ERP_NOMINAL_DIAMETER_3" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_INAME" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_INAME" Format="string" Value="" />
+          <GenericAttribute Name="MAT_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_CONNECT_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="VPE_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_CONNECT_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_CONNECT_PN" Format="string" Value="" />
+          <GenericAttribute Name="VPE_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_CONNECT_PN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_MAIN_MATERIAL" Format="string" Value="" />
+          <GenericAttribute Name="VPE_TEMP_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_MAIN_MATERIAL" Format="string" Value="" />
+          <GenericAttribute Name="ERP_TEMP_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_INTERNALS" Format="string" Value="" />
+          <GenericAttribute Name="VPE_TEMP_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_INTERNALS" Format="string" Value="" />
+          <GenericAttribute Name="ERP_TEMP_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_GASKET" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_GASKET" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_PRESS_RATING" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_PRESS_RATING" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAX_TEST_PRESSURE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAX_TEST_PRESSURE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_SPINDLE_MAT" Format="string" Value="" />
+          <GenericAttribute Name="VPE_SPINDLE_MAT" Format="string" Value="" />
+          <GenericAttribute Name="ERP_LUBRICANT_WET" Format="string" Value="" />
+          <GenericAttribute Name="VPE_LUBRICANT_WET" Format="string" Value="" />
+          <GenericAttribute Name="ERP_FLOW_COEFFICIENT" Format="string" Value="" />
+          <GenericAttribute Name="VPE_FLOW_COEFFICIENT" Format="string" Value="" />
+          <GenericAttribute Name="ELEC_CONSUMER" Format="string" Value="ywkAAB+LCAAAAAAABACtlk2PmzAQhv8K8j1x0t4iYIWMu0ElgIAk3ROi4E2QwE5t02T/fc1HUuXjsHI2B2RnZp53PNgezJdTUxt/CRcVoxaYT2fAEDKnZV4zSizwQQR4sQ3TKctKKpe8dnOZ2+ZJLESxJ01uVKUFrq3AUEwqLDAOFic13kt5WEB4PB6nx+9Txnfw22w2h79WftJzzr6NKBXCAi2no4KYNFXBmWDvclKwZqH8JoMX6PMgNWkIlQbNG3KfyuC58EQ3TYi0gOQtufy/FgS1nKt4nxV5TUZzD1Zih5qc0o8DGeZ7VhXEaCoaFkXL1aJUsZr8dJ619DdraUnKR3lhH6MMhUGyXuH4MV+QPy2hBXkQ7bmXjJ1WMo8WvDffrObKlhCiXs0cGFIJWEAxKyrBTfrwgdhYqYizA+Hyo9O+IITkFd19hpLmO83ITYQvlcrStwhrUXAcfQEF+U6SaK/CQZmLtLPXj+60N6GfOq/6tXsmvtOPwq3a6Lrq+tGdduyk2M3QOo5xkGrn8DylyyVJnTgdIR3SC7UT+iLUcL6SLFp6T5ws/fhLVZ493k9DltvMCxTBD9FPLUC/TbMkXMcIZ5rXnRJ3/CzZeilaYr27JsbuOnCdAL1lPxyUhnonx9m8ZmGE+40VZKm30itqX9FALSnGKyf+VF3hVfeDt70R/tcYrX0nfuCp5i2tFOh8fTOqRHPV+OZg7LE1KSTjxumQy70FphBed+ZxSe8VqcuzU/dixywH+oOUhm8V27yi2abn2nMTqqd511Xt+Uz91MOE9zazb582Rip6GJrwBg1vvsn+AUJ1gp7LCQAA" />
+          <GenericAttribute Name="MEDIUM_DS" Format="string" Value="VwcAAB+LCAAAAAAABAClVU2PmzAQ/SvI98RJV3uJgBUKUYsayCqmVXuKXJhNkMCmtmnIv68DNlE+DityQR7PzJs3tufhvrVV6fwDIQvOPDSfzpAjFWU5LTkDD51AojffcYM8L5QOoWVIFfXdVi5kdoCKOkXuoWsvcjQmkx4yi0Wr1wel6gXGx+NxenyZcrHHX2azOf4Vr0mHY2MrmWsIDzWCmQpyUhWZ4JJ/qEnGq4WOm/RRqOMBJVTAlMNoBfdU+shFJM8mAeUhJRoY9n9IWDZC6Pw1z2gJxt0B62J1CW16qqG3D7zIwKkKtsmyRuim9GFVtLVWw/7whuWQP+KlGw0HyrfIEv42wDJ4kBeFA9egUTximejcN31c+QiAvpQ5cpQu4CGNWTCFbojjB8XMGb0LXoNQp3PtAUIqUbD9Z1BSuh+ZGa/CXZQE8Wp09nIdELJ7ovzyqfIkDdLx2ekqft9tg+TreIj625MAJFhHSZT+Hg0QrhLyTP7PiCw3TyGQzToKyej0IEk2+hqjTTIaYruKg+33z6Tjq+nHt9qAL/DG22nQg0htN6zQQIbGkjNdlOrBnyOjMSVkigunrak6eGiKsdUk08dHAWVu3ecRMvx63Adken32XYPju1Hoz12sv+6dkvgvWu5fX11873E7wfBjndqv3EEHzhSGqbRGN2TWuMyM3bEjMISbF21t80CtOby3Ib57Pta6vAa7019udzhD4/jm//gffZSjAlcHAAA=" />
+          <GenericAttribute Name="MED_INAME" Format="string" Value="" />
+          <GenericAttribute Name="MED_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="MED_STATE" Format="string" Value="" />
+          <GenericAttribute Name="MED_TEMP_RANGE" Format="string" Value="" />
+          <GenericAttribute Name="MED_pH_RANGE" Format="string" Value="" />
+          <GenericAttribute Name="MED_SALINITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_DENSITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_VISCOSITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_SOLIDS" Format="string" Value="" />
+          <GenericAttribute Name="MED_ANNOTATION" Format="string" Value="" />
+          <GenericAttribute Name="MED_REMARK" Format="string" Value="" />
+          <GenericAttribute Name="MED_CLASS_ID" Format="string" Value="" />
+          <GenericAttribute Name="ANNOTATION" Format="string" Value="" />
+          <GenericAttribute Name="PICTURE" Format="string" Value="" />
+          <GenericAttribute Name="NORM" Format="string" Value="DIN EN ISO 10628-2:2013-04" />
+          <GenericAttribute Name="STANDARD_GROUP" Format="string" Value="24.16" />
+          <GenericAttribute Name="STANDARD_REGNO" Format="string" Value="511" />
+          <GenericAttribute Name="IDENTIFICATIONLETTER" Format="string" Value="X" />
+          <GenericAttribute Name="LAST_EDIT_DATE" Format="string" Value="2026-08-31T10:52:35" />
+          <GenericAttribute Name="LAST_EDIT_BY" Format="string" Value="Thoralf Schmidt" />
+          <GenericAttribute Name="VERSION" Format="string" Value="5.1" />
+          <GenericAttribute Name="MTP_BASE_HMI" Format="string" Value="No" />
+          <GenericAttribute Name="MTP_BASE_HMI_ECLASS" Format="string" Value="" />
+          <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+          <GenericAttribute Name="MTP_BASE_HMI_TAG_NAME" Format="string" Value="" />
+          <GenericAttribute Name="OSXML" Format="string" Value="" />
+          <GenericAttribute Name="MTP_BASE_HMI_DESCRIPTION" Format="string" Value="" />
+        </GenericAttributes>
+        <ConnectionPoints FlowIn="1" FlowOut="2" NumPoints="4">
+          <Node ID="PC_11_0" Name="1" Type="process">
+            <Position>
+              <Location X="151.23213869135012" Y="105" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_11_1" Name="2" Type="process">
+            <Position>
+              <Location X="152.48213869135012" Y="105" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_11_2" Name="3" Type="process">
+            <Position>
+              <Location X="151.85713869135012" Y="102.5" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_11_3" Name="4" Type="process">
+            <Position>
+              <Location X="151.85713869135012" Y="107.49999999999999" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+        </ConnectionPoints>
+      </PipingComponent>
+    </PipingNetworkSegment>
+    <PipingNetworkSegment ID="Pipe_13" TagName="" ComponentName="XVT_63" ComponentClass="PipingNetworkSegment" ComponentClassURI="http://data.posccaesar.org/rdl/RDS267704">
+      <Extent>
+        <Min X="152.48213869135012" Y="102.5" Z="0" />
+        <Max X="169.99999999999997" Y="107.5" Z="0" />
+      </Extent>
+      <GenericAttributes Number="3" Set="DexpiAttributes">
+        <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+        <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+        <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="￼" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+      </GenericAttributes>
+      <GenericAttributes Number="22" Set="XVTAttributes">
+        <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+        <GenericAttribute Name="MEDIA_COLOR" Format="string" Value="" />
+        <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+        <GenericAttribute Name="SYSTEM" Format="string" Value="" />
+        <GenericAttribute Name="CLASS" Format="string" Value="Piping" />
+        <GenericAttribute Name="SUB_CLASS" Format="string" Value="Main pipe" />
+        <GenericAttribute Name="DIRECTION" Format="string" Value="--------&gt;" />
+        <GenericAttribute Name="PIPENO" Format="string" Value="" />
+        <GenericAttribute Name="PIPE_INAME" Format="string" Value="" />
+        <GenericAttribute Name="NOMINAL_DIAMETER" Format="string" Value="" />
+        <GenericAttribute Name="MAT_INAME" Format="string" Value="" />
+        <GenericAttribute Name="PIPE_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="MAT_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PIPE_LENGTH" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PIPE_LENGTH" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PIPE_WALL_THICKNESS" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PIPE_WALL_THICKNESS" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="HIDE_TAG" Format="string" Value="Hide" />
+        <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+        <GenericAttribute Name="OSXML" Format="string" Value="" />
+      </GenericAttributes>
+      <Connection FromID="PC_11" FromNode="2" ToID="PC_8" ToNode="1" />
+      <CenterLine NumPoints="2" ID="Pipe_13">
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.0001" />
+        <Extent>
+          <Min X="152.48213869135012" Y="104.99970431111112" Z="0" />
+          <Max X="169.99895290482235" Y="104.99970431111112" Z="0" />
+        </Extent>
+        <Coordinate X="152.48213869135012" Y="104.99970431111112" Z="0" />
+        <Coordinate X="169.99895290482235" Y="104.99970431111112" Z="0" />
+      </CenterLine>
+      <PolyLine NumPoints="2">
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="1.00000152777778" />
+        <Extent>
+          <Min X="152.48213869135012" Y="104.99970431111112" Z="0" />
+          <Max X="164.33194424690566" Y="104.99970431111112" Z="0" />
+        </Extent>
+        <Coordinate X="152.48213869135012" Y="104.99970431111112" Z="0" />
+        <Coordinate X="164.33194424690566" Y="104.99970431111112" Z="0" />
+      </PolyLine>
+      <PipingComponent ID="PC_8" TagName="4" ComponentName="XVT_17" ComponentClass="Pipe reducer">
+        <Extent>
+          <Min X="169.99999999999997" Y="100" Z="0" />
+          <Max X="179.99999999999997" Y="110" Z="0" />
+        </Extent>
+        <Position>
+          <Location X="174.99999999999997" Y="105" Z="0" />
+          <Axis X="0" Y="0" Z="1" />
+          <Reference X="1" Y="0" Z="0" />
+        </Position>
+        <Scale X="1" Y="1" Z="1" />
+        <GenericAttributes Number="3" Set="DexpiAttributes">
+          <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+          <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="4" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+          <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+        </GenericAttributes>
+        <GenericAttributes Number="92" Set="XVTAttributes">
+          <GenericAttribute Name="AUTOMATION_ISCM" Format="string" Value="Nein" />
+          <GenericAttribute Name="FNO" Format="string" Value="4" />
+          <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="FULL_FNO" Format="string" Value="T10000-FG000-4" />
+          <GenericAttribute Name="INSTALLATION_STATE" Format="string" Value="" />
+          <GenericAttribute Name="COMM_STATE" Format="string" Value="" />
+          <GenericAttribute Name="MAINT_STATE" Format="string" Value="" />
+          <GenericAttribute Name="REPAIR_STATE" Format="string" Value="" />
+          <GenericAttribute Name="OPER_STATE" Format="string" Value="" />
+          <GenericAttribute Name="IDENT" Format="string" Value="" />
+          <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+          <GenericAttribute Name="CLASS" Format="string" Value="Reducer" />
+          <GenericAttribute Name="SUB_CLASS" Format="string" Value="General" />
+          <GenericAttribute Name="DIRECTION" Format="string" Value="--------&gt;" />
+          <GenericAttribute Name="SCOPE_OF_SUPPLY" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="NOMINAL_DIAMETER_1" Format="string" Value="" />
+          <GenericAttribute Name="NOMINAL_DIAMETER_2" Format="string" Value="" />
+          <GenericAttribute Name="FN_INAME" Format="string" Value="" />
+          <GenericAttribute Name="CFGR" Format="string" Value="" />
+          <GenericAttribute Name="CUSTOM_NO" Format="string" Value="" />
+          <GenericAttribute Name="FN_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="FN_LOCATION" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_MNFCT" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_MNFCT" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_ARTICLE" Format="string" Value="" />
+          <GenericAttribute Name="EQ_SUPPLIER" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_ARTICLE" Format="string" Value="" />
+          <GenericAttribute Name="VPE_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+          <GenericAttribute Name="ERP_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+          <GenericAttribute Name="VPE_SPECIAL" Format="string" Value="" />
+          <GenericAttribute Name="ERP_SPECIAL" Format="string" Value="" />
+          <GenericAttribute Name="EQ_SERIAL_NUMBER" Format="string" Value="" />
+          <GenericAttribute Name="EQ_ORDER_NO" Format="string" Value="" />
+          <GenericAttribute Name="EQ_ORDER_DATE" Format="string" Value="" />
+          <GenericAttribute Name="EQ_MNFCT_IDENTCODE" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_1" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_2" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_3" Format="string" Value="" />
+          <GenericAttribute Name="VPE_WHOLESALE_PRICE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_WHOLESALE_PRICE" Format="string" Value="" />
+          <GenericAttribute Name="DOC_REQUIREMENT_SHEET_LNK" Format="string" Value="" />
+          <GenericAttribute Name="DIM_DRAWING_LNK" Format="string" Value="" />
+          <GenericAttribute Name="MANUAL_LNK" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_INAME" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_INAME" Format="string" Value="" />
+          <GenericAttribute Name="MAT_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="VPE_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="VPE_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_CONNECT_PN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_MAIN_MATERIAL" Format="string" Value="" />
+          <GenericAttribute Name="VPE_TEMP_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_TEMP_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_MAIN_MATERIAL" Format="string" Value="" />
+          <GenericAttribute Name="VPE_TEMP_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="ERP_TEMP_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_PRESS_RATING" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_PRESS_RATING" Format="string" Value="" />
+          <GenericAttribute Name="ELEC_CONSUMER" Format="string" Value="ywkAAB+LCAAAAAAABACtlk2PmzAQhv8K8j1x0t4iYIWMu0ElgIAk3ROi4E2QwE5t02T/fc1HUuXjsHI2B2RnZp53PNgezJdTUxt/CRcVoxaYT2fAEDKnZV4zSizwQQR4sQ3TKctKKpe8dnOZ2+ZJLESxJ01uVKUFrq3AUEwqLDAOFic13kt5WEB4PB6nx+9Txnfw22w2h79WftJzzr6NKBXCAi2no4KYNFXBmWDvclKwZqH8JoMX6PMgNWkIlQbNG3KfyuC58EQ3TYi0gOQtufy/FgS1nKt4nxV5TUZzD1Zih5qc0o8DGeZ7VhXEaCoaFkXL1aJUsZr8dJ619DdraUnKR3lhH6MMhUGyXuH4MV+QPy2hBXkQ7bmXjJ1WMo8WvDffrObKlhCiXs0cGFIJWEAxKyrBTfrwgdhYqYizA+Hyo9O+IITkFd19hpLmO83ITYQvlcrStwhrUXAcfQEF+U6SaK/CQZmLtLPXj+60N6GfOq/6tXsmvtOPwq3a6Lrq+tGdduyk2M3QOo5xkGrn8DylyyVJnTgdIR3SC7UT+iLUcL6SLFp6T5ws/fhLVZ493k9DltvMCxTBD9FPLUC/TbMkXMcIZ5rXnRJ3/CzZeilaYr27JsbuOnCdAL1lPxyUhnonx9m8ZmGE+40VZKm30itqX9FALSnGKyf+VF3hVfeDt70R/tcYrX0nfuCp5i2tFOh8fTOqRHPV+OZg7LE1KSTjxumQy70FphBed+ZxSe8VqcuzU/dixywH+oOUhm8V27yi2abn2nMTqqd511Xt+Uz91MOE9zazb582Rip6GJrwBg1vvsn+AUJ1gp7LCQAA" />
+          <GenericAttribute Name="MEDIUM_DS" Format="string" Value="VwcAAB+LCAAAAAAABAClVU2PmzAQ/SvI98RJV3uJgBUKUYsayCqmVXuKXJhNkMCmtmnIv68DNlE+DityQR7PzJs3tufhvrVV6fwDIQvOPDSfzpAjFWU5LTkDD51AojffcYM8L5QOoWVIFfXdVi5kdoCKOkXuoWsvcjQmkx4yi0Wr1wel6gXGx+NxenyZcrHHX2azOf4Vr0mHY2MrmWsIDzWCmQpyUhWZ4JJ/qEnGq4WOm/RRqOMBJVTAlMNoBfdU+shFJM8mAeUhJRoY9n9IWDZC6Pw1z2gJxt0B62J1CW16qqG3D7zIwKkKtsmyRuim9GFVtLVWw/7whuWQP+KlGw0HyrfIEv42wDJ4kBeFA9egUTximejcN31c+QiAvpQ5cpQu4CGNWTCFbojjB8XMGb0LXoNQp3PtAUIqUbD9Z1BSuh+ZGa/CXZQE8Wp09nIdELJ7ovzyqfIkDdLx2ekqft9tg+TreIj625MAJFhHSZT+Hg0QrhLyTP7PiCw3TyGQzToKyej0IEk2+hqjTTIaYruKg+33z6Tjq+nHt9qAL/DG22nQg0htN6zQQIbGkjNdlOrBnyOjMSVkigunrak6eGiKsdUk08dHAWVu3ecRMvx63Adken32XYPju1Hoz12sv+6dkvgvWu5fX11873E7wfBjndqv3EEHzhSGqbRGN2TWuMyM3bEjMISbF21t80CtOby3Ib57Pta6vAa7019udzhD4/jm//gffZSjAlcHAAA=" />
+          <GenericAttribute Name="MED_INAME" Format="string" Value="" />
+          <GenericAttribute Name="MED_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="MED_STATE" Format="string" Value="" />
+          <GenericAttribute Name="MED_TEMP_RANGE" Format="string" Value="" />
+          <GenericAttribute Name="MED_pH_RANGE" Format="string" Value="" />
+          <GenericAttribute Name="MED_SALINITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_DENSITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_VISCOSITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_SOLIDS" Format="string" Value="" />
+          <GenericAttribute Name="MED_ANNOTATION" Format="string" Value="" />
+          <GenericAttribute Name="MED_REMARK" Format="string" Value="" />
+          <GenericAttribute Name="MED_CLASS_ID" Format="string" Value="" />
+          <GenericAttribute Name="ANNOTATION" Format="string" Value="" />
+          <GenericAttribute Name="PICTURE" Format="string" Value="" />
+          <GenericAttribute Name="NORM" Format="string" Value="DIN EN ISO 10628-2:2013-04" />
+          <GenericAttribute Name="STANDARD_GROUP" Format="string" Value="24.17" />
+          <GenericAttribute Name="STANDARD_REGNO" Format="string" Value="516" />
+          <GenericAttribute Name="IDENTIFICATIONLETTER" Format="string" Value="X" />
+          <GenericAttribute Name="LAST_EDIT_DATE" Format="string" Value="2026-08-31T10:48:39" />
+          <GenericAttribute Name="LAST_EDIT_BY" Format="string" Value="Thoralf Schmidt" />
+          <GenericAttribute Name="VERSION" Format="string" Value="5.1" />
+          <GenericAttribute Name="MTP_BASE_HMI" Format="string" Value="No" />
+          <GenericAttribute Name="MTP_BASE_HMI_ECLASS" Format="string" Value="" />
+          <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+          <GenericAttribute Name="MTP_BASE_HMI_TAG_NAME" Format="string" Value="" />
+          <GenericAttribute Name="OSXML" Format="string" Value="" />
+          <GenericAttribute Name="MTP_BASE_HMI_DESCRIPTION" Format="string" Value="" />
+        </GenericAttributes>
+        <ConnectionPoints FlowIn="1" FlowOut="2" NumPoints="4">
+          <Node ID="PC_8_0" Name="1" Type="process">
+            <Position>
+              <Location X="169.99999999999997" Y="105" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_8_1" Name="2" Type="process">
+            <Position>
+              <Location X="179.99999999999997" Y="105" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_8_2" Name="3" Type="process">
+            <Position>
+              <Location X="174.99999999999997" Y="105" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_8_3" Name="4" Type="process">
+            <Position>
+              <Location X="174.99999999999997" Y="105" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+        </ConnectionPoints>
+      </PipingComponent>
+    </PipingNetworkSegment>
+    <PipingNetworkSegment ID="Pipe_16" TagName="" ComponentName="XVT_63" ComponentClass="PipingNetworkSegment" ComponentClassURI="http://data.posccaesar.org/rdl/RDS267704">
+      <Extent>
+        <Min X="179.99999999999997" Y="102.5" Z="0" />
+        <Max X="186.87499999999997" Y="107.5" Z="0" />
+      </Extent>
+      <GenericAttributes Number="3" Set="DexpiAttributes">
+        <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+        <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+        <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="￼" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+      </GenericAttributes>
+      <GenericAttributes Number="22" Set="XVTAttributes">
+        <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+        <GenericAttribute Name="MEDIA_COLOR" Format="string" Value="" />
+        <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+        <GenericAttribute Name="SYSTEM" Format="string" Value="" />
+        <GenericAttribute Name="CLASS" Format="string" Value="Piping" />
+        <GenericAttribute Name="SUB_CLASS" Format="string" Value="Main pipe" />
+        <GenericAttribute Name="DIRECTION" Format="string" Value="--------&gt;" />
+        <GenericAttribute Name="PIPENO" Format="string" Value="" />
+        <GenericAttribute Name="PIPE_INAME" Format="string" Value="" />
+        <GenericAttribute Name="NOMINAL_DIAMETER" Format="string" Value="" />
+        <GenericAttribute Name="MAT_INAME" Format="string" Value="" />
+        <GenericAttribute Name="PIPE_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="MAT_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PIPE_LENGTH" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PIPE_LENGTH" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PIPE_WALL_THICKNESS" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PIPE_WALL_THICKNESS" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="HIDE_TAG" Format="string" Value="Hide" />
+        <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+        <GenericAttribute Name="OSXML" Format="string" Value="" />
+      </GenericAttributes>
+      <Connection FromID="PC_8" FromNode="2" ToID="PC_14" ToNode="1" />
+      <CenterLine NumPoints="2" ID="Pipe_16">
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.0001" />
+        <Extent>
+          <Min X="179.99999999999997" Y="104.99970431111112" Z="0" />
+          <Max X="186.87350865791663" Y="104.99970431111112" Z="0" />
+        </Extent>
+        <Coordinate X="179.99999999999997" Y="104.99970431111112" Z="0" />
+        <Coordinate X="186.87350865791663" Y="104.99970431111112" Z="0" />
+      </CenterLine>
+      <PolyLine NumPoints="2">
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="1.00000152777778" />
+        <Extent>
+          <Min X="179.99999999999997" Y="104.99970431111112" Z="0" />
+          <Max X="181.20649999999998" Y="104.99970431111112" Z="0" />
+        </Extent>
+        <Coordinate X="179.99999999999997" Y="104.99970431111112" Z="0" />
+        <Coordinate X="181.20649999999998" Y="104.99970431111112" Z="0" />
+      </PolyLine>
+      <PipingComponent ID="PC_14" TagName="5" ComponentName="XVT_614" ComponentClass="Flange">
+        <Extent>
+          <Min X="184.99999999999997" Y="102.5" Z="0" />
+          <Max X="189.99999999999997" Y="107.5" Z="0" />
+        </Extent>
+        <Position>
+          <Location X="187.49999999999997" Y="105" Z="0" />
+          <Axis X="0" Y="0" Z="1" />
+          <Reference X="1" Y="0" Z="0" />
+        </Position>
+        <Scale X="1" Y="1" Z="1" />
+        <GenericAttributes Number="3" Set="DexpiAttributes">
+          <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+          <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="5" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+          <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+        </GenericAttributes>
+        <GenericAttributes Number="113" Set="XVTAttributes">
+          <GenericAttribute Name="AUTOMATION_ISCM" Format="string" Value="Nein" />
+          <GenericAttribute Name="FNO" Format="string" Value="5" />
+          <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="FULL_FNO" Format="string" Value="T10000-FG000-5" />
+          <GenericAttribute Name="INSTALLATION_STATE" Format="string" Value="" />
+          <GenericAttribute Name="COMM_STATE" Format="string" Value="" />
+          <GenericAttribute Name="MAINT_STATE" Format="string" Value="" />
+          <GenericAttribute Name="REPAIR_STATE" Format="string" Value="" />
+          <GenericAttribute Name="OPER_STATE" Format="string" Value="" />
+          <GenericAttribute Name="IDENT" Format="string" Value="" />
+          <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+          <GenericAttribute Name="CLASS" Format="string" Value="Flange" />
+          <GenericAttribute Name="SUB_CLASS" Format="string" Value="Flange, general" />
+          <GenericAttribute Name="CONNECTION_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="SCOPE_OF_SUPPLY" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="FN_INAME" Format="string" Value="" />
+          <GenericAttribute Name="CFGR" Format="string" Value="" />
+          <GenericAttribute Name="CUSTOM_NO" Format="string" Value="" />
+          <GenericAttribute Name="FN_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="FN_LOCATION" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_MNFCT" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_MNFCT" Format="string" Value="" />
+          <GenericAttribute Name="MAT_CLASS_ID" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_ARTICLE" Format="string" Value="" />
+          <GenericAttribute Name="EQ_SUPPLIER" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_ARTICLE" Format="string" Value="" />
+          <GenericAttribute Name="VPE_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+          <GenericAttribute Name="ERP_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+          <GenericAttribute Name="VPE_SPECIAL" Format="string" Value="" />
+          <GenericAttribute Name="ERP_SPECIAL" Format="string" Value="" />
+          <GenericAttribute Name="EQ_SERIAL_NUMBER" Format="string" Value="" />
+          <GenericAttribute Name="EQ_ORDER_NO" Format="string" Value="" />
+          <GenericAttribute Name="EQ_ORDER_DATE" Format="string" Value="" />
+          <GenericAttribute Name="EQ_MNFCT_IDENTCODE" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_1" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_2" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_3" Format="string" Value="" />
+          <GenericAttribute Name="VPE_WHOLESALE_PRICE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_WHOLESALE_PRICE" Format="string" Value="" />
+          <GenericAttribute Name="DOC_REQUIREMENT_SHEET_LNK" Format="string" Value="" />
+          <GenericAttribute Name="DIM_DRAWING_LNK" Format="string" Value="" />
+          <GenericAttribute Name="MANUAL_LNK" Format="string" Value="" />
+          <GenericAttribute Name="SPLIT_PIPE_SYSTEM" Format="string" Value="Nein" />
+          <GenericAttribute Name="VPE_NOMINAL_DIAMETER_1" Format="string" Value="" />
+          <GenericAttribute Name="ERP_NOMINAL_DIAMETER_1" Format="string" Value="" />
+          <GenericAttribute Name="VPE_NOMINAL_DIAMETER_2" Format="string" Value="" />
+          <GenericAttribute Name="ERP_NOMINAL_DIAMETER_2" Format="string" Value="" />
+          <GenericAttribute Name="VPE_NOMINAL_DIAMETER_3" Format="string" Value="" />
+          <GenericAttribute Name="ERP_NOMINAL_DIAMETER_3" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_INAME" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_INAME" Format="string" Value="" />
+          <GenericAttribute Name="MAT_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_CONNECT_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="VPE_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_CONNECT_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_CONNECT_PN" Format="string" Value="" />
+          <GenericAttribute Name="VPE_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_CONNECT_PN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_MAIN_MATERIAL" Format="string" Value="" />
+          <GenericAttribute Name="VPE_TEMP_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_MAIN_MATERIAL" Format="string" Value="" />
+          <GenericAttribute Name="ERP_TEMP_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_INTERNALS" Format="string" Value="" />
+          <GenericAttribute Name="VPE_TEMP_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_INTERNALS" Format="string" Value="" />
+          <GenericAttribute Name="ERP_TEMP_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_GASKET" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_GASKET" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_PRESS_RATING" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_PRESS_RATING" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAX_TEST_PRESSURE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAX_TEST_PRESSURE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_SPINDLE_MAT" Format="string" Value="" />
+          <GenericAttribute Name="VPE_SPINDLE_MAT" Format="string" Value="" />
+          <GenericAttribute Name="ERP_LUBRICANT_WET" Format="string" Value="" />
+          <GenericAttribute Name="VPE_LUBRICANT_WET" Format="string" Value="" />
+          <GenericAttribute Name="ERP_FLOW_COEFFICIENT" Format="string" Value="" />
+          <GenericAttribute Name="VPE_FLOW_COEFFICIENT" Format="string" Value="" />
+          <GenericAttribute Name="ELEC_CONSUMER" Format="string" Value="ywkAAB+LCAAAAAAABACtlk2PmzAQhv8K8j1x0t4iYIWMu0ElgIAk3ROi4E2QwE5t02T/fc1HUuXjsHI2B2RnZp53PNgezJdTUxt/CRcVoxaYT2fAEDKnZV4zSizwQQR4sQ3TKctKKpe8dnOZ2+ZJLESxJ01uVKUFrq3AUEwqLDAOFic13kt5WEB4PB6nx+9Txnfw22w2h79WftJzzr6NKBXCAi2no4KYNFXBmWDvclKwZqH8JoMX6PMgNWkIlQbNG3KfyuC58EQ3TYi0gOQtufy/FgS1nKt4nxV5TUZzD1Zih5qc0o8DGeZ7VhXEaCoaFkXL1aJUsZr8dJ619DdraUnKR3lhH6MMhUGyXuH4MV+QPy2hBXkQ7bmXjJ1WMo8WvDffrObKlhCiXs0cGFIJWEAxKyrBTfrwgdhYqYizA+Hyo9O+IITkFd19hpLmO83ITYQvlcrStwhrUXAcfQEF+U6SaK/CQZmLtLPXj+60N6GfOq/6tXsmvtOPwq3a6Lrq+tGdduyk2M3QOo5xkGrn8DylyyVJnTgdIR3SC7UT+iLUcL6SLFp6T5ws/fhLVZ493k9DltvMCxTBD9FPLUC/TbMkXMcIZ5rXnRJ3/CzZeilaYr27JsbuOnCdAL1lPxyUhnonx9m8ZmGE+40VZKm30itqX9FALSnGKyf+VF3hVfeDt70R/tcYrX0nfuCp5i2tFOh8fTOqRHPV+OZg7LE1KSTjxumQy70FphBed+ZxSe8VqcuzU/dixywH+oOUhm8V27yi2abn2nMTqqd511Xt+Uz91MOE9zazb582Rip6GJrwBg1vvsn+AUJ1gp7LCQAA" />
+          <GenericAttribute Name="MEDIUM_DS" Format="string" Value="VwcAAB+LCAAAAAAABAClVU2PmzAQ/SvI98RJV3uJgBUKUYsayCqmVXuKXJhNkMCmtmnIv68DNlE+DityQR7PzJs3tufhvrVV6fwDIQvOPDSfzpAjFWU5LTkDD51AojffcYM8L5QOoWVIFfXdVi5kdoCKOkXuoWsvcjQmkx4yi0Wr1wel6gXGx+NxenyZcrHHX2azOf4Vr0mHY2MrmWsIDzWCmQpyUhWZ4JJ/qEnGq4WOm/RRqOMBJVTAlMNoBfdU+shFJM8mAeUhJRoY9n9IWDZC6Pw1z2gJxt0B62J1CW16qqG3D7zIwKkKtsmyRuim9GFVtLVWw/7whuWQP+KlGw0HyrfIEv42wDJ4kBeFA9egUTximejcN31c+QiAvpQ5cpQu4CGNWTCFbojjB8XMGb0LXoNQp3PtAUIqUbD9Z1BSuh+ZGa/CXZQE8Wp09nIdELJ7ovzyqfIkDdLx2ekqft9tg+TreIj625MAJFhHSZT+Hg0QrhLyTP7PiCw3TyGQzToKyej0IEk2+hqjTTIaYruKg+33z6Tjq+nHt9qAL/DG22nQg0htN6zQQIbGkjNdlOrBnyOjMSVkigunrak6eGiKsdUk08dHAWVu3ecRMvx63Adken32XYPju1Hoz12sv+6dkvgvWu5fX11873E7wfBjndqv3EEHzhSGqbRGN2TWuMyM3bEjMISbF21t80CtOby3Ib57Pta6vAa7019udzhD4/jm//gffZSjAlcHAAA=" />
+          <GenericAttribute Name="MED_INAME" Format="string" Value="" />
+          <GenericAttribute Name="MED_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="MED_STATE" Format="string" Value="" />
+          <GenericAttribute Name="MED_TEMP_RANGE" Format="string" Value="" />
+          <GenericAttribute Name="MED_pH_RANGE" Format="string" Value="" />
+          <GenericAttribute Name="MED_SALINITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_DENSITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_VISCOSITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_SOLIDS" Format="string" Value="" />
+          <GenericAttribute Name="MED_ANNOTATION" Format="string" Value="" />
+          <GenericAttribute Name="MED_REMARK" Format="string" Value="" />
+          <GenericAttribute Name="MED_CLASS_ID" Format="string" Value="" />
+          <GenericAttribute Name="ANNOTATION" Format="string" Value="" />
+          <GenericAttribute Name="PICTURE" Format="string" Value="" />
+          <GenericAttribute Name="NORM" Format="string" Value="DIN EN ISO 10628-2:2013-04" />
+          <GenericAttribute Name="STANDARD_GROUP" Format="string" Value="24.16" />
+          <GenericAttribute Name="STANDARD_REGNO" Format="string" Value="511" />
+          <GenericAttribute Name="IDENTIFICATIONLETTER" Format="string" Value="X" />
+          <GenericAttribute Name="LAST_EDIT_DATE" Format="string" Value="2026-08-31T10:53:18" />
+          <GenericAttribute Name="LAST_EDIT_BY" Format="string" Value="Thoralf Schmidt" />
+          <GenericAttribute Name="VERSION" Format="string" Value="5.1" />
+          <GenericAttribute Name="MTP_BASE_HMI" Format="string" Value="No" />
+          <GenericAttribute Name="MTP_BASE_HMI_ECLASS" Format="string" Value="" />
+          <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+          <GenericAttribute Name="MTP_BASE_HMI_TAG_NAME" Format="string" Value="" />
+          <GenericAttribute Name="OSXML" Format="string" Value="" />
+          <GenericAttribute Name="MTP_BASE_HMI_DESCRIPTION" Format="string" Value="" />
+        </GenericAttributes>
+        <ConnectionPoints FlowIn="1" FlowOut="2" NumPoints="4">
+          <Node ID="PC_14_0" Name="1" Type="process">
+            <Position>
+              <Location X="186.875" Y="105" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_14_1" Name="2" Type="process">
+            <Position>
+              <Location X="188.125" Y="105" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_14_2" Name="3" Type="process">
+            <Position>
+              <Location X="187.49999999999997" Y="102.5" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_14_3" Name="4" Type="process">
+            <Position>
+              <Location X="187.49999999999997" Y="107.49999999999999" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+        </ConnectionPoints>
+      </PipingComponent>
+    </PipingNetworkSegment>
+  </PipingNetworkSystem>
+  <PipingNetworkSystem ID="PNS_1" ComponentClass="PipingNetworkSystem" ComponentClassURI="http://data.posccaesar.org/rdl/RDS270359">
+    <PipingNetworkSegment ID="Pipe_10" TagName="" ComponentName="XVT_63" ComponentClass="PipingNetworkSegment" ComponentClassURI="http://data.posccaesar.org/rdl/RDS267704">
+      <Extent>
+        <Min X="245" Y="102.5" Z="0" />
+        <Max X="255" Y="107.5" Z="0" />
+      </Extent>
+      <GenericAttributes Number="4" Set="DexpiAttributes">
+        <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+        <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+        <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="￼" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+        <GenericAttribute Name="LineNumberAssignmentClass" Value="1" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/LineNumberAssignmentClass" Units="" />
+      </GenericAttributes>
+      <GenericAttributes Number="22" Set="XVTAttributes">
+        <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+        <GenericAttribute Name="MEDIA_COLOR" Format="string" Value="" />
+        <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+        <GenericAttribute Name="SYSTEM" Format="string" Value="" />
+        <GenericAttribute Name="CLASS" Format="string" Value="Piping" />
+        <GenericAttribute Name="SUB_CLASS" Format="string" Value="Main pipe" />
+        <GenericAttribute Name="DIRECTION" Format="string" Value="--------&gt;" />
+        <GenericAttribute Name="PIPENO" Format="string" Value="1" />
+        <GenericAttribute Name="PIPE_INAME" Format="string" Value="" />
+        <GenericAttribute Name="NOMINAL_DIAMETER" Format="string" Value="" />
+        <GenericAttribute Name="MAT_INAME" Format="string" Value="" />
+        <GenericAttribute Name="PIPE_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="MAT_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PIPE_LENGTH" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PIPE_LENGTH" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PIPE_WALL_THICKNESS" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PIPE_WALL_THICKNESS" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="HIDE_TAG" Format="string" Value="Show" />
+        <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+        <GenericAttribute Name="OSXML" Format="string" Value="" />
+      </GenericAttributes>
+      <Connection FromID="PC_9" FromNode="2" />
+      <PipingComponent ID="PC_9" TagName="8" ComponentName="XVT_17" ComponentClass="Pipe reducer">
+        <Extent>
+          <Min X="234.99999999999997" Y="100" Z="0" />
+          <Max X="244.99999999999997" Y="110" Z="0" />
+        </Extent>
+        <Position>
+          <Location X="239.99999999999997" Y="105" Z="0" />
+          <Axis X="0" Y="0" Z="1" />
+          <Reference X="1" Y="0" Z="0" />
+        </Position>
+        <Scale X="1" Y="1" Z="1" />
+        <GenericAttributes Number="3" Set="DexpiAttributes">
+          <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+          <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="8" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+          <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+        </GenericAttributes>
+        <GenericAttributes Number="92" Set="XVTAttributes">
+          <GenericAttribute Name="AUTOMATION_ISCM" Format="string" Value="Nein" />
+          <GenericAttribute Name="FNO" Format="string" Value="8" />
+          <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="FULL_FNO" Format="string" Value="T10000-FG000-8" />
+          <GenericAttribute Name="INSTALLATION_STATE" Format="string" Value="" />
+          <GenericAttribute Name="COMM_STATE" Format="string" Value="" />
+          <GenericAttribute Name="MAINT_STATE" Format="string" Value="" />
+          <GenericAttribute Name="REPAIR_STATE" Format="string" Value="" />
+          <GenericAttribute Name="OPER_STATE" Format="string" Value="" />
+          <GenericAttribute Name="IDENT" Format="string" Value="" />
+          <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+          <GenericAttribute Name="CLASS" Format="string" Value="Reducer" />
+          <GenericAttribute Name="SUB_CLASS" Format="string" Value="General" />
+          <GenericAttribute Name="DIRECTION" Format="string" Value="--------&gt;" />
+          <GenericAttribute Name="SCOPE_OF_SUPPLY" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="NOMINAL_DIAMETER_1" Format="string" Value="" />
+          <GenericAttribute Name="NOMINAL_DIAMETER_2" Format="string" Value="" />
+          <GenericAttribute Name="FN_INAME" Format="string" Value="" />
+          <GenericAttribute Name="CFGR" Format="string" Value="" />
+          <GenericAttribute Name="CUSTOM_NO" Format="string" Value="" />
+          <GenericAttribute Name="FN_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="FN_LOCATION" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_MNFCT" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_MNFCT" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_ARTICLE" Format="string" Value="" />
+          <GenericAttribute Name="EQ_SUPPLIER" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_ARTICLE" Format="string" Value="" />
+          <GenericAttribute Name="VPE_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+          <GenericAttribute Name="ERP_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+          <GenericAttribute Name="VPE_SPECIAL" Format="string" Value="" />
+          <GenericAttribute Name="ERP_SPECIAL" Format="string" Value="" />
+          <GenericAttribute Name="EQ_SERIAL_NUMBER" Format="string" Value="" />
+          <GenericAttribute Name="EQ_ORDER_NO" Format="string" Value="" />
+          <GenericAttribute Name="EQ_ORDER_DATE" Format="string" Value="" />
+          <GenericAttribute Name="EQ_MNFCT_IDENTCODE" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_1" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_2" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_3" Format="string" Value="" />
+          <GenericAttribute Name="VPE_WHOLESALE_PRICE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_WHOLESALE_PRICE" Format="string" Value="" />
+          <GenericAttribute Name="DOC_REQUIREMENT_SHEET_LNK" Format="string" Value="" />
+          <GenericAttribute Name="DIM_DRAWING_LNK" Format="string" Value="" />
+          <GenericAttribute Name="MANUAL_LNK" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_INAME" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_INAME" Format="string" Value="" />
+          <GenericAttribute Name="MAT_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="VPE_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="VPE_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_CONNECT_PN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_MAIN_MATERIAL" Format="string" Value="" />
+          <GenericAttribute Name="VPE_TEMP_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_TEMP_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_MAIN_MATERIAL" Format="string" Value="" />
+          <GenericAttribute Name="VPE_TEMP_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="ERP_TEMP_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_PRESS_RATING" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_PRESS_RATING" Format="string" Value="" />
+          <GenericAttribute Name="ELEC_CONSUMER" Format="string" Value="ywkAAB+LCAAAAAAABACtlk2PmzAQhv8K8j1x0t4iYIWMu0ElgIAk3ROi4E2QwE5t02T/fc1HUuXjsHI2B2RnZp53PNgezJdTUxt/CRcVoxaYT2fAEDKnZV4zSizwQQR4sQ3TKctKKpe8dnOZ2+ZJLESxJ01uVKUFrq3AUEwqLDAOFic13kt5WEB4PB6nx+9Txnfw22w2h79WftJzzr6NKBXCAi2no4KYNFXBmWDvclKwZqH8JoMX6PMgNWkIlQbNG3KfyuC58EQ3TYi0gOQtufy/FgS1nKt4nxV5TUZzD1Zih5qc0o8DGeZ7VhXEaCoaFkXL1aJUsZr8dJ619DdraUnKR3lhH6MMhUGyXuH4MV+QPy2hBXkQ7bmXjJ1WMo8WvDffrObKlhCiXs0cGFIJWEAxKyrBTfrwgdhYqYizA+Hyo9O+IITkFd19hpLmO83ITYQvlcrStwhrUXAcfQEF+U6SaK/CQZmLtLPXj+60N6GfOq/6tXsmvtOPwq3a6Lrq+tGdduyk2M3QOo5xkGrn8DylyyVJnTgdIR3SC7UT+iLUcL6SLFp6T5ws/fhLVZ493k9DltvMCxTBD9FPLUC/TbMkXMcIZ5rXnRJ3/CzZeilaYr27JsbuOnCdAL1lPxyUhnonx9m8ZmGE+40VZKm30itqX9FALSnGKyf+VF3hVfeDt70R/tcYrX0nfuCp5i2tFOh8fTOqRHPV+OZg7LE1KSTjxumQy70FphBed+ZxSe8VqcuzU/dixywH+oOUhm8V27yi2abn2nMTqqd511Xt+Uz91MOE9zazb582Rip6GJrwBg1vvsn+AUJ1gp7LCQAA" />
+          <GenericAttribute Name="MEDIUM_DS" Format="string" Value="VwcAAB+LCAAAAAAABAClVU2PmzAQ/SvI98RJV3uJgBUKUYsayCqmVXuKXJhNkMCmtmnIv68DNlE+DityQR7PzJs3tufhvrVV6fwDIQvOPDSfzpAjFWU5LTkDD51AojffcYM8L5QOoWVIFfXdVi5kdoCKOkXuoWsvcjQmkx4yi0Wr1wel6gXGx+NxenyZcrHHX2azOf4Vr0mHY2MrmWsIDzWCmQpyUhWZ4JJ/qEnGq4WOm/RRqOMBJVTAlMNoBfdU+shFJM8mAeUhJRoY9n9IWDZC6Pw1z2gJxt0B62J1CW16qqG3D7zIwKkKtsmyRuim9GFVtLVWw/7whuWQP+KlGw0HyrfIEv42wDJ4kBeFA9egUTximejcN31c+QiAvpQ5cpQu4CGNWTCFbojjB8XMGb0LXoNQp3PtAUIqUbD9Z1BSuh+ZGa/CXZQE8Wp09nIdELJ7ovzyqfIkDdLx2ekqft9tg+TreIj625MAJFhHSZT+Hg0QrhLyTP7PiCw3TyGQzToKyej0IEk2+hqjTTIaYruKg+33z6Tjq+nHt9qAL/DG22nQg0htN6zQQIbGkjNdlOrBnyOjMSVkigunrak6eGiKsdUk08dHAWVu3ecRMvx63Adken32XYPju1Hoz12sv+6dkvgvWu5fX11873E7wfBjndqv3EEHzhSGqbRGN2TWuMyM3bEjMISbF21t80CtOby3Ib57Pta6vAa7019udzhD4/jm//gffZSjAlcHAAA=" />
+          <GenericAttribute Name="MED_INAME" Format="string" Value="" />
+          <GenericAttribute Name="MED_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="MED_STATE" Format="string" Value="" />
+          <GenericAttribute Name="MED_TEMP_RANGE" Format="string" Value="" />
+          <GenericAttribute Name="MED_pH_RANGE" Format="string" Value="" />
+          <GenericAttribute Name="MED_SALINITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_DENSITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_VISCOSITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_SOLIDS" Format="string" Value="" />
+          <GenericAttribute Name="MED_ANNOTATION" Format="string" Value="" />
+          <GenericAttribute Name="MED_REMARK" Format="string" Value="" />
+          <GenericAttribute Name="MED_CLASS_ID" Format="string" Value="" />
+          <GenericAttribute Name="ANNOTATION" Format="string" Value="" />
+          <GenericAttribute Name="PICTURE" Format="string" Value="" />
+          <GenericAttribute Name="NORM" Format="string" Value="DIN EN ISO 10628-2:2013-04" />
+          <GenericAttribute Name="STANDARD_GROUP" Format="string" Value="24.17" />
+          <GenericAttribute Name="STANDARD_REGNO" Format="string" Value="516" />
+          <GenericAttribute Name="IDENTIFICATIONLETTER" Format="string" Value="X" />
+          <GenericAttribute Name="LAST_EDIT_DATE" Format="string" Value="2026-08-31T10:48:51" />
+          <GenericAttribute Name="LAST_EDIT_BY" Format="string" Value="Thoralf Schmidt" />
+          <GenericAttribute Name="VERSION" Format="string" Value="5.1" />
+          <GenericAttribute Name="MTP_BASE_HMI" Format="string" Value="No" />
+          <GenericAttribute Name="MTP_BASE_HMI_ECLASS" Format="string" Value="" />
+          <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+          <GenericAttribute Name="MTP_BASE_HMI_TAG_NAME" Format="string" Value="" />
+          <GenericAttribute Name="OSXML" Format="string" Value="" />
+          <GenericAttribute Name="MTP_BASE_HMI_DESCRIPTION" Format="string" Value="" />
+        </GenericAttributes>
+        <ConnectionPoints FlowIn="1" FlowOut="2" NumPoints="4">
+          <Node ID="PC_9_0" Name="1" Type="process">
+            <Position>
+              <Location X="235" Y="105" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_9_1" Name="2" Type="process">
+            <Position>
+              <Location X="244.99999999999997" Y="105" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_9_2" Name="3" Type="process">
+            <Position>
+              <Location X="239.99999999999997" Y="105" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_9_3" Name="4" Type="process">
+            <Position>
+              <Location X="239.99999999999997" Y="105" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+        </ConnectionPoints>
+      </PipingComponent>
+      <CenterLine NumPoints="2" ID="Pipe_10">
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.0001" />
+        <Extent>
+          <Min X="245" Y="104.99970431111112" Z="0" />
+          <Max X="254.99911976902777" Y="104.99970431111112" Z="0" />
+        </Extent>
+        <Coordinate X="245" Y="104.99970431111112" Z="0" />
+        <Coordinate X="254.99911976902777" Y="104.99970431111112" Z="0" />
+      </CenterLine>
+      <PolyLine NumPoints="2">
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="1.00000152777778" />
+        <Extent>
+          <Min X="245" Y="104.99970431111112" Z="0" />
+          <Max X="249.33211111111112" Y="104.99970431111112" Z="0" />
+        </Extent>
+        <Coordinate X="245" Y="104.99970431111112" Z="0" />
+        <Coordinate X="249.33211111111112" Y="104.99970431111112" Z="0" />
+      </PolyLine>
+    </PipingNetworkSegment>
+    <PipingNetworkSegment ID="Pipe_18" TagName="" ComponentName="XVT_63" ComponentClass="PipingNetworkSegment" ComponentClassURI="http://data.posccaesar.org/rdl/RDS267704">
+      <Extent>
+        <Min X="217.18750000000006" Y="102.5" Z="0" />
+        <Max X="222.18750000000006" Y="107.5" Z="0" />
+      </Extent>
+      <GenericAttributes Number="3" Set="DexpiAttributes">
+        <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+        <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+        <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="￼" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+      </GenericAttributes>
+      <GenericAttributes Number="22" Set="XVTAttributes">
+        <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+        <GenericAttribute Name="MEDIA_COLOR" Format="string" Value="" />
+        <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+        <GenericAttribute Name="SYSTEM" Format="string" Value="" />
+        <GenericAttribute Name="CLASS" Format="string" Value="Piping" />
+        <GenericAttribute Name="SUB_CLASS" Format="string" Value="Main pipe" />
+        <GenericAttribute Name="DIRECTION" Format="string" Value="--------&gt;" />
+        <GenericAttribute Name="PIPENO" Format="string" Value="" />
+        <GenericAttribute Name="PIPE_INAME" Format="string" Value="" />
+        <GenericAttribute Name="NOMINAL_DIAMETER" Format="string" Value="" />
+        <GenericAttribute Name="MAT_INAME" Format="string" Value="" />
+        <GenericAttribute Name="PIPE_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="MAT_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PIPE_LENGTH" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PIPE_LENGTH" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PIPE_WALL_THICKNESS" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PIPE_WALL_THICKNESS" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="HIDE_TAG" Format="string" Value="Hide" />
+        <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+        <GenericAttribute Name="OSXML" Format="string" Value="" />
+      </GenericAttributes>
+      <Connection FromID="N_3" FromNode="2" ToID="PC_15" ToNode="1" />
+      <CenterLine NumPoints="2" ID="Pipe_18">
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.0001" />
+        <Extent>
+          <Min X="217.50147222222228" Y="104.99970431111112" Z="0" />
+          <Max X="221.87591666666671" Y="104.99970431111112" Z="0" />
+        </Extent>
+        <Coordinate X="217.50147222222228" Y="104.99970431111112" Z="0" />
+        <Coordinate X="221.87591666666671" Y="104.99970431111112" Z="0" />
+      </CenterLine>
+      <PolyLine NumPoints="2">
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="1.00000152777778" />
+        <Extent>
+          <Min X="217.50147222222228" Y="104.99970431111112" Z="0" />
+          <Max X="221.87591666666671" Y="104.99970431111112" Z="0" />
+        </Extent>
+        <Coordinate X="217.50147222222228" Y="104.99970431111112" Z="0" />
+        <Coordinate X="221.87591666666671" Y="104.99970431111112" Z="0" />
+      </PolyLine>
+      <PipingComponent ID="PC_15" TagName="7" ComponentName="XVT_614" ComponentClass="Flange">
+        <Extent>
+          <Min X="220" Y="102.5" Z="0" />
+          <Max X="225" Y="107.5" Z="0" />
+        </Extent>
+        <Position>
+          <Location X="222.5" Y="105" Z="0" />
+          <Axis X="0" Y="0" Z="1" />
+          <Reference X="1" Y="0" Z="0" />
+        </Position>
+        <Scale X="1" Y="1" Z="1" />
+        <GenericAttributes Number="3" Set="DexpiAttributes">
+          <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+          <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="7" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+          <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+        </GenericAttributes>
+        <GenericAttributes Number="113" Set="XVTAttributes">
+          <GenericAttribute Name="AUTOMATION_ISCM" Format="string" Value="Nein" />
+          <GenericAttribute Name="FNO" Format="string" Value="7" />
+          <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="FULL_FNO" Format="string" Value="T10000-FG000-7" />
+          <GenericAttribute Name="INSTALLATION_STATE" Format="string" Value="" />
+          <GenericAttribute Name="COMM_STATE" Format="string" Value="" />
+          <GenericAttribute Name="MAINT_STATE" Format="string" Value="" />
+          <GenericAttribute Name="REPAIR_STATE" Format="string" Value="" />
+          <GenericAttribute Name="OPER_STATE" Format="string" Value="" />
+          <GenericAttribute Name="IDENT" Format="string" Value="" />
+          <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+          <GenericAttribute Name="CLASS" Format="string" Value="Flange" />
+          <GenericAttribute Name="SUB_CLASS" Format="string" Value="Flange, general" />
+          <GenericAttribute Name="CONNECTION_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="SCOPE_OF_SUPPLY" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_STATUS" Format="string" Value="" />
+          <GenericAttribute Name="FN_INAME" Format="string" Value="" />
+          <GenericAttribute Name="CFGR" Format="string" Value="" />
+          <GenericAttribute Name="CUSTOM_NO" Format="string" Value="" />
+          <GenericAttribute Name="FN_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="FN_LOCATION" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_MNFCT" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_MNFCT" Format="string" Value="" />
+          <GenericAttribute Name="MAT_CLASS_ID" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="VPE_EQ_ARTICLE" Format="string" Value="" />
+          <GenericAttribute Name="EQ_SUPPLIER" Format="string" Value="" />
+          <GenericAttribute Name="ERP_EQ_ARTICLE" Format="string" Value="" />
+          <GenericAttribute Name="VPE_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+          <GenericAttribute Name="ERP_ARTICLE_NO_CUSTOMER" Format="string" Value="" />
+          <GenericAttribute Name="VPE_SPECIAL" Format="string" Value="" />
+          <GenericAttribute Name="ERP_SPECIAL" Format="string" Value="" />
+          <GenericAttribute Name="EQ_SERIAL_NUMBER" Format="string" Value="" />
+          <GenericAttribute Name="EQ_ORDER_NO" Format="string" Value="" />
+          <GenericAttribute Name="EQ_ORDER_DATE" Format="string" Value="" />
+          <GenericAttribute Name="EQ_MNFCT_IDENTCODE" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_1" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_2" Format="string" Value="" />
+          <GenericAttribute Name="LABEL_LINE_3" Format="string" Value="" />
+          <GenericAttribute Name="VPE_WHOLESALE_PRICE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_WHOLESALE_PRICE" Format="string" Value="" />
+          <GenericAttribute Name="DOC_REQUIREMENT_SHEET_LNK" Format="string" Value="" />
+          <GenericAttribute Name="DIM_DRAWING_LNK" Format="string" Value="" />
+          <GenericAttribute Name="MANUAL_LNK" Format="string" Value="" />
+          <GenericAttribute Name="SPLIT_PIPE_SYSTEM" Format="string" Value="Nein" />
+          <GenericAttribute Name="VPE_NOMINAL_DIAMETER_1" Format="string" Value="" />
+          <GenericAttribute Name="ERP_NOMINAL_DIAMETER_1" Format="string" Value="" />
+          <GenericAttribute Name="VPE_NOMINAL_DIAMETER_2" Format="string" Value="" />
+          <GenericAttribute Name="ERP_NOMINAL_DIAMETER_2" Format="string" Value="" />
+          <GenericAttribute Name="VPE_NOMINAL_DIAMETER_3" Format="string" Value="" />
+          <GenericAttribute Name="ERP_NOMINAL_DIAMETER_3" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_INAME" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_INAME" Format="string" Value="" />
+          <GenericAttribute Name="MAT_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_CONNECT_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="VPE_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_CONNECT_TYPE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_PRESSURE_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_CONNECT_PN" Format="string" Value="" />
+          <GenericAttribute Name="VPE_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_CONNECT_PN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_PRESSURE_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_MAIN_MATERIAL" Format="string" Value="" />
+          <GenericAttribute Name="VPE_TEMP_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_MAIN_MATERIAL" Format="string" Value="" />
+          <GenericAttribute Name="ERP_TEMP_DESIGN_MIN" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_INTERNALS" Format="string" Value="" />
+          <GenericAttribute Name="VPE_TEMP_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_INTERNALS" Format="string" Value="" />
+          <GenericAttribute Name="ERP_TEMP_DESIGN_MAX" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_GASKET" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_GASKET" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAT_PRESS_RATING" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAT_PRESS_RATING" Format="string" Value="" />
+          <GenericAttribute Name="VPE_MAX_TEST_PRESSURE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_MAX_TEST_PRESSURE" Format="string" Value="" />
+          <GenericAttribute Name="ERP_SPINDLE_MAT" Format="string" Value="" />
+          <GenericAttribute Name="VPE_SPINDLE_MAT" Format="string" Value="" />
+          <GenericAttribute Name="ERP_LUBRICANT_WET" Format="string" Value="" />
+          <GenericAttribute Name="VPE_LUBRICANT_WET" Format="string" Value="" />
+          <GenericAttribute Name="ERP_FLOW_COEFFICIENT" Format="string" Value="" />
+          <GenericAttribute Name="VPE_FLOW_COEFFICIENT" Format="string" Value="" />
+          <GenericAttribute Name="ELEC_CONSUMER" Format="string" Value="ywkAAB+LCAAAAAAABACtlk2PmzAQhv8K8j1x0t4iYIWMu0ElgIAk3ROi4E2QwE5t02T/fc1HUuXjsHI2B2RnZp53PNgezJdTUxt/CRcVoxaYT2fAEDKnZV4zSizwQQR4sQ3TKctKKpe8dnOZ2+ZJLESxJ01uVKUFrq3AUEwqLDAOFic13kt5WEB4PB6nx+9Txnfw22w2h79WftJzzr6NKBXCAi2no4KYNFXBmWDvclKwZqH8JoMX6PMgNWkIlQbNG3KfyuC58EQ3TYi0gOQtufy/FgS1nKt4nxV5TUZzD1Zih5qc0o8DGeZ7VhXEaCoaFkXL1aJUsZr8dJ619DdraUnKR3lhH6MMhUGyXuH4MV+QPy2hBXkQ7bmXjJ1WMo8WvDffrObKlhCiXs0cGFIJWEAxKyrBTfrwgdhYqYizA+Hyo9O+IITkFd19hpLmO83ITYQvlcrStwhrUXAcfQEF+U6SaK/CQZmLtLPXj+60N6GfOq/6tXsmvtOPwq3a6Lrq+tGdduyk2M3QOo5xkGrn8DylyyVJnTgdIR3SC7UT+iLUcL6SLFp6T5ws/fhLVZ493k9DltvMCxTBD9FPLUC/TbMkXMcIZ5rXnRJ3/CzZeilaYr27JsbuOnCdAL1lPxyUhnonx9m8ZmGE+40VZKm30itqX9FALSnGKyf+VF3hVfeDt70R/tcYrX0nfuCp5i2tFOh8fTOqRHPV+OZg7LE1KSTjxumQy70FphBed+ZxSe8VqcuzU/dixywH+oOUhm8V27yi2abn2nMTqqd511Xt+Uz91MOE9zazb582Rip6GJrwBg1vvsn+AUJ1gp7LCQAA" />
+          <GenericAttribute Name="MEDIUM_DS" Format="string" Value="VwcAAB+LCAAAAAAABAClVU2PmzAQ/SvI98RJV3uJgBUKUYsayCqmVXuKXJhNkMCmtmnIv68DNlE+DityQR7PzJs3tufhvrVV6fwDIQvOPDSfzpAjFWU5LTkDD51AojffcYM8L5QOoWVIFfXdVi5kdoCKOkXuoWsvcjQmkx4yi0Wr1wel6gXGx+NxenyZcrHHX2azOf4Vr0mHY2MrmWsIDzWCmQpyUhWZ4JJ/qEnGq4WOm/RRqOMBJVTAlMNoBfdU+shFJM8mAeUhJRoY9n9IWDZC6Pw1z2gJxt0B62J1CW16qqG3D7zIwKkKtsmyRuim9GFVtLVWw/7whuWQP+KlGw0HyrfIEv42wDJ4kBeFA9egUTximejcN31c+QiAvpQ5cpQu4CGNWTCFbojjB8XMGb0LXoNQp3PtAUIqUbD9Z1BSuh+ZGa/CXZQE8Wp09nIdELJ7ovzyqfIkDdLx2ekqft9tg+TreIj625MAJFhHSZT+Hg0QrhLyTP7PiCw3TyGQzToKyej0IEk2+hqjTTIaYruKg+33z6Tjq+nHt9qAL/DG22nQg0htN6zQQIbGkjNdlOrBnyOjMSVkigunrak6eGiKsdUk08dHAWVu3ecRMvx63Adken32XYPju1Hoz12sv+6dkvgvWu5fX11873E7wfBjndqv3EEHzhSGqbRGN2TWuMyM3bEjMISbF21t80CtOby3Ib57Pta6vAa7019udzhD4/jm//gffZSjAlcHAAA=" />
+          <GenericAttribute Name="MED_INAME" Format="string" Value="" />
+          <GenericAttribute Name="MED_CNAME" Format="string" Value="" />
+          <GenericAttribute Name="MED_STATE" Format="string" Value="" />
+          <GenericAttribute Name="MED_TEMP_RANGE" Format="string" Value="" />
+          <GenericAttribute Name="MED_pH_RANGE" Format="string" Value="" />
+          <GenericAttribute Name="MED_SALINITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_DENSITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_VISCOSITY" Format="string" Value="" />
+          <GenericAttribute Name="MED_SOLIDS" Format="string" Value="" />
+          <GenericAttribute Name="MED_ANNOTATION" Format="string" Value="" />
+          <GenericAttribute Name="MED_REMARK" Format="string" Value="" />
+          <GenericAttribute Name="MED_CLASS_ID" Format="string" Value="" />
+          <GenericAttribute Name="ANNOTATION" Format="string" Value="" />
+          <GenericAttribute Name="PICTURE" Format="string" Value="" />
+          <GenericAttribute Name="NORM" Format="string" Value="DIN EN ISO 10628-2:2013-04" />
+          <GenericAttribute Name="STANDARD_GROUP" Format="string" Value="24.16" />
+          <GenericAttribute Name="STANDARD_REGNO" Format="string" Value="511" />
+          <GenericAttribute Name="IDENTIFICATIONLETTER" Format="string" Value="X" />
+          <GenericAttribute Name="LAST_EDIT_DATE" Format="string" Value="2026-08-31T10:53:34" />
+          <GenericAttribute Name="LAST_EDIT_BY" Format="string" Value="Thoralf Schmidt" />
+          <GenericAttribute Name="VERSION" Format="string" Value="5.1" />
+          <GenericAttribute Name="MTP_BASE_HMI" Format="string" Value="No" />
+          <GenericAttribute Name="MTP_BASE_HMI_ECLASS" Format="string" Value="" />
+          <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+          <GenericAttribute Name="MTP_BASE_HMI_TAG_NAME" Format="string" Value="" />
+          <GenericAttribute Name="OSXML" Format="string" Value="" />
+          <GenericAttribute Name="MTP_BASE_HMI_DESCRIPTION" Format="string" Value="" />
+        </GenericAttributes>
+        <ConnectionPoints FlowIn="1" FlowOut="2" NumPoints="4">
+          <Node ID="PC_15_0" Name="1" Type="process">
+            <Position>
+              <Location X="221.87499999999994" Y="105" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_15_1" Name="2" Type="process">
+            <Position>
+              <Location X="223.12499999999997" Y="105" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_15_2" Name="3" Type="process">
+            <Position>
+              <Location X="222.5" Y="102.5" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+          <Node ID="PC_15_3" Name="4" Type="process">
+            <Position>
+              <Location X="222.5" Y="107.49999999999999" />
+              <Axis X="0" Y="0" Z="1" />
+              <Reference X="1" Y="0" Z="0" />
+            </Position>
+          </Node>
+        </ConnectionPoints>
+      </PipingComponent>
+    </PipingNetworkSegment>
+    <PipingNetworkSegment ID="Pipe_19" TagName="" ComponentName="XVT_63" ComponentClass="PipingNetworkSegment" ComponentClassURI="http://data.posccaesar.org/rdl/RDS267704">
+      <Extent>
+        <Min X="223.125" Y="102.5" Z="0" />
+        <Max X="235" Y="107.5" Z="0" />
+      </Extent>
+      <GenericAttributes Number="4" Set="DexpiAttributes">
+        <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+        <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+        <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="￼" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+        <GenericAttribute Name="LineNumberAssignmentClass" Value="1" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/LineNumberAssignmentClass" Units="" />
+      </GenericAttributes>
+      <GenericAttributes Number="22" Set="XVTAttributes">
+        <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+        <GenericAttribute Name="MEDIA_COLOR" Format="string" Value="" />
+        <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+        <GenericAttribute Name="SYSTEM" Format="string" Value="" />
+        <GenericAttribute Name="CLASS" Format="string" Value="Piping" />
+        <GenericAttribute Name="SUB_CLASS" Format="string" Value="Main pipe" />
+        <GenericAttribute Name="DIRECTION" Format="string" Value="--------&gt;" />
+        <GenericAttribute Name="PIPENO" Format="string" Value="1" />
+        <GenericAttribute Name="PIPE_INAME" Format="string" Value="" />
+        <GenericAttribute Name="NOMINAL_DIAMETER" Format="string" Value="" />
+        <GenericAttribute Name="MAT_INAME" Format="string" Value="" />
+        <GenericAttribute Name="PIPE_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="MAT_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PIPE_LENGTH" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PIPE_LENGTH" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PIPE_WALL_THICKNESS" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PIPE_WALL_THICKNESS" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="HIDE_TAG" Format="string" Value="Show" />
+        <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+        <GenericAttribute Name="OSXML" Format="string" Value="" />
+      </GenericAttributes>
+      <Connection FromID="PC_15" FromNode="2" ToID="PC_9" ToNode="1" />
+      <CenterLine NumPoints="2" ID="Pipe_19">
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.0001" />
+        <Extent>
+          <Min X="223.125" Y="104.99970431111112" Z="0" />
+          <Max X="235.00089754680556" Y="104.99970431111112" Z="0" />
+        </Extent>
+        <Coordinate X="223.125" Y="104.99970431111112" Z="0" />
+        <Coordinate X="235.00089754680556" Y="104.99970431111112" Z="0" />
+      </CenterLine>
+      <PolyLine NumPoints="2">
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="1.00000152777778" />
+        <Extent>
+          <Min X="223.125" Y="104.99970431111112" Z="0" />
+          <Max X="229.33388888888888" Y="104.99970431111112" Z="0" />
+        </Extent>
+        <Coordinate X="223.125" Y="104.99970431111112" Z="0" />
+        <Coordinate X="229.33388888888888" Y="104.99970431111112" Z="0" />
+      </PolyLine>
+    </PipingNetworkSegment>
+  </PipingNetworkSystem>
+  <PipingNetworkSystem ID="PNS_2" ComponentClass="PipingNetworkSystem" ComponentClassURI="http://data.posccaesar.org/rdl/RDS270359">
+    <PipingNetworkSegment ID="Pipe_17" TagName="" ComponentName="XVT_63" ComponentClass="PipingNetworkSegment" ComponentClassURI="http://data.posccaesar.org/rdl/RDS267704">
+      <Extent>
+        <Min X="188.125" Y="102.5" Z="0" />
+        <Max X="197.49999999999994" Y="107.5" Z="0" />
+      </Extent>
+      <GenericAttributes Number="4" Set="DexpiAttributes">
+        <GenericAttribute Name="TagNamePrefixAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNamePrefixAssignmentClass" />
+        <GenericAttribute Name="TagNameSequenceNumberAssignmentClass" Value="" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSequenceNumberAssignmentClass" />
+        <GenericAttribute Name="TagNameSuffixAssignmentClass" Value="￼" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/TagNameSuffixAssignmentClass" />
+        <GenericAttribute Name="LineNumberAssignmentClass" Value="2" Format="string" AttributeURI="http://sandbox.dexpi.org/rdl/LineNumberAssignmentClass" Units="" />
+      </GenericAttributes>
+      <GenericAttributes Number="22" Set="XVTAttributes">
+        <GenericAttribute Name="SH_PLANNIG_STATE" Format="string" Value="" />
+        <GenericAttribute Name="MEDIA_COLOR" Format="string" Value="" />
+        <GenericAttribute Name="ORDER_STATUS" Format="string" Value="" />
+        <GenericAttribute Name="SYSTEM" Format="string" Value="" />
+        <GenericAttribute Name="CLASS" Format="string" Value="Piping" />
+        <GenericAttribute Name="SUB_CLASS" Format="string" Value="Main pipe" />
+        <GenericAttribute Name="DIRECTION" Format="string" Value="--------&gt;" />
+        <GenericAttribute Name="PIPENO" Format="string" Value="2" />
+        <GenericAttribute Name="PIPE_INAME" Format="string" Value="" />
+        <GenericAttribute Name="NOMINAL_DIAMETER" Format="string" Value="" />
+        <GenericAttribute Name="MAT_INAME" Format="string" Value="" />
+        <GenericAttribute Name="PIPE_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="MAT_CNAME" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PIPE_LENGTH" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PIPE_LENGTH" Format="string" Value="" />
+        <GenericAttribute Name="VPE_PIPE_WALL_THICKNESS" Format="string" Value="" />
+        <GenericAttribute Name="ERP_PIPE_WALL_THICKNESS" Format="string" Value="" />
+        <GenericAttribute Name="VPE_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="ERP_MAT_MAIN_MATERIAL" Format="string" Value="" />
+        <GenericAttribute Name="HIDE_TAG" Format="string" Value="Show" />
+        <GenericAttribute Name="OSDESCRIPTION" Format="string" Value="" />
+        <GenericAttribute Name="OSXML" Format="string" Value="" />
+      </GenericAttributes>
+      <Connection FromID="PC_14" FromNode="2" ToID="N_2" ToNode="2" />
+      <CenterLine NumPoints="2" ID="Pipe_17">
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="0.0001" />
+        <Extent>
+          <Min X="188.125" Y="104.99970431111112" Z="0" />
+          <Max X="197.49970310236111" Y="104.99970431111112" Z="0" />
+        </Extent>
+        <Coordinate X="188.125" Y="104.99970431111112" Z="0" />
+        <Coordinate X="197.49970310236111" Y="104.99970431111112" Z="0" />
+      </CenterLine>
+      <PolyLine NumPoints="2">
+        <Presentation LineType="Solid" R="0" G="0" B="0" LineWeight="1.00000152777778" />
+        <Extent>
+          <Min X="188.125" Y="104.99970431111112" Z="0" />
+          <Max X="191.83269444444446" Y="104.99970431111112" Z="0" />
+        </Extent>
+        <Coordinate X="188.125" Y="104.99970431111112" Z="0" />
+        <Coordinate X="191.83269444444446" Y="104.99970431111112" Z="0" />
+      </PolyLine>
+    </PipingNetworkSegment>
+  </PipingNetworkSystem>
+</PlantModel>

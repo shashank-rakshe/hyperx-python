@@ -1,0 +1,42 @@
+diff --git a/modules/version/CMakeLists.txt b/modules/version/CMakeLists.txt
+index 1c714c368..8a91bea44 100644
+--- a/modules/version/CMakeLists.txt
++++ b/modules/version/CMakeLists.txt
+@@ -22,10 +22,34 @@ if( DEFINED GIT_DESCRIBE )
+     "Version information has been set as a CMake flag. This should only used when the git-version cannot be set automatically."
+   )
+ else()
+-  include(GetGitRevisionDescription)
+-  git_describe(GIT_DESCRIBE)
++  # CableDyn integration: the CableDyn patch series leaves the worktree modified, so the
++  # upstream `git describe --dirty` would call every CableDyn build '<tag>-dirty'. Describe
++  # the checked-out commit instead (no --dirty), which is the unpatched OpenFAST base.
++  find_package(Git QUIET)
++  if( GIT_FOUND )
++    execute_process(COMMAND "${GIT_EXECUTABLE}" describe --tags --abbrev=8
++      WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
++      RESULT_VARIABLE _cabledyn_describe_result
++      OUTPUT_VARIABLE GIT_DESCRIBE
++      ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
++  endif()
++  if( NOT GIT_FOUND OR NOT _cabledyn_describe_result EQUAL 0 OR
++      NOT GIT_DESCRIBE MATCHES "^v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9]+-g[0-9a-f]+)?$" )
++    message( FATAL_ERROR
++      "The OpenFAST checkout is not described by a release tag (git describe --tags: '${GIT_DESCRIBE}'). "
++      "Fetch its tags (git fetch --tags), or set -DGIT_DESCRIBE=<OpenFAST version>."
++    )
++  endif()
+ endif()
+-add_definitions(-DGIT_VERSION_INFO="${GIT_DESCRIBE}")
++# CableDyn integration: the executables name the CableDyn version they carry, the project
++# version of CABLEDYN_ROOT/CMakeLists.txt: '<OpenFAST version>-CableDyn-<CableDyn version>'.
++file(STRINGS "${CABLEDYN_ROOT}/CMakeLists.txt" _cabledyn_project REGEX "^project\\(CableDynCore VERSION ")
++string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" _cabledyn_version "${_cabledyn_project}")
++if( NOT _cabledyn_version )
++  message( FATAL_ERROR "No CableDyn project version in ${CABLEDYN_ROOT}/CMakeLists.txt" )
++endif()
++set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CABLEDYN_ROOT}/CMakeLists.txt")
++add_definitions(-DGIT_VERSION_INFO="${GIT_DESCRIBE}-CableDyn-${_cabledyn_version}")
+ 
+ add_library(versioninfolib STATIC
+   src/VersionInfo.f90

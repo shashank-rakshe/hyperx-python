@@ -1,0 +1,30 @@
+{
+  "definition": "unsigned three-point Menger curvature from adjacent marker centres",
+  "interpretation": "marker-scale geometric curvature; not a direct or continuous curvature measurement",
+  "digitisation_sensitivity": {
+    "coordinate_allowance": "plus or minus the tabulated two-source-pixel allowance",
+    "grid_levels_per_coordinate": 9,
+    "evaluations_per_station": 531441,
+    "interval_interpretation": "deterministic sensitivity envelope, not confidence interval"
+  },
+  "aggregate_station_definition": "M2--M5; M6 is plotted but excluded because its stencil contains prescribed endpoint M7",
+  "free_rotation": {
+    "number_of_independent_curvature_stations": 4,
+    "bias_m_inv": -0.03563281268825637,
+    "mae_m_inv": 0.05205133454543186,
+    "rmse_m_inv": 0.08652531901068977,
+    "maximum_absolute_error_m_inv": 0.17053994355221214
+  },
+  "vertical_clamp": {
+    "number_of_independent_curvature_stations": 4,
+    "bias_m_inv": -0.08626589865762797,
+    "mae_m_inv": 0.08626589865762797,
+    "rmse_m_inv": 0.12451684808302356,
+    "maximum_absolute_error_m_inv": 0.23490715370099902
+  },
+  "source_sha256": {
+    "experimental_markers": "1671cf5b9bf2567478c113cf38bb6d0c71a4fa580e7e52bd92026c5c98c258b2",
+    "free_rotation_comparison": "284c50d22d505152dc24c2bc55a7fc1ee947fc0beed2c6f62d7a85193dd08bd5",
+    "vertical_clamp_comparison": "90661c176a0da3fcdf57dd877a5da34730383106d7d20846379c97a2177911e0"
+  }
+}

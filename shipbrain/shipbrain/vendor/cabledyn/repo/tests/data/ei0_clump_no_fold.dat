@@ -1,0 +1,35 @@
+--------------------- CableDyn Input File ------------------------------------
+A 50 t clump weight resting on the seabed between two polyester lines, each line grounded at the clump: no line folds (no note)
+--------------------- LINE TYPES ---------------------------------------------
+TypeName Diam MassDenInAir EA BA EI Cd_n Cd_t Ca_n Ca_t
+(-) (m) (kg/m) (N) (-) (Nm2) (-) (-) (-) (-)
+poly 0.172 31.916 200000000 -1 0 1.2 0.008 1 0
+--------------------- POINTS -------------------------------------------------
+ID Type X Y Z Mass Vol CdA Ca
+(-) (-) (m) (m) (m) (kg) (m3) (m2) (-)
+1 Coupled 0 0 -10 0 0 0 0
+2 Fixed 800 0 -200 0 0 0 0
+3 Connect 450 0 -190 50000 0 0 0
+--------------------- LINES --------------------------------------------------
+ID NodeA NodeB Outputs
+(-) (-) (-) (-)
+1 1 3 -
+2 3 2 -
+--------------------- SECTIONS -----------------------------------------------
+LineID LineType Length NumSegs
+(-) (-) (m) (-)
+1 poly 520 52
+2 poly 360 36
+--------------------- OPTIONS ------------------------------------------------
+9.80665 g
+1025.0 rhoW
+200.0 WtrDpth
+1.0e5 kBot
+1.0e4 cBot
+0.05 dtM
+0.0 TMax
+--------------------- OUTPUTS ------------------------------------------------
+FairTen1
+AnchTen1
+Point3pz
+--------------------- END ----------------------------------------------------

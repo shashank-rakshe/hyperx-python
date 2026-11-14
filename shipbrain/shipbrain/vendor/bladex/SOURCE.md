@@ -1,0 +1,1 @@
+BladeX (https://github.com/mathLab/BladeX), MIT, copied unchanged (package `bladex` and LICENSE.rst). `shipbrain.bladex_bridge` answers its pythonocc (OCC) and smithers imports with placeholders because only the blade-surface generation is used; IGES export needs pythonocc-core.

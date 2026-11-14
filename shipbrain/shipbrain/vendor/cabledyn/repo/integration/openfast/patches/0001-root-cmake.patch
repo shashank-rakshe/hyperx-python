@@ -1,0 +1,29 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 8d6bfa66f..da43fef8c 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -236,6 +236,7 @@ set(OPENFAST_MODULES
+   extptfm
+   feamooring
+   moordyn
++  cabledyn
+   icedyn
+   icefloe
+   wakedynamics
+@@ -254,6 +255,15 @@ set_registry_includes("modules" ${OPENFAST_MODULES})
+ set(OPENFAST_REGISTRY_INCLUDES
+   ${OPENFAST_REGISTRY_INCLUDES} -I ${CMAKE_SOURCE_DIR}/modules/icefloe/src/interfaces/FAST/
+   CACHE INTERNAL "Registry includes paths")
++# The CableDyn mooring module's registry lives in the CableDyn repository
++# (modules/cabledyn compiles sources from CABLEDYN_ROOT/src/openfast). The default is
++# a CableDyn checkout at modules/cabledyn/CableDyn; configure with
++# -DCABLEDYN_ROOT=<CableDyn checkout> to use one elsewhere.
++set(CABLEDYN_ROOT "${CMAKE_SOURCE_DIR}/modules/cabledyn/CableDyn" CACHE PATH
++    "Path to the CableDyn repository (contains src/openfast/); default modules/cabledyn/CableDyn")
++set(OPENFAST_REGISTRY_INCLUDES
++  ${OPENFAST_REGISTRY_INCLUDES} -I ${CABLEDYN_ROOT}/src/openfast
++  CACHE INTERNAL "Registry includes paths")
+ 
+ foreach(IDIR IN ITEMS ${OPENFAST_MODULES})
+   add_subdirectory("${CMAKE_SOURCE_DIR}/modules/${IDIR}")
+

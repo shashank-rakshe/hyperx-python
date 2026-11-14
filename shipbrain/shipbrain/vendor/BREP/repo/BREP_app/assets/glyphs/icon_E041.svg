@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:brep="https://brep.io/icons"
+     viewBox="0 0 24 24" width="24" height="24" brep:glyph-name="icon_feat_offset_shell" brep:unicode="E041">
+  <!-- A hollowed block: the top removed, thin walls left around the cavity. -->
+  <path d="M3.5 17.5 9.2 21.6 9.2 12.6 3.5 8.5Z" fill="#f0b840" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M9.2 21.6 18.2 17.4 18.2 8.4 9.2 12.6Z" fill="#d4901f" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M6.5 13.7 12.2 11 15.2 13.2 9.5 15.9Z" fill="#d4901f"/>
+  <path d="M6.5 8.7 12.2 6 12.2 11 6.5 13.7Z" fill="#f0b840"/>
+  <path d="M12.2 6 15.2 8.2 15.2 13.2 12.2 11Z" fill="#d4901f"/>
+  <path d="M3.5 8.5 12.5 4.3 18.2 8.4 9.2 12.6ZM6.5 8.7 12.2 6 15.2 8.2 9.5 10.9Z" fill="#ffd977" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round" fill-rule="evenodd"/>
+</svg>

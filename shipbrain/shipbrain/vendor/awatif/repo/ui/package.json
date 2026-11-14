@@ -1,0 +1,29 @@
+{
+  "name": "@awatif/ui",
+  "description": "Awatif User Interface",
+  "version": "3.4.0",
+  "author": "Mohamed Adil",
+  "license": "MIT",
+  "type": "module",
+  "module": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "build": "node -e \"console.log('No package build for @awatif/ui')\"",
+    "build:wasm": "node -e \"console.log('No WASM build for @awatif/ui')\"",
+    "deploy": "node -e \"console.log('No deploy for @awatif/ui')\"",
+    "test": "node -e \"console.log('No tests for @awatif/ui')\" --"
+  },
+  "dependencies": {
+    "@awatif/components": "^3.4.0",
+    "vanjs-core": "^1.6.0",
+    "lit-html": "^3.3.2",
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "vite": "^8.0.8",
+    "@types/three": "^0.183.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

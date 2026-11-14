@@ -1,0 +1,44 @@
+--------------------- MoorDyn Input File ------------------------------------
+Gulf of Maine 200 m lazy-wave dynamic cable ONLY (static IC) - hang-off + anchor fixed
+FALSE    Echo
+----------------------- LINE TYPES ------------------------------------------
+Name  Diam  MassDen  EA       BA/-zeta  EI    Cd    Ca    CdAx   CaAx
+(-)   (m)   (kg/m)   (N)      (N-s/-)   (-)   (-)   (-)   (-)    (-)
+bare_cable  0.1600    36.70     4.69e8      -1.0     1.99e4    1.2     1.0     0.000     0.0
+buoy_cable  0.3000    60.85     4.69e8      -1.0     1.99e4    1.2     1.0     0.000     0.0
+---------------------- ROD TYPES ---------------------------------------------------------------
+TypeName Diam Mass/m Cd Ca CdEnd CaEnd
+(name) (m) (kg/m) (-) (-) (-) (-)
+connector    0.0100     0.00   0.00   0.00     0.00     0.00
+---------------------- BODIES ---------------------------------------
+ID   Attachment  X0     Y0    Z0     r0      p0     y0     Mass  CG*   I*      Volume   CdA*   Ca*
+(#)   (word)     (m)    (m)   (m)   (deg)   (deg)  (deg)   (kg)  (m)  (kg-m^2)  (m^3)   (m^2)  (-)
+---------------------- POINTS --------------------------------
+ID   Type      X         Y       Z       M    V    CdA   CA
+(-)  (-)      (m)       (m)     (m)    (kg) (m^3) (m^2) (-)
+---------------------- RODS --------------------------------------------------------------------
+ID RodType Attachment Xa Ya Za Xb Yb Zb NumSegs RodOutputs
+(#) (name) (#/key) (m) (m) (m) (m) (m) (m) (-) (-)
+1    connector  Fixed       5.000     0.000   -14.000     5.001     0.000   -14.000  0       -
+2    connector  Free       52.808     0.000  -157.206    52.809     0.000  -157.206  0       -
+3    connector  Free       94.734     0.000  -178.466    94.735     0.000  -178.466  0       -
+4    connector  Fixed     205.000     0.000   -200.000   205.001     0.000   -200.000  0       -
+---------------------- LINES --------------------------------------
+ID  LineType  AttachA   AttachB  UnstrLen  NumSegs  Outputs
+(-)   (-)       (-)       (-)      (m)       (-)      (-)
+1    bare_cable R2A       R1B       171.978  30      Kt
+2    buoy_cable R3A       R2B        60.000  20      Kt
+3    bare_cable R4A       R3B       121.527  24      Kt
+---------------------- SOLVER OPTIONS ---------------------------------------
+0.0005     dtM
+RK4        tScheme
+3.0e6      kBot
+3.0e5      cBot
+1.0        dtIC
+300.0      TmaxIC
+4.0        CdScaleIC
+0.001      threshIC
+------------------------ OUTPUTS --------------------------------------------
+LINE1TENB
+END
+------------------------- need this line --------------------------------------

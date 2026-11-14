@@ -1,0 +1,6 @@
+#!/bin/sh -e
+
+SOURCE_FILES="pydexpi tests scripts .claude"
+
+ruff format $SOURCE_FILES
+ruff check --fix $SOURCE_FILES

@@ -1,0 +1,96 @@
+MYSTRAN
+=======
+
+MYSTRAN is an acronym for “My Structural Analysis” (https://www.mystran.com)
+
+
+---
+
+[Build Instructions](#Build-Instructions) |
+[Introduction](#Introduction) |
+[Features](#Features) |
+[Get EXE or Make Binary](#Get-EXE-or-Make-Binary) |
+[Documentation](#Documentation) |
+[Four Repositories](#Four-Repositories) |
+[Developmental Goals](#Developmental-Goals) |
+[Ways You Can Help](#ways-you-can-help) |
+[Community](#community)
+
+---
+
+# Build Instructions
+
+See [BUILD.md](BUILD.md) for both Windows and Linux build (compiling) instructions.
+
+# Introduction
+
+MYSTRAN is a general purpose finite element analysis computer program for
+structures that can be modeled as linear (i.e. displacements, forces and
+stresses proportional to applied load). MYSTRAN is an acronym for
+“My Structural Analysis”, to indicate its usefulness in solving a wide variety
+of finite element analysis problems.
+
+For anyone familiar with the popular NASTRAN computer program developed by NASA
+(National Aeronautics and Space Administration) in the 1970’s and popularized
+in several commercial versions since, the input to MYSTRAN will look quite
+familiar. Many structural analyses modeled for execution in NASTRAN will
+execute in MYSTRAN with little, or no, modification. MYSTRAN, however, is not
+NASTRAN. It is an independent program written in modern Fortran 95.
+
+# Features
+
+- Nastran compatibility
+- Linear Static Analysis
+- Modal analysis
+- Linear Elastic Buckling Analysis
+- Full Suite of 1D, 2D, and 3D elements
+- Support for Classical Laminated Plate Theory
+- OP2 Supports
+
+# Get EXE or Make Binary
+
+Windows EXE (executable) for can be found in the "Releases" section of this page (right hand pane).
+
+Static Linux binaries have been built, but releases are in work.
+For now, it is better to build it yourself -- it's really
+straightforward.
+
+# Documentation
+
+The end user documentation is located the [MYSTRAN_Documentation](https://github.com/MYSTRANsolver/MYSTRAN_Documentation) repository.
+This includes a Quick Setup Guide, User Manual, and Theory Manual.
+
+# Five Repositories
+
+The MYSTRAN project consists of five repositories.
+
+1 - This repository contains the source code and build instructions.
+
+2 - The [MYSTRAN_Documentation](https://github.com/MYSTRANsolver/MYSTRAN_Documentation) repository contains various documents related to the MYSTRAN program.
+
+3 - The [MYSTRAN_Resources](https://github.com/MYSTRANsolver/MYSTRAN_Resources) repository consists of files for MYSTRAN developers.
+It also contains information and files related to pre- and post-processors relevant to MYSTRAN.
+
+4 - The [MYSTRAN_Validation](https://github.com/MystranSolver/MYSTRAN_Validation) repository contains models with verified results and code to automatically check a MYSTRAN binary against the expected results; this keeps track of our validation effort and prevents regressions.
+
+5 - The [MYSTRAN_Benchmark](https://github.com/MYSTRANsolver/MYSTRAN_Benchmark) repository contains the original test cases and some utilities used to verify results before the Validation repository started.
+
+# Developmental Goals
+
+- Continue the implementation of the MITC shell elements and shell element buckling capability
+- Validation effort (hundreds/thousands of test cases)
+- Discover and resolve bugs
+- Improve performance
+
+
+# Ways You Can Help
+
+- Join the MYSTRAN Discord Channel and/or Forum (links below)
+- Report bugs and inconsistencies
+- Report issues with Documentation
+- A large validation  effort is underway. This will require the assistance of the community. Any help would be greatly appreciated.
+
+# Community
+
+- [Join our Discord Channel](https://discord.gg/9k76SkHpHM) - Very active.
+- [Join our Forums](https://mystran.com/forums) - Little activity. Mostly for archive purposes.

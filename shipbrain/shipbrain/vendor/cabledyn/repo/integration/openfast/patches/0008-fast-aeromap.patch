@@ -1,0 +1,23 @@
+diff --git a/modules/openfast-library/src/FAST_AeroMap.f90 b/modules/openfast-library/src/FAST_AeroMap.f90
+index 67b539354..30a796d95 100644
+--- a/modules/openfast-library/src/FAST_AeroMap.f90
++++ b/modules/openfast-library/src/FAST_AeroMap.f90
+@@ -116,7 +116,7 @@ subroutine FAST_AeroMapDriver(AM, m, p_FAST, m_FAST, y_FAST, T, ErrStat, ErrMsg)
+                            T%ED, T%SED, T%BD, T%SrvD, T%AD, T%ADsk, &
+                            T%ExtLd, T%IfW, T%ExtInfw, &
+                            T%SeaSt, T%HD, T%SD, T%ExtPtfm, T%MAP, &
+-                           T%FEAM, T%MD, T%Orca, T%IceF, T%IceD, T%SlD, &
++                           T%FEAM, T%MD, T%CD, T%Orca, T%IceF, T%IceD, T%SlD, &
+                            CompAeroMaps, ErrStat2, ErrMsg2)
+    if (Failed()) return
+ 
+@@ -311,7 +311,7 @@ subroutine FAST_AeroMapDriver(AM, m, p_FAST, m_FAST, y_FAST, T, ErrStat, ErrMsg)
+ 
+       call WrOutputLine(n_global, p_FAST, y_FAST, UnusedAry, UnusedAry, T%ED%y, UnusedAry, &
+                         T%AD%y, UnusedAry, T%SrvD%y, UnusedAry, UnusedAry, UnusedAry, UnusedAry, UnusedAry, &
+-                        UnusedAry, UnusedAry, UnusedAry, UnusedAry, T%IceD%y, T%SlD%y%WriteOutput, T%BD%y, ErrStat2, ErrMsg2)
++                        UnusedAry, UnusedAry, UnusedAry, UnusedAry, UnusedAry, T%IceD%y, T%SlD%y%WriteOutput, T%BD%y, ErrStat2, ErrMsg2)
+       if (Failed()) return
+ 
+       !-------------------------------------------------------------------------
+

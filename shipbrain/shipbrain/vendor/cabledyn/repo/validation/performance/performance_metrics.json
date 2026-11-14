@@ -1,0 +1,563 @@
+{
+  "protocol": {
+    "threads": "one (OMP_NUM_THREADS = OPENBLAS_NUM_THREADS = 1; OrcaFlex threadCount = 1)",
+    "repeats": "median of three timed runs after one warm-up; the range is kept",
+    "timed_work": "CableDyn, MoorDyn-F and MoorDyn-C: the whole process; OrcaFlex: CalculateStatics plus RunSimulation",
+    "tool": "validation/scripts/performance_records.py"
+  },
+  "host": [
+    "AMD Ryzen Threadripper PRO 7965WX 24-Cores, Windows 10.0.26300"
+  ],
+  "dates": [
+    "2026-11-08",
+    "2026-11-09"
+  ],
+  "codes": {
+    "orcaflex": {
+      "name": "OrcaFlex",
+      "version": "OrcFxAPI DLL 11.6d",
+      "build": "OrcFxAPI from Python 3.15.0, threadCount = 1"
+    },
+    "moordyn-c": {
+      "name": "MoorDyn-C",
+      "version": "MoorDyn-C v2.7.2",
+      "build": "MoorDyn-C v2.7.2 release source; libmoordyn.dll by GNU g++ 16.2.0 (conda-forge), CMake Release (-O3 -DNDEBUG); validation/scripts/moordyn_c_driver.cpp by g++ -O2",
+      "library_sha256": "4cc8efef71fac7cbff847c9e9421aaf97a1a370a81d489d0abbadd31c08a5134"
+    },
+    "moordyn-f": {
+      "name": "MoorDyn-F",
+      "version": "MoorDyn-F v2.3.8 (OpenFAST v5.0.0 MoorDyn driver)",
+      "build": "OpenFAST v5.0.0 MoorDyn driver (unmodified MoorDyn module v2.3.8); GNU Fortran 16.2.0 (conda-forge), CMake Release (-O3), DOUBLE_PRECISION=OFF",
+      "driver_sha256": "9f3ce34fbeb45e851866676334262e8a87430386585d83f76e50be180aeac09b"
+    },
+    "ifx-release-0.4.2": {
+      "name": "CableDyn",
+      "version": "CableDyn v0.4.2 Build x86-64-v3 (AVX2)",
+      "build": "v0.4.2 release asset CableDyn_driver.exe (SHA-256 1799911f...c301); IFX 2025.3.2, static, /fp:precise /arch:CORE-AVX2 /Qfma-, reference LAPACK 3.12.1",
+      "driver_sha256": "1799911f0ca121bc407e7a34e223a0c6bd8bb6721c4cbaf0685310bad5dcc301"
+    },
+    "gnu-release-0.4.2": {
+      "name": "CableDyn",
+      "version": "CableDyn v0.4.2 Build baseline",
+      "build": "release/0.4.2 at 25bdfc1; GNU Fortran 16.2.0 (conda-forge), CMake Release (-O3), baseline x86-64, OpenBLAS 0.3.33",
+      "driver_sha256": "0ab8649f0d5532450ff5f99e8277e498ff8f8f24556ef98f46bf2d52fb5417e0"
+    }
+  },
+  "rows": [
+    {
+      "case": "L5-DPC",
+      "site": "80m",
+      "solver": "CableDyn",
+      "build": "gnu-release-0.4.2",
+      "elements": 240,
+      "time_step_s": 0.05,
+      "total_wall_median_s": 1.9096,
+      "total_wall_min_s": 1.9078,
+      "total_wall_max_s": 1.9188,
+      "static_wall_median_s": 0.125,
+      "dynamic_wall_median_s": 1.763,
+      "total_cpu_median_s": 1.9062,
+      "peak_working_set_MiB": 18.6,
+      "host_busy_median": 0.05,
+      "newton_per_step": 3.038,
+      "subdivided_intervals": 0
+    },
+    {
+      "case": "L5-DPC",
+      "site": "80m",
+      "solver": "CableDyn",
+      "build": "ifx-release-0.4.2",
+      "elements": 240,
+      "time_step_s": 0.05,
+      "total_wall_median_s": 1.3375,
+      "total_wall_min_s": 1.3328,
+      "total_wall_max_s": 1.3515,
+      "static_wall_median_s": 0.113,
+      "dynamic_wall_median_s": 1.211,
+      "total_cpu_median_s": 1.3281,
+      "peak_working_set_MiB": 17.7,
+      "host_busy_median": 0.055,
+      "newton_per_step": 3.038,
+      "subdivided_intervals": 0
+    },
+    {
+      "case": "L5-DPC",
+      "site": "80m",
+      "solver": "OrcaFlex",
+      "build": "orcaflex",
+      "elements": 179,
+      "time_step_s": 0.05,
+      "total_wall_median_s": 2.694,
+      "total_wall_min_s": 2.679,
+      "total_wall_max_s": 2.714,
+      "static_wall_median_s": 0.3212,
+      "dynamic_wall_median_s": 2.3727,
+      "total_cpu_median_s": 2.7031,
+      "peak_working_set_MiB": 99.8,
+      "host_busy_median": 0.059,
+      "newton_per_step": null,
+      "subdivided_intervals": null
+    },
+    {
+      "case": "L5-DPC",
+      "site": "80m",
+      "solver": "MoorDyn-F",
+      "build": "moordyn-f",
+      "elements": 208,
+      "time_step_s": 0.000125,
+      "total_wall_median_s": 326.6135,
+      "total_wall_min_s": 323.8323,
+      "total_wall_max_s": 343.3232,
+      "static_wall_median_s": null,
+      "dynamic_wall_median_s": null,
+      "total_cpu_median_s": 325.8281,
+      "peak_working_set_MiB": 203.3,
+      "host_busy_median": 0.109,
+      "newton_per_step": null,
+      "subdivided_intervals": null
+    },
+    {
+      "case": "L5-DPC",
+      "site": "200m",
+      "solver": "CableDyn",
+      "build": "gnu-release-0.4.2",
+      "elements": 480,
+      "time_step_s": 0.05,
+      "total_wall_median_s": 3.1789,
+      "total_wall_min_s": 3.1743,
+      "total_wall_max_s": 3.2091,
+      "static_wall_median_s": 0.224,
+      "dynamic_wall_median_s": 2.966,
+      "total_cpu_median_s": 3.1719,
+      "peak_working_set_MiB": 27.1,
+      "host_busy_median": 0.047,
+      "newton_per_step": 2.692,
+      "subdivided_intervals": 0
+    },
+    {
+      "case": "L5-DPC",
+      "site": "200m",
+      "solver": "CableDyn",
+      "build": "ifx-release-0.4.2",
+      "elements": 480,
+      "time_step_s": 0.05,
+      "total_wall_median_s": 2.3696,
+      "total_wall_min_s": 2.354,
+      "total_wall_max_s": 2.3723,
+      "static_wall_median_s": 0.187,
+      "dynamic_wall_median_s": 2.174,
+      "total_cpu_median_s": 2.3594,
+      "peak_working_set_MiB": 26.1,
+      "host_busy_median": 0.049,
+      "newton_per_step": 2.752,
+      "subdivided_intervals": 0
+    },
+    {
+      "case": "L5-DPC",
+      "site": "200m",
+      "solver": "OrcaFlex",
+      "build": "orcaflex",
+      "elements": 350,
+      "time_step_s": 0.05,
+      "total_wall_median_s": 5.3104,
+      "total_wall_min_s": 5.178,
+      "total_wall_max_s": 5.641,
+      "static_wall_median_s": 0.2996,
+      "dynamic_wall_median_s": 5.0223,
+      "total_cpu_median_s": 5.2969,
+      "peak_working_set_MiB": 110.4,
+      "host_busy_median": 0.069,
+      "newton_per_step": null,
+      "subdivided_intervals": null
+    },
+    {
+      "case": "L5-DPC",
+      "site": "200m",
+      "solver": "MoorDyn-F",
+      "build": "moordyn-f",
+      "elements": 224,
+      "time_step_s": 0.000125,
+      "total_wall_median_s": 191.8809,
+      "total_wall_min_s": 191.7363,
+      "total_wall_max_s": 193.5473,
+      "static_wall_median_s": null,
+      "dynamic_wall_median_s": null,
+      "total_cpu_median_s": 191.6406,
+      "peak_working_set_MiB": 203.1,
+      "host_busy_median": 0.069,
+      "newton_per_step": null,
+      "subdivided_intervals": null
+    },
+    {
+      "case": "L5-DPC",
+      "site": "800m",
+      "solver": "CableDyn",
+      "build": "gnu-release-0.4.2",
+      "elements": 960,
+      "time_step_s": 0.05,
+      "total_wall_median_s": 6.8685,
+      "total_wall_min_s": 6.8215,
+      "total_wall_max_s": 6.8915,
+      "static_wall_median_s": 0.339,
+      "dynamic_wall_median_s": 6.467,
+      "total_cpu_median_s": 6.8594,
+      "peak_working_set_MiB": 44.0,
+      "host_busy_median": 0.049,
+      "newton_per_step": 3.267,
+      "subdivided_intervals": 0
+    },
+    {
+      "case": "L5-DPC",
+      "site": "800m",
+      "solver": "CableDyn",
+      "build": "ifx-release-0.4.2",
+      "elements": 960,
+      "time_step_s": 0.05,
+      "total_wall_median_s": 4.9758,
+      "total_wall_min_s": 4.9189,
+      "total_wall_max_s": 5.0871,
+      "static_wall_median_s": 0.321,
+      "dynamic_wall_median_s": 4.625,
+      "total_cpu_median_s": 4.9375,
+      "peak_working_set_MiB": 43.0,
+      "host_busy_median": 0.057,
+      "newton_per_step": 3.269,
+      "subdivided_intervals": 0
+    },
+    {
+      "case": "L5-DPC",
+      "site": "800m",
+      "solver": "OrcaFlex",
+      "build": "orcaflex",
+      "elements": 1227,
+      "time_step_s": 0.05,
+      "total_wall_median_s": 27.8132,
+      "total_wall_min_s": 27.4384,
+      "total_wall_max_s": 28.1457,
+      "static_wall_median_s": 2.6539,
+      "dynamic_wall_median_s": 25.1593,
+      "total_cpu_median_s": 27.8125,
+      "peak_working_set_MiB": 166.8,
+      "host_busy_median": 0.065,
+      "newton_per_step": null,
+      "subdivided_intervals": null
+    },
+    {
+      "case": "L5-DPC",
+      "site": "800m",
+      "solver": "MoorDyn-F",
+      "build": "moordyn-f",
+      "elements": 232,
+      "time_step_s": 0.0005,
+      "total_wall_median_s": 320.684,
+      "total_wall_min_s": 319.2952,
+      "total_wall_max_s": 326.9064,
+      "static_wall_median_s": null,
+      "dynamic_wall_median_s": null,
+      "total_cpu_median_s": 320.1719,
+      "peak_working_set_MiB": 203.2,
+      "host_busy_median": 0.09,
+      "newton_per_step": null,
+      "subdivided_intervals": null
+    }
+  ],
+  "wallclock_rows": [
+    {
+      "case": "L5-V",
+      "site": "",
+      "solver": "CableDyn",
+      "build": "gnu-release-0.4.2",
+      "elements": 50,
+      "time_step_s": 0.1,
+      "total_wall_median_s": 6.0509,
+      "total_wall_min_s": 6.0004,
+      "total_wall_max_s": 6.0883,
+      "static_wall_median_s": 0.63,
+      "dynamic_wall_median_s": 5.449,
+      "total_cpu_median_s": 6.0312,
+      "peak_working_set_MiB": 21.4,
+      "host_busy_median": 0.047,
+      "newton_per_step": 2.03,
+      "subdivided_intervals": null
+    },
+    {
+      "case": "L5-V",
+      "site": "",
+      "solver": "CableDyn",
+      "build": "ifx-release-0.4.2",
+      "elements": 50,
+      "time_step_s": 0.1,
+      "total_wall_median_s": 4.2962,
+      "total_wall_min_s": 4.2584,
+      "total_wall_max_s": 4.3062,
+      "static_wall_median_s": 0.328,
+      "dynamic_wall_median_s": 4.003,
+      "total_cpu_median_s": 4.2812,
+      "peak_working_set_MiB": 12.6,
+      "host_busy_median": 0.055,
+      "newton_per_step": 2.03,
+      "subdivided_intervals": null
+    },
+    {
+      "case": "L5-V",
+      "site": "",
+      "solver": "OrcaFlex",
+      "build": "orcaflex",
+      "elements": 50,
+      "time_step_s": 0.1,
+      "total_wall_median_s": 19.7203,
+      "total_wall_min_s": 19.3258,
+      "total_wall_max_s": 19.7361,
+      "static_wall_median_s": 0.0276,
+      "dynamic_wall_median_s": 19.6926,
+      "total_cpu_median_s": 19.7188,
+      "peak_working_set_MiB": 151.2,
+      "host_busy_median": 0.064,
+      "newton_per_step": null,
+      "subdivided_intervals": null
+    },
+    {
+      "case": "L5-wc",
+      "site": "",
+      "solver": "CableDyn",
+      "build": "gnu-release-0.4.2",
+      "elements": 41,
+      "time_step_s": 0.05,
+      "total_wall_median_s": 0.2678,
+      "total_wall_min_s": 0.2676,
+      "total_wall_max_s": 0.268,
+      "static_wall_median_s": 0.028,
+      "dynamic_wall_median_s": 0.221,
+      "total_cpu_median_s": 0.2656,
+      "peak_working_set_MiB": 11.3,
+      "host_busy_median": 0.068,
+      "newton_per_step": 2.289,
+      "subdivided_intervals": null
+    },
+    {
+      "case": "L5-wc",
+      "site": "",
+      "solver": "CableDyn",
+      "build": "ifx-release-0.4.2",
+      "elements": 41,
+      "time_step_s": 0.05,
+      "total_wall_median_s": 0.1966,
+      "total_wall_min_s": 0.1956,
+      "total_wall_max_s": 0.2008,
+      "static_wall_median_s": 0.015,
+      "dynamic_wall_median_s": 0.159,
+      "total_cpu_median_s": 0.1875,
+      "peak_working_set_MiB": 10.5,
+      "host_busy_median": 0.052,
+      "newton_per_step": 2.289,
+      "subdivided_intervals": null
+    },
+    {
+      "case": "L5-wc",
+      "site": "",
+      "solver": "MoorDyn-C",
+      "build": "moordyn-c",
+      "elements": 41,
+      "time_step_s": 0.001,
+      "total_wall_median_s": 0.4819,
+      "total_wall_min_s": 0.4758,
+      "total_wall_max_s": 0.4827,
+      "static_wall_median_s": null,
+      "dynamic_wall_median_s": 0.452,
+      "total_cpu_median_s": 0.4844,
+      "peak_working_set_MiB": 6.2,
+      "host_busy_median": 0.072,
+      "newton_per_step": null,
+      "subdivided_intervals": null
+    }
+  ],
+  "responses": {
+    "dpc/80m/cabledyn/gnu-release-0.4.2": {
+      "tension_mean_kN": 9.3294,
+      "tension_min_kN": 5.6364,
+      "tension_max_kN": 13.0781
+    },
+    "dpc/80m/cabledyn/ifx-release-0.4.2": {
+      "tension_mean_kN": 9.3294,
+      "tension_min_kN": 5.6364,
+      "tension_max_kN": 13.0781
+    },
+    "dpc/80m/orcaflex/orcaflex": {
+      "tension_mean_kN": 9.3211,
+      "tension_min_kN": 5.6342,
+      "tension_max_kN": 13.0806
+    },
+    "dpc/80m/moordyn-f/moordyn-f": {
+      "tension_mean_kN": 9.3307,
+      "tension_min_kN": 5.6176,
+      "tension_max_kN": 13.0897,
+      "dynamic_peak_curvature_per_m": 0.1029
+    },
+    "dpc/200m/cabledyn/gnu-release-0.4.2": {
+      "tension_mean_kN": 25.1818,
+      "tension_min_kN": 14.8966,
+      "tension_max_kN": 35.5161
+    },
+    "dpc/200m/cabledyn/ifx-release-0.4.2": {
+      "tension_mean_kN": 25.1818,
+      "tension_min_kN": 14.8967,
+      "tension_max_kN": 35.516
+    },
+    "dpc/200m/orcaflex/orcaflex": {
+      "tension_mean_kN": 25.156,
+      "tension_min_kN": 14.8934,
+      "tension_max_kN": 35.5169
+    },
+    "dpc/200m/moordyn-f/moordyn-f": {
+      "tension_mean_kN": 25.1806,
+      "tension_min_kN": 14.8858,
+      "tension_max_kN": 35.4843,
+      "dynamic_peak_curvature_per_m": 0.0882
+    },
+    "dpc/800m/cabledyn/gnu-release-0.4.2": {
+      "tension_mean_kN": 57.8542,
+      "tension_min_kN": 33.2499,
+      "tension_max_kN": 82.9642
+    },
+    "dpc/800m/cabledyn/ifx-release-0.4.2": {
+      "tension_mean_kN": 57.8541,
+      "tension_min_kN": 33.2498,
+      "tension_max_kN": 82.9642
+    },
+    "dpc/800m/orcaflex/orcaflex": {
+      "tension_mean_kN": 57.7876,
+      "tension_min_kN": 33.2413,
+      "tension_max_kN": 82.9632
+    },
+    "dpc/800m/moordyn-f/moordyn-f": {
+      "tension_mean_kN": 57.8475,
+      "tension_min_kN": 33.241,
+      "tension_max_kN": 82.9197,
+      "dynamic_peak_curvature_per_m": 0.0379
+    },
+    "v/cabledyn/gnu-release-0.4.2": {
+      "tension_mean_kN": 2446.0086,
+      "tension_std_kN": 205.5469,
+      "tension_min_kN": 2068.2135,
+      "tension_max_kN": 2863.0315
+    },
+    "v/cabledyn/ifx-release-0.4.2": {
+      "tension_mean_kN": 2446.0086,
+      "tension_std_kN": 205.5469,
+      "tension_min_kN": 2068.2135,
+      "tension_max_kN": 2863.0315
+    },
+    "v/orcaflex/orcaflex": {
+      "tension_mean_kN": 2439.3855,
+      "tension_std_kN": 206.0789,
+      "tension_min_kN": 2057.8574,
+      "tension_max_kN": 2850.9109
+    },
+    "wc/cabledyn/gnu-release-0.4.2": {
+      "tension_mean_kN": 1003.91,
+      "tension_max_kN": 1117.8437,
+      "tension_min_kN": 903.917
+    },
+    "wc/cabledyn/ifx-release-0.4.2": {
+      "tension_mean_kN": 1003.91,
+      "tension_max_kN": 1117.8437,
+      "tension_min_kN": 903.917
+    },
+    "wc/moordyn-c/moordyn-c": {
+      "tension_mean_kN": 990.5661,
+      "tension_max_kN": 1099.0251,
+      "tension_min_kN": 884.9949
+    }
+  },
+  "wc_trace_agreement": {
+    "wc/gnu-release-0.4.2_vs_moordyn-c": {
+      "samples": 201.0,
+      "mean_difference_percent": 1.347,
+      "max_difference_percent": 1.712
+    },
+    "wc/ifx-release-0.4.2_vs_moordyn-c": {
+      "samples": 201.0,
+      "mean_difference_percent": 1.347,
+      "max_difference_percent": 1.712
+    }
+  },
+  "moordyn_f_step_checks": {
+    "dpc/80m/moordyn-f/moordyn-f": {
+      "half_step_s": 6.25e-05,
+      "half_step_wall_s": 664.9597234,
+      "largest_relative_move": 5.3e-07,
+      "moves": {
+        "kdyn": 3.9e-07,
+        "tmean": 3e-08,
+        "tmin": 5.3e-07,
+        "tmax": 8e-08
+      }
+    },
+    "dpc/200m/moordyn-f/moordyn-f": {
+      "half_step_s": 6.25e-05,
+      "half_step_wall_s": 372.2898273,
+      "largest_relative_move": 5.42e-06,
+      "moves": {
+        "kdyn": 5.42e-06,
+        "tmean": 2e-08,
+        "tmin": 7.4e-07,
+        "tmax": 1.1e-07
+      }
+    },
+    "dpc/800m/moordyn-f/moordyn-f": {
+      "half_step_s": 0.00025,
+      "half_step_wall_s": 628.0401264,
+      "largest_relative_move": 2.64e-06,
+      "moves": {
+        "kdyn": 2.64e-06,
+        "tmean": 0.0,
+        "tmin": 3.6e-07,
+        "tmax": 0.0
+      }
+    }
+  },
+  "cabledyn_driver_notes": {
+    "dpc/80m/cabledyn/ifx-release-0.4.2": [
+      "Note: motionFile point 1 starts moving at 1.571 m/s while the lines start at rest; the sudden start sends an axial shock down the line. Start the motion from rest, or ramp its amplitude in over one or two periods in the motion file.",
+      "Note: line 1: a nodal tangent turned up to   1.670 deg in one step; a smaller dtM would resolve the line's rotation (mean tension errors of about 1 % and more above 0.25 deg per step).",
+      "Note: LINE 1: dtM = 0.0500 s resolves its axial period of 0.083 s (twice its length over sqrt(EA/m)) in 1.7 steps, fewer than 6: its axial dynamics are damped and its tension peaks can be wrong. A dtM of at most 0.0138 s resolves them."
+    ],
+    "dpc/200m/cabledyn/ifx-release-0.4.2": [
+      "Note: motionFile point 1 starts moving at 1.571 m/s while the lines start at rest; the sudden start sends an axial shock down the line. Start the motion from rest, or ramp its amplitude in over one or two periods in the motion file.",
+      "Note: line 1: a nodal tangent turned up to   4.099 deg in one step; a smaller dtM would resolve the line's rotation (mean tension errors of about 1 % and more above 0.25 deg per step).",
+      "Note: LINE 1: dtM = 0.0500 s resolves its axial period of 0.157 s (twice its length over sqrt(EA/m)) in 3.1 steps, fewer than 6: its axial dynamics are damped and its tension peaks can be wrong. A dtM of at most 0.0261 s resolves them."
+    ],
+    "dpc/800m/cabledyn/ifx-release-0.4.2": [
+      "Note: motionFile point 1 starts moving at 1.571 m/s while the lines start at rest; the sudden start sends an axial shock down the line. Start the motion from rest, or ramp its amplitude in over one or two periods in the motion file.",
+      "Note: line 1: a nodal tangent turned up to   2.053 deg in one step; a smaller dtM would resolve the line's rotation (mean tension errors of about 1 % and more above 0.25 deg per step)."
+    ],
+    "v/cabledyn/ifx-release-0.4.2": [
+      "Note: LINE 1: its negative BA is a damping ratio per segment, BA = zeta L0 sqrt(EA m) on each element, which damps the first axial mode of the line (both ends held) at 3.141 % of critical on its 50 elements (zeta pi/(2N) on a uniform line of N elements): the axial damping depends on the mesh. With OPTION mode1 axialDampingRatio a negative BA is the damping ratio of the first axial mode, the same on any mesh."
+    ],
+    "wc/cabledyn/ifx-release-0.4.2": [
+      "Note: motionFile point 2 starts moving at 1.257 m/s while the lines start at rest; the sudden start sends an axial shock down the line. Start the motion from rest, or ramp its amplitude in over one or two periods in the motion file.",
+      "Note: LINE 1: its negative BA is a damping ratio per segment, BA = zeta L0 sqrt(EA m) on each element, which damps the first axial mode of the line (both ends held) at 3.830 % of critical on its 41 elements (zeta pi/(2N) on a uniform line of N elements): the axial damping depends on the mesh. With OPTION mode1 axialDampingRatio a negative BA is the damping ratio of the first axial mode, the same on any mesh."
+    ],
+    "dpc/80m/cabledyn/gnu-release-0.4.2": [
+      "Note: motionFile point 1 starts moving at 1.571 m/s while the lines start at rest; the sudden start sends an axial shock down the line. Start the motion from rest, or ramp its amplitude in over one or two periods in the motion file.",
+      "Note: line 1: a nodal tangent turned up to   1.670 deg in one step; a smaller dtM would resolve the line's rotation (mean tension errors of about 1 % and more above 0.25 deg per step).",
+      "Note: LINE 1: dtM = 0.0500 s resolves its axial period of 0.083 s (twice its length over sqrt(EA/m)) in 1.7 steps, fewer than 6: its axial dynamics are damped and its tension peaks can be wrong. A dtM of at most 0.0138 s resolves them."
+    ],
+    "dpc/200m/cabledyn/gnu-release-0.4.2": [
+      "Note: motionFile point 1 starts moving at 1.571 m/s while the lines start at rest; the sudden start sends an axial shock down the line. Start the motion from rest, or ramp its amplitude in over one or two periods in the motion file.",
+      "Note: line 1: a nodal tangent turned up to   4.714 deg in one step; a smaller dtM would resolve the line's rotation (mean tension errors of about 1 % and more above 0.25 deg per step).",
+      "Note: LINE 1: dtM = 0.0500 s resolves its axial period of 0.157 s (twice its length over sqrt(EA/m)) in 3.1 steps, fewer than 6: its axial dynamics are damped and its tension peaks can be wrong. A dtM of at most 0.0261 s resolves them."
+    ],
+    "dpc/800m/cabledyn/gnu-release-0.4.2": [
+      "Note: motionFile point 1 starts moving at 1.571 m/s while the lines start at rest; the sudden start sends an axial shock down the line. Start the motion from rest, or ramp its amplitude in over one or two periods in the motion file.",
+      "Note: line 1: a nodal tangent turned up to   2.010 deg in one step; a smaller dtM would resolve the line's rotation (mean tension errors of about 1 % and more above 0.25 deg per step)."
+    ],
+    "v/cabledyn/gnu-release-0.4.2": [
+      "Note: LINE 1: its negative BA is a damping ratio per segment, BA = zeta L0 sqrt(EA m) on each element, which damps the first axial mode of the line (both ends held) at 3.141 % of critical on its 50 elements (zeta pi/(2N) on a uniform line of N elements): the axial damping depends on the mesh. With OPTION mode1 axialDampingRatio a negative BA is the damping ratio of the first axial mode, the same on any mesh."
+    ],
+    "wc/cabledyn/gnu-release-0.4.2": [
+      "Note: motionFile point 2 starts moving at 1.257 m/s while the lines start at rest; the sudden start sends an axial shock down the line. Start the motion from rest, or ramp its amplitude in over one or two periods in the motion file.",
+      "Note: LINE 1: its negative BA is a damping ratio per segment, BA = zeta L0 sqrt(EA m) on each element, which damps the first axial mode of the line (both ends held) at 3.830 % of critical on its 41 elements (zeta pi/(2N) on a uniform line of N elements): the axial damping depends on the mesh. With OPTION mode1 axialDampingRatio a negative BA is the damping ratio of the first axial mode, the same on any mesh."
+    ]
+  }
+}

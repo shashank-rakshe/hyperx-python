@@ -1,0 +1,167 @@
+import logging
+
+import numpy as np
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QGridLayout
+
+from pulse import app
+from pulse.interface.ui_generated.plots.results.structural.plot_stresses_field_for_static_analysis_ui import PlotStressesFieldForStaticAnalysis_UI
+from pulse.interface.user_input.plots.general.animation_widget import AnimationWidget
+from pulse.interface.user_input.project.loading_window import LoadingWindow
+from pulse.interface.viewer_3d.coloring.color_palettes import COLORMAP_NAMES
+
+
+class PlotStressesFieldForStaticAnalysis(PlotStressesFieldForStaticAnalysis_UI):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._config_window()
+        self._initialize()
+        self._add_animation_widget()
+        self._create_connections()
+
+    def _initialize(self):
+
+        self.stresses_data = None
+        self.selected_index = None
+
+        self.stresses_labels = np.array(
+            ["Normal axial", "Normal bending y", "Normal bending z", "Hoop", "Torsional shear", "Transversal shear xy", "Transversal shear xz"],
+        )
+
+    @property
+    def model(self):
+        return app().project.model
+
+    @property
+    def structural_solver(self):
+        return app().project.structural_solver
+
+    def _load_structural_solver(self):
+
+        if self.structural_solver is not None:
+            return
+
+        def process_cross_sections():
+            logging.info("Processing the cross-sections [75%]")
+            self.model.preprocessor.process_cross_sections_mapping()
+
+        LoadingWindow(process_cross_sections).run()
+
+        app().project.structural_solver = app().project.get_structural_solver()
+        if self.structural_solver.solution is None:
+            self.structural_solver.solution = self.model.structural_solution
+
+    def _config_window(self):
+        self.setWindowFlags(Qt.WindowStaysOnTopHint)
+        self.setWindowModality(Qt.WindowModal)
+        self.setWindowIcon(app().main_window.pulse_icon)
+        self.setWindowTitle("OpenPulse")
+
+    def _create_connections(self):
+        #
+        self.comboBox_colormaps.currentIndexChanged.connect(self.update_colormap_type)
+        self.comboBox_color_scale.currentIndexChanged.connect(self.update_plot)
+        self.comboBox_stress_type.currentIndexChanged.connect(self.update_plot)
+        #
+        self.slider_transparency.valueChanged.connect(self.update_transparency_callback)
+        #
+        self.update_animation_widget_visibility()
+        self.load_user_preference_colormap()
+        self.update_colormap_type()
+    
+    def _add_animation_widget(self):
+        self.grid_layout = QGridLayout()
+        self.grid_layout.setContentsMargins(0, 0, 0, 0)
+        self.frame_animation.setLayout(self.grid_layout)
+
+        self.animation_widget = AnimationWidget()
+        self.grid_layout.addWidget(self.animation_widget)
+        self.frame_animation.adjustSize()
+
+    def update_animation_widget_visibility(self):
+        if not hasattr(self, "animation_widget"):
+            return
+        is_animation = self.comboBox_color_scale.currentText().startswith("Animation")
+        self.animation_widget.setDisabled(not is_animation)
+
+    def load_user_preference_colormap(self):
+        try:
+            colormap = app().config.user_preferences.color_map
+            if colormap in COLORMAP_NAMES:
+                index = COLORMAP_NAMES.index()
+                self.comboBox_colormaps.setCurrentIndex(index)
+
+        except Exception:
+            self.comboBox_colormaps.setCurrentIndex(0)
+
+    def update_colormap_type(self):
+        colormap = self.get_colormap()
+        app().config.user_preferences.color_map = colormap
+        app().config.update_config_file()
+        try:
+            app().main_window.results_widget.set_colormap(colormap)
+            self.update_plot()
+        except AttributeError:
+            pass
+
+    def get_colormap(self) -> str:
+        index = self.comboBox_colormaps.currentIndex()
+        if not (0 <= index < len(COLORMAP_NAMES)):
+            return "jet"
+        return COLORMAP_NAMES[index]
+
+    def get_stress_data(self):
+
+        index = self.comboBox_stress_type.currentIndex()
+        stress_label = self.stresses_labels[index]
+
+        app().project.model.frequencies = np.array([0.], dtype=float)
+
+        if self.stresses_data is None:
+            self.stresses_data = self.structural_solver.stress_calculate(static_analysis=True)
+
+        stress_data = self.stresses_data[:, index, self.selected_index]
+
+        min_stress = np.min(stress_data)
+        max_stress = np.max(stress_data)
+
+        app().project.model.set_stresses_data(stress_data)
+        app().project.model.set_min_max_type_stresses(min_stress, max_stress, stress_label)
+
+        color_scale_setup = self.get_user_color_scale_setup()
+        app().project.set_color_scale_setup(color_scale_setup)
+        app().main_window.results_widget.show_stress_field(self.selected_index)
+
+    def get_user_color_scale_setup(self):
+
+        color_scale = self.comboBox_color_scale.currentText()
+
+        color_scale_setup = {   
+            "absolute" : color_scale == "Absolute values",
+            "real_values" : color_scale == "Real values",
+            "imag_values" : color_scale == "Imaginary values",
+            "absolute_animation" : color_scale == "Animation (absolute)",
+            }
+
+        return color_scale_setup
+
+    def update_transparency_callback(self):
+        transparency = self.slider_transparency.value() / 100
+        app().main_window.results_widget.set_tube_actors_transparency(transparency)
+
+    def update_plot(self):
+        self.update_animation_widget_visibility()
+        self.selected_index = 0
+        self.get_stress_data()
+        app().main_window.results_widget.clear_cache()
+
+    def load_frequencies(self):
+        self._load_structural_solver()
+        self.update_plot()
+
+    def confirm_button(self):
+        self.update_plot()
+    
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Enter or event.key() == Qt.Key_Return:
+            self.update_plot()

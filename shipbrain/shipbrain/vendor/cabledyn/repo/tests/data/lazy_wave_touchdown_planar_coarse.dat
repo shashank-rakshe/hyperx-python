@@ -1,0 +1,44 @@
+--------------------- CableDyn Input File ------------------------------------
+Lazy-wave power cable free in torsion, deck mesh too coarse at touchdown
+-- The cable of lazy_wave_touchdown_torsion_coarse.dat free in torsion, so its static solve runs in
+-- the vertical plane of the line. On the coarse deck mesh (10 m elements along the grounded run,
+-- half the bending length is 2.5 m) that planar state is unstable out of its plane, and the dynamics
+-- would start from it with the line free to leave the plane: the driver names it in a note, once,
+-- and solves the deck unchanged.
+--------------------- LINE TYPES ---------------------------------------------
+Name Diam Mass EA BA EI GAs GJ Irt Irn Cdn Cdt Can Cat
+(-) (m) (kg/m) (N) (-) (Nm2) (N) (Nm2) (kgm) (kgm) (-) (-) (-) (-)
+bare 0.16 36.70 4.69e8 0.0 1.99e4 1.0e8 1.5e4 1.0 1.0 1.2 0.1 1.0 0.0
+buoy 0.29 59.53 4.69e8 0.0 1.99e4 1.0e8 1.5e4 1.0 1.0 1.2 0.1 1.0 0.0
+--------------------- POINTS -------------------------------------------------
+ID Type X Y Z
+(-) (-) (m) (m) (m)
+7 Coupled 30.0 0.0 -20.0
+8 Fixed 500.0 0.0 -200.0
+--------------------- LINES --------------------------------------------------
+ID NodeA NodeB Outputs
+(-) (-) (-) (-)
+4 7 8 -
+--------------------- SECTIONS -----------------------------------------------
+LineID LineType Length NumSegs
+(-) (-) (m) (-)
+4 bare 80.0 20
+4 buoy 100.0 25
+4 bare 420.0 42
+--------------------- END CONNECTIONS ----------------------------------------
+LineID End Stiffness EzX EzY EzZ TorsStiffness NxX NxY NxZ Pretwist
+(-) (-) (N-m/rad) (-) (-) (-) (N-m/rad) (-) (-) (-) (deg)
+4 A Rigid 0.1058 0 -0.9944 Free 0 1 0 0
+4 B Rigid 1 0 0 Free 0 1 0 0
+--------------------- OPTIONS ------------------------------------------------
+9.80665 g
+1025.0 rhoW
+3.0e6 kBot
+3.0e5 cBot
+0.35 frictionMu
+200.0 WtrDpth
+0.025 dtM
+0.0 TMax
+--------------------- OUTPUTS ------------------------------------------------
+FairTen4
+--------------------- END ----------------------------------------------------

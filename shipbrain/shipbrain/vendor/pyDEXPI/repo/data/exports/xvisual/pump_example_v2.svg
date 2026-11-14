@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1189.0" height="840.9999999999999" viewBox="0.0 0.0 1189.0 840.9999999999999">
+  <rect x="0.0" y="0.0" width="1189.0" height="840.9999999999999" fill="#f0f0f0" />
+  <metadata>DEXPI Diagram: DEXPI.vsdx</metadata>
+  <g id="diagram-DEXPI.vsdx" class="diagram" fill="rgb(255,255,255)">
+    <g id="E_1" class="representation-group">
+      <g class="static">
+        <g>
+          <g id="XVT_252" transform="translate(207.50,736.00)">
+            <path d="M 7.50,0.00 A 7.50,7.50 0.00 0,1 -7.50,0.00" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+            <path d="M -7.50,0.00 A 7.50,7.50 0.00 0,1 7.50,0.00" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+            <polyline points="5.555555555769587e-05,7.501552222222215 7.5001111111111145,0.0014966666666600403" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+            <polyline points="7.5001111111111145,0.0014966666666600403 5.555555555769587e-05,-7.498558888888891" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+          </g>
+        </g>
+      </g>
+      <g id="N_2" class="representation-group">
+        <g class="static">
+          <g>
+            <g id="XVT_627" transform="translate(198.75,736.00) rotate(180.00)">
+              <polyline points="1.2511944444444127,-0.06639168888888936 -1.2500000000000315,-0.06286391111111289" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+              <polyline points="1.2511944444444127,1.2494694222222211 1.2511944444444127,-1.2517250222222236" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+            </g>
+          </g>
+        </g>
+      </g>
+      <g id="N_3" class="representation-group">
+        <g class="static">
+          <g>
+            <g id="XVT_627" transform="translate(216.25,736.00)">
+              <polyline points="1.2511944444444127,-0.06639168888888936 -1.2500000000000315,-0.06286391111111289" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+              <polyline points="1.2511944444444127,1.2494694222222211 1.2511944444444127,-1.2517250222222236" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+            </g>
+          </g>
+        </g>
+      </g>
+    </g>
+    <g id="PNS_3" class="representation-group">
+      <g id="Pipe_5" class="representation-group">
+        <g id="PC_4" class="representation-group">
+          <g class="static">
+            <g>
+              <g id="XVT_614" transform="translate(122.50,736.00)">
+                <polyline points="-0.6267500000000001,2.501267177777775 -0.6267500000000001,-2.5011217111111126" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="0.6256111111111107,2.501267177777775 0.6256111111111107,-2.5011217111111126" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+              </g>
+            </g>
+          </g>
+          <g id="PC_4" class="representation-group" />
+        </g>
+        <g id="Pipe_5" class="representation-group">
+          <g class="static">
+            <polyline points="100.0,736.0002956888887 121.87361976902778,736.0002956888887" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+          </g>
+        </g>
+      </g>
+      <g id="Pipe_7" class="representation-group">
+        <g id="PC_6" class="representation-group">
+          <g class="static">
+            <g>
+              <g id="XVT_609" transform="translate(129.87,742.25)">
+                <polyline points="7.628209722222184,-1.248649766666631 12.627070833333295,-1.248649766666631" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="12.627070833333295,-1.248649766666631 12.627070833333295,-11.24989976666663" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="12.627070833333295,-11.24989976666663 7.628209722222184,-11.24989976666663" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="7.628209722222184,-11.24989976666663 7.628209722222184,-1.248649766666631" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="12.627070833333295,-1.248649766666631 11.378237499999962,-3.7498442111110766" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="10.877293055555521,-4.75173309999996 9.501459722222185,-7.4998719888888505" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="8.877043055555518,-8.748705322222186 7.628209722222184,-11.24989976666663" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+              </g>
+            </g>
+          </g>
+          <g id="PC_6" class="representation-group" />
+        </g>
+        <g id="Pipe_7" class="representation-group">
+          <g class="static">
+            <polyline points="123.12500000000003,735.9999999999999 123.12500000000004,736.0002956888887 137.49856421347226,736.0002956888887 137.5,735.9999999999999" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+          </g>
+        </g>
+      </g>
+      <g id="Pipe_12" class="representation-group">
+        <g id="PC_11" class="representation-group">
+          <g class="static">
+            <g>
+              <g id="XVT_614" transform="translate(151.86,736.00)">
+                <polyline points="-0.6267500000000001,2.501267177777775 -0.6267500000000001,-2.5011217111111126" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="0.6256111111111107,2.501267177777775 0.6256111111111107,-2.5011217111111126" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+              </g>
+            </g>
+          </g>
+          <g id="PC_11" class="representation-group" />
+        </g>
+        <g id="Pipe_12" class="representation-group">
+          <g class="static">
+            <polyline points="142.50000000000003,735.9999999999999 142.50000000000003,735.9991567999999 151.2326475468056,735.9991567999999 151.23213869135012,735.9999999999999" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+          </g>
+        </g>
+      </g>
+      <g id="Pipe_13" class="representation-group">
+        <g id="PC_8" class="representation-group">
+          <g class="static">
+            <g>
+              <g id="XVT_17" transform="translate(175.00,736.00)">
+                <polyline points="-5.0,2.5001432888888893 -5.0,-2.498717822222222" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="-5.0,-2.498717822222222 5.001250000000001,-0.0010511555555545726" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="5.001250000000001,-0.0010511555555545726 -5.0,2.5001432888888893" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+              </g>
+            </g>
+          </g>
+          <g id="PC_8" class="representation-group" />
+        </g>
+        <g id="Pipe_13" class="representation-group">
+          <g class="static">
+            <polyline points="152.48213869135012,735.9999999999999 152.48213869135012,736.0002956888887 169.99895290482235,736.0002956888887 169.99999999999997,735.9999999999999" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+          </g>
+        </g>
+      </g>
+      <g id="Pipe_16" class="representation-group">
+        <g id="PC_14" class="representation-group">
+          <g class="static">
+            <g>
+              <g id="XVT_614" transform="translate(187.50,736.00)">
+                <polyline points="-0.6267500000000001,2.501267177777775 -0.6267500000000001,-2.5011217111111126" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="0.6256111111111107,2.501267177777775 0.6256111111111107,-2.5011217111111126" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+              </g>
+            </g>
+          </g>
+          <g id="PC_14" class="representation-group" />
+        </g>
+        <g id="Pipe_16" class="representation-group">
+          <g class="static">
+            <polyline points="179.99999999999997,735.9999999999999 179.99999999999997,736.0002956888887 186.87350865791663,736.0002956888887 186.875,735.9999999999999" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+          </g>
+        </g>
+      </g>
+    </g>
+    <g id="PNS_1" class="representation-group">
+      <g id="Pipe_10" class="representation-group">
+        <g id="PC_9" class="representation-group">
+          <g class="static">
+            <g>
+              <g id="XVT_17" transform="translate(240.00,736.00)">
+                <polyline points="-5.0,2.5001432888888893 -5.0,-2.498717822222222" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="-5.0,-2.498717822222222 5.001250000000001,-0.0010511555555545726" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="5.001250000000001,-0.0010511555555545726 -5.0,2.5001432888888893" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+              </g>
+            </g>
+          </g>
+          <g id="PC_9" class="representation-group" />
+        </g>
+        <g id="Pipe_10" class="representation-group">
+          <g class="static">
+            <polyline points="245.0,736.0002956888887 254.99911976902777,736.0002956888887" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+          </g>
+        </g>
+      </g>
+      <g id="Pipe_18" class="representation-group">
+        <g id="PC_15" class="representation-group">
+          <g class="static">
+            <g>
+              <g id="XVT_614" transform="translate(222.50,736.00)">
+                <polyline points="-0.6267500000000001,2.501267177777775 -0.6267500000000001,-2.5011217111111126" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="0.6256111111111107,2.501267177777775 0.6256111111111107,-2.5011217111111126" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+              </g>
+            </g>
+          </g>
+          <g id="PC_15" class="representation-group" />
+        </g>
+        <g id="Pipe_18" class="representation-group">
+          <g class="static">
+            <polyline points="217.50147222222228,736.0002956888887 221.8759166666667,736.0002956888887" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+          </g>
+        </g>
+      </g>
+      <g id="Pipe_19" class="representation-group">
+        <g id="Pipe_19" class="representation-group">
+          <g class="static">
+            <polyline points="223.12499999999997,735.9999999999999 223.125,736.0002956888887 235.00089754680556,736.0002956888887 235.0,735.9999999999999" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+          </g>
+        </g>
+      </g>
+    </g>
+    <g id="PNS_2" class="representation-group">
+      <g id="Pipe_17" class="representation-group">
+        <g id="Pipe_17" class="representation-group">
+          <g class="static">
+            <polyline points="188.125,736.0002956888887 197.4997031023611,736.0002956888887" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

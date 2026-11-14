@@ -1,0 +1,7 @@
+node_modules/
+_runner/node_modules/
+_npm_*/
+_clone_*/
+OpenPhysicsAI/repo/build/
+OpenPhysicsAI/repo/openphysics-*
+OpenPhysicsAI/repo/navier-*

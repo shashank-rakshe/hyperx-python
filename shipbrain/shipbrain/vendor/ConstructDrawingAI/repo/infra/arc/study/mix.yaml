@@ -1,0 +1,19 @@
+# MIXED: real DELP + our synthetic, both in the 10-class space. Trains on BOTH image sets
+# (ultralytics accepts a list of train dirs); validates + tests on the REAL delp10 splits.
+train:
+  - /projects/bedigital/cdai/data/delp10/train/images
+  - /projects/bedigital/cdai/data/synth10/images/train
+val: /projects/bedigital/cdai/data/delp10/valid/images
+test: /projects/bedigital/cdai/data/delp10/test/images
+nc: 10
+names:
+  0: Duplex Receptacle
+  1: Quad Receptacle
+  2: GFCI Receptacle
+  3: Light Fixture
+  4: Recessed Downlight
+  5: Wall Light
+  6: Single-Pole Switch
+  7: Three-Way Switch
+  8: Junction Box
+  9: Panelboard

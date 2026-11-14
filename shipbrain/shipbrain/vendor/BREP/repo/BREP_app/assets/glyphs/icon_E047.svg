@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:brep="https://brep.io/icons"
+     viewBox="0 0 24 24" width="24" height="24" brep:glyph-name="icon_feat_sm_contour_flange" brep:unicode="E047">
+  <!-- An open U profile swept into a channel: two walls and a connecting flat. -->
+  <g stroke-width="1.2" stroke-linejoin="round">
+    <path d="M3 9 12 4V12L3 17Z" fill="#a5e8c4" stroke="#125236"/>
+    <path d="M3 17 12 12 21 16 12 21Z" fill="#bcd7e8" stroke="#2b4c63"/>
+    <path d="M12 21 21 16V8L12 13Z" fill="#a5e8c4" stroke="#125236"/>
+    <path d="M3 9V17L12 21V13" style="fill:none" stroke="#2fa469" stroke-width="2"/>
+  </g>
+</svg>

@@ -1,0 +1,32 @@
+--------------------- CableDyn Input File ------------------------------------
+Slack chain between two grounded ends, a 2 m/s current along it on a frictionless seabed: the run folds back on itself at a deck node (noted)
+--------------------- LINE TYPES ---------------------------------------------
+TypeName Diam MassDenInAir EA BA EI Cd_n Cd_t Ca_n Ca_t
+(-) (m) (kg/m) (N) (-) (Nm2) (-) (-) (-) (-)
+chain 0.216 286.56 1.22976e9 -1 0 1.37 0.64 1 0
+--------------------- POINTS -------------------------------------------------
+ID Type X Y Z
+(-) (-) (m) (m) (m)
+1 Coupled 0.0 0.0 -100.0
+2 Fixed 450.0 0.0 -100.0
+--------------------- LINES --------------------------------------------------
+ID NodeA NodeB Outputs
+(-) (-) (-) (-)
+1 1 2 -
+--------------------- SECTIONS -----------------------------------------------
+LineID LineType Length NumSegs
+(-) (-) (m) (-)
+1 chain 520.0 52
+--------------------- OPTIONS ------------------------------------------------
+9.80665 g
+1025.0 rhoW
+100.0 WtrDpth
+1.0e5 kBot
+1.0e4 cBot
+0.05 dtM
+0.0 TMax
+uniform 2.0 0 0 current
+--------------------- OUTPUTS ------------------------------------------------
+FairTen1
+AnchTen1
+--------------------- END ----------------------------------------------------

@@ -1,0 +1,24 @@
+{
+ "yard": "the yard",
+ "_note": "R-YC yard conventions: owner answers / confirmed aliases reused for every drawing of this yard",
+ "section_aliases": {
+  "150 U.A": [
+   "L",
+   150,
+   90,
+   9,
+   9
+  ],
+  "250 I.A": [
+   "L",
+   250,
+   90,
+   10,
+   15
+  ]
+ },
+ "section_aliases_source": "owner-confirmed 2026-10-16 (hull_builder section_alias_catalog.json)",
+ "answers": [],
+ "pipe_table_csv": "pipe_table.csv",
+ "pipe_table_source": "owner 2026-10-26: PIPE TABLE.pdf = the yard pipe standard"
+}

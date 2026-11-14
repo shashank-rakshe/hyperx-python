@@ -1,0 +1,68 @@
+# ShipBrain: download the outside drawing datasets on GitHub's own computers (full internet), turn them into training
+# samples there, and publish ONLY the samples (questions / answers + small resized pictures + licence notices) as the
+# release "data-latest". The Kaggle training run fetches that release by itself - nothing to attach by hand.
+# Started by a change to shipbrain/training/DATA_REQUEST.txt (the assistant does this) or by hand (Actions tab).
+# Class society rule books are NOT handled here (copyright; this repo is public): the Kaggle run downloads them privately.
+name: shipbrain-data
+on:
+  push:
+    paths: ['shipbrain/training/DATA_REQUEST.txt']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: shipbrain-data
+jobs:
+  data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Make disk room (the zips are large)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          df -h /tmp
+      - name: Install
+        run: pip -q install numpy scipy pillow pypdfium2 gdown pydantic msgpack pyyaml rapidocr-onnxruntime ezdxf
+      - name: Download the datasets (each one independent)
+        working-directory: shipbrain
+        run: python training/fetch_data.py --out /tmp/sbdata --only pid2graph cubicasa5k pidqa floorplancad
+      - name: Make the training samples
+        working-directory: shipbrain
+        run: |
+          mkdir -p /tmp/out
+          python training/construct_real.py --data-root /tmp/sbdata --out /tmp/out/construct_real_train.jsonl \
+            --img-dir /tmp/out/construct_real_images 2>&1 | tee /tmp/out/build_log.txt
+      - name: Package (samples + licence notices only, no raw datasets)
+        run: |
+          cp /tmp/sbdata/manifest.json /tmp/out/manifest.json
+          cat > /tmp/out/NOTICE.md <<'EOF'
+          # ShipBrain training samples made from public datasets (non-commercial, open research use)
+          - PID2Graph (Sturmer et al.), CC BY-SA 4.0 - https://zenodo.org/records/14803338 - derived samples stay CC BY-SA 4.0
+          - CubiCasa5K (Kalervo et al.), CC BY-NC 4.0 - https://zenodo.org/record/2613548 - non-commercial use only
+          - PIDQA (Gupta et al.), CC0 - https://github.com/mgupta70/PIDQA
+          - FloorPlanCAD (Fan et al.), CC BY-NC 4.0 - https://floorplancad.github.io - non-commercial use only
+          Pictures are resized copies; answers come from each dataset's own annotation.
+          EOF
+          cd /tmp/out && zip -qr /tmp/shipbrain-real-drawings.zip .
+          ls -la /tmp/shipbrain-real-drawings.zip
+          python - <<'PY' > /tmp/notes.md
+          import json, collections
+          m = json.load(open('/tmp/out/manifest.json'))
+          import os
+          rows = [json.loads(l) for f in ('/tmp/out/construct_real_train.jsonl', '/tmp/out/parsebench_train.jsonl')
+                  if os.path.exists(f) for l in open(f)]
+          print('Training samples made on GitHub from public drawing datasets.\n')
+          print('Samples by kind:', dict(collections.Counter(r['task'] for r in rows)), '\n')
+          print('Sources:\n```json\n' + json.dumps(m['sources'], indent=1) + '\n```\n')
+          log = open('/tmp/out/build_log.txt').read().splitlines()
+          print('Build log (last lines):\n```\n' + '\n'.join(log[-25:]) + '\n```')
+          PY
+      - name: Publish as release data-latest
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: |
+          gh release view data-latest >/dev/null 2>&1 || gh release create data-latest --prerelease --target "${GITHUB_SHA}" \
+            --title "ShipBrain training data (latest)" --notes "being built"
+          gh release upload data-latest /tmp/shipbrain-real-drawings.zip /tmp/out/manifest.json --clobber
+          gh release edit data-latest --notes-file /tmp/notes.md

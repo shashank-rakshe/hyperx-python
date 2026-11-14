@@ -1,0 +1,352 @@
+{
+ "box_girder": {
+  "ok": true,
+  "bbox": [
+   6000.0,
+   800.0,
+   600.0
+  ],
+  "volume": 198144000.0,
+  "n_solids": 1
+ },
+ "flat_bar_stiffener": {
+  "ok": true,
+  "bbox": [
+   2400.0,
+   12.0,
+   150.0
+  ],
+  "volume": 4320000.0,
+  "n_solids": 1
+ },
+ "l_bar_stiffener": {
+  "ok": true,
+  "bbox": [
+   2000.0,
+   90.0,
+   250.0
+  ],
+  "volume": 6920000.0,
+  "n_solids": 1
+ },
+ "manhole_plate": {
+  "ok": true,
+  "bbox": [
+   2000.0,
+   1500.0,
+   114.0
+  ],
+  "volume": 48000442.1,
+  "n_solids": 1
+ },
+ "pipe_penetration_collar": {
+  "ok": true,
+  "bbox": [
+   1000.0,
+   1000.0,
+   30.0
+  ],
+  "volume": 11126253.1,
+  "n_solids": 1
+ },
+ "plate_with_lightening_holes": {
+  "ok": true,
+  "bbox": [
+   3000.0,
+   12.0,
+   1200.0
+  ],
+  "volume": 35796106.6,
+  "n_solids": 1
+ },
+ "sc_bent_rod_sweep": {
+  "ok": true,
+  "bbox": [
+   53.0,
+   6.0,
+   53.0
+  ],
+  "volume": 2584.7,
+  "n_solids": 1
+ },
+ "sc_block_two_bosses": {
+  "ok": true,
+  "bbox": [
+   60.0,
+   30.0,
+   25.0
+  ],
+  "volume": 21392.9,
+  "n_solids": 1
+ },
+ "sc_bolted_flange_ring": {
+  "ok": true,
+  "bbox": [
+   100.0,
+   100.0,
+   10.0
+  ],
+  "volume": 66758.8,
+  "n_solids": 1
+ },
+ "sc_box_through_hole": {
+  "ok": true,
+  "bbox": [
+   60.0,
+   40.0,
+   20.0
+  ],
+  "volume": 45738.1,
+  "n_solids": 1
+ },
+ "sc_chamfer_top": {
+  "ok": true,
+  "bbox": [
+   40.0,
+   30.0,
+   20.0
+  ],
+  "volume": 23730.7,
+  "n_solids": 1
+ },
+ "sc_counterbored_plate": {
+  "ok": true,
+  "bbox": [
+   80.0,
+   50.0,
+   10.0
+  ],
+  "volume": 36766.7,
+  "n_solids": 1
+ },
+ "sc_cut_splits_body": {
+  "ok": true,
+  "bbox": [
+   80.0,
+   20.0,
+   20.0
+  ],
+  "volume": 28000.0,
+  "n_solids": 2
+ },
+ "sc_fillet_all_edges": {
+  "ok": true,
+  "bbox": [
+   40.0,
+   30.0,
+   20.0
+  ],
+  "volume": 23340.8,
+  "n_solids": 1
+ },
+ "sc_flanged_plate_bend": {
+  "ok": true,
+  "bbox": [
+   100.0,
+   60.0,
+   20.0
+  ],
+  "volume": 18972.6,
+  "n_solids": 1
+ },
+ "sc_heat_sink": {
+  "ok": true,
+  "bbox": [
+   60.0,
+   50.0,
+   30.0
+  ],
+  "volume": 43125.0,
+  "n_solids": 1
+ },
+ "sc_plate_four_bores": {
+  "ok": true,
+  "bbox": [
+   150.0,
+   80.0,
+   10.0
+  ],
+  "volume": 117989.4,
+  "n_solids": 1
+ },
+ "sc_rect_hole_pattern": {
+  "ok": true,
+  "bbox": [
+   90.0,
+   70.0,
+   5.0
+  ],
+  "volume": 29803.5,
+  "n_solids": 1
+ },
+ "sc_rounded_bracket_plate": {
+  "ok": true,
+  "bbox": [
+   60.0,
+   40.0,
+   10.0
+  ],
+  "volume": 22780.1,
+  "n_solids": 1
+ },
+ "sc_shell_open_top": {
+  "ok": true,
+  "bbox": [
+   50.0,
+   40.0,
+   30.0
+  ],
+  "volume": 13632.0,
+  "n_solids": 1
+ },
+ "sc_shell_two_open_faces": {
+  "ok": true,
+  "bbox": [
+   50.0,
+   40.0,
+   30.0
+  ],
+  "volume": 16044.0,
+  "n_solids": 1
+ },
+ "sc_square_frame": {
+  "ok": true,
+  "bbox": [
+   42.0,
+   42.0,
+   10.0
+  ],
+  "volume": 6080.0,
+  "n_solids": 1
+ },
+ "sc_taper_extrude": {
+  "ok": true,
+  "bbox": [
+   50.58,
+   50.58,
+   30.0
+  ],
+  "volume": 61814.8,
+  "n_solids": 1
+ },
+ "sc_trapezoid_two_holes": {
+  "ok": true,
+  "bbox": [
+   60.0,
+   25.0,
+   5.0
+  ],
+  "volume": 5342.3,
+  "n_solids": 1
+ },
+ "sc_u_channel_bent": {
+  "ok": true,
+  "bbox": [
+   80.0,
+   50.0,
+   20.0
+  ],
+  "volume": 10053.7,
+  "n_solids": 1
+ },
+ "sc_vgroove_pulley": {
+  "ok": true,
+  "bbox": [
+   80.0,
+   80.0,
+   40.0
+  ],
+  "volume": 168510.8,
+  "n_solids": 1
+ },
+ "stiffened_deck_panel": {
+  "ok": true,
+  "bbox": [
+   4800.0,
+   3200.0,
+   172.0
+  ],
+  "volume": 207360000.0,
+  "n_solids": 1
+ },
+ "t2c_clamp_block": {
+  "ok": true,
+  "bbox": [
+   70.0,
+   34.0,
+   28.0
+  ],
+  "volume": 61040.0,
+  "n_solids": 1
+ },
+ "t2c_gusset_plate": {
+  "ok": true,
+  "bbox": [
+   88.0,
+   30.0,
+   54.0
+  ],
+  "volume": 20108.7,
+  "n_solids": 1
+ },
+ "t2c_mounting_plate": {
+  "ok": true,
+  "bbox": [
+   100.0,
+   70.0,
+   8.0
+  ],
+  "volume": 48331.9,
+  "n_solids": 1
+ },
+ "t2c_retainer_plate": {
+  "ok": true,
+  "bbox": [
+   82.0,
+   34.0,
+   6.0
+  ],
+  "volume": 14234.9,
+  "n_solids": 1
+ },
+ "t2c_square_mounting_block": {
+  "ok": true,
+  "bbox": [
+   48.0,
+   48.0,
+   28.0
+  ],
+  "volume": 59064.5,
+  "n_solids": 1
+ },
+ "t_bar_stiffener": {
+  "ok": true,
+  "bbox": [
+   3200.0,
+   150.0,
+   400.0
+  ],
+  "volume": 19520000.0,
+  "n_solids": 1
+ },
+ "triangular_bracket": {
+  "ok": true,
+  "bbox": [
+   600.0,
+   12.0,
+   600.0
+  ],
+  "volume": 2154600.0,
+  "n_solids": 1
+ },
+ "web_frame_with_cutouts": {
+  "ok": true,
+  "bbox": [
+   3200.0,
+   10.0,
+   800.0
+  ],
+  "volume": 25328000.0,
+  "n_solids": 1
+ }
+}

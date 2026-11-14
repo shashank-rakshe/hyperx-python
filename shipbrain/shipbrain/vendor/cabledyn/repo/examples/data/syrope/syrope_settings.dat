@@ -1,0 +1,4 @@
+syrope_owc.dat  OWC     - Original working-curve table file (relative to this file)
+EXP             WCType  - Working-curve formulation {LINEAR; QUADRATIC; EXP}
+0.20            k1      - First working-curve shape parameter
+1.50            k2      - Second working-curve shape parameter

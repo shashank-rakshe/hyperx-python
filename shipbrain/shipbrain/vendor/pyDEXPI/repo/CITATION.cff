@@ -1,0 +1,19 @@
+cff-version: "1.2.0"
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: Goldstein
+    given-names: Dominik P.
+    orcid: 0000-0002-7837-055X
+  - family-names: Schulze Balhorn
+    given-names: Lukas
+    orcid: 0000-0001-7494-9110
+  - family-names: Alimin
+    given-names: Achmad Anggawirya
+    orcid: 0000-0001-6382-8196
+  - family-names: Schweidtmann
+    given-names: Artur
+    orcid: 0000-0001-8885-6847
+date-released: 2025-07-08
+title: "pyDEXPI: A Python framework for piping and instrumentation diagrams (P&IDs) using the DEXPI information model"
+doi: https://doi.org/10.69997/sct.139043
+url: "https://github.com/process-intelligence-research/pyDEXPI"

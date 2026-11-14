@@ -1,0 +1,15 @@
+diff --git a/modules/openfast-library/src/FAST_ModGlue.f90 b/modules/openfast-library/src/FAST_ModGlue.f90
+index 645ca2626..328ddac7e 100644
+--- a/modules/openfast-library/src/FAST_ModGlue.f90
++++ b/modules/openfast-library/src/FAST_ModGlue.f90
+@@ -469,7 +469,8 @@ subroutine ModGlue_Init(p, m, y, p_FAST, m_FAST, Turbine, ErrStat, ErrMsg)
+                  pack(modIdx, ModIDs == Module_SD), &
+                  pack(modIdx, ModIDs == Module_ExtPtfm), &
+                  pack(modIdx, ModIDs == Module_MAP), &
+-                 pack(modIdx, ModIDs == Module_MD)]
++                 pack(modIdx, ModIDs == Module_MD), &
++                 pack(modIdx, ModIDs == Module_CD)]
+ 
+    ! Loop through modules, if module is not in index, return with error
+    if (p_FAST%Linearize) then
+

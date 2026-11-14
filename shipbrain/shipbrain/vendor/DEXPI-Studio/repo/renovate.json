@@ -1,0 +1,59 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "labels": ["dependencies"],
+  "ignoreDeps": [],
+  "ignorePresets": [],
+  "schedule": ["after 1am and before 3am on Sunday"],
+  "timezone": "UTC",
+  "packageRules": [
+    {
+      "groupName": "dev dependencies",
+      "matchFileNames": ["pyproject.toml"],
+      "matchDepTypes": ["optional-dependencies"],
+      "labels": ["dev-deps"],
+      "automerge": true,
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "groupName": "production dependencies",
+      "matchFileNames": ["pyproject.toml"],
+      "matchDepTypes": ["dependencies"],
+      "labels": ["prod-deps"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": false
+    },
+    {
+      "groupName": "major version updates",
+      "matchUpdateTypes": ["major"],
+      "labels": ["major-update"],
+      "automerge": false,
+      "schedule": ["at any time"]
+    },
+    {
+      "groupName": "Python version",
+      "matchManagers": ["pyenv"],
+      "matchFileNames": [".python-version"],
+      "labels": ["python-version"],
+      "automerge": false,
+      "schedule": ["at any time"]
+    }
+  ],
+  "assigneesSampleSize": 2,
+  "assignees": [
+    "williamlac"
+  ],
+  "prConcurrentLimit": 3,
+  "prHourlyLimit": 2,
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "schedule": ["at any time"],
+    "automerge": true,
+    "labels": ["security", "vulnerability"]
+  },
+  "lockFileMaintenance": {
+    "enabled": false
+  }
+}

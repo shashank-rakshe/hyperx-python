@@ -1,0 +1,168 @@
+pyDEXPI
+=======
+
+pyDEXPI is released under the GNU Affero General Public License v3 (see LICENSE).
+
+It also contains material of third parties under the Creative Commons Attribution 4.0
+International License (CC BY 4.0), which requires the attribution given here: for each item, what
+it is, where it comes from, and what was changed. Item 8 is under the MIT License, whose text it
+gives.
+
+
+1. The generated DEXPI classes (pydexpi/pydexpi_classes/)
+---------------------------------------------------------
+
+The Pydantic classes in pydexpi/pydexpi_classes/ -- pydexpi_classes.py, _spec_info.py and the
+core/, plant/ and process/ modules; not the hand-written _base.py and unit_resolution.py -- are
+generated from the DEXPI Specification 2.0.1, (c) 2026 DEXPI (DEXPI e.V.), licensed under the
+Creative Commons Attribution 4.0 International License (CC BY 4.0),
+https://creativecommons.org/licenses/by/4.0/.
+
+Source: https://gitlab.com/dexpi/Specification/-/releases/V2.0.1 (tag V2.0.1, commit
+eef0f0c6e8edfe84582e7a45d109c396bdc544f8): its machine-readable model, Dexpi.xmi, and the model
+files the specification's own build writes (Core.xml, Plant.xml, Process.xml, Builtin.xml), as
+vendored with their provenance in pyDEXPI-builder
+(https://github.com/process-intelligence-research/pyDEXPI-builder, data/dexpi_xmi_files/2.0.1/).
+
+The classes are an adaptation of the specification. Changes:
+
+- the model is translated to Pydantic, with Python names (TagName becomes tagName, and a name
+  the generated classes reserve gets a trailing underscore: Role.Uri becomes uri_, which keeps
+  Uri as its dexpi_name);
+- the data types that parent enumerations (PhysicalQuantityUnit, PressureUnit, FrequencyUnit)
+  are generated as enumerations;
+- the documentation is the specification's reStructuredText text, with the specificator's own
+  roles (:sp:element: and :sp:name:) rendered as the text they name and standard roles kept
+  verbatim; each description is joined onto one line, and LaTeX-style \url{...} becomes a plain
+  URL;
+- the multiplicities of the opposite ends of associations are not generated;
+- three semantic deviations from the specification, each declared with its reason and evidence
+  in pyDEXPI-builder's SPEC_DEVIATIONS table, and marked on the field it changes as
+  "spec_deviation" in its json_schema_extra:
+  - QV-VALUE-UNION: QualifiedValue.Value is
+    float | int | PhysicalQuantity | PhysicalQuantityVector | Undefined (required), the union of
+    the types the specification's bindings give it, instead of the declared
+    PhysicalQuantity | Double;
+  - PORT-SUBREFERENCE: Port.SubReference is a reference, not a composition;
+  - COMPONENT-ORDER: ListOfMaterialComponents.Component is an ordered list.
+
+The header of pydexpi_classes.py and the docstring of pydexpi/pydexpi_classes/__init__.py carry
+the same attribution.
+
+
+2. The DEXPI reference P&ID (data/reference_pid.xml, data/reference_pid.json)
+------------------------------------------------------------------------------
+
+data/reference_pid.xml contains material of the DEXPI Specification 2.0 -- its reference P&ID --
+(c) 2025 DEXPI (DEXPI e.V.), licensed under the Creative Commons Attribution 4.0 International
+License (CC BY 4.0), https://creativecommons.org/licenses/by/4.0/.
+
+Source: https://gitlab.com/dexpi/Specification/-/releases/V2.0.0.
+
+Changes: the one content change is that eight Shape objects that carry no
+SymbolRegistrationNumber in the original were given the placeholder value
+MISSING_IN_ORIGINAL_EXAMPLE_FILE (pyDEXPI commit 1325ac13). Otherwise the file is XML-equivalent
+to the original: five empty strings are written <String/> rather than <String></String>, and the
+file has no final newline (pyDEXPI commit e1413dc9).
+data/reference_pid.json is the same document converted to pyDEXPI's JSON format by pyDEXPI.
+
+
+3. The DEXPI TrainingTestCases (data/dexpi_training_test_cases/)
+----------------------------------------------------------------
+
+Vendored byte-identical from https://gitlab.com/dexpi/TrainingTestCases under CC BY 4.0; the
+attribution, provenance and per-file hashes are in data/dexpi_training_test_cases/README.md.
+
+
+4. The DEXPI 2.0.1 reference P&ID (data/dexpi_2_0_1/reference_pid.xml)
+-----------------------------------------------------------------------
+
+data/dexpi_2_0_1/reference_pid.xml is the reference P&ID of the DEXPI Specification 2.0.1,
+(c) 2026 DEXPI (DEXPI e.V.), licensed under the Creative Commons Attribution 4.0 International
+License (CC BY 4.0), https://creativecommons.org/licenses/by/4.0/.
+
+Source: https://gitlab.com/dexpi/Specification/-/releases/V2.0.1 (tag V2.0.1, commit
+eef0f0c6e8edfe84582e7a45d109c396bdc544f8), the file src/documentation/_static/reference_pid.xml.
+
+Changes: none; the file is vendored byte-identical. Its provenance and SHA-256 are in
+data/dexpi_2_0_1/README.md.
+
+
+5. The CO2 sequestration plant process example
+   (data/dexpi_process_examples/CO2 sequestration plant - Oslo/)
+--------------------------------------------------------------------
+
+CO2TerminalExample.xml and the slides "2026-05-04 CO2 for DEXPI 2 and OPC.pdf" are a DEXPI 2.0
+process model of a demonstration CO2 handling and injection system and its graphical
+presentation, (c) 2026 David Cameron, University of Oslo, licensed under the Creative Commons
+Attribution 4.0 International License (CC BY 4.0), https://creativecommons.org/licenses/by/4.0/.
+
+Source: built by the author for the OPC Materials Subject Group and contributed as is; the
+reference, author, date and licence are in that directory's README.md.
+
+Changes: CO2TerminalExample.xml is unchanged. CO2TerminalExample-corrected.xml is an adaptation
+generated from it by data/dexpi_process_examples/make_corrected.py; its leading XML comment lists
+every change (three misspelt type and reference names) and every deliberate non-change. The PDF
+was converted from the original PowerPoint slides.
+
+
+6. The DEXPI XML Schema (data/DEXPI_XML_Schema.xsd)
+---------------------------------------------------
+
+data/DEXPI_XML_Schema.xsd is the XML schema of the DEXPI Specification 2.0.1, (c) 2026 DEXPI
+(DEXPI e.V.), licensed under the Creative Commons Attribution 4.0 International License
+(CC BY 4.0), https://creativecommons.org/licenses/by/4.0/.
+
+Source: https://gitlab.com/dexpi/Specification/-/releases/V2.0.1 (tag V2.0.1, commit
+eef0f0c6e8edfe84582e7a45d109c396bdc544f8), the file src/documentation/_static/DEXPI_XML_Schema.xsd.
+
+Changes: none. The committed file is byte-identical to that source (SHA-256
+0bd6568b7c52fd59ac4ef6d8547ab2b2aa890c009a3a1bfbc5d7cc18c53b36e6); a Windows checkout may show
+it with CRLF line endings, which git normalises on commit.
+
+
+7. The process tables (pydexpi/toolkits/process_toolkit.py)
+-----------------------------------------------------------
+
+PORT_CONNECTIONS, PORT_ROLE_NAMES and ABSTRACT_PROCESS_CLASSES in
+pydexpi/toolkits/process_toolkit.py transcribe material of the DEXPI Specification 2.0.1, (c) 2026
+DEXPI (DEXPI e.V.), licensed under the Creative Commons Attribution 4.0 International License
+(CC BY 4.0), https://creativecommons.org/licenses/by/4.0/: which port class each process
+connection class joins, the role names each port class lists, and which process classes are
+abstract.
+
+Source: https://gitlab.com/dexpi/Specification/-/releases/V2.0.1 (tag V2.0.1, commit
+eef0f0c6e8edfe84582e7a45d109c396bdc544f8), the class descriptions and declarations in
+src/model/Process/Process/Process.py, cited by line in the module.
+
+Changes: transcribed into Python tables; nothing added to them. DEFAULT_ROLES beside them is
+pyDEXPI's own choice among the listed names, not specification material.
+
+
+8. The bpmn2dexpi example export (data/exports/bpmn2dexpi/process-model-dexpi.xml)
+----------------------------------------------------------------------------------
+
+data/exports/bpmn2dexpi/process-model-dexpi.xml is an example process exported with bpmn2dexpi
+v0.3.1, https://github.com/skhella/bpmn2dexpi. Changes: none.
+
+MIT License
+
+Copyright (c) 2026 Shady Khella
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

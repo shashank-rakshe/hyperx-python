@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:brep="https://brep.io/icons"
+     viewBox="0 0 24 24" width="24" height="24" brep:glyph-name="icon_feat_datum" brep:unicode="E030">
+  <!-- A reference triad: three orthogonal planes sharing one origin corner. -->
+  <path d="M3.5 16.5 13.4 11.9 13.4 0.9 3.5 5.5Z" fill="#a8d4f7" stroke="#1c5384" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M3.5 16.5 9.6 20.9 9.6 9.9 3.5 5.5Z" fill="#3d86c4" stroke="#1c5384" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M3.5 16.5 13.4 11.9 19.5 16.3 9.6 20.9Z" fill="#a8d4f7" stroke="#1c5384" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="3.5" cy="16.5" rx="1.7" ry="1.7" fill="#c9871a" stroke="#7a4d10" stroke-width="1.2"/>
+</svg>

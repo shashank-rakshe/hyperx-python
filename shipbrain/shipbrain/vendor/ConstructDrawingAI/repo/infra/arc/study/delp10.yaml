@@ -1,0 +1,18 @@
+# REAL DELP, remapped to our 10-class DEVICE_CATALOG. The common REAL test split for
+# all three conditions of the synthetic-bet study.
+path: /projects/bedigital/cdai/data/delp10
+train: train/images
+val: valid/images
+test: test/images
+nc: 10
+names:
+  0: Duplex Receptacle
+  1: Quad Receptacle
+  2: GFCI Receptacle
+  3: Light Fixture
+  4: Recessed Downlight
+  5: Wall Light
+  6: Single-Pole Switch
+  7: Three-Way Switch
+  8: Junction Box
+  9: Panelboard

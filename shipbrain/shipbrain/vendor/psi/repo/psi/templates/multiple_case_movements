@@ -1,0 +1,57 @@
+{% extends "multiple_case_report" %}
+
+{% block header %}
+{{ super() }}
+{{ "%-10s" | format("") }}{{ "%-10s" | format("") }}{{ "%-s (%s)" | format("TRANSLATIONS", units.length) | center(30) }}{{ "%-s (%s)" | format("ROTATIONS", units.rotation) | center(30) }}
+
+{{ "%-10s" | format("NODE") }}{{ "%-10s" | format("LOAD CASE") }}{{ "%10s" | format("DX") }}{{ "%10s" | format("DY") }}{{ "%10s" | format("DZ") }}{{ "%10s" | format("RX") }}{{ "%10s" | format("RY") }}{{ "%10s" | format("RZ") }}
+{% endblock %}
+
+{% block body %}
+{%- for i, point in enumerate(loadcases[0].points) -%}
+
+{%- set ns = namespace(DX=0, DY=0, DZ=0, RX=0, RY=0, RZ=0) -%}
+
+{%- for loadcase in loadcases -%}
+
+{%- set results = loadcase.movements.results[i*6:i*6+6] -%}
+{%- set dx = results[0][0] -%}
+{%- set dy = results[1][0] -%}
+{%- set dz = results[2][0] -%}
+{%- set rx = results[3][0] -%}
+{%- set ry = results[4][0] -%}
+{%- set rz = results[5][0] -%}
+
+{%- if abs(dx) > abs(ns.DX) -%}
+    {%- set ns.DX = dx -%}
+{% endif -%}
+{%- if abs(dy) > abs(ns.DY) -%}
+    {%- set ns.DY = dy -%}
+{% endif -%}
+{%- if abs(dz) > abs(ns.DZ) -%}
+    {%- set ns.DZ = dz -%}
+{% endif -%}
+{%- if abs(rx) > abs(ns.RX) -%}
+    {%- set ns.RX = rx -%}
+{% endif -%}
+{%- if abs(ry) > abs(ns.RY) -%}
+    {%- set ns.RY = ry -%}
+{% endif -%}
+{%- if abs(rz) > abs(ns.RZ) -%}
+    {%- set ns.RZ = rz -%}
+{% endif %}
+{% if loop.first -%}
+{{ "%-10s" | format(point.name) }}{{ "%10s" | format(loadcase.name + " (" + loadcase.stype + ") ") }}{{ "% 10.3f" | format(dx) }}{{ "% 10.3f" | format(dy) }}{{ "% 10.3f" | format(dz) }}{{ "% 10.4f" | format(rx) }}{{ "% 10.4f" | format(ry) }}{{ "% 10.4f" | format(rz) }}
+{%- elif loop.last -%}
+{{ "%-10s" | format(" ") }}{{ "%10s" | format(loadcase.name + " (" + loadcase.stype + ") ") }}{{ "% 10.3f" | format(dx) }}{{ "% 10.3f" | format(dy) }}{{ "% 10.3f" | format(dz) }}{{ "% 10.4f" | format(rx) }}{{ "% 10.4f" | format(ry) }}{{ "% 10.4f" | format(rz) }}
+{{ "%-10s" | format(" ") }}{{ "%10s" | format("MAX ") }}{{ "% 10.3f" | format(ns.DX) }}{{ "% 10.3f" | format(ns.DY) }}{{ "% 10.3f" | format(ns.DZ) }}{{ "% 10.4f" | format(ns.RX) }}{{ "% 10.4f" | format(ns.RY) }}{{ "% 10.4f" | format(ns.RZ) }}
+{%- else -%}
+{{ "%-10s" | format(" ") }}{{ "%10s" | format(loadcase.name + " (" + loadcase.stype + ") ") }}{{ "% 10.3f" | format(dx) }}{{ "% 10.3f" | format(dy) }}{{ "% 10.3f" | format(dz) }}{{ "% 10.4f" | format(rx) }}{{ "% 10.4f" | format(ry) }}{{ "% 10.4f" | format(rz) }}
+{%- endif -%}
+{% endfor %}
+{% endfor -%}
+
+{% endblock %}
+
+{% block footer %}
+{% endblock %}

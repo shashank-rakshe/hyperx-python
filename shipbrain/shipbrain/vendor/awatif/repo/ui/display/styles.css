@@ -1,0 +1,127 @@
+#display {
+  width: 280px;
+  margin-left: 8px;
+
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0 0 4px 4px;
+  box-shadow: 0 1px 4px var(--shadow);
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  overflow: hidden;
+}
+
+#display summary {
+  padding: 6px 10px;
+
+  cursor: pointer;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 0.8rem;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.2s ease;
+}
+
+#display summary:hover {
+  background: var(--bg-hover);
+}
+
+#display[open] summary {
+  background: var(--bg-hover);
+}
+
+#display .display-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  gap: 6px;
+
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s ease;
+}
+
+#display .display-item:last-child {
+  border-bottom: none;
+}
+
+#display .display-item:hover {
+  background: var(--bg-tertiary);
+}
+
+#display .display-item label {
+  margin-right: auto;
+
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+#display .display-pair {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+  gap: 6px;
+}
+
+#display .display-pair-separator {
+  width: 1px;
+  height: 14px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+#display .display-toggle-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#display .display-toggle-option {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#display .display-toggle-option-separated {
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+}
+
+#display .display-toggle-label {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+}
+
+#display .display-item input[type="number"] {
+  max-width: 50px;
+  padding: 3px 6px;
+
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 0.8rem;
+  transition: border-color 0.2s ease;
+}
+
+#display .display-item input[type="range"] {
+  width: 50px;
+  margin: 0;
+  cursor: pointer;
+}
+
+#display .display-item input[type="number"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+#display .value-display {
+  min-width: 25px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-align: right;
+}

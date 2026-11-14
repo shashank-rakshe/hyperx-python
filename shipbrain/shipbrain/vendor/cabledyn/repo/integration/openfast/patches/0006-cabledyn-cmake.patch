@@ -1,0 +1,201 @@
+diff --git a/modules/cabledyn/CMakeLists.txt b/modules/cabledyn/CMakeLists.txt
+new file mode 100644
+index 000000000..be1a9133b
+--- /dev/null
++++ b/modules/cabledyn/CMakeLists.txt
+@@ -0,0 +1,194 @@
++#
++# Copyright (C) 2026 Jae Hoon Seo, SMI Lab, Inha University
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#     http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++#
++
++# CableDyn: a first-class mooring module (CompMooring = 5), coexisting with stock
++# MoorDyn (CompMooring = 3) in the same binary.
++#
++# SELF-CONTAINED DEFAULT: a CableDyn checkout at modules/cabledyn/CableDyn (or the one
++# named by -DCABLEDYN_ROOT), and the solver core is built IN-TREE as an external
++# project with the CableDyn repository's OWN toolchain flags -- the core is
++# precision-typed against wp = REAL64 and must not be compiled under OpenFAST's
++# default-real promotion (-fdefault-real-8), so it is deliberately NOT compiled
++# with this project's Fortran flags. A plain `cmake -B build && cmake --build build`
++# of this tree therefore produces an openfast binary that has cabledyn, with no
++# separate CableDyn build step.
++#
++# DEVELOPER OVERRIDE (the two-repo development flow): point the build at an
++# existing CableDyn checkout and prebuilt core:
++#   -DCABLEDYN_ROOT=<CableDyn repo>          (module sources: src/openfast/)
++#   -DCABLEDYN_BUILD_DIR=<CableDyn build>    (platform static library + mod/)
++
++set(CABLEDYN_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/CableDyn" CACHE PATH
++    "Path to the CableDyn repository (contains src/openfast/); default modules/cabledyn/CableDyn")
++set(CABLEDYN_BUILD_DIR "" CACHE PATH
++    "Path to a prebuilt CableDyn build tree (static core library and mod/); empty = build the core in-tree")
++option(CABLEDYN_CORE_OPENMP
++       "CableDyn core was/is built with OpenMP; set OFF for a serial prebuilt core" ON)
++
++set(_cabledyn_core_name
++    "${CMAKE_STATIC_LIBRARY_PREFIX}cabledyn_core${CMAKE_STATIC_LIBRARY_SUFFIX}")
++set(_cabledyn_core_relpath "${_cabledyn_core_name}")
++if (CMAKE_CONFIGURATION_TYPES)
++  # The isolated core is deliberately a Release library even when a developer
++  # builds a Debug OpenFAST configuration. Multi-config generators place it in
++  # the named configuration directory.
++  set(_cabledyn_core_relpath "Release/${_cabledyn_core_name}")
++endif()
++
++if (NOT EXISTS "${CABLEDYN_ROOT}/src/openfast/CableDyn_OF.f90")
++  message(FATAL_ERROR "CABLEDYN_ROOT does not point at a CableDyn repository "
++                      "(missing src/openfast/CableDyn_OF.f90): '${CABLEDYN_ROOT}'. "
++                      "Configure with -DCABLEDYN_ROOT=<CableDyn checkout>.")
++endif()
++
++if (CABLEDYN_BUILD_DIR STREQUAL "")
++  # In-tree core build (the self-contained default): ExternalProject keeps the core's
++  # own CMake flags/toolchain, isolated from OpenFAST's (see the header note on real
++  # promotion). Only the static core library target is built -- none of CableDyn's
++  # tests, benches, or driver executables.
++  include(ExternalProject)
++  set(_cabledyn_core_build "${CMAKE_CURRENT_BINARY_DIR}/cabledyn-core-build")
++  file(MAKE_DIRECTORY "${_cabledyn_core_build}/mod")
++  file(MAKE_DIRECTORY "${_cabledyn_core_build}/mod/Release")
++  # The core's own configure must find LAPACK too. The outer build already resolved it
++  # (LAPACK_LIBRARIES), so forward the install prefix above that library as the inner
++  # CMAKE_PREFIX_PATH -- the core's find_package(LAPACK)/OpenBLAS fallback searches
++  # <prefix>/lib. LAPACK_LIBRARIES can be a list; the first entry carries the prefix.
++  list(GET LAPACK_LIBRARIES 0 _cd_lapack_lib)
++  get_filename_component(_cd_lapack_libdir "${_cd_lapack_lib}" DIRECTORY)
++  get_filename_component(_cd_lapack_prefix "${_cd_lapack_libdir}" DIRECTORY)
++  ExternalProject_Add(cabledyn_core_ep
++    SOURCE_DIR "${CABLEDYN_ROOT}"
++    BINARY_DIR "${_cabledyn_core_build}"
++    CMAKE_ARGS
++      -DCMAKE_BUILD_TYPE=Release
++      "-DCMAKE_Fortran_COMPILER=${CMAKE_Fortran_COMPILER}"
++      "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
++      "-DCMAKE_PREFIX_PATH=${_cd_lapack_prefix}"
++      "-DCABLEDYN_ENABLE_OPENMP=${CABLEDYN_CORE_OPENMP}"
++    BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release --target cabledyn_core
++    INSTALL_COMMAND ""
++    BUILD_BYPRODUCTS "${_cabledyn_core_build}/${_cabledyn_core_relpath}"
++    # Without this, the ExternalProject build step runs once and is stamped done:
++    # later core-source changes (a CableDyn update) would silently keep linking the
++    # stale libcabledyn_core.a. BUILD_ALWAYS re-enters the inner build every time
++    # and lets the inner ninja decide staleness (a no-op when up to date).
++    BUILD_ALWAYS 1
++  )
++  set(CABLEDYN_BUILD_DIR "${_cabledyn_core_build}")
++  set(_cabledyn_core_location "${CABLEDYN_BUILD_DIR}/${_cabledyn_core_relpath}")
++  # GNU/Ninja writes directly to Fortran_MODULE_DIRECTORY, whereas Intel with
++  # Visual Studio appends the active configuration name.
++  set(_cabledyn_core_module_dirs
++      "${CABLEDYN_BUILD_DIR}/mod;${CABLEDYN_BUILD_DIR}/mod/Release")
++else()
++  # Prebuilt-core override: accept a single-config root archive or the explicit
++  # Release subdirectory used by a multi-config CableDyn build.
++  set(_cabledyn_core_location "${CABLEDYN_BUILD_DIR}/${_cabledyn_core_name}")
++  if (NOT EXISTS "${_cabledyn_core_location}")
++    set(_cabledyn_core_location "${CABLEDYN_BUILD_DIR}/Release/${_cabledyn_core_name}")
++  endif()
++  if (NOT EXISTS "${_cabledyn_core_location}")
++    message(FATAL_ERROR "CABLEDYN_BUILD_DIR has no ${_cabledyn_core_name} at its root or Release subdirectory: "
++                        "'${CABLEDYN_BUILD_DIR}' (build the CableDyn core first)")
++  endif()
++  set(_cabledyn_core_module_dirs "")
++  foreach(_module_dir "${CABLEDYN_BUILD_DIR}/mod" "${CABLEDYN_BUILD_DIR}/mod/Release")
++    if (EXISTS "${_module_dir}")
++      list(APPEND _cabledyn_core_module_dirs "${_module_dir}")
++    endif()
++  endforeach()
++  if (NOT _cabledyn_core_module_dirs)
++    message(FATAL_ERROR "CABLEDYN_BUILD_DIR has no Fortran module directory at mod or mod/Release: "
++                        "'${CABLEDYN_BUILD_DIR}' (build the CableDyn core first)")
++  endif()
++endif()
++
++set(_cabledyn_core_link_libraries "${LAPACK_LIBRARIES}")
++if (CABLEDYN_CORE_OPENMP)
++  # A prebuilt core does not carry target metadata, so restore its compiler-specific
++  # OpenMP dependency here. This also preserves the self-contained default without
++  # assuming GNU's gomp and is independent of OpenFAST's own OPENMP switch.
++  find_package(OpenMP REQUIRED COMPONENTS Fortran)
++  list(APPEND _cabledyn_core_link_libraries OpenMP::OpenMP_Fortran)
++endif()
++
++add_library(cabledyn_core STATIC IMPORTED GLOBAL)
++set_target_properties(cabledyn_core PROPERTIES
++  IMPORTED_LOCATION "${_cabledyn_core_location}"
++  INTERFACE_INCLUDE_DIRECTORIES "${_cabledyn_core_module_dirs}"
++  INTERFACE_LINK_LIBRARIES "${_cabledyn_core_link_libraries}")
++
++if (GENERATE_TYPES)
++  generate_f90_types(${CABLEDYN_ROOT}/src/openfast/CableDyn_Registry.txt
++                     ${CABLEDYN_ROOT}/src/openfast/CableDyn_Types.f90)
++endif()
++
++add_library(cabledynlib STATIC
++  ${CABLEDYN_ROOT}/src/openfast/CableDyn_OF.f90
++  ${CABLEDYN_ROOT}/src/openfast/CableDyn_Types.f90
++)
++target_link_libraries(cabledynlib cabledyn_core seastlib nwtclibs)
++if (CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
++  # The value-safe floating-point model for the adapter, as the core's own build sets for
++  # every IFX build (see CableDyn's CMakeLists.txt): IFX defaults to /fp:fast.
++  if (WIN32)
++    target_compile_options(cabledynlib PRIVATE /fp:precise)
++  else()
++    target_compile_options(cabledynlib PRIVATE "SHELL:-fp-model precise")
++  endif()
++endif()
++if (TARGET cabledyn_core_ep)
++  # the imported core cannot carry dependencies itself; the consumer orders the build
++  add_dependencies(cabledynlib cabledyn_core_ep)
++endif()
++
++install(TARGETS cabledynlib
++  EXPORT "${CMAKE_PROJECT_NAME}Libraries"
++  RUNTIME DESTINATION bin
++  ARCHIVE DESTINATION lib
++  LIBRARY DESTINATION lib
++)
++
++# Standalone module driver (the MoorDyn_Driver peer): exercises the real registry
++# module -- CD_Init / CD_UpdateStates / CD_CalcOutput / CD_End over the NWTC point-mesh
++# surface -- without the aero-servo-hydro glue, giving the module its own committable
++# regression cases (see modules/cabledyn/tests/).
++add_executable(cabledyn_of_driver ${CABLEDYN_ROOT}/src/openfast/CableDyn_OF_Driver.f90)
++target_link_libraries(cabledyn_of_driver cabledynlib versioninfolib)
++install(TARGETS cabledyn_of_driver
++  RUNTIME DESTINATION bin
++)
++
++# Module regression cases (self-contained text inputs, copied to the build tree so the
++# runs never write into the source tree): the driver fails loud -- nonzero exit -- on
++# any module error or non-finite output, so exit status is the assertion.
++#
++# Deliberately NOT gated on BUILD_TESTING: OpenFAST's testing tree drags the r-test
++# checkout + a Python interpreter and recompiles with -DUNIT_TEST, none of which these
++# two text-input smoke cases need. enable_testing() here scopes them to this directory:
++#   ctest --test-dir <build>/modules/cabledyn -L cabledyn
++enable_testing()
++file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/cd_settle
++          ${CMAKE_CURRENT_SOURCE_DIR}/tests/cd_harmonic
++     DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/tests)
++add_test(NAME cd_of_settle
++         COMMAND cabledyn_of_driver cabledyn_driver.inp
++         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tests/cd_settle)
++add_test(NAME cd_of_harmonic
++         COMMAND cabledyn_of_driver cabledyn_driver.inp
++         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tests/cd_harmonic)
++set_tests_properties(cd_of_settle cd_of_harmonic PROPERTIES LABELS "cabledyn" TIMEOUT 600)
+

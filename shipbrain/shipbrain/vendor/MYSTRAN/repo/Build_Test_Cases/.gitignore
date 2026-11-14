@@ -1,0 +1,10 @@
+# Ignore all generated artifacts in test case directories; keep only inputs.
+*
+!*/
+!.gitignore
+!README.md
+!*.bdf
+!*.BDF
+!*.dat
+!*.DAT
+!*.py

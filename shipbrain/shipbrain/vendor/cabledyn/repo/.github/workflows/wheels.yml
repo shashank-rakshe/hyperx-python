@@ -1,0 +1,265 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Jae Hoon Seo, SMI Lab, Inha University
+#
+# The published Python distribution: an sdist and one py3-none platform wheel each for Linux
+# x86-64 (manylinux_2_28), macOS arm64 and Windows x86-64, every wheel carrying the CableDyn
+# library and the standalone driver. The x86-64 wheels target x86-64-v3 (AVX2), as the static
+# Windows release does. Each wheel is installed into a clean environment and
+# smoke-tested (release/smoke_test_wheel.py) on its own platform. The distributions are workflow
+# artifacts. They are uploaded only by the two publish jobs, through PyPI Trusted Publishing
+# (no stored token): to TestPyPI when a manual run asks for it, and to PyPI when a GitHub
+# release is published, after checking that the distributions carry the release tag's version.
+name: wheels
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: Upload the built distributions (TestPyPI only; PyPI uploads come from releases)
+        type: choice
+        options: [none, testpypi]
+        default: none
+  release:
+    types: [published]
+  pull_request:
+    paths:
+      - pyproject.toml
+      - CMakeLists.txt
+      - python/cabledyn/**
+      - release/build_windows_wheel.ps1
+      - release/smoke_test_wheel.py
+      - .github/workflows/wheels.yml
+
+permissions:
+  contents: read
+
+jobs:
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out CableDyn
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Build and check the sdist
+        run: |
+          python -m pip install --upgrade pip build twine
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          python -m build --sdist --outdir dist .
+          python -m twine check dist/*
+
+      - name: Upload the sdist
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cabledyn-sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out CableDyn
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build, repair (auditwheel) and test the manylinux wheel
+        uses: pypa/cibuildwheel@8c2dcd2e96041a619f5ff03c9638d7941e2553a4 # v4.3.3
+        env:
+          # one py3-none wheel serves every Python; build it once
+          CIBW_BUILD: cp312-manylinux_x86_64
+          CIBW_ARCHS_LINUX: x86_64
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          # gfortran comes with the image's GCC toolset; OpenBLAS supplies LAPACK and is bundled
+          # into the wheel by auditwheel together with the Fortran runtime
+          CIBW_BEFORE_ALL_LINUX: >-
+            dnf install -y epel-release && dnf install -y openblas-devel
+          # x86-64-v3, as the Windows release (CABLEDYN_TARGET_AVX2): the wheel's library and
+          # driver stop with a message on a processor without AVX2
+          CIBW_ENVIRONMENT_LINUX: SKBUILD_CMAKE_DEFINE="CABLEDYN_TARGET_AVX2=ON"
+          CIBW_TEST_COMMAND: >-
+            python {project}/release/smoke_test_wheel.py {project}/examples/dynamic_chain_current.dat --expect-build x86-64-v3
+        with:
+          output-dir: wheelhouse
+
+      - name: Upload the Linux wheel
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cabledyn-wheel-linux-x86_64
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  macos:
+    runs-on: macos-15
+    steps:
+      - name: Check out CableDyn
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build, repair (delocate) and test the macOS wheel
+        uses: pypa/cibuildwheel@8c2dcd2e96041a619f5ff03c9638d7941e2553a4 # v4.3.3
+        env:
+          CIBW_BUILD: cp312-macosx_arm64
+          CIBW_ARCHS_MACOS: arm64
+          # Homebrew gfortran and OpenBLAS; delocate bundles them with the Fortran runtime. The
+          # deployment target is the runner's macOS, the oldest the Homebrew libraries support.
+          CIBW_BEFORE_ALL_MACOS: brew install gcc openblas
+          CIBW_ENVIRONMENT_MACOS: >-
+            MACOSX_DEPLOYMENT_TARGET=15.0
+            FC=gfortran
+            CMAKE_PREFIX_PATH=$(brew --prefix openblas)
+          CIBW_TEST_COMMAND: >-
+            python {project}/release/smoke_test_wheel.py {project}/examples/dynamic_chain_current.dat --expect-build baseline
+        with:
+          output-dir: wheelhouse
+
+      - name: Upload the macOS wheel
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cabledyn-wheel-macos-arm64
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  windows:
+    timeout-minutes: 180
+    runs-on: windows-2022
+    steps:
+      - name: Check out CableDyn
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Install Intel Fortran Essentials
+        # the release compiler, as in release-windows-static.yml
+        shell: powershell
+        env:
+          URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/33676fcf-14a3-4e96-a9b9-72976b1145d9/intel-fortran-essentials-2025.3.1.25_offline.exe
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'intel-fortran-essentials-2025.3.1.25.exe'
+          curl.exe --fail --location --output $installer --url $env:URL --retry 5 --retry-delay 5
+          if ($LASTEXITCODE -ne 0) { throw "Intel Fortran download failed with exit $LASTEXITCODE" }
+          if ((Get-Item -LiteralPath $installer).Length -ne 880951016) {
+            throw 'Intel Fortran installer length differs from the pinned release payload'
+          }
+          $signature = Get-AuthenticodeSignature -LiteralPath $installer
+          if ($signature.Status -ne 'Valid' -or
+              $signature.SignerCertificate.Subject -notmatch '(^|, )O=Intel Corporation(,|$)') {
+            throw "Intel Fortran installer signature is not a valid Intel Corporation signature: $($signature.Status)"
+          }
+          $arguments = @(
+            '-s', '-a', '--silent', '--eula', 'accept',
+            '-p=NEED_VS2017_INTEGRATION=0',
+            '-p=NEED_VS2019_INTEGRATION=0',
+            '-p=NEED_VS2022_INTEGRATION=1',
+            '--log-dir=.'
+          )
+          $process = Start-Process -FilePath $installer -ArgumentList $arguments -Wait -PassThru
+          if ($process.ExitCode -notin @(0, 3010)) {
+            throw "Intel Fortran installer failed with exit $($process.ExitCode)"
+          }
+
+      - name: Build the static Windows wheel
+        shell: powershell
+        run: .\release\build_windows_wheel.ps1 -OutputDir "$PWD\wheelhouse" -Jobs 4
+
+      - name: Install the wheel into a clean environment and smoke-test it
+        shell: powershell
+        run: |
+          $venv = Join-Path $env:RUNNER_TEMP 'wheel-test'
+          python -m venv $venv
+          & "$venv\Scripts\python.exe" -m pip install --upgrade pip
+          $wheel = (Get-ChildItem wheelhouse\cabledyn-*-win_amd64.whl).FullName
+          & "$venv\Scripts\python.exe" -m pip install $wheel
+          Push-Location $env:RUNNER_TEMP
+          try {
+            & "$venv\Scripts\python.exe" "$env:GITHUB_WORKSPACE\release\smoke_test_wheel.py" `
+              "$env:GITHUB_WORKSPACE\examples\dynamic_chain_current.dat" --expect-build x86-64-v3
+            if ($LASTEXITCODE -ne 0) { throw "smoke test failed ($LASTEXITCODE)" }
+          } finally {
+            Pop-Location
+          }
+
+      - name: Upload the Windows wheel
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cabledyn-wheel-windows-x86_64
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  publish-testpypi:
+    # manual runs that ask for it; a version already on TestPyPI is skipped, not an error
+    if: github.event_name == 'workflow_dispatch' && inputs.upload == 'testpypi'
+    needs: [sdist, linux, macos, windows]
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/cabledyn
+    permissions:
+      id-token: write
+    steps:
+      - name: Download the distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: cabledyn-*
+          merge-multiple: true
+          path: dist
+
+      - name: Check the distribution set
+        run: |
+          ls -l dist
+          test "$(ls dist/*.tar.gz | wc -l)" -eq 1
+          test "$(ls dist/*.whl | wc -l)" -eq 3
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  publish-pypi:
+    # published GitHub releases only, behind the pypi environment
+    if: github.event_name == 'release'
+    needs: [sdist, linux, macos, windows]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/cabledyn
+    permissions:
+      id-token: write
+    steps:
+      - name: Download the distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: cabledyn-*
+          merge-multiple: true
+          path: dist
+
+      - name: Check the distributions against the release tag
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          ls -l dist
+          version="${TAG#v}"
+          test "$(ls dist/*.tar.gz | wc -l)" -eq 1
+          test "$(ls dist/*.whl | wc -l)" -eq 3
+          for f in dist/*; do
+            case "$(basename "$f")" in
+              "cabledyn-${version}.tar.gz"|"cabledyn-${version}-py3-none-"*.whl) ;;
+              *) echo "::error::$(basename "$f") is not version ${version} of release ${TAG}"; exit 1 ;;
+            esac
+          done
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2

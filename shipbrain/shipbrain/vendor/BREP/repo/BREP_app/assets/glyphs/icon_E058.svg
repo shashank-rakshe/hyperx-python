@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:brep="https://brep.io/icons"
+     viewBox="0 0 24 24" width="24" height="24" brep:glyph-name="icon_feat_acomp" brep:unicode="E058">
+  <!-- Assembly Component: a violet placed instance with a blue placement pin. -->
+  <path d="M2 12 8 9 12 12 6 15Z" fill="#c9b6f0" stroke="#3d2a6b" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M2 12 6 15V22L2 19Z" fill="#8b6fd4" stroke="#3d2a6b" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M6 15 12 12V19L6 22Z" fill="#8b6fd4" stroke="#3d2a6b" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M13 8 17 6M17 9V13" style="fill:none" stroke="#3d86c4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M17 1.5a4 4 0 0 1 4 4c0 3-4 7-4 7s-4-4-4-7a4 4 0 0 1 4-4Z" fill="#a8d4f7" stroke="#1c5384" stroke-width="1.2" stroke-linejoin="round"/>
+  <circle cx="17" cy="5.5" r="1.4" fill="#3d86c4"/>
+</svg>

@@ -1,0 +1,31 @@
+--------------------- CableDyn Input File ------------------------------------
+Driver failure-path regression with a deliberately under-iterated dynamic step
+--------------------- LINE TYPES ---------------------------------------------
+TypeName Diam MassDenInAir EA BA EI Cd_n Cd_t Ca_n Ca_t
+(-) (m) (kg/m) (N) (-) (N-m2) (-) (-) (-) (-)
+chain 0.252 390.0 1.674e9 -1.0 0.0 1.37 0.64 1.0 0.0
+--------------------- POINTS -------------------------------------------------
+ID Type X Y Z
+(-) (-) (m) (m) (m)
+1 Fixed 400.0 0.0 -50.0
+2 Coupled 0.0 0.0 0.0
+--------------------- LINES --------------------------------------------------
+ID NodeA NodeB Outputs
+(-) (-) (-) (-)
+1 2 1 -
+--------------------- SECTIONS -----------------------------------------------
+LineID LineType Length NumSegs
+(-) (-) (m) (-)
+1 chain 410.0 41
+--------------------- OPTIONS ------------------------------------------------
+9.80665 g
+1025.0 rhoW
+50.0 WtrDpth
+1.0e5 kBot
+0.01 dtM
+0.03 TMax
+dynamic_solver 1.0e-12 1.0e-14 1 0
+nonconvergent_motion.txt motionFile
+--------------------- OUTPUTS ------------------------------------------------
+FairTen1 AnchTen1 Point2pz
+--------------------- need this line ----------------------------------------

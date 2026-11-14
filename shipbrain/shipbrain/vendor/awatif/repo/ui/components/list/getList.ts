@@ -1,0 +1,444 @@
+import van, { State } from "vanjs-core";
+import { html, render } from "lit-html";
+import {
+  Geometry,
+  Components,
+  templates as Templates,
+  ComponentsType,
+  ActiveComponent,
+  LoadCase,
+  LoadSelection,
+} from "@awatif/components";
+
+import "./styles.css";
+
+type TaggedItem = {
+  type: ComponentsType;
+  index: number;
+  item: {
+    name: string;
+    templateId: string;
+    geometry: number[];
+    params?: Record<string, unknown>;
+    loadCase?: LoadCase;
+  };
+};
+
+export function getList({
+  types,
+  geometry,
+  components,
+  activeComponent,
+  templates,
+  loadCase,
+}: {
+  types: State<ComponentsType[]>;
+  geometry: Geometry;
+  components: Components;
+  activeComponent: State<ActiveComponent>;
+  templates?: typeof Templates;
+  loadCase?: State<LoadSelection>;
+}): HTMLElement {
+  const container = document.createElement("div");
+  const editingIndex = van.state<number | null>(null);
+  let isSyncing = false;
+
+  const getTaggedList = (): TaggedItem[] => {
+    const result: TaggedItem[] = [];
+    for (const type of types.val) {
+      const list = components.val.get(type) ?? [];
+      list.forEach((item, i) => {
+        // Filter loads by active load case; hide all loads when combination is active
+        if (type === ComponentsType.LOADS && loadCase) {
+          const isCombination =
+            loadCase.val === "uls-live" || loadCase.val === "uls-wind";
+          if (isCombination || (item.loadCase ?? "dead") !== loadCase.val) {
+            return;
+          }
+        }
+        result.push({ type, index: i, item });
+      });
+    }
+    return result;
+  };
+
+  // A component's geometry kind is declared at the template level
+  const getComponentKind = (
+    type: ComponentsType,
+    component: { templateId: string },
+  ): "point" | "line" | null => {
+    const template = templates?.get(type)?.get(component.templateId) as
+      | { geometryKind?: "point" | "line" }
+      | undefined;
+    return template?.geometryKind ?? null;
+  };
+
+  const getSelectedGeometry = (kind: "point" | "line" | null) => {
+    const sel = geometry.selection.val;
+    if (kind === "point") return sel?.points ?? [];
+    if (kind === "line") return sel?.lines ?? [];
+    return [];
+  };
+
+  const setSelection = (
+    indices: number[],
+    kind: "point" | "line" | null,
+  ) => {
+    const current = geometry.selection.val ?? {
+      points: [],
+      lines: [],
+    };
+    if (kind === "point") {
+      geometry.selection.val = { ...current, points: indices };
+    } else if (kind === "line") {
+      geometry.selection.val = { ...current, lines: indices };
+    } else {
+      geometry.selection.val = null;
+    }
+  };
+
+  const arraysEqual = (a: number[], b: number[]) =>
+    a.length === b.length && a.every((v, i) => v === b[i]);
+
+  // Reset activeComponent when types or load case change
+  van.derive(() => {
+    types.val;
+    loadCase?.val;
+    activeComponent.val = null;
+  });
+
+  // Clear selection when no active component
+  van.derive(() => {
+    if (activeComponent.val === null && !isSyncing) {
+      geometry.selection.val = null;
+    }
+  });
+
+  // Exit active component when selection is cleared externally (e.g., right-click in viewer)
+  van.derive(() => {
+    if (
+      geometry.selection.val === null &&
+      activeComponent.rawVal !== null &&
+      !isSyncing
+    ) {
+      activeComponent.val = null;
+    }
+  });
+
+  // Sync activeComponent -> geometry.selection
+  van.derive(() => {
+    const active = activeComponent.val;
+    if (active === null || types.val.length === 0) return;
+
+    const list = components.val.get(active.type) ?? [];
+    const current = list[active.index];
+    if (!current) return;
+    const componentGeometry = current.geometry ?? [];
+    const activeKind = getComponentKind(active.type, current);
+    if (activeKind === null) return; // unknown template: don't touch selection
+    isSyncing = true;
+    setSelection(componentGeometry, activeKind);
+    isSyncing = false;
+  });
+
+  // Sync geometry.selection -> activeComponent's geometry
+  van.derive(() => {
+    const active = activeComponent.val;
+    if (isSyncing || active === null || types.val.length === 0) return;
+    if (geometry.selection.val === null) return;
+
+    const list = components.val.get(active.type) ?? [];
+    const current = list[active.index];
+    if (!current) return;
+
+    const activeKind = getComponentKind(active.type, current);
+    if (activeKind === null) return; // unknown template: don't wipe geometry
+
+    const selectedGeometry = getSelectedGeometry(activeKind);
+    if (arraysEqual(current.geometry ?? [], selectedGeometry)) return;
+
+    const selectedSet = new Set(selectedGeometry);
+
+    // Update the active component's geometry and remove those indices from siblings.
+    // Only steal from siblings of the SAME geometry kind — point and line
+    // IDs are independent number spaces, so a line load and a point load can
+    // both legitimately reference index 3. For load components, also
+    // restrict to siblings in the same load case (different load cases may share a node).
+    const activeLoadCase = current.loadCase ?? "dead";
+    const updatedList = list.map((c, i) => {
+      if (i === active.index) return { ...c, geometry: [...selectedGeometry] };
+      const sameKind = getComponentKind(active.type, c) === activeKind;
+      if (!sameKind) return c;
+      const sameLoadCase =
+        active.type !== ComponentsType.LOADS ||
+        (c.loadCase ?? "dead") === activeLoadCase;
+      if (!sameLoadCase) return c;
+      return {
+        ...c,
+        geometry: (c.geometry ?? []).filter((g) => !selectedSet.has(g)),
+      };
+    });
+    components.val = new Map(components.val).set(active.type, updatedList);
+  });
+
+  // Sync geometry deletions -> remove deleted indices from components
+  let prevPointKeys = new Set(geometry.points.val.keys());
+  let prevLineKeys = new Set(geometry.lines.val.keys());
+
+  const findDeleted = (prev: Set<number>, current: Set<number>) => {
+    const deleted = new Set<number>();
+    for (const key of prev) {
+      if (!current.has(key)) deleted.add(key);
+    }
+    return deleted;
+  };
+
+  // Clean the deleted IDs from every component whose template's geometryKind
+  // matches - point and line IDs are independent number spaces
+  const removeDeletedOfKind = (
+    componentsMap: Map<
+      ComponentsType,
+      { geometry: number[]; templateId: string }[]
+    >,
+    deleted: Set<number>,
+    deletedKind: "point" | "line",
+  ) => {
+    if (deleted.size === 0) return;
+
+    componentsMap.forEach((list, type) => {
+      componentsMap.set(
+        type,
+        list.map((c) =>
+          getComponentKind(type, c) === deletedKind
+            ? {
+                ...c,
+                geometry: c.geometry.filter((idx) => !deleted.has(idx)),
+              }
+            : c,
+        ),
+      );
+    });
+  };
+
+  van.derive(() => {
+    const currentPointKeys = new Set(geometry.points.val.keys());
+    const currentLineKeys = new Set(geometry.lines.val.keys());
+
+    const deletedPoints = findDeleted(prevPointKeys, currentPointKeys);
+    const deletedLines = findDeleted(prevLineKeys, currentLineKeys);
+
+    if (deletedPoints.size > 0 || deletedLines.size > 0) {
+      const updated = new Map(components.val);
+
+      removeDeletedOfKind(updated, deletedPoints, "point");
+      removeDeletedOfKind(updated, deletedLines, "line");
+
+      components.val = updated;
+    }
+
+    prevPointKeys = currentPointKeys;
+    prevLineKeys = currentLineKeys;
+  });
+
+  // Render
+  van.derive(() => {
+    render(template(), container);
+  });
+
+  function template() {
+    if (types.val.length === 0) return html``;
+
+    const taggedList = getTaggedList();
+
+    return html`
+      <details
+        id="list"
+        open
+        @toggle=${(e: Event) => {
+          if (!(e.target as HTMLDetailsElement).open)
+            activeComponent.val = null;
+        }}
+      >
+        <summary>Components</summary>
+        ${taggedList.map((tagged, combinedIdx) =>
+          componentItem(tagged, combinedIdx),
+        )}
+        ${templatesSection()}
+      </details>
+    `;
+  }
+
+  function componentItem(tagged: TaggedItem, combinedIndex: number) {
+    const active = activeComponent.val;
+    const isActive =
+      active !== null &&
+      active.type === tagged.type &&
+      active.index === tagged.index;
+    const isEditing = editingIndex.val === combinedIndex;
+
+    return html`
+      <div
+        class="components-item ${isActive ? "active" : ""}"
+        @click=${() =>
+          (activeComponent.val = isActive
+            ? null
+            : { type: tagged.type, index: tagged.index })}
+      >
+        ${isEditing
+          ? renameInput(tagged.item.name, tagged)
+          : nameLabel(tagged.item.name, combinedIndex)}
+        <button
+          class="components-delete-btn"
+          @click=${(e: Event) => {
+            e.stopPropagation();
+            deleteComponent(tagged);
+          }}
+          title="Delete component"
+        >
+          ×
+        </button>
+      </div>
+    `;
+  }
+
+  function renameInput(name: string, tagged: TaggedItem) {
+    return html`
+      <input
+        class="components-rename-input"
+        type="text"
+        .value=${name}
+        @blur=${(e: Event) =>
+          commitRename(tagged, (e.target as HTMLInputElement).value)}
+        @keydown=${(e: KeyboardEvent) => {
+          if (e.key === "Enter")
+            commitRename(tagged, (e.target as HTMLInputElement).value);
+          else if (e.key === "Escape") editingIndex.val = null;
+        }}
+        @input=${(e: Event) => e.stopPropagation()}
+      />
+    `;
+  }
+
+  function nameLabel(name: string, combinedIndex: number) {
+    return html`
+      <label @dblclick=${() => (editingIndex.val = combinedIndex)}
+        >${name}</label
+      >
+    `;
+  }
+
+  function templatesSection() {
+    if (!templates) return html``;
+
+    const allEntries: Array<{
+      type: ComponentsType;
+      id: string;
+      t: any;
+    }> = [];
+    for (const type of types.val) {
+      const map = templates.get(type);
+      if (map) {
+        for (const [id, t] of map.entries()) {
+          allEntries.push({ type, id, t });
+        }
+      }
+    }
+    if (allEntries.length === 0) return html``;
+
+    return html`
+      <details class="components-templates" open>
+        <summary class="components-divider">templates</summary>
+        ${allEntries.map(
+          ({ type, id, t }) => html`
+            <div class="components-item template">
+              <label>${t.name}</label>
+              <button
+                class="components-copy-btn"
+                @click=${() => copyTemplate(t.name, id, type)}
+                title="Copy template"
+              >
+                +
+              </button>
+            </div>
+          `,
+        )}
+      </details>
+    `;
+  }
+
+  // Actions
+  function copyTemplate(
+    baseName: string,
+    templateId: string,
+    targetType: ComponentsType,
+  ) {
+    const list = components.val.get(targetType) ?? [];
+    const names = new Set(list.map((c) => c.name));
+    let name = baseName;
+
+    if (names.has(name)) {
+      name = `${baseName} copy`;
+      let n = 2;
+      while (names.has(name)) name = `${baseName} copy ${n++}`;
+    }
+
+    const defaultParams = {
+      ...templates?.get(targetType)?.get(templateId)?.defaultParams,
+    };
+    const newComponent: {
+      name: string;
+      templateId: string;
+      geometry: number[];
+      params: Record<string, unknown>;
+      loadCase?: LoadCase;
+    } = {
+      name,
+      templateId,
+      geometry: [],
+      params: defaultParams,
+    };
+    // Auto-assign active load case when creating load components
+    if (targetType === ComponentsType.LOADS && loadCase) {
+      const val = loadCase.val;
+      const isCombination = val === "uls-live" || val === "uls-wind";
+      newComponent.loadCase = isCombination ? "dead" : (val as LoadCase);
+      if (isCombination) loadCase.val = "dead";
+    }
+    const updated = [...list, newComponent];
+    components.val = new Map(components.val).set(targetType, updated);
+    activeComponent.val = { type: targetType, index: updated.length - 1 };
+  }
+
+  function commitRename(tagged: TaggedItem, newName: string) {
+    const list = components.val.get(tagged.type) ?? [];
+    const trimmed = newName.trim();
+
+    if (trimmed && trimmed !== list[tagged.index]?.name) {
+      const updated = list.map((c, i) =>
+        i === tagged.index ? { ...c, name: trimmed } : c,
+      );
+      components.val = new Map(components.val).set(tagged.type, updated);
+    }
+
+    requestAnimationFrame(() => {
+      editingIndex.val = null;
+    });
+  }
+
+  function deleteComponent(tagged: TaggedItem) {
+    const active = activeComponent.val;
+    if (
+      active !== null &&
+      active.type === tagged.type &&
+      active.index === tagged.index
+    ) {
+      activeComponent.val = null;
+    }
+
+    const list = components.val.get(tagged.type) ?? [];
+    const updated = list.filter((_, i) => i !== tagged.index);
+    components.val = new Map(components.val).set(tagged.type, updated);
+  }
+
+  return container;
+}

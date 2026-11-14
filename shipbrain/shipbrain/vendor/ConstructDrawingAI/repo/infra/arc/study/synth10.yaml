@@ -1,0 +1,17 @@
+# OUR SYNTHETIC electrical, 10-class DEVICE_CATALOG (from perception export). Used to train
+# the synthetic-only condition; it is EVALUATED on the real delp10 test (via delp10.yaml).
+path: /projects/bedigital/cdai/data/synth10
+train: images/train
+val: images/val
+nc: 10
+names:
+  0: Duplex Receptacle
+  1: Quad Receptacle
+  2: GFCI Receptacle
+  3: Light Fixture
+  4: Recessed Downlight
+  5: Wall Light
+  6: Single-Pole Switch
+  7: Three-Way Switch
+  8: Junction Box
+  9: Panelboard

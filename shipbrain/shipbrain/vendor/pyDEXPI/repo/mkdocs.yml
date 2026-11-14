@@ -1,0 +1,132 @@
+site_name: pyDEXPI
+site_description: Python toolkit for importing, analyzing, and visualizing DEXPI engineering models with Python, CLI, and MCP interfaces
+site_author: Process Intelligence Research
+site_url: https://www.pydexpi.org/
+docs_dir: docs/mkdocs
+
+# Repository
+repo_name: process-intelligence-research/pyDEXPI
+repo_url: https://github.com/process-intelligence-research/pyDEXPI
+
+# Theme configuration
+theme:
+  name: material
+  logo: logos/pydexpi_logo.png
+  favicon: logos/pydexpi_logo.png
+  palette:
+    # Palette toggle for light mode
+    - scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.share
+    - search.suggest
+    - content.code.copy
+    - content.code.annotate
+
+# Extensions
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      # Resolve --8<-- paths from the repository root, so a page can pull in
+      # a document that lives next to the code it describes. check_paths
+      # turns a missing or moved include into a build error instead of a
+      # silently empty page -- with --strict that is what stops a docs
+      # reference from rotting the way the old hand-written links did.
+      base_path: ['.']
+      check_paths: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+  - attr_list
+  - md_in_html
+
+# Plugins
+plugins:
+  - search
+  - autorefs
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [pydexpi]
+          options:
+            show_source: true
+            show_root_heading: true
+            show_root_toc_entry: false
+            docstring_style: numpy
+            merge_init_into_class: true
+            show_signature_annotations: true
+            separate_signature: true
+            filters: ["!^_"]
+          import:
+            - https://docs.python.org/3/objects.inv
+            - https://networkx.org/documentation/stable/objects.inv
+            - https://docs.pydantic.dev/latest/objects.inv
+
+# Navigation
+nav:
+  - Home: index.md
+  - Usage: usage.md
+  - Migrating from 1.x: migration.md
+  - Public API and stability: public-api.md
+  - Versioning: versioning.md
+  - CLI: cli.md
+  - MCP Server: mcp.md
+  - PNG & PDF Export: png_pdf_export.md
+  - Neo4j Export: neo4j_export.md
+  - API Reference: api-reference.md
+  - Architecture Decisions:
+      - Overview: adr/README.md
+      - 0001 Pydantic as the parse target: adr/0001-pydantic-as-parse-target.md
+      - 0002 Comparing model states: adr/0002-model-change-representations.md
+  - Applications & References: applications.md
+  - About: about.md
+  - License: license.md
+  - Dependency Licenses: dependency-licenses.md
+# Watch extra directories
+watch:
+  - pydexpi/
+
+# Extra CSS
+extra_css:
+  - stylesheets/home.css
+
+# Extra
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/process-intelligence-research/pyDEXPI
+    - icon: fontawesome/brands/linkedin
+      link: https://www.linkedin.com/company/84022065
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/ASchweidtmann
+  generator: false

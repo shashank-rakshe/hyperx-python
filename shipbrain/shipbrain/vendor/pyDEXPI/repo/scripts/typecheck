@@ -1,0 +1,34 @@
+#!/bin/sh -e
+
+# Static type check. What gets checked is the allow-list under [[tool.mypy.overrides]] in
+# pyproject.toml, not the whole package -- the rest is parsed and its types are used, but its
+# own diagnostics are suppressed until the module is cleaned and added to the list.
+#
+# With no arguments this is the CI gate: exactly the allow-listed surface.
+#
+# Given a path or module, `./scripts/typecheck pydexpi/exports` reports what that module would
+# cost to bring onto the checked surface. Naming it on the command line is not enough on its own
+# -- ignore_errors applies however mypy reaches a module -- so the target is un-ignored through a
+# throwaway config that carries pyproject.toml plus a more specific override, which mypy resolves
+# in favour of the target. Nothing on disk changes.
+
+if [ $# -eq 0 ]; then
+    exec mypy
+fi
+
+config=$(mktemp)
+trap 'rm -f "$config"' EXIT
+cat pyproject.toml > "$config"
+
+{
+    printf '\n[[tool.mypy.overrides]]\nmodule = ['
+    for target in "$@"; do
+        module=$(printf '%s' "$target" | sed -e 's#^\./##' -e 's#\.py$##' -e 's#/$##' -e 's#/__init__$##' -e 's#/#.#g')
+        printf '"%s", "%s.*", ' "$module" "$module"
+    done
+    printf ']\nignore_errors = false\n'
+} >> "$config"
+
+# The allow-list entries for other modules go unused on a single-target run; that is expected
+# here and says nothing about the configuration.
+mypy --config-file "$config" --no-warn-unused-configs "$@"

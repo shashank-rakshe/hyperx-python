@@ -1,0 +1,98 @@
+#analysis-status {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  cursor: default;
+}
+
+#analysis-status .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transition:
+    background 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+#analysis-status .label:not(:empty) {
+  margin-left: 9px;
+  font-size: 0.75rem;
+  line-height: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+#analysis-status .tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  white-space: normal;
+  width: max-content;
+  max-width: 260px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+#analysis-status:hover .tooltip {
+  opacity: 1;
+}
+
+#analysis-status .dot.success {
+  background: #4caf50;
+  box-shadow: 0 0 4px #4caf5088;
+}
+
+#analysis-status .dot.loading {
+  background: #42a5f5;
+  box-shadow: 0 0 4px #42a5f588;
+  animation: pulse-loading 1.2s ease-in-out infinite;
+}
+
+#analysis-status .dot.error {
+  background: #ff6b6b;
+  box-shadow: 0 0 4px #ff6b6b88;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+#analysis-status .dot.warning {
+  position: relative;
+  overflow: visible;
+}
+
+#analysis-status .dot.warning::after {
+  content: "⚠";
+  position: absolute;
+  top: -7px;
+  right: -9px;
+  font-size: 0.55rem;
+  color: #ffa726;
+  line-height: 1;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 4px #ff6b6b88;
+  }
+  50% {
+    box-shadow: 0 0 10px #ff6b6bcc;
+  }
+}
+
+@keyframes pulse-loading {
+  0%,
+  100% {
+    box-shadow: 0 0 4px #42a5f588;
+  }
+  50% {
+    box-shadow: 0 0 10px #42a5f5cc;
+  }
+}

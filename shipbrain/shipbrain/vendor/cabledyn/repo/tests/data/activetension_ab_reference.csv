@@ -1,0 +1,22 @@
+# CableDyn active-tension (CtrlChan) A/B reference: coupled OpenFAST, held platform, ServoDyn cable control.
+# UMaine VolturnUS-S, CompMooring=5 (CableDyn) vs =3 (stock MoorDyn), identical libcabctrl.dll DeltaL schedule.
+# Tensions in N; hold windows have DeltaLdot=0. Reproduce: validation/scripts/activetension/ + validation/scripts/openfast_activetension_ab.py.
+channel,hold,cabledyn_N,moordyn_N,pct
+FairTen1,baseline,2.353e+06,2.35299e+06,+0.000
+FairTen1,payout_hold,2.27203e+06,2.27203e+06,-0.013
+FairTen1,haulin_hold,2.39818e+06,2.39819e+06,-0.040
+FairTen2,baseline,2.429e+06,2.42922e+06,-0.009
+FairTen2,payout_hold,2.33901e+06,2.33916e+06,+0.084
+FairTen2,haulin_hold,2.4769e+06,2.47691e+06,+0.461
+FairTen3,baseline,2.429e+06,2.42922e+06,-0.009
+FairTen3,payout_hold,2.33901e+06,2.33916e+06,+0.084
+FairTen3,haulin_hold,2.4769e+06,2.47691e+06,+0.461
+AnchTen1,baseline,1.274e+06,1.27428e+06,-0.022
+AnchTen1,payout_hold,1.19295e+06,1.19292e+06,+0.367
+AnchTen1,haulin_hold,1.31937e+06,1.31935e+06,+0.665
+AnchTen2,baseline,1.35e+06,1.35005e+06,-0.004
+AnchTen2,payout_hold,1.26017e+06,1.26032e+06,-0.107
+AnchTen2,haulin_hold,1.39774e+06,1.39772e+06,+0.145
+AnchTen3,baseline,1.35e+06,1.35005e+06,-0.004
+AnchTen3,payout_hold,1.26017e+06,1.26032e+06,-0.107
+AnchTen3,haulin_hold,1.39774e+06,1.39772e+06,+0.145

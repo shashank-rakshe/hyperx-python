@@ -1,0 +1,54 @@
+# File: .pre-commit-config.yaml
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Jae Hoon Seo, SMI Lab, Inha University
+#
+# Hooks run locally on every commit. CI does NOT invoke `pre-commit` itself --
+# fortran.yml runs the equivalent gates as explicit steps: the fprettify
+# formatting check plus the CMake build and CTest suite. Keep this list and
+# that workflow in sync so a hook that passes locally is also enforced in CI.
+
+repos:
+  # src/openfast/ carries OpenFAST-convention sources kept byte-exact against their
+  # upstream/registry-generated forms. The OpenFAST integration patches are also
+  # byte-exact upstream diffs. Whitespace normalizers must not rewrite either group.
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(src/openfast/|integration/openfast/patches/)
+      - id: end-of-file-fixer
+        exclude: ^(src/openfast/|integration/openfast/patches/)
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [--maxkb=2000]
+
+  - repo: https://github.com/fortran-lang/fprettify
+    rev: v0.3.7
+    hooks:
+      - id: fprettify
+        args: [--indent, "2", --line-length, "120"]
+        # src/openfast/ carries OpenFAST-convention sources: CableDyn_Types.f90 is
+        # registry-generated (must stay byte-exact vs regeneration) and the module
+        # glue follows OpenFAST formatting for review against the upstream modules.
+        exclude: ^src/openfast/
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.13
+    hooks:
+      # No --config: ruff discovers python/pyproject.toml per file, so its relative
+      # settings (per-file ignores, first-party detection) resolve against python/.
+      - id: ruff-check
+        files: ^python/
+      - id: ruff-format
+        files: ^python/
+
+  - repo: local
+    hooks:
+      - id: release-metadata
+        name: release metadata
+        entry: python release/check_release_metadata.py
+        # Let pre-commit provide the interpreter. This avoids relying on a
+        # system-level `python` command, which is commonly absent on Windows.
+        language: python
+        pass_filenames: false

@@ -1,0 +1,12 @@
+{
+  "completed_cases": 30,
+  "mean_bias_N": 0.4682263800000007,
+  "mean_bias_percent_of_measured": 1.596721433936495,
+  "mae_N": 1.3186648599999997,
+  "mape_percent": 3.1109261757182893,
+  "rmse_N": 1.5765834980908213,
+  "maximum_absolute_error_percent": 7.724655932203389,
+  "pearson_correlation": 0.9933081725437557,
+  "correlation_r_squared": 0.9866611256422155,
+  "lin_concordance_correlation": 0.9892319678075987
+}

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:brep="https://brep.io/icons"
+     viewBox="0 0 24 24" width="24" height="24" brep:glyph-name="icon_feat_port" brep:unicode="E03B">
+  <!-- A harness waypoint: a point with the direction a wire passes through it. -->
+  <path d="M3 16L21 6M19.5 9.6L21 6L17.2 5.4" style="fill:none" stroke="#8b6fd4" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="12" cy="11" rx="4.2" ry="4.2" fill="#c9b6f0" stroke="#3d2a6b" stroke-width="1.2"/>
+  <ellipse cx="12" cy="11" rx="1.4" ry="1.4" fill="#3d2a6b"/>
+</svg>

@@ -1,0 +1,7 @@
+{
+  "name": "pid-to-kg",
+  "version": "0.1.0",
+  "description": "Turn P&ID PDFs (vector or scanned) into a process knowledge graph: flow connectivity, instrument locations and control loops, as JSON + DuckDB + an LLM-ready summary.",
+  "license": "MIT",
+  "keywords": ["p&id", "pid", "knowledge-graph", "process-engineering", "chemical-engineering", "isa-5.1", "dexpi"]
+}

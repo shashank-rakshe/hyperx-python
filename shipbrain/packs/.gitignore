@@ -1,0 +1,3 @@
+# private packs: your own code (repopack --own), class society rules (shipbrain.classrules build), refused licences
+# (--private-only). Never commit or share them; a model trained on them stays private.
+*.private.sbpack

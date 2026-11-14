@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://cabledyn.readthedocs.io
+    about: Installation, tutorials, the deck format, options, outputs, and troubleshooting.
+  - name: Security vulnerability
+    url: https://github.com/SMI-Lab-Inha/CableDyn/security/advisories/new
+    about: Report security issues privately, never in a public issue.

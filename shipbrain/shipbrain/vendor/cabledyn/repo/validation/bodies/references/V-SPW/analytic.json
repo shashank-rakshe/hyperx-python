@@ -1,0 +1,51 @@
+{
+ "case": "V-SPW",
+ "code": "analytic",
+ "date": "2026-09-26",
+ "version": "closed form",
+ "settings": "see method",
+ "dt": null,
+ "commit": "",
+ "method": "linear hydrostatics of a wall-sided cylinder; free-floating surge-pitch eigenproblem with surge condensed; transverse added mass rho Ca A over the wetted length; end added mass rho CaEnd (2/3) pi r^3 in heave",
+ "values": {
+  "d": 10.0,
+  "L": 25.0,
+  "mass_body": 1585066.234964769,
+  "mass_rod": 25000.0,
+  "mass": 1610066.234964769,
+  "draft": 20.0,
+  "z_eq": -0.0,
+  "volume": 1570.7963267948967,
+  "z_B": -10.0,
+  "z_G": -10.1,
+  "BM": 0.3125,
+  "GM": 0.41249999999999964,
+  "I_wp": 490.8738521234052,
+  "I_G": 15895594.951770484,
+  "A11": 1610066.234964769,
+  "A15": 161006.62349647633,
+  "A55": 53684975.16117528,
+  "I55_eff": 69572519.78177094,
+  "a33": 0.0,
+  "C33": 789467.8021558626,
+  "C55_exact": 6513109.367785862,
+  "GM_equivalent": {
+   "exact (pi d^4/64)": 0.41249999999999964,
+   "MoorDyn, cap moments exact (+pi d^4/16)": 1.6624999999999996,
+   "MoorDyn, bottom-cap moment sign reversed (+pi d^4/32)": 1.0374999999999996
+  },
+  "T_heave": 8.97293513783272,
+  "T_pitch": {
+   "exact (pi d^4/64)": 20.535465379732766,
+   "MoorDyn, cap moments exact (+pi d^4/16)": 10.229059359643143,
+   "MoorDyn, bottom-cap moment sign reversed (+pi d^4/32)": 12.948589803644431
+  },
+  "T_pitch_exact": 20.535465379732766,
+  "heel_1MNm_deg": {
+   "exact (pi d^4/64)": 8.79699330652574,
+   "MoorDyn, cap moments exact (+pi d^4/16)": 2.1827126249274387,
+   "MoorDyn, bottom-cap moment sign reversed (+pi d^4/32)": 3.497599748377702
+  },
+  "heel_1MNm_wallsided_deg": 8.752711285180398
+ }
+}

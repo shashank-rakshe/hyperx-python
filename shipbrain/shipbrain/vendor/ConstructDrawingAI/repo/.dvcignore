@@ -1,0 +1,5 @@
+# Patterns DVC should ignore when traversing tracked directories.
+# https://dvc.org/doc/user-guide/project-structure/dvcignore-files
+.git/
+.venv/
+__pycache__/

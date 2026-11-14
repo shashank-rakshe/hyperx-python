@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:brep="https://brep.io/icons"
+     viewBox="0 0 24 24" width="24" height="24" brep:glyph-name="icon_feat_path_sweep" brep:unicode="E053">
+  <!-- A round profile at the start of a bent path, the solid following its first leg. -->
+  <path d="M4 6.5V15H17" style="fill:none" stroke="#3d86c4" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M14.5 12.5 17 15 14.5 17.5" style="fill:none" stroke="#3d86c4" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="4" cy="15" rx="1.3" ry="1.3" fill="#a8d4f7" stroke="#1c5384" stroke-width="1"/>
+  <path d="M2 4Q2 10 10 10V13Q0 13 0 4Z" fill="#f0b840" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round" transform="translate(2 2.5)"/>
+  <path d="M2 4Q2 10 10 10V13Q0 13 0 4" style="fill:none" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round" transform="translate(2 2.5)"/>
+  <ellipse cx="4" cy="6.5" rx="2.6" ry="1.3" fill="#a5e8c4" stroke="#125236" stroke-width="1.2"/>
+  <ellipse cx="12" cy="14" rx="1.3" ry="2.6" fill="#ffd977" stroke="#7a4d10" stroke-width="1.2"/>
+</svg>

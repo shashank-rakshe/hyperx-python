@@ -1,0 +1,23 @@
+diff --git a/glue-codes/fast-farm/src/FAST_Farm_IO.f90 b/glue-codes/fast-farm/src/FAST_Farm_IO.f90
+index 86e3f58cb..6ad003bae 100644
+--- a/glue-codes/fast-farm/src/FAST_Farm_IO.f90
++++ b/glue-codes/fast-farm/src/FAST_Farm_IO.f90
+@@ -653,7 +653,7 @@ SUBROUTINE Farm_ReadPrimaryFile( InputFile, p, WD_InitInp, AWAE_InitInp, OutList
+    CALL ReadVar( UnIn, InputFile, p%TMax, "TMax", "Total run time (s)", ErrStat2, ErrMsg2, UnEc); if (Failed()) return
+    CALL ReadVar( UnIn, InputFile, AWAE_InitInp%Mod_AmbWind, "Mod_AmbWind", "Ambient wind model (-) (switch) {1: high-fidelity precursor in VTK format, 2: one InflowWind module, 3: multiple InflowWind modules, 4: high-fidelity precursor in AMReX format}", ErrStat2, ErrMsg2, UnEc); if (Failed()) return
+    CALL ReadVar( UnIn, InputFile, p%WaveFieldMod, "Mod_WaveField", "Wave field handling (-) (switch) {1: use individual HydroDyn inputs without adjustment, 2: adjust wave phases based on turbine offsets from farm origin}", ErrStat2, ErrMsg2, UnEc); if (Failed()) return
+-   CALL ReadVar( UnIn, InputFile, p%MooringMod, "Mod_SharedMooring", "Array-level mooring handling (-) (switch) {0: none; 3: array-level MoorDyn model}", ErrStat2, ErrMsg2, UnEc); if (Failed()) return
++   CALL ReadVar( UnIn, InputFile, p%MooringMod, "Mod_SharedMooring", "Array-level mooring handling (-) (switch) {0: none; 3: array-level MoorDyn model; 5: array-level CableDyn model}", ErrStat2, ErrMsg2, UnEc); if (Failed()) return
+ 
+    !---------------------- SHARED MOORING SYSTEM ------------------------------------------------------------------
+    CALL ReadCom( UnIn, InputFile, 'Section Header: SHARED MOORING SYSTEM', ErrStat2, ErrMsg2, UnEc ); if (Failed()) return
+@@ -1054,7 +1054,7 @@ SUBROUTINE Farm_ValidateInput( p, WD_InitInp, AWAE_InitInp, ErrStat, ErrMsg )
+ 
+    ! --- SIMULATION CONTROL ---
+    IF ((p%WaveFieldMod .ne. 1) .and. (p%WaveFieldMod .ne. 2)) CALL SetErrStat(ErrID_Fatal,'WaveFieldMod must be 1 or 2.',ErrStat,ErrMsg,RoutineName)
+-   IF ((p%MooringMod .ne. 0) .and. (p%MooringMod .ne. 3)) CALL SetErrStat(ErrID_Fatal,'MooringMod must be 0 or 3.',ErrStat,ErrMsg,RoutineName)
++   IF ((p%MooringMod .ne. 0) .and. (p%MooringMod .ne. 3) .and. (p%MooringMod .ne. 5)) CALL SetErrStat(ErrID_Fatal,'MooringMod must be 0, 3, or 5.',ErrStat,ErrMsg,RoutineName)
+ 
+ 
+    IF (p%DT_low <= 0.0_ReKi) CALL SetErrStat(ErrID_Fatal,'DT_low must be positive.',ErrStat,ErrMsg,RoutineName)
+

@@ -1,0 +1,83 @@
+--------------------- CableDyn Input File ------------------------------------
+CableDyn driver deck -- Rigid6 spar with a fixed hull rod and two pinned outrigger rods, waves, dynamic
+-- A 6 m diameter spar floats in 150 m of water. Body 1 is a free Rigid6 body that carries the
+-- ballast (mass, centre of gravity, and inertia; Volume = 0). The hull is rod 1, a Body1 rod fixed
+-- in the body frame from 60 m draft to 10 m freeboard: its submerged length gives the buoyancy
+-- and the waterplane restoring, and its mass and Morison loads are lumped into the body. Rods 2
+-- and 3 are Body1Pinned outriggers: End A is pinned to the keel, each rod has its own three
+-- rotations, and it loads the spar only through the pin force. Each outrigger tip (R2B, R3B)
+-- carries a polyester tether to an anchor; three studless chain catenaries run from fairleads at
+-- 20 m draft. The static solve (bodyIC static) balances the spar, the outriggers, and all lines
+-- in the 0.4 m/s current; the regular 4 m, 8 s Airy wave is then ramped in over 20 s.
+--------------------- LINE TYPES ---------------------------------------
+TypeName   Diam    MassDenInAir   EA        BA/-zeta   EI       Cd_n  Cd_t  Ca_n  Ca_t
+(-)        (m)     (kg/m)         (N)       (N-s/-)    (N-m^2)  (-)   (-)   (-)   (-)
+chain      0.10    200.0          8.0e8     -0.8       0.0      2.4   1.15  1.0   0.5
+poly       0.14    18.0           6.0e7     -0.8       0.0      1.2   0.05  1.0   0.0
+--------------------- ROD TYPES ----------------------------------------
+Name     Diam    Mass     Cd     Ca     CdEnd  CaEnd
+(-)      (m)     (kg/m)   (-)    (-)    (-)    (-)
+hull     6.0     3000.0   0.8    1.0    0.0    0.0
+arm      0.6     400.0    1.0    1.0    0.0    0.0
+--------------------- BODIES -------------------------------------------
+ID  Attachment  X0    Y0    Z0    r0     p0     y0     Mass     CG      I                   Volume  CdA   Ca
+(-) (-)         (m)   (m)   (m)   (deg)  (deg)  (deg)  (kg)     (m)     (kg-m^2)            (m^3)   (m^2) (-)
+1   Free        0.0   0.0   0.0   0.0    0.0    0.0    1.30e6   -50.0   2.0e8|2.0e8|6.0e6   0.0     0.0   0.0
+--------------------- RODS ---------------------------------------------
+ID   RodType   Attachment    XA    YA     ZA      XB    YB      ZB      NumSegs   Outputs
+(-)  (-)       (-)           (m)   (m)    (m)     (m)   (m)     (m)     (-)       (-)
+1    hull      Body1         0.0   0.0    -60.0   0.0   0.0     10.0    14        -
+2    arm       Body1Pinned   0.0   3.0    -60.0   0.0   12.0    -68.0   6         -
+3    arm       Body1Pinned   0.0   -3.0   -60.0   0.0   -12.0   -68.0   6         -
+--------------------- POINTS -------------------------------------------
+ID    Type      X          Y          Z         Mass    Vol     CdA    Ca
+(-)   (-)       (m)        (m)        (m)       (kg)    (m^3)   (m^2)  (-)
+1     Body1     3.0        0.0        -20.0     0       0       0      0
+2     Body1     -1.5       2.598      -20.0     0       0       0      0
+3     Body1     -1.5       -2.598     -20.0     0       0       0      0
+4     Fixed     500.0      0.0        -150.0    0       0       0      0
+5     Fixed     -250.0     433.013    -150.0    0       0       0      0
+6     Fixed     -250.0     -433.013   -150.0    0       0       0      0
+7     Fixed     0.0        60.0       -150.0    0       0       0      0
+8     Fixed     0.0        -60.0      -150.0    0       0       0      0
+--------------------- LINES --------------------------------------------
+ID    LineType   AttachA   AttachB   UnstrLen   NumSegs   Outputs
+(-)   (-)        (-)       (-)       (m)        (-)       (-)
+1     chain      1         4         560.0      40        -
+2     chain      2         5         560.0      40        -
+3     chain      3         6         560.0      40        -
+4     poly       R2B       7         95.0       20        -
+5     poly       R3B       8         95.0       20        -
+--------------------- OPTIONS ------------------------------------------
+9.80665              g         - Gravitational acceleration (m/s^2) [default: 9.80665]
+1025.0               rhoW      - Water density (kg/m^3) [default: 1025]
+150.0                WtrDpth   - Water depth (m) [default: absent standalone; host-owned OpenFAST]
+3.0e5                kBot      - Seabed penalty stiffness base (Pa/m) [default: 1.0e5]
+1.0e4                cBot      - Seabed normal damping base (Pa-s/m) [default: 1.0e4]
+0.02                 dtM       - CableDyn internal time step (s) [default: omitted standalone; the glue DT in OpenFAST]
+60.0                 TMax      - Standalone simulation duration (s) [default: omitted standalone; host-owned OpenFAST]
+airy 4.0 8.0 0.0     waves     - Wave model, height, period, and direction (m, s, deg) {none; airy; jonswap} [default: none]
+20.0                 rampTime  - Half-cosine start-up ramp of the waves (s) {>=0; 0=off} [default: 0]
+uniform 0.4 0.0 0.0  current   - Current model and X/Y/Z velocity (m/s) {none; uniform; profile} [default: none]
+static    bodyIC           - Initial pose of free bodies and rods {static; deck} [default: static]
+0.4       rhoInf           - Generalised-alpha spectral radius {0<=rhoInf<=1} [default: 0.4]
+False     modified_newton  - Tangent-reuse mode {False=full Newton; True=guarded reuse} [default: False]
+False     adaptive_mesh    - Automatic finite-EI refinement {False; True} [default: False]
+dynamic_solver 1.0e-8 1.0e-14 30 12 - Relative tolerance, absolute tolerance, max iterations, backtracks [defaults shown]
+none      frictionMu       - Seabed friction coefficient {none; value>=0} [default: none]
+0         WaterKin          - Water-kinematics source {0/none; file; SEASTATE coupled only} [default: no policy]
+-- Complete option/default reference: cabledyn_options_reference.dat and doc/options.rst.
+--------------------- OUTPUTS ------------------------------------------
+"Body1Px"
+"Body1Pz"
+"Body1Ry"
+"Rod2Rx"
+"Rod2Ry"
+"Rod3Rx"
+"Rod2TenB"
+"Rod2N6Pz"
+"FairTen1"
+"FairTen2"
+"FairTen4"
+"FairTen5"
+--------------------- need this line -----------------------------------

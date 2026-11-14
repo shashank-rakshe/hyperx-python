@@ -1,0 +1,38 @@
+--------------------- MoorDyn Input File ------------------------------
+V-S1m three IEA-15MW VolturnUS-S chains from three turbines to one shared anchor
+-- Turbines at the vertices of an equilateral triangle of side 837.6*sqrt(3) m; the shared
+-- anchor sits at the centroid (837.6 m from every turbine), 200 m water; each line is the
+-- single-turbine VolturnUS line of examples/iea15mw_volturnus_mooring.dat.
+-- MoorDyn-C twin: the fairleads are Coupled points in farm-global coordinates.
+---------------------- LINE TYPES ------------------------------------
+TypeName  Diam  Mass/m  EA  BA/-zeta  EI  Cd  Ca  CdAx  CaAx
+(name)  (m)  (kg/m)  (N)  (N-s)  (N-m^2)  (-)  (-)  (-)  (-)
+chain  0.333  685  3.27000000e+09  -1  0  1.37  1  0.64  0
+---------------------- POINTS ----------------------------------------
+ID  Attachment  X  Y  Z  Mass  Volume  CdA  Ca
+(#)  (-)  (m)  (m)  (m)  (kg)  (m^3)  (m^2)  (-)
+1  Coupled  50.229473  29  -14  0  0  0  0
+2  Coupled  1400.536283  29  -14  0  0  0  0
+3  Coupled  725.382878  1198.4  -14  0  0  0  0
+4  Fixed  725.382878  418.8  -200  0  0  0  0
+---------------------- LINES -----------------------------------------
+ID  LineType  AttachA  AttachB  UnstrLen  NumSegs  LineOutputs
+(#)  (name)  (#)  (#)  (m)  (-)  (-)
+1  chain  1  4  850  200  -
+2  chain  2  4  850  200  -
+3  chain  3  4  850  200  -
+---------------------- OPTIONS -----------------------------------------
+5.00000000e-04  dtM
+9.80665  g
+1025  WtrDnsty
+200  WtrDpth
+3.00000000e+06  kbot
+10000  cbot
+2  dtIC
+600  TmaxIC
+4  CdScaleIC
+1.00000000e-06  threshIC
+0  writeLog
+1  disableOutput
+1  disableOutTime
+------------------------- need this line --------------------------------

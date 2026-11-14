@@ -1,0 +1,35 @@
+--------------------- CableDyn Input File ------------------------------------
+C API host-coupling test deck: one EI=0 chain and one finite-EI cable, each from its own
+Coupled fairlead to a Fixed anchor on a 50 m flat seabed. The finite-EI line puts the deck on
+the coupled aggregate (fixed step dtM); the two sub-objects make every step a staged step.
+--------------------------- LINE TYPES ----------------------------------------
+Name   Diam   Mass   EA      BA    EI      Cdn   Cdt   Can   Cat
+(-)    (m)    (kg/m) (N)     (-)   (Nm2)   (-)   (-)   (-)   (-)
+chain  0.10   50.0   5.0e8   -1.0  0.0     2.0   0.4   0.82  0.27
+cable  0.16   36.7   4.69e8  0.0   1.99e4  1.2   0.1   1.0   0.0
+--------------------------- POINTS --------------------------------------------
+ID   Type      X         Y        Z
+(-)  (-)      (m)       (m)      (m)
+1    Fixed   -110.0      0.0    -50.0
+2    Coupled   -5.0      0.0     -5.0
+3    Fixed     95.0      0.0    -50.0
+4    Coupled    5.0      0.0     -5.0
+--------------------------- LINES ---------------------------------------------
+ID  NodeA  NodeB  Outputs
+(-)  (-)    (-)    (-)
+1    2      1      -
+2    4      3      -
+--------------------------- SECTIONS ------------------------------------------
+LineID  LineType  Length  NumSegs
+(-)     (-)       (m)     (-)
+1       chain     120.0   20
+2       cable     110.0   22
+--------------------------- OPTIONS -------------------------------------------
+9.80665  g
+1025.0   rhoW
+3.0e6    kBot
+3.0e5    cBot
+50.0     WtrDpth
+0.01     dtM
+0.0      TMax
+--------------------------- need this line ------------------------------------

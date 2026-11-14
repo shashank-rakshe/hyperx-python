@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "page": 2,
+  "sheet": {
+    "drawing_number": "PID-200",
+    "title": "Product tank",
+    "drawing_type": "pid"
+  },
+  "equipment": [
+    {"id": "TK-200", "tag": "TK-200", "kind": "tank", "name": "Product tank", "bbox": [0.40, 0.30, 0.60, 0.70]}
+  ],
+  "components": [],
+  "instruments": [
+    {"id": "TI-210", "tag": "TI-210", "location": "field", "measures": {"item": "TK-200"}}
+  ],
+  "lines": [
+    {"id": "L1", "line_number": "3\"-PW-002", "from": "OPC1", "to": "TK-200"},
+    {"id": "L2", "line_number": "4\"-PW-010", "from": "TK-200", "to": "B1", "flow_direction": "inferred"},
+    {"id": "L0", "line_number": "4\"-PW-001", "from": "B2", "to": "TK-100"}
+  ],
+  "signals": [],
+  "off_page_connectors": [
+    {"id": "OPC1", "direction": "in", "name": "FROM TRANSFER PUMP P-101", "other_drawing": "PID-100",
+     "line_number": "3\"-PW-002"}
+  ],
+  "boundaries": [
+    {"id": "B1", "name": "TO DISTRIBUTION", "direction": "sink"},
+    {"id": "B2", "name": "RAW WATER SUPPLY", "direction": "source"}
+  ],
+  "tiles_reviewed": ["r1c1"]
+}

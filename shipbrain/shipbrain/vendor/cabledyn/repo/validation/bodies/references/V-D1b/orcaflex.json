@@ -1,0 +1,146 @@
+{
+  "case": "V-D1b",
+  "code": "orcaflex",
+  "date": "2026-09-27",
+  "version": {
+    "orcaflex": "11.6d",
+    "script": "validation/scripts/orcaflex_vd1b_reference.py",
+    "script_sha256": "bb71c40032cd94574ac9957d36de12e82cb876a97ae33f114f0a3fd0c31d457f",
+    "series_script_sha256": "b7ab906477c459855b662844396f2f28a248ad4145a752c1c3863c99f7450711",
+    "note": "The series was simulated on the date above by an earlier revision of the script (series_script_sha256) with the same OrcaFlex model and settings; the summary values were then reduced from that series with bodies_summary.reference_summary, as the current script (script_sha256) does."
+  },
+  "settings": {
+    "solver": "implicit, constant step",
+    "dt": 0.00025,
+    "segments_per_leg": 320,
+    "log_interval": 0.01,
+    "dtout": 0.01,
+    "tmax": 120.0,
+    "release": "buoy held in statics (DegreesOfFreedomInStatics None), free from t = 0",
+    "buoy": "spar buoy, 1 cylinder along global y: 0.5 rho CdA |v| v in x-z",
+    "FairTen": "End A End force magnitude",
+    "seabed": "flat elastic, kBot 1e5 Pa/m, centreline contact, undamped (deck cBot 1e4)"
+  },
+  "wall_s": 2884.2608485221863,
+  "host": "13th Gen Intel(R) Core(TM) i9-13900K, Windows",
+  "static_check": {
+    "FairTen1_N": 3329.4,
+    "FairTen2_N": 793213.0,
+    "note": "held-body static tensions equal MoorDyn-C settled values (3328.7 N, 793213 N)"
+  },
+  "convergence": {
+    "window": "t in [0, 30] s, FairTen1 e_rms vs 640 segments / dt 5e-4 on a 0.01 s grid",
+    "segments_dt": {
+      "80/1e-3": 0.018,
+      "160/1e-3": 0.025,
+      "320/1e-3": 0.0046,
+      "320/5e-4": 0.0042,
+      "320/2.5e-4": 0.006
+    },
+    "release_transient": "t 0.17-0.24 s: an end-segment tension transient on the slack leg 1 that changes with refinement (61 kN at 320/5e-4, 126 kN at 320/2.5e-4, 29 kN at 640/5e-4; MoorDyn-C and CableDyn 1-3 kN); exclude t < 0.5 s when comparing"
+  },
+  "arbitration": {
+    "metric": "FairTen1 RMS difference over t in [0.5, 120] s on a 0.01 s grid / max excursion of this series",
+    "cabledyn": {
+      "80/dtM 1e-3": 0.0162,
+      "160/1e-3": 0.0118,
+      "320/1e-3": 0.0054,
+      "320/2.5e-3": 0.005
+    },
+    "moordyn_c": {
+      "80": 0.024,
+      "160": 0.0124,
+      "320": 0.0077
+    },
+    "cabledyn_build": "cabledyn.exe built 2026-09-27 10:49 from release/0.1.0-hardening (monolithic step)",
+    "moordyn_c_runs": "v2.7.1 rk4, dt 1.25e-5 (160, 320 segments), committed moordyn_c reference (80)"
+  },
+  "summary": {
+    "window": [
+      0.5,
+      120.0
+    ],
+    "grid_dt": 0.01,
+    "channels": {
+      "Body1Px": {
+        "mean": 0.05031215115815495,
+        "std": 0.3604414531672558,
+        "max": 4.1939259,
+        "t_max": 0.5,
+        "min": -0.28693339,
+        "t_min": 4.91,
+        "excursion": 4.1924797693,
+        "period": 4.0193084269336845
+      },
+      "Body1Pz": {
+        "mean": -20.050532390511254,
+        "std": 0.3319587519177152,
+        "max": -19.90011,
+        "t_max": 5.25,
+        "min": -23.323156,
+        "t_min": 1.21,
+        "excursion": 3.3176210000000026,
+        "period": 1.0701081499275842
+      },
+      "FairTen1": {
+        "mean": 75580.5450142373,
+        "std": 14306.230511906662,
+        "max": 168959.32,
+        "t_max": 5.15,
+        "min": 14.532849,
+        "t_min": 6.62,
+        "excursion": 93085.998,
+        "period": 1.0859930131015587,
+        "harmonic_amp": 3895.737333353255,
+        "harmonic_phase_deg": 49.22784933420765,
+        "harmonic_freq": 0.9204250690318794
+      },
+      "FairTen2": {
+        "mean": 75629.60345224106,
+        "std": 18966.099983572658,
+        "max": 317669.98,
+        "t_max": 2.65,
+        "min": 10.670719,
+        "t_min": 3.09,
+        "excursion": 241132.962,
+        "period": 1.0742399241796188,
+        "harmonic_amp": 4496.1012576710755,
+        "harmonic_phase_deg": 106.55571636327616,
+        "harmonic_freq": 0.9120575684043168
+      },
+      "FairTen3": {
+        "mean": 75629.20272138984,
+        "std": 18967.234741993314,
+        "max": 317566.01,
+        "t_max": 2.65,
+        "min": 9.0766624,
+        "t_min": 3.09,
+        "excursion": 241029.046,
+        "period": 1.074239214002798,
+        "harmonic_amp": 4496.298638259254,
+        "harmonic_phase_deg": 106.55107448462057,
+        "harmonic_freq": 0.9120575684043168
+      }
+    },
+    "snaps": {
+      "FairTen1": [
+        {
+          "span": [
+            1.8,
+            2.1
+          ],
+          "t": 1.95,
+          "max": 62087.891
+        },
+        {
+          "span": [
+            2.4,
+            2.8
+          ],
+          "t": 2.59,
+          "max": 118100.02
+        }
+      ]
+    }
+  }
+}

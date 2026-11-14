@@ -1,0 +1,44 @@
+# DELP (real UK electrical) YOLO dataset — corrected for the ARC layout.
+# Roboflow's export used `../train/images`; our synced layout has the splits directly
+# under `path`, so we pin an absolute root + split-relative paths. License: CC BY 4.0
+# => RESEARCH lane only (any weights trained here are research-lane, never commercial).
+path: /projects/bedigital/cdai/data/delp_yolo
+train: train/images
+val: valid/images
+test: test/images
+nc: 34
+names:
+  - BT Entry Point
+  - Cat 6 Data Socket
+  - Ceiling Mounted Continuous Extract Fan With Boost Mode Activated By Light Switch
+  - Ceiling Mounted Continuous Extract Fan With Local Boost Switch
+  - Co-Ax TV Socket
+  - Consumer Unit
+  - Double Socket
+  - Electric Meter Box
+  - External Wall Light
+  - Full Height Tiling
+  - Fused spur
+  - Gas Meter Box
+  - Grid Switch
+  - Hob Switch
+  - Internal Wall Light
+  - Light Switch
+  - Low Energy Downlighter
+  - Low Energy Pendant Light
+  - Mains Wired Smoke Detector
+  - Outside Socket
+  - Outside Tap
+  - Oven Switch
+  - Programmable Room Thermostat
+  - Radiator
+  - Recirculating Extractor Fan
+  - Shaver Socket
+  - Single Socket
+  - TV - Satellite Multisocket
+  - Telephone Socket
+  - Track Light
+  - Twin LED Strip Light
+  - USB Double Socket
+  - Underfloor Heating Manifold
+  - Water Entry Position

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<HullConditionModel>
+  <Plates>
+    <Plate id="P1" thickness="12">
+      <OuterContour><Vertex x="0" y="0" z="0"/><Vertex x="2400" y="0" z="0"/><Vertex x="2400" y="1600" z="0"/><Vertex x="0" y="1600" z="0"/></OuterContour>
+    </Plate>
+    <Plate id="P2" thickness="10">
+      <OuterContour><Vertex x="0" y="0" z="0"/><Vertex x="0" y="1600" z="0"/><Vertex x="0" y="1600" z="800"/><Vertex x="0" y="0" z="800"/></OuterContour>
+      <InnerContour><Vertex x="300" y="400" z="0"/><Vertex x="500" y="400" z="0"/><Vertex x="500" y="600" z="0"/></InnerContour>
+    </Plate>
+    <Plate id="P3" thickness="9"><Mesh><Vertex x="0" y="0" z="0"/><Vertex x="100" y="0" z="0"/><Vertex x="0" y="100" z="0"/><Triangle v1="0" v2="1" v3="2"/></Mesh></Plate>
+  </Plates>
+  <Stiffeners>
+    <Stiffener id="S1" type="FB" orientation="Positive" thickness="10" height="120" offset="0">
+      <TraceLine><Vertex x="0" y="400" z="0"/><Vertex x="2400" y="400" z="0"/></TraceLine>
+      <Orientations><Direction i="0" j="0" k="-1"/><Direction i="0" j="0" k="-1"/></Orientations>
+    </Stiffener>
+    <Stiffener id="S2" type="T" orientation="Positive" thickness="8" height="250" offset="0">
+      <TraceLine><Vertex x="0" y="800" z="0"/><Vertex x="2400" y="800" z="0"/></TraceLine>
+      <Orientations><Direction i="0" j="0" k="-1"/><Direction i="0" j="0" k="-1"/></Orientations>
+      <Flanges><Flange position="Top" breadth="90" thickness="12"/></Flanges>
+    </Stiffener>
+  </Stiffeners>
+  <Compartments><Compartment name="Ballast tank 1"/><Compartment name="Cargo hold 2"/></Compartments>
+</HullConditionModel>

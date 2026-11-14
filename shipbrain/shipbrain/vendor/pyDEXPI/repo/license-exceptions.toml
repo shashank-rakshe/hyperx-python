@@ -1,0 +1,91 @@
+# Dependency licenses that were reviewed by hand.
+#
+# Packages listed here are exempted from the permissive-only policy declared in
+# [tool.licensecheck] in pyproject.toml, so that an exemption is an explicit, reviewable decision
+# rather than a silent pass.
+#
+# THESE ARE MAINTAINERS' COMPATIBILITY ASSESSMENTS, NOT LEGAL ADVICE OR LEGAL APPROVAL. They
+# record how the pyDEXPI maintainers read a license for a specific use, at a specific version.
+# A change in how pyDEXPI is distributed -- most importantly bundling dependencies into a
+# proprietary or frozen binary -- invalidates the reasoning here and needs a fresh assessment,
+# with legal input where the stakes warrant it.
+#
+# Add an entry only when the license has actually been checked at the source named below --
+# see docs/mkdocs/dependency-licenses.md for the full procedure.
+#
+# Required fields: package, version_spec, verified_license, classification, source, reviewed_on,
+#                  reason
+# Optional field:  reviewed_by
+#
+# classification must be one of:
+#   "weak-copyleft"    File- or library-level copyleft (MPL, LGPL). Not a license conflict: these
+#                      permit a larger work to be distributed under other terms, while keeping
+#                      obligations on the covered files or library themselves. Listed here
+#                      because pyDEXPI's policy is permissive-only and deliberately stricter than
+#                      mere compatibility -- not because the dependency is problematic.
+#   "policy-exception" Something the policy genuinely disallows, accepted anyway for the stated
+#                      reason. Expect close scrutiny in review.
+#
+# Validated by scripts/license_report.py, which fails if a field is missing or invalid, or if the
+# version CI actually resolved falls outside version_spec -- so a major bump forces a re-review.
+
+[[exception]]
+package = "svglib"
+version_spec = ">=2.0.0,<3.0.0"
+verified_license = "LGPL-3.0-or-later"
+classification = "weak-copyleft"
+source = "https://pypi.org/project/svglib/ (License-Expression metadata field)"
+reviewed_on = "2026-07-30"
+reviewed_by = "pyDEXPI maintainers"
+reason = """
+Optional dependency: installed only via the [pdf] and [export] extras, never by a default
+`pip install pyDEXPI`.
+
+svglib is used as an unmodified, separately identifiable Python dependency. LGPL-3.0 permits
+distribution of a Combined Work under terms of your choice, subject to the LGPL's requirements
+for the library itself and to the user's ability to replace or modify the LGPL-covered component.
+Any redistribution must preserve the applicable notices, license text, source availability, and
+those replacement rights.
+
+For pyDEXPI distributed under the AGPL-3.0 this is unlikely to create a practical
+incompatibility. The consequential case is a future one: bundling svglib into a proprietary or
+frozen executable, where the replacement and source-availability requirements become the binding
+constraint. Re-assess before doing that, and re-assess if svglib is ever vendored, patched, or
+promoted to a core dependency.
+
+This is a maintainers' compatibility assessment, not definitive legal approval.
+"""
+
+[[exception]]
+package = "certifi"
+version_spec = ">=2024.2.2"
+verified_license = "MPL-2.0"
+classification = "weak-copyleft"
+source = "https://github.com/certifi/python-certifi/blob/master/LICENSE"
+reviewed_on = "2026-07-30"
+reviewed_by = "pyDEXPI maintainers"
+reason = """
+Not a license incompatibility. MPL-2.0 is file-level copyleft: it allows a larger work to be
+distributed under other terms while keeping MPL obligations on the MPL-covered files themselves.
+It does not normally prevent commercial or proprietary use.
+
+Recorded here only because pyDEXPI's policy is permissive-only by default. certifi arrives
+transitively through two routes: requests <- mkdocs-material (documentation tooling), and
+httpx <- mcp, which puts it in the optional `mcp` extra, so users who install that extra receive
+it. It is a separate, unmodified package providing the Mozilla CA bundle; pyDEXPI neither vendors
+nor patches it, and MPL-2.0's file-level copyleft places no obligation on pyDEXPI's own code.
+"""
+
+[[exception]]
+package = "pathspec"
+version_spec = ">=0.10.0,<2.0.0"
+verified_license = "MPL-2.0"
+classification = "weak-copyleft"
+source = "https://github.com/cpburnz/python-pathspec/blob/master/LICENSE"
+reviewed_on = "2026-07-30"
+reviewed_by = "pyDEXPI maintainers"
+reason = """
+Not a license incompatibility; same file-level copyleft reasoning as certifi. Arrives
+transitively through mkdocs, so it is documentation tooling only, is not shipped as part of the
+pyDEXPI distribution, and is used unmodified.
+"""

@@ -1,0 +1,159 @@
+import numpy as np
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QGridLayout, QTreeWidgetItem
+
+from pulse import app
+from pulse.interface.ui_generated.plots.results.acoustic.plot_acoustic_pressure_field_for_harmonic_analysis_ui import PlotAcousticPressureFieldForHarmonicAnalysis_UI
+from pulse.interface.user_input.plots.general.animation_widget import AnimationWidget
+from pulse.interface.viewer_3d.coloring.color_palettes import COLORMAP_NAMES
+
+
+class PlotAcousticPressureField(PlotAcousticPressureFieldForHarmonicAnalysis_UI):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._initialize()
+        self._define_qt_variables()
+        self._create_connections()
+        self._add_animation_widget()
+
+    def _initialize(self):
+        pass
+
+    def _define_qt_variables(self):
+        self._config_treeWidget()
+
+    def _create_connections(self):
+        #
+        self.comboBox_colormaps.currentIndexChanged.connect(self.update_colormap_type)
+        self.comboBox_color_scale.currentIndexChanged.connect(self.update_plot)
+        #
+        self.slider_transparency.valueChanged.connect(self.update_transparency_callback)
+        #
+        self.treeWidget_frequencies.itemClicked.connect(self.on_click_item)
+        self.treeWidget_frequencies.itemDoubleClicked.connect(self.on_doubleclick_item)
+        #
+        self.update_animation_widget_visibility()
+        self.load_user_preference_colormap()
+        self.update_colormap_type()
+
+    def _config_treeWidget(self):
+        widths = [80, 140]
+        for i, width in enumerate(widths):
+            self.treeWidget_frequencies.setColumnWidth(i, width)
+            self.treeWidget_frequencies.headerItem().setTextAlignment(i, Qt.AlignCenter)
+    
+    def _add_animation_widget(self):
+        self.grid_layout = QGridLayout()
+        self.grid_layout.setContentsMargins(0, 0, 0, 0)
+        self.frame_animation.setLayout(self.grid_layout)
+
+        self.animation_widget = AnimationWidget()
+        self.grid_layout.addWidget(self.animation_widget)
+        self.frame_animation.adjustSize()
+        self.animation_widget.set_magnification_slider_visible(False)
+
+    def update_animation_widget_visibility(self):
+        if not hasattr(self, "animation_widget"):
+            return
+        is_animation = self.comboBox_color_scale.currentText().startswith("Animation")
+        self.animation_widget.setDisabled(not is_animation)
+
+    def load_user_preference_colormap(self):
+        try:
+            colormap = app().config.user_preferences.color_map
+            if colormap in COLORMAP_NAMES:
+                index = COLORMAP_NAMES.index()
+                self.comboBox_colormaps.setCurrentIndex(index)
+
+        except Exception:
+            self.comboBox_colormaps.setCurrentIndex(0)
+
+    def update_colormap_type(self):
+        colormap = self.get_colormap()
+        app().config.user_preferences.color_map = colormap
+        app().config.update_config_file()
+        try:
+            app().main_window.results_widget.set_colormap(colormap)
+            self.update_plot()
+        except AttributeError:
+            pass
+
+    def get_colormap(self) -> str:
+        index = self.comboBox_colormaps.currentIndex()
+        if not (0 <= index < len(COLORMAP_NAMES)):
+            return "jet"
+        return COLORMAP_NAMES[index]
+
+    def update_transparency_callback(self):
+        transparency = self.slider_transparency.value() / 100
+        app().main_window.results_widget.set_tube_actors_transparency(transparency)
+
+    def update_plot(self):
+
+        self.update_animation_widget_visibility()
+        if self.lineEdit_selected_frequency.text() == "":
+            return
+
+        frequency_selected = float(self.lineEdit_selected_frequency.text())
+        self.frequency = self.frequency_to_index[frequency_selected]
+
+        column = self.frequencies.index(frequency_selected)
+
+        color_scale_setup = self.get_user_color_scale_setup()
+        app().project.set_color_scale_setup(color_scale_setup)
+        app().main_window.results_widget.show_pressure_field(column)
+        app().main_window.results_widget.clear_cache()
+
+    def get_user_color_scale_setup(self):
+
+        color_scale = self.comboBox_color_scale.currentText()
+
+        color_scale_setup = {   
+            "absolute" : color_scale == "Absolute values",
+            "real_values" : color_scale == "Real values",
+            "imag_values" : color_scale == "Imaginary values",
+            "absolute_animation" : color_scale == "Animation (absolute)",
+            }
+
+        return color_scale_setup
+
+    def load_frequencies(self):
+        self.treeWidget_frequencies.clear()
+        _frequencies = app().project.model.frequencies
+
+        for index, frequency in enumerate(_frequencies):
+            new = QTreeWidgetItem([str(index+1), str(frequency)])
+            new.setTextAlignment(0, Qt.AlignCenter)
+            new.setTextAlignment(1, Qt.AlignCenter)
+            self.treeWidget_frequencies.addTopLevelItem(new)
+
+        if isinstance(_frequencies, np.ndarray):
+            self.frequencies = list(_frequencies)
+
+        elif isinstance(_frequencies, list):
+            self.frequencies = _frequencies
+
+        self.frequency_to_index = dict(zip(self.frequencies, np.arange(len(self.frequencies), dtype=int)))
+
+        self.select_first_frequency()
+
+    def select_first_frequency(self):
+        if self.treeWidget_frequencies.topLevelItemCount() == 0:
+            return
+        item = self.treeWidget_frequencies.topLevelItem(0)
+        self.treeWidget_frequencies.setCurrentItem(item)
+        self.on_click_item(item)
+
+    def on_click_item(self, item):
+        self.lineEdit_selected_frequency.setText(item.text(1))
+        self.animation_widget.reset_sliders()
+        self.update_plot()
+
+    def on_doubleclick_item(self, item):
+        self.lineEdit_selected_frequency.setText(item.text(1))
+        self.animation_widget.reset_sliders()
+        self.update_plot()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Enter or event.key() == Qt.Key_Return:
+            self.update_plot()

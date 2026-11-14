@@ -1,0 +1,39 @@
+# Model 2 — connectivity edge classifier — LOCAL-DEBUG profile.
+# Trains in seconds on the geometric/semantic node-pair features (it is a small MLP, not
+# a big net), so this profile is mainly about proving the graph pipeline end-to-end.
+# As with the detector, a good synthetic edge-AP here is a SMOKE TEST, not real performance.
+kind: connectivity
+profile: local_debug
+data_lane: research
+seed: 0
+
+data:
+  synthetic_root: datasets/synthetic/electrical_pilot
+  # Reuse the detector's persisted split so the two models share train/val samples.
+  split_json: outputs/perception/detector/local_debug/yolo/split.json
+  val_fraction: 0.2          # used only if split_json is absent
+  limit_samples: 60
+  k_neighbors: 8             # candidate edges per node (+ all node<->panel pairs)
+
+model:
+  hidden: [64, 64]
+
+train:
+  epochs: 60
+  lr: 0.001
+  batch_size: 4096
+  project: outputs/perception/connectivity
+  name: local_debug
+
+wandb:
+  enabled: true
+  project: cdai-wedge-connectivity
+  mode: offline
+
+infer:
+  k_neighbors: 8
+  edge_conf: 0.5             # min edge-class probability to emit a connection
+
+# The detector profile whose trained weights supply the nodes at eval time.
+detector:
+  profile: local_debug

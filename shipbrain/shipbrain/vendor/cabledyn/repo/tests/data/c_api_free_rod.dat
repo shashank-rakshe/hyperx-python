@@ -1,0 +1,41 @@
+--------------------- CableDyn Input File ------------------------------------
+C API concurrency test deck: a Free rod hung between a Fixed anchor line and a line to a
+Coupled point, so a handle steps the rod through the coupled aggregate (fixed step dtM)
+(test_c_api_threads --mixed).
+--------------------------- LINE TYPES ----------------------------------------
+Name Diam Mass EA BA EI Cdn Cdt Can Cat
+(-) (m) (kg/m) (N) (-) (Nm2) (-) (-) (-) (-)
+line 0.10 80.0 1.0e5 0.0 0.0 1.0 0.0 1.0 0.0
+--------------------------- ROD TYPES -----------------------------------------
+Name Diam Mass Cd Ca CdEnd CaEnd
+(-) (m) (kg/m) (-) (-) (-) (-)
+rodmat 0.20 50.0 1.0 1.0 0.0 0.0
+--------------------------- RODS ----------------------------------------------
+ID RodType Type XA YA ZA XB YB ZB NumSegs Outputs
+(-) (-) (-) (m) (m) (m) (m) (m) (m) (-) (-)
+1 rodmat Free 0.0 0.0 -4.0 0.0 0.0 -2.0 2 -
+--------------------------- POINTS --------------------------------------------
+ID Type X Y Z Mass Vol CdA Ca
+(-) (-) (m) (m) (m) (kg) (m3) (m2) (-)
+1 Fixed 2.0 0.0 -5.0 0.0 0.0 0.0 0.0
+2 Rod1A 0.0 0.0 -4.0 0.0 0.0 0.0 0.0
+3 Rod1B 0.0 0.0 -2.0 0.0 0.0 0.0 0.0
+4 Coupled 0.0 0.0 -1.0 0.0 0.0 0.0 0.0
+--------------------------- LINES ---------------------------------------------
+ID NodeA NodeB Outputs
+(-) (-) (-) (-)
+1 2 1 -
+2 3 4 -
+--------------------------- SECTIONS ------------------------------------------
+LineID LineType Length NumSegs
+(-) (-) (m) (-)
+1 line 3.5 3
+2 line 1.2 2
+--------------------------- OPTIONS -------------------------------------------
+9.80665 g
+1025.0 rhoW
+10.0 WtrDpth
+1.0e5 kBot
+0.05 dtM
+1.0 TMax
+--------------------------- END -----------------------------------------------

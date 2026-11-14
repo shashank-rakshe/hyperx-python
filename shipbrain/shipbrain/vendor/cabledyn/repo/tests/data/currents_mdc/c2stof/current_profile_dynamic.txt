@@ -1,0 +1,9 @@
+--------------------- MoorDyn dynamic currents File ----------------------------------
+x velocities only; depths that single precision rounds
+
+
+-40.0 -12.3 -0.7
+
+0.0 0.1 0.4 0.9   # comment
+2.5 0.2 0.5 1.1   # comment
+6.0 0.05 0.3 0.6   # comment

@@ -1,0 +1,47 @@
+[engine]
+model = "meta-llama/Llama-3.1-8B"
+dtype = "half"
+max_model_len = 4096
+max_num_batched_tokens = 2048
+max_num_seqs = 32
+block_size = 16
+kv_cache_memory_bytes = 536870912
+
+[engine.hf_overrides]
+num_hidden_layers = 1
+
+[repeat]
+"model.model.layers.0" = "num_hidden_layers"
+
+[components]
+embedding = "model.model.embed_tokens"
+input_norm = "model.model.layers.*.input_layernorm"
+qkv = "model.model.layers.*.self_attn.qkv_proj"
+rope = "model.model.layers.*.self_attn.rotary_emb"
+attention = "model.model.layers.*.self_attn.attn"
+output_projection = "model.model.layers.*.self_attn.o_proj"
+post_attention_norm = "model.model.layers.*.post_attention_layernorm"
+gate_up = "model.model.layers.*.mlp.gate_up_proj"
+activation = "model.model.layers.*.mlp.act_fn"
+down = "model.model.layers.*.mlp.down_proj"
+final_norm = "model.model.norm"
+lm_head = "model.logits_processor"
+sampler = "sampler"
+
+[[batches]]
+requests = [{ count = 1, query = [8, 32, 128, 512, 2048], context = 0 }]
+
+[[batches]]
+requests = [{ count = [1, 4, 8, 16, 32], query = 1, context = [0, 128, 512, 2048] }]
+
+[[batches]]
+requests = [
+  { query = [128, 512], context = 0 },
+  { count = 31, query = 1, context = 512 },
+]
+
+[[batches]]
+requests = [
+  { query = 1, context = 2048 },
+  { count = 31, query = 1, context = [128, 512] },
+]

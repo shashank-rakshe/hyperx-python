@@ -1,0 +1,9 @@
+--------------------- MoorDyn steady currents File ----------------------------------
+Tabulated file with the water currents components
+z (m), ux (m/s), uy (m/s), uz (m/s)
+-50.0 0.20 0.00 0.00
+-40.0 0.25 0.00 0.00
+-30.0 0.30 0.00 0.00
+-20.0 0.38 0.00 0.00
+-10.0 0.48 0.00 0.00
+0.0   0.60 0.00 0.00

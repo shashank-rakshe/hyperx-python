@@ -1,0 +1,452 @@
+from enum import IntEnum
+
+import numpy as np
+from PySide6.QtCore import QEvent, QObject, Qt, Signal
+
+from pulse import app
+from pulse.interface import error_title
+from pulse.interface.ui_generated.plots.results.acoustic.plot_transmission_loss_ui import PlotTransmissionLoss_UI
+from pulse.interface.user_input.data_handler.export_model_results import ExportModelResults
+from pulse.interface.user_input.numeric_checks.double_validator import StrictDoubleValidator
+from pulse.interface.user_input.plots.general.frequency_response_plotter import FrequencyResponsePlotter
+from pulse.interface.user_input.project.print_message import PrintMessageInput
+from pulse.model.elements.acoustic.acoustic_calculator import RadiationImpedanceType
+from pulse.model.elements.acoustic.acoustic_calculator import AcousticCalculator
+from pulse.model.properties.fluid import Fluid
+
+
+class DataType(IntEnum):
+    TRANSMISSION_LOSS = 0
+    NOISE_REDUCTION = 1
+
+
+class CutoffFrequency(IntEnum):
+    DISABLED = 0
+    USER_DEFINED = 1
+    AUTOMATIC = 2
+
+
+class PlotTransmissionLoss(PlotTransmissionLoss_UI):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        app().main_window.set_input_widget(self)
+
+        self._config_window()
+        self._initialize()
+        self._configure_validator()
+        self._create_connections()
+        self.load_nodes_ids()
+
+    @property
+    def project(self):
+        return app().project
+
+    @property
+    def model(self):
+        return app().project.model
+
+    @property
+    def properties(self):
+        return app().project.model.properties
+
+    @property
+    def preprocessor(self):
+        return app().project.model.preprocessor
+
+    def _initialize(self):
+        self.before_run = self.project.get_pre_solution_model_checks()
+        self.diameters_from_node = self.preprocessor.neighbor_elements_diameter()
+
+        self.unit_label = "dB"
+        self.current_line_edit = None
+
+    def _config_window(self):
+        self.setWindowFlags(Qt.WindowStaysOnTopHint)
+        self.setWindowModality(Qt.WindowModal)
+        self.setWindowIcon(app().main_window.pulse_icon)
+        self.setWindowTitle("OpenPulse")
+
+    def _configure_validator(self):
+        self.lineEdit_cutoff_frequency.setValidator(StrictDoubleValidator(0, 1e8, 6))
+
+    def _create_connections(self):
+        #
+        self.comboBox_processing_selector.currentIndexChanged.connect(self.update_flip_buttons)
+        self.comboBox_cutoff_frequency_options.currentIndexChanged.connect(self.cutoff_frequency_options_callback)
+        #
+        self.pushButton_help.clicked.connect(self.call_help)
+        self.pushButton_flip_nodes.clicked.connect(self.flip_nodes)
+        self.pushButton_plot_data.clicked.connect(self.call_plotter)
+        #
+        self.clickable(self.lineEdit_input_node_id).connect(self.input_line_edit_clicked)
+        self.clickable(self.lineEdit_output_node_id).connect(self.output_line_edit_clicked)
+        #
+        app().main_window.selection_changed.connect(self.selection_callback)
+        #
+        self.output_line_edit_clicked()
+        self.selection_callback()
+        self.update_flip_buttons()
+
+    def selection_callback(self):
+
+        selected_nodes = app().main_window.list_selected_nodes()
+
+        if len(selected_nodes) == 1:
+            self.current_line_edit.setText(str(selected_nodes[0]))
+
+    def load_nodes_ids(self):
+
+        input_node = list()
+        output_node = list()
+
+        for (property, node_id) in self.properties.nodal_properties.keys():
+
+            if property == "radiation_impedance":
+                volume_velocity = self.properties._get_property("volume_velocity", node_ids=node_id)
+                if volume_velocity is None:
+                    if node_id not in output_node:
+                        output_node.append(node_id)
+
+                elif node_id not in input_node:
+                    input_node.append(node_id)
+
+        if len(input_node) == 1:
+            self.lineEdit_input_node_id.setText(str(input_node[0]))
+
+        if len(output_node) == 1:
+            self.lineEdit_output_node_id.setText(str(output_node[0]))
+
+        if input_node and output_node:
+            return False
+
+        elif not input_node:
+            self.lineEdit_input_node_id.setFocus()
+
+        elif not output_node:
+            self.lineEdit_input_node_id.setFocus()
+
+        self.close()
+        title = "Invalid inputs detected"
+        message = "The transmission loss calculation requires only one active excitation source "
+        message += "at the input surface, commonly in the form of a incident plane wave with and a "
+        message += "specific impedance at the output surface. Analogous results are obtained whether "
+        message += "a surface velocity, combined with specific impedances in both input and output "
+        message += "surfaces, is adopted. Any mismatch in these requirements will make the transmission "
+        message += "loss calculation unfeasible."
+        PrintMessageInput([error_title, title, message])
+        return True
+
+    def clickable(self, widget):
+        class Filter(QObject):
+            clicked = Signal()
+
+            def eventFilter(self, obj, event):
+                if obj == widget and event.type() == QEvent.MouseButtonRelease and obj.rect().contains(event.pos()):
+                    self.clicked.emit()
+                    return True
+                else:
+                    return False
+
+        filter = Filter(widget)
+        widget.installEventFilter(filter)
+        return filter.clicked
+
+    def input_line_edit_clicked(self):
+        self.current_line_edit = self.lineEdit_input_node_id
+        self.highlight_line_edit()
+
+    def output_line_edit_clicked(self):
+        self.current_line_edit = self.lineEdit_output_node_id
+        self.highlight_line_edit()
+
+    def highlight_line_edit(self):
+        self.current_line_edit.setStyleSheet("""border-color: rgb(32, 207, 255); border-width: 2px;""")
+        if self.current_line_edit == self.lineEdit_input_node_id:
+            self.lineEdit_output_node_id.setStyleSheet("")
+        elif self.current_line_edit == self.lineEdit_output_node_id:
+            self.lineEdit_input_node_id.setStyleSheet("")
+
+    def alternate_node_id_input_fields(self):
+        if self.current_line_edit == self.lineEdit_input_node_id:
+            self.output_line_edit_clicked()
+        else:
+            self.input_line_edit_clicked()
+
+        self.current_line_edit.setFocus()
+
+    def flip_nodes(self):
+        temp_text_input = self.lineEdit_input_node_id.text()
+        temp_text_output = self.lineEdit_output_node_id.text()
+        self.lineEdit_input_node_id.setText(temp_text_output)
+        self.lineEdit_output_node_id.setText(temp_text_input)
+
+    def update_flip_buttons(self):
+        index = self.comboBox_processing_selector.currentIndex()
+        if index == DataType.TRANSMISSION_LOSS:
+            self.pushButton_flip_nodes.setDisabled(True)
+        else:
+            self.pushButton_flip_nodes.setDisabled(False)
+
+    def call_help(self):
+        window_title = "Help"
+        if self.comboBox_processing_selector.currentIndex() == DataType.TRANSMISSION_LOSS:
+            title = "Required data to process the Transmission Loss"
+            message = "Dear user, to determine the Transmission Loss (TL) of a filter or duct it is necessary to "
+            message += "select the input node ID where the indicent wave is applied (usually by a volume velocity "
+            message += "source) and the output node ID with an anechoic termination. An anechoic termination also "
+            message += "should be applied at the input node ID to avoid wave reflections caused by the source itself."
+            message += "\n\nInput node ID: incident plane wave (volume velocity + anechoic impedance)"
+            message += "\nOutput node ID: outlet of filter or duct with an anechoic impedance\n"
+
+        else:
+            title = "Required data to process the Noise Reduction"
+            message = "Dear user, to determine the Noise Reduction (NR) it is necessary to select the input "
+            message += "node ID at inlet of the duct or filter and the node ID at the end termination. "
+            message += "By definition, the NR represents the sound pressure level differece between the "
+            message += "input and output of a duct or filter and it does not require a anechoic termination."
+
+        PrintMessageInput([window_title, title, message], height=320, width=580)
+
+    def check_nodes_information(self):
+
+        if self.comboBox_processing_selector.currentIndex() == DataType.TRANSMISSION_LOSS:
+
+            vv_data = self.properties._get_property("volume_velocity", node_ids=self.input_node_id)
+            input_impedance = self.properties._get_property("radiation_impedance", node_ids=self.input_node_id)
+            output_impedance = self.properties._get_property("radiation_impedance", node_ids=self.output_node_id)
+            
+            if (vv_data, input_impedance).count(None):
+                self.input_node_id = None
+                self.lineEdit_input_node_id.clear()
+
+            elif "values" in vv_data.keys():
+                self.input_volume_velocity = np.real(vv_data["values"])
+                input_impedance_type = input_impedance.get("impedance_type")
+                if isinstance(input_impedance_type, str):
+                    if input_impedance_type != RadiationImpedanceType.ANECHOIC:
+                        self.input_node_id = None
+                        self.lineEdit_input_node_id.clear()
+
+            if output_impedance is None:
+                self.output_node_id = None
+                self.lineEdit_output_node_id.clear()
+
+            elif isinstance(output_impedance, dict):
+                output_impedance_type = output_impedance.get("impedance_type")
+                if isinstance(output_impedance_type, str):
+                    if output_impedance_type != RadiationImpedanceType.ANECHOIC:
+                        self.output_node_id = None
+                        self.lineEdit_output_node_id.clear()
+
+        else:
+
+            if (self.input_node_id, self.output_node_id).count(None):
+                return True
+
+        if (self.input_node_id, self.output_node_id).count(None):
+            self.call_help()
+            return True
+
+    def check_inputs(self):
+
+        input_node = self.lineEdit_input_node_id.text()
+        stop, self.input_node_id = self.before_run.check_selected_ids(input_node, "nodes", single_id=True)
+        if stop:
+            self.lineEdit_input_node_id.setFocus()
+            return True
+
+        output_node = self.lineEdit_output_node_id.text()
+        stop, self.output_node_id = self.before_run.check_selected_ids(output_node, "nodes", single_id=True)
+        if stop:
+            self.lineEdit_output_node_id.setFocus()
+            return True
+        
+        if self.check_nodes_information():
+            return True
+        
+        if self.comboBox_cutoff_frequency_options.currentIndex() != CutoffFrequency.DISABLED:
+            line_edit = self.lineEdit_cutoff_frequency
+            if line_edit.text() == "":
+                line_edit.setFocus()
+                return True
+
+    def get_minor_inner_diameter_from_node(self, node: int):
+
+        data = self.diameters_from_node.get(node)
+        if data is None:
+            return None, None, None
+
+        density = list()
+        speed_of_sound = list()
+        inner_diameter = list()
+
+        for (index, _, int_dia) in data:
+            element_attributes = self.preprocessor.elements_attributes.get(index)
+            fluid = element_attributes.fluid
+
+            inner_diameter.append(int_dia)
+            density.append(fluid.density)
+
+            act_calculator = AcousticCalculator(element_attributes)
+            speed_of_sound.append(act_calculator.speed_of_sound_corrected())
+
+        if not inner_diameter:
+            return None, None, None
+
+        ind = inner_diameter.index(min(inner_diameter))
+
+        return inner_diameter[ind], density[ind], speed_of_sound[ind]
+
+    def compute_TL_or_NR(self):
+
+        P_out = self.project.acoustic_postprocessing.get_acoustic_response_spectrum(self.output_node_id)
+
+        d_in, rho_in, c0_in = self.get_minor_inner_diameter_from_node(self.input_node_id)
+        if (d_in, rho_in, c0_in).count(None):
+            return None
+
+        d_out, rho_out, c0_out = self.get_minor_inner_diameter_from_node(self.output_node_id)
+        if (d_out, rho_out, c0_out).count(None):
+            return None
+
+        A_in = np.pi * (d_in**2) / 4
+        A_out = np.pi * (d_out**2) / 4
+
+        # the zero_shift constant is summed to avoid zero values either in P_input2 or P_output2 variables
+        zero_shift = 1e-12
+
+        index = self.comboBox_processing_selector.currentIndex()
+        if index == 0:
+
+            ## Reference: 
+            ## Howard, Carl Q. and Cazzolato, Benjamin S. Acoustic Analyses Using MATLAB® and ANSYS®. pags. 74 and 75. 2014.
+  
+            Q = self.input_volume_velocity
+
+            u_n = Q / A_in
+            P_in = u_n * rho_in * c0_in / 2
+
+            I_in = ((P_in / np.sqrt(2))**2) / (rho_in * c0_in)
+            I_out = (np.real(P_out * np.conjugate(P_out)) / 2) / (rho_out * c0_out)
+
+            W_in = 10 * np.log10(I_in * A_in)
+            W_out = 10 * np.log10(I_out * A_out)
+
+            TL = W_in - W_out
+
+            return TL
+
+        if index == 1:
+            P_in = self.project.acoustic_postprocessing.get_acoustic_response_spectrum(self.input_node_id)
+            Prms_in2 = np.real(P_in * np.conjugate(P_in)) / 2 + zero_shift
+            Prms_out2 = np.real(P_out * np.conjugate(P_out)) / 2 + zero_shift
+            NR = 10 * np.log10(Prms_in2 / Prms_out2)
+
+            return NR
+
+    def cutoff_frequency_options_callback(self):
+        index = self.comboBox_cutoff_frequency_options.currentIndex()
+        user_defined = index == CutoffFrequency.USER_DEFINED
+        self.lineEdit_cutoff_frequency.setEnabled(user_defined)
+
+        if index == CutoffFrequency.DISABLED:
+            self.lineEdit_cutoff_frequency.clear()
+
+        elif index == CutoffFrequency.AUTOMATIC:
+            f_cut = self.compute_pipe_cutoff_frequency()
+            if isinstance(f_cut, float):
+                value = f"{f_cut : .4f}".strip()
+                self.lineEdit_cutoff_frequency.setText(value)
+
+    def compute_pipe_cutoff_frequency(self):
+
+        d_in = 0.
+        for line_id, data in self.properties.line_properties.items():
+            if not isinstance(data, dict):
+                continue
+
+            section_type_label = data.get("section_type_label")
+            if section_type_label != "pipe":
+                continue
+
+            d_out, t, *_ = data.get("section_parameters")
+            if d_out - 2 * t > d_in:
+                d_in = d_out - 2 * t
+
+                fluid = data.get("fluid")
+
+        if not isinstance(fluid, Fluid):
+            return None
+   
+        Co = fluid.speed_of_sound
+
+        if d_in == 0:
+            return None
+
+        # cut-off frequency of a circular pipe
+        f_cut = 1.8412 * Co / (np.pi * d_in)
+
+        return f_cut
+
+    def join_model_data(self):
+
+        self.model_results = dict()
+        self.title = f"Acoustic frequency response - {self.project.analysis_method} method"
+
+        if self.comboBox_processing_selector.currentIndex() == DataType.TRANSMISSION_LOSS:
+            y_label = "Transmission loss"
+
+        else:
+            y_label = "Noise reduction"
+
+        legend_label = "{} between nodes {} and {}".format(
+            y_label,
+            self.input_node_id,
+            self.output_node_id,
+        )
+
+        key = ("nodes", (self.input_node_id, self.output_node_id))
+
+        self.model_results[key] = {
+            "x_data": self.model.frequencies,
+            "y_data": self.compute_TL_or_NR(),
+            "x_label": "Frequency [Hz]",
+            "y_label": y_label,
+            "title": self.title,
+            "data_information": legend_label,
+            "legend": legend_label,
+            "unit": self.unit_label,
+            "color": [0, 0, 1],
+            "linestyle": "-",
+        }
+
+    def call_plotter(self):
+        if self.check_inputs():
+            return
+
+        self.join_model_data()
+        self.plotter = FrequencyResponsePlotter()
+        # self.plotter.imported_dB_data()
+        self.plotter.imported_real_data(decibel_data=True)
+
+        f_cut = None
+        if self.comboBox_cutoff_frequency_options.currentIndex() != CutoffFrequency.DISABLED:
+            f_cut = float(self.lineEdit_cutoff_frequency.text()) 
+
+        self.plotter.set_cutoff_frequency(f_cut)
+        self.plotter._set_model_results_data_to_plot(self.model_results)
+
+    def call_data_exporter(self):
+        if self.check_inputs():
+            return
+
+        self.join_model_data()
+        self.exporter = ExportModelResults()
+        self.exporter._set_data_to_export(self.model_results)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Enter or event.key() == Qt.Key_Return:
+            self.call_plotter()
+
+        if event.key() in [Qt.Key_Up, Qt.Key_Down]:
+            self.alternate_node_id_input_fields()

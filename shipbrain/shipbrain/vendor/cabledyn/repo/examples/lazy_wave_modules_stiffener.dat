@@ -1,0 +1,80 @@
+--------------------- CableDyn Input File ------------------------------------
+Lazy-wave power cable with discrete buoyancy modules and a bend stiffener on a moving vessel in a current, 36 s
+-- The 80 m Gulf of Mexico cable of lazy_wave_buoyancy_modules.dat: its buoyant stretch is ten
+-- discrete modules (ATTACHMENTS series 70.614:5.0:115.614) on the bare cable, in a 0.3 m/s
+-- current along -X, from the touchdown toward the hang-off; seabed friction (0.5) holds the
+-- grounded tail. The hang-off carries the 4 m polyurethane bend stiffener of
+-- lazy_wave_bend_stiffener.dat (STIFFENERS: a 0.4 m cylindrical root and a 3.6 m cone) and is
+-- clamped (Rigid) along its static tangent on the vessel of lazy_wave_vessel_motion.dat
+-- (vesselMotion: 1.5 m surge, 2 m heave and 3 deg pitch at 12 s, after a 12 s smooth start).
+-- The mesh puts 0.15 m elements under the stiffener and a couple of metres past its tip, and a
+-- node at every module, 0.5 m apart along the buoyant stretch. The modules and the stiffener
+-- both enter the static solve, so the march starts in the equilibrium in the current.
+-- BendMom1N1 + StfMom1N1 is the root moment, BendMom1N1 the cable's share; Curv1N28 samples
+-- the cable 4.05 m from the root, just past the stiffener tip. The Outputs flag r writes the
+-- range graph (tension, curvature, bend moment, declination and seabed clearance envelopes
+-- from RangeStart) to <root>.Line1.range.out.
+--------------------- LINE TYPES ---------------------------------------------
+TypeName  Diam   MassDenInAir  EA       BA   EI       Cd_n Cd_t Ca_n Ca_t
+(-)       (m)    (kg/m)        (N)      (-)  (N-m2)   (-)  (-)  (-)  (-)
+bare      0.160  36.70         4.69e8   0.0  1.99e4   1.2  0.1  1.0  0.0
+--------------------- POINTS ------------------------------------------------
+ID  Type     X       Y    Z
+(-) (-)      (m)     (m)  (m)
+1   Coupled  5.0     0.0  -14.0
+2   Fixed    125.0   0.0  -80.0
+--------------------- LINES -------------------------------------------------
+ID  NodeA  NodeB  Outputs
+(-) (-)    (-)    (-)
+1   1      2      r
+--------------------- SECTIONS ----------------------------------------------
+LineID  LineType  Length   NumSegs
+(-)     (-)       (m)      (-)
+1       bare      6.0      40
+1       bare      62.114   62
+1       bare      50.000   100
+1       bare      52.101   52
+--------------------- ATTACHMENTS -------------------------------------------
+LineID  ArcLength               Mass     Volume   CdA    Ca    CdAx
+(-)     (m)                     (kg)     (m^3)    (m^2)  (-)   (m^2)
+1       70.614:5.0:115.614      114.15   0.2297   0.78   1.0   0.2042
+--------------------- STIFFENERS --------------------------------------------
+-- Rows run outward from the root at End A: the cylindrical root, then the cone.
+LineID  End  Length  RootOD  TipOD  InnerD  E       Density
+(-)     (-)  (m)     (m)     (m)    (m)     (Pa)    (kg/m^3)
+1       A    0.4     0.45    0.45   0.17    5.0e7   1150
+1       A    3.6     0.45    0.18   0.17    5.0e7   1150
+--------------------- END CONNECTIONS ---------------------------------------
+-- End A is clamped along the static hang-off tangent in the current (84.4 deg below horizontal).
+LineID  End  Stiffness  EzX     EzY  EzZ
+(-)     (-)  (N-m/rad)  (-)     (-)  (-)
+1       A    Rigid      0.0984  0.0  -0.9951
+--------------------- OPTIONS -----------------------------------------------
+9.80665  g                - Gravitational acceleration (m/s^2) [default: 9.80665]
+1025.0   rhoW             - Water density (kg/m^3) [default: 1025]
+80.0     WtrDpth          - Water depth for the flat seabed (m) [default: absent standalone; host-owned OpenFAST]
+1.0e5    kBot             - Seabed penalty stiffness base (Pa/m) [default: 1.0e5]
+1.0e4    cBot             - Seabed normal damping base (Pa-s/m) [default: 1.0e4]
+0.05     dtM              - CableDyn internal time step (s) [default: omitted standalone; the glue DT in OpenFAST]
+36.0     TMax             - Standalone simulation duration (s), including the 12 s smooth start
+data/vessel/vessel_surge_heave_pitch_12s_dt005.txt vesselMotion - 6-DOF vessel record moving every Coupled point rigidly
+0.0|0.0|0.0 vesselRef     - Vessel reference point, rotation centre and RAO origin (m) [default: 0|0|0]
+12.0     RangeStart       - First output time in the range graphs (s) [default: 0]
+uniform -0.3 0.0 0.0 current - Current model and X/Y/Z velocity (m/s) {none; uniform; profile} [default: none]
+none      waves            - Wave model, height, period, and direction (m, s, deg) {none; airy; jonswap} [default: none]
+0         WaterKin         - Water-kinematics source {0/none; file; SEASTATE coupled only} [default: no policy]
+0.4       rhoInf           - Generalised-alpha spectral radius {0<=rhoInf<=1} [default: 0.4]
+False     modified_newton  - Tangent-reuse mode {False=full Newton; True=guarded reuse} [default: False]
+False     adaptive_mesh    - Automatic finite-EI refinement {False; True} [default: False]
+dynamic_solver 1.0e-8 1.0e-14 30 12 - Relative tolerance, absolute tolerance, max iterations, backtracks [defaults shown]
+0.5       frictionMu       - Seabed friction coefficient, holding the grounded tail in the current {none; value>=0} [default: none]
+-- Complete option/default reference: cabledyn_options_reference.dat and doc/options.rst.
+--------------------- OUTPUTS -----------------------------------------------
+"FairTen1"
+"AnchTen1"
+"FairIncl1"
+"BendMom1N1"
+"StfMom1N1"
+"Curv1N28"
+"TDP1s"
+--------------------- need this line ----------------------------------------

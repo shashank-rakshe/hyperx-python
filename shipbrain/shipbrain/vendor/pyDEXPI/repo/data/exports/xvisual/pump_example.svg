@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1189.0" height="840.9999999999999" viewBox="0.0 0.0 1189.0 840.9999999999999">
+  <rect x="0.0" y="0.0" width="1189.0" height="840.9999999999999" fill="#f0f0f0" />
+  <metadata>DEXPI Diagram: Z123456.vsdx</metadata>
+  <g id="diagram-Z123456.vsdx" class="diagram" fill="rgb(255,255,255)">
+    <g id="E_1" class="representation-group">
+      <g class="static">
+        <g>
+          <g id="XVT_252" transform="translate(582.50,411.00)">
+            <path d="M 40.00,0.00 A 40.00,40.00 0.00 0,1 -40.00,0.00" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+            <path d="M -40.00,0.00 A 40.00,40.00 0.00 0,1 40.00,0.00" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+            <polyline points="0.0014722222222189885,39.999407333333295 39.99941666666666,0.0014628888888807978" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+            <polyline points="39.99941666666666,0.0014628888888807978 0.0014722222222189885,-40.00000933333334" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+          </g>
+        </g>
+      </g>
+    </g>
+    <g id="PNS_Virt" class="representation-group">
+      <g id="Virt_1" class="representation-group">
+        <g id="PC_2" class="representation-group">
+          <g class="static">
+            <g>
+              <g id="XVT_614" transform="translate(485.00,411.00)">
+                <polyline points="-1.8767222222221642,7.500282222222166 -1.8767222222221642,-7.499828888888947" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="1.8733055555556142,7.500282222222166 1.8733055555556142,-7.499828888888947" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+              </g>
+            </g>
+          </g>
+          <g id="PC_2" class="representation-group" />
+        </g>
+      </g>
+      <g id="Virt_2" class="representation-group">
+        <g id="PC_5" class="representation-group">
+          <g class="static">
+            <g>
+              <g id="XVT_17" transform="translate(441.25,411.00)">
+                <polyline points="-8.749999999999996,4.3751322222222235 -8.749999999999996,-4.373756666666669" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="-8.749999999999996,-4.373756666666669 8.751305555555557,0.0006877777777773986" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="8.751305555555557,0.0006877777777773986 -8.749999999999996,4.3751322222222235" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+              </g>
+            </g>
+          </g>
+          <g id="PC_5" class="representation-group" />
+        </g>
+      </g>
+      <g id="Virt_3" class="representation-group">
+        <g id="PC_6" class="representation-group">
+          <g class="static">
+            <g>
+              <g id="XVT_614" transform="translate(397.50,411.00)">
+                <polyline points="-1.8767222222221642,7.500282222222166 -1.8767222222221642,-7.499828888888947" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="1.8733055555556142,7.500282222222166 1.8733055555556142,-7.499828888888947" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+              </g>
+            </g>
+          </g>
+          <g id="PC_6" class="representation-group" />
+        </g>
+      </g>
+      <g id="Virt_4" class="representation-group">
+        <g id="PC_7" class="representation-group">
+          <g class="static">
+            <g>
+              <g id="XVT_614" transform="translate(347.50,411.00)">
+                <polyline points="-1.8767222222221642,7.500282222222166 -1.8767222222221642,-7.499828888888947" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="1.8733055555556142,7.500282222222166 1.8733055555556142,-7.499828888888947" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+              </g>
+            </g>
+          </g>
+          <g id="PC_7" class="representation-group" />
+        </g>
+      </g>
+      <g id="Virt_5" class="representation-group">
+        <g id="PC_8" class="representation-group">
+          <g class="static">
+            <g>
+              <g id="XVT_609" transform="translate(368.44,441.16)">
+                <polyline points="-4.063044722222225,-13.904952066855547 12.185899722222217,-13.904952066855547" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="12.185899722222217,-13.904952066855547 12.185899722222217,-46.406368733522214" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="12.185899722222217,-46.406368733522214 -4.063044722222225,-46.406368733522214" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="-4.063044722222225,-46.406368733522214 -4.063044722222225,-13.904952066855547" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="12.185899722222217,-13.904952066855547 8.125427499999994,-22.032952066855547" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="6.499121944444436,-25.282035400188885 2.0329552777777735,-34.2178965113" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="0.0009552777777734889,-38.28189651129999 -4.063044722222225,-46.406368733522214" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+              </g>
+            </g>
+          </g>
+          <g id="PC_8" class="representation-group" />
+        </g>
+      </g>
+      <g id="Virt_6" class="representation-group">
+        <g id="PC_13" class="representation-group">
+          <g class="static">
+            <g>
+              <g id="XVT_614" transform="translate(660.00,411.00)">
+                <polyline points="-1.8767222222221642,7.500282222222166 -1.8767222222221642,-7.499828888888947" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="1.8733055555556142,7.500282222222166 1.8733055555556142,-7.499828888888947" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+              </g>
+            </g>
+          </g>
+          <g id="PC_13" class="representation-group" />
+        </g>
+      </g>
+      <g id="Virt_7" class="representation-group">
+        <g id="PC_15" class="representation-group">
+          <g class="static">
+            <g>
+              <g id="XVT_17" transform="translate(702.50,411.00)">
+                <polyline points="-8.749999999999996,4.3751322222222235 -8.749999999999996,-4.373756666666669" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="-8.749999999999996,-4.373756666666669 8.751305555555557,0.0006877777777773986" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+                <polyline points="8.751305555555557,0.0006877777777773986 -8.749999999999996,4.3751322222222235" fill="none" stroke="rgb(0,0,0)" stroke-width="1.0" vector-effect="non-scaling-stroke" />
+              </g>
+            </g>
+          </g>
+          <g id="PC_15" class="representation-group" />
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

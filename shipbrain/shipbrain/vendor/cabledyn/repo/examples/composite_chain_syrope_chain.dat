@@ -1,0 +1,59 @@
+--------------------- CableDyn Input File ------------------------------------
+CableDyn driver deck -- composite chain + SYROPE polyester + chain mooring on a moving vessel
+-- One LINE of three SECTIONS in End-A(fairlead)->End-B(anchor) order: a 100 m studless chain
+-- at the fairlead, a 400 m polyester section with the Syrope working-curve model, and a 250 m
+-- chain at the anchor, in 200 m of water. The line of composite_chain_poly_chain.dat with its
+-- anchor 30 m further out, so the polyester carries about 1 MN. The polyester's EA and BA
+-- columns, its settings and OWC files, are those of syrope_polyester_mooring.dat. The static
+-- start puts every polyester element on its rest curve (here the OWC: the rope is virgin), so
+-- the dynamics start in that equilibrium. The vessel then surges, heaves and pitches in the
+-- 12 s record of lazy_wave_vessel_motion.dat, with its 12 s smooth start.
+--   chain 155 mm R4 studless: volume-equivalent diam 0.2791 m, dry mass 480.93 kg/m, EA 2.058e9 N.
+--   polyester 181.8 mm: diam 0.1438 m, dry mass 22.42 kg/m.
+--------------------- LINE TYPES ---------------------------------------
+TypeName    Diam     MassDenInAir   EA                                       BA            EI       Cd_n  Cd_t  Ca_n  Ca_t
+(-)         (m)      (kg/m)         (-)                                      (N-s|N-s)     (N-m^2)  (-)   (-)   (-)   (-)
+chain       0.2791   480.93         2.058e9                                  -1.0          0.0      1.37  0.64  1.0   0.0
+polyester   0.1438   22.42          "SYROPE:data/syrope/syrope_settings.dat|1.53e8|23.12"  5.0e10|1.0e5  0.0      1.2   0.2   1.0   0.0
+--------------------- POINTS -------------------------------------------
+ID    Type      X        Y      Z         Mass    Vol     CdA    Ca
+(-)   (-)       (m)      (m)    (m)       (kg)    (m^3)   (m^2)  (-)
+1     Fixed     780.0    0.0    -200.0    0       0       0      0
+2     Coupled   58.0     0.0    -14.0     0       0       0      0
+--------------------- LINES --------------------------------------------
+ID    NodeA   NodeB   Outputs
+(-)   (-)     (-)     (-)
+1     2       1       -
+--------------------- SECTIONS -----------------------------------------
+LineID   LineType    Length   NumSegs
+(-)      (-)         (m)      (-)
+1        chain       100.0    12
+1        polyester   400.0    40
+1        chain       250.0    25
+--------------------- OPTIONS ------------------------------------------
+9.80665      g         - Gravitational acceleration (m/s^2) [default: 9.80665]
+1025.0       rhoW      - Water density (kg/m^3) [default: 1025]
+200.0        WtrDpth   - Water depth (m) [default: absent standalone; host-owned OpenFAST]
+3.0e6        kBot      - Seabed penalty stiffness base (Pa/m) [default: 1.0e5]
+1.0e4    cBot              - Seabed normal damping base (Pa-s/m) [default: 1.0e4]
+0.05     dtM               - CableDyn internal time step (s) [default: omitted standalone; the glue DT in OpenFAST]
+36.0     TMax              - Standalone simulation duration (s), including the 12 s smooth start
+data/vessel/vessel_surge_heave_pitch_12s_dt005.txt vesselMotion - 6-DOF vessel record moving every Coupled point rigidly
+0.0|0.0|0.0 vesselRef - Vessel reference point, rotation centre and RAO origin (m) [default: 0|0|0]
+0.4       rhoInf           - Generalised-alpha spectral radius {0<=rhoInf<=1} [default: 0.4]
+False     modified_newton  - Tangent-reuse mode {False=full Newton; True=guarded reuse} [default: False]
+False     adaptive_mesh    - Automatic finite-EI refinement {False; True} [default: False]
+dynamic_solver 1.0e-8 1.0e-14 30 12 - Relative tolerance, absolute tolerance, max iterations, backtracks [defaults shown]
+none      frictionMu       - Seabed friction coefficient {none; value>=0} [default: none]
+none      current           - Current model and velocity (m/s) {none; uniform; profile} [default: none]
+none      waves             - Wave model, height, period, and direction (m, s, deg) {none; airy; jonswap} [default: none]
+0         WaterKin          - Water-kinematics source {0/none; file; SEASTATE coupled only} [default: no policy]
+-- Complete option/default reference: cabledyn_options_reference.dat and doc/options.rst.
+--------------------- OUTPUTS ------------------------------------------
+"FairTen1"
+"AnchTen1"
+"FairIncl1"
+"AnchIncl1"
+"Point2px"
+"Point2pz"
+--------------------- need this line -----------------------------------

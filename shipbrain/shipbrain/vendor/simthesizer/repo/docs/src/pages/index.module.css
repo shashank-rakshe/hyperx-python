@@ -1,0 +1,443 @@
+/* Hero */
+
+.hero {
+  position: relative;
+  padding: 7rem 0 6rem;
+  overflow: hidden;
+  background:
+    radial-gradient(60rem 30rem at 85% -10%, var(--sz-signal-soft), transparent 60%),
+    radial-gradient(60rem 30rem at 15% -10%, var(--sz-signal-soft), transparent 60%),
+    radial-gradient(50rem 30rem at -10% 110%, var(--sz-trace-soft), transparent 60%),
+    var(--sz-bg);
+  border-bottom: 1px solid var(--sz-border);
+}
+
+.heroInner {
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 0 var(--ifm-spacing-horizontal);
+  text-align: center;
+}
+
+.heroTitle {
+  margin: 0;
+  line-height: 0;
+}
+
+.wordmark {
+  height: clamp(3.6rem, 10vw, 7.5rem);
+  width: auto;
+  max-width: 100%;
+}
+
+.tagline {
+  margin: 1.8rem auto 0;
+  /* One line when it fits; balanced lines when it wraps. */
+  text-wrap: balance;
+  font-size: clamp(1.15rem, 2.2vw, 1.55rem);
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--sz-muted);
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.8rem;
+  margin-top: 2.2rem;
+}
+
+/* Name */
+
+.nameBand {
+  padding: 3.5rem 0;
+  border-bottom: 1px solid var(--sz-border);
+  text-align: center;
+}
+
+.equation {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 0.3rem 1rem;
+  margin: 0 0 0.9rem;
+  font-family: var(--ifm-heading-font-family);
+  font-size: clamp(1.7rem, 3.4vw, 2.6rem);
+  font-weight: 600;
+}
+
+.term {
+  color: var(--sz-muted);
+}
+
+.term b {
+  color: var(--sz-text);
+}
+
+.op {
+  color: var(--sz-muted);
+  font-weight: 500;
+}
+
+.result {
+  font-weight: 800;
+  color: var(--sz-signal);
+}
+
+.nameNote {
+  margin: 0;
+  font-size: clamp(1.1rem, 1.7vw, 1.3rem);
+  line-height: 1.6;
+  text-wrap: balance;
+  color: var(--sz-muted);
+}
+
+/* Sections */
+
+.section {
+  padding: 5rem 0;
+}
+
+.sectionAlt {
+  background: var(--sz-surface-2);
+  border-top: 1px solid var(--sz-border);
+  border-bottom: 1px solid var(--sz-border);
+}
+
+[data-theme='dark'] .sectionAlt {
+  background: #0e1117;
+}
+
+.sectionHead {
+  margin-bottom: 2.4rem;
+}
+
+.sectionHead h2 {
+  margin: 0.35rem 0 0.7rem;
+  font-size: clamp(1.7rem, 3vw, 2.3rem);
+}
+
+.sectionHead p {
+  max-width: 46rem;
+  color: var(--sz-muted);
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.eyebrow {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sz-trace-ink);
+}
+
+/* Idea cards */
+
+.cards3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.2rem;
+}
+
+.card {
+  padding: 1.8rem;
+  border: 1px solid var(--sz-border);
+  border-radius: 14px;
+  background: var(--sz-surface);
+}
+
+.card h3 {
+  margin: 0.6rem 0 0.7rem;
+  font-size: 1.45rem;
+  line-height: 1.25;
+}
+
+.card p {
+  margin: 0;
+  font-size: 1.08rem;
+  color: var(--sz-muted);
+  line-height: 1.6;
+}
+
+.kicker {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sz-signal-ink);
+}
+
+/* Pipeline */
+
+.pipeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.2rem;
+}
+
+.stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 1.6rem 1.5rem 1.5rem;
+  border: 1px solid var(--sz-border);
+  border-top: 3px solid var(--sz-signal);
+  border-radius: 12px;
+  background: var(--sz-surface);
+}
+
+.stage:not(:last-child)::after {
+  content: '→';
+  position: absolute;
+  right: -1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  color: var(--sz-signal-ink);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.stageTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.1rem;
+}
+
+.stageIcon {
+  display: inline-grid;
+  place-items: center;
+  width: 3.4rem;
+  height: 3.4rem;
+  border-radius: 12px;
+  color: var(--sz-signal-ink);
+  background: var(--sz-signal-soft);
+}
+
+.stageIndex {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.85rem;
+  color: var(--sz-muted);
+}
+
+.stage h3 {
+  margin: 0 0 0.6rem;
+  font-size: clamp(1.25rem, 1.78vw, 1.6rem);
+}
+
+.stageSkill {
+  align-self: flex-start;
+  font-size: 1rem;
+  border: 1px solid var(--sz-border);
+  color: var(--sz-signal-ink);
+  background: var(--sz-signal-soft);
+}
+
+.loopNote {
+  margin: 1.6rem 0 0;
+  color: var(--sz-muted);
+}
+
+/* Architecture */
+
+.arch {
+  display: grid;
+  grid-template-columns: 1fr auto 1.4fr auto 1.1fr auto 1fr;
+  align-items: stretch;
+  gap: 0.6rem;
+}
+
+.archCol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.archRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+/* Rows share each column's height, so every column ends at the same line. */
+.archCol > .box,
+.archCol > .archRow {
+  flex: 1;
+}
+
+.archLabel {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sz-muted);
+}
+
+.box {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--sz-border);
+  border-radius: 10px;
+  background: var(--sz-surface);
+}
+
+.boxIcon {
+  flex: none;
+  color: var(--sz-muted);
+}
+
+.box strong {
+  font-size: 1.1rem;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.box_io strong {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.box_comp {
+  border-left: 3px solid var(--sz-trace);
+}
+
+.box_comp .boxIcon {
+  color: var(--sz-trace-ink);
+}
+
+/* The system owns the components beneath it, as the engine owns the graph. */
+.box_system {
+  border-color: var(--sz-trace);
+  background: var(--sz-trace-soft);
+}
+
+.box_system .boxIcon {
+  color: var(--sz-trace-ink);
+}
+
+.box_engine {
+  border-color: var(--sz-signal);
+  background: var(--sz-signal-soft);
+}
+
+.box_engine .boxIcon,
+.box_cost .boxIcon {
+  color: var(--sz-signal-ink);
+}
+
+.box_cost {
+  border-left: 3px solid var(--sz-signal);
+}
+
+.arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6rem;
+  color: var(--sz-signal-ink);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.7rem;
+}
+
+.arrow::after {
+  content: '→';
+  font-size: 1.2rem;
+}
+
+.arrow span {
+  writing-mode: vertical-rl;
+  color: var(--sz-muted);
+}
+
+/* Citation */
+
+.citeGrid {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 3rem;
+}
+
+.news {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.news li {
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--sz-border);
+}
+
+.news time {
+  display: block;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.78rem;
+  color: var(--sz-trace-ink);
+}
+
+/* Grid items holding code blocks must be allowed to shrink below their
+   content width, or long commands widen the page. */
+.citeGrid > * {
+  min-width: 0;
+}
+
+/* Responsive */
+
+@media (max-width: 1150px) {
+  .arch {
+    grid-template-columns: 1fr;
+  }
+  .arrow {
+    min-height: 1.4rem;
+  }
+  .arrow::after {
+    content: '↓';
+  }
+  .arrow span {
+    writing-mode: horizontal-tb;
+    margin-right: 0.4rem;
+  }
+}
+
+@media (max-width: 996px) {
+  .cards3,
+  .pipeline {
+    grid-template-columns: 1fr 1fr;
+  }
+  .stage:not(:last-child)::after {
+    display: none;
+  }
+  .citeGrid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .hero {
+    padding: 3.5rem 0 3rem;
+  }
+  .section {
+    padding: 3.5rem 0;
+  }
+  .cards3,
+  .pipeline {
+    grid-template-columns: 1fr;
+  }
+  .archRow {
+    grid-template-columns: 1fr;
+  }
+}

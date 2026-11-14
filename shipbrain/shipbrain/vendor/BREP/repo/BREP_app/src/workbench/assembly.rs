@@ -1,0 +1,107 @@
+//! Creatable set: the shared building blocks (sketch `S` / datum `D` / plane
+//! `P`) plus the ASSEMBLY COMPONENT (`ACOMP`) — in-context sketches on
+//! component faces are an allowed reference use, so S/D/P stay creatable here.
+//! Everything else (modeling + sheet metal) is filtered out of the creation
+//! UI; the history itself stays fully visible/editable regardless of workbench
+//! (standing rule).
+//!
+//! Claims the two assembly panels (Assembly Structure tree + Assembly
+//! Constraints), which therefore show ONLY under Assembly (and "All").
+
+use super::{ButtonState, FeatureInfo, Workbench, WorkbenchButton};
+
+/// The Assembly Structure tree panel's id (claim + registration key).
+/// The Assembly Constraints panel's id (the requirements-§5 record id).
+pub const CONSTRAINTS_PANEL_ID: &str = "assemblyConstraints";
+/// The BOM panel's id (the columned parts list).
+pub const BOM_PANEL_ID: &str = "assemblyBom";
+
+/// Datum / Plane / Sketch / Component (`ACOMP`) / Pattern Component (`APAT`).
+fn includes(feature: &FeatureInfo<'_>) -> bool {
+    matches!(feature.type_code, "S" | "D" | "P" | "ACOMP" | "APAT")
+}
+
+/// Add Component's id — named because the shell arm that answers for it and
+/// the PCB row that borrows it both refer to one button, not to a spelling.
+pub const ADD_COMPONENT_BUTTON_ID: &str = "assembly.add_component";
+
+// The feature command already provides insertion wherever ACOMP is creatable.
+// Keep the borrowed insertion action for PCB, whose feature palette omits ACOMP.
+fn needs_component_button(state: &ButtonState<'_>) -> bool {
+    !super::includes_feature(&state.engine.settings.workbench, "ACOMP")
+}
+
+/// The assembly toolbar tools. A click surfaces the button id out of the toolbar to the shell:
+/// `"assembly.add_component"` opens the insert-component modal (the same
+/// `FileAction::InsertComponent` flow the ACOMP palette pick routes through),
+/// `"assembly.auto_constrain"` opens the inference window and scans the current placement, and
+/// `"assembly.interference"` runs the engine's pairwise check and opens the results window.
+/// Like every workbench button, "All" carries them automatically via the deduped union. PCB
+/// BORROWS the first of them ([`super::BORROWED`]), which is why this is a named array:
+/// [`ADD_COMPONENT`] points INTO it rather than beside it.
+static BUTTONS: [WorkbenchButton; 4] = [
+    WorkbenchButton {
+        id: ADD_COMPONENT_BUTTON_ID,
+        // The same placed-instance artwork as Assembly Component.
+        glyph: "\u{E058}",
+        ribbon_path: "Home/Assembly/Add component", size: crate::workbench::CommandSize::Large, tooltip: "Add component (insert a part from the library or a saved model)",
+        when: Some(needs_component_button),
+        pressed: None,
+        disabled: None,
+        caption: None,
+        menu: &[],
+    },
+    WorkbenchButton {
+        id: "assembly.step_parts_library",
+        // Library books and a solid part, drawn from the SVG catalog.
+        glyph: "\u{1F4DA}",
+        ribbon_path: "Home/Assembly/step.parts library", size: crate::workbench::CommandSize::Large, tooltip: "step.parts library — browse & import an online STEP part as a component",
+        when: None,
+        pressed: None,
+        disabled: None,
+        caption: None,
+        menu: &[],
+    },
+    WorkbenchButton {
+        id: "assembly.auto_constrain",
+        // Our own artwork (U+E067): two parts closing on a shared axis with the
+        // inference spark. Catalogued SVG, like every picture the app draws.
+        glyph: "\u{E067}",
+        ribbon_path: "Home/Assembly/Auto constraints", size: crate::workbench::CommandSize::Large, tooltip: "Auto constraints \u{2014} infer mates (concentric, touch align, coincident) from where the components already sit",
+        when: None,
+        pressed: None,
+        disabled: None,
+        caption: None,
+        menu: &[],
+    },
+    WorkbenchButton {
+        id: "assembly.interference",
+        // Intersecting solid instances with the overlap highlighted red.
+        glyph: "\u{2229}",
+        ribbon_path: "Home/Assembly/Interference check", size: crate::workbench::CommandSize::Large, tooltip: "Interference check (pairwise intersect)",
+        when: None,
+        pressed: None,
+        disabled: None,
+        caption: None,
+        menu: &[],
+    },
+];
+
+/// The ADD COMPONENT button ITSELF — the one declaration, lent to the PCB
+/// workbench through [`super::BORROWED`]. A borrower shows THIS button, not a
+/// copy of it, so the id, the picture, the tooltip and the shell arm that
+/// answers for it cannot drift apart.
+pub static ADD_COMPONENT: &WorkbenchButton = &BUTTONS[0];
+
+/// The assembly panels this workbench claims (claim-based visibility —
+/// unclaimed panels stay visible everywhere; these show only here + All).
+static PANELS: &[&str] = &[CONSTRAINTS_PANEL_ID, BOM_PANEL_ID];
+
+pub static ASSEMBLY: Workbench = Workbench {
+    id: "assembly",
+    label: "Assembly",
+    glyph: "\u{E064}",
+    includes,
+    buttons: &BUTTONS,
+    panels: PANELS,
+};

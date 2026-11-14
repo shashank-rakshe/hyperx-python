@@ -1,0 +1,132 @@
+from contextlib import contextmanager
+from dataclasses import dataclass
+from enum import IntEnum
+
+from PySide6.QtWidgets import QDialog, QLineEdit, QWidget
+
+from pulse import ICON_DIR
+from pulse.interface.user_input.project.print_message import PrintMessageInput
+
+window_title = "Error"
+
+
+class Workspace(IntEnum):
+    GEOMETRY = 0
+    STRUCTURAL_SETUP = 1
+    ACOUSTIC_SETUP = 2
+    RESULTS = 3
+
+
+class ColorMode(IntEnum):
+    EMPTY = 0
+    MATERIAL = 1
+    FLUID = 2
+
+
+@dataclass
+class VisualizationFilter:
+    points: bool = False
+    nodes: bool = False
+    lines: bool = False
+    tubes: bool = False
+    transparent: bool = False
+    acoustic_symbols: bool = False
+    structural_symbols: bool = False
+    color_mode: int = ColorMode.EMPTY
+
+    @classmethod
+    def all_false(cls):
+        # It is dumb, but it works
+        args = [False] * 7
+        return cls(*args)
+
+    @classmethod
+    def all_true(cls):
+        # It is dumb, but it works
+        args = [True] * 7
+        return cls(*args)
+
+
+@dataclass
+class SelectionFilter:
+    nodes: bool = False
+    lines: bool = False
+    elements: bool = False
+
+    @classmethod
+    def all_false(cls):
+        # It is dumb, but it works
+        args = [False] * 3
+        return cls(*args)
+
+    @classmethod
+    def all_true(cls):
+        # It is dumb, but it works
+        args = [True] * 3
+        return cls(*args)
+
+
+@contextmanager
+def block_signals(widget: QWidget):
+    widget.blockSignals(True)
+    try:
+        yield widget
+    finally:
+        widget.blockSignals(False)
+
+
+def check_inputs(
+    lineEdit: QLineEdit,
+    label: str,
+    only_positive: bool = True,
+    zero_included: bool = False,
+    title: str | None = None,
+    parent: None | QDialog | QWidget = None,
+):
+
+    if title is None:
+        title = "Invalid input"
+
+    message = ""
+    if lineEdit.text() != "":
+        try:
+            str_value = lineEdit.text().replace(",", ".")
+            out = float(str_value)
+
+            if only_positive:
+                if zero_included:
+                    if out < 0:
+                        message = f"Insert a positive value to the {label}. "
+                        message += "The zero value is allowed."
+
+                else:
+                    if out <= 0:
+                        message = f"Insert a positive value to the {label}. "
+                        message += "The zero value is not allowed."
+
+        except Exception as error_log:
+            message = f"Wrong input for {label}.\n\n"
+            message += str(error_log)
+
+    else:
+        if zero_included:
+            return float(0)
+
+        else:
+            message = f"Insert some value at the {label} input field."
+
+    if message != "":
+        if isinstance(parent, QWidget | QDialog):
+            parent.hide()
+
+        lineEdit.setFocus()
+        PrintMessageInput([window_title, title, message])
+        return None
+
+    return out
+
+
+def get_icons_path(filename):
+    path = ICON_DIR / filename
+    if path.exists():
+        return str(path)

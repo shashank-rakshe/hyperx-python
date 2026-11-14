@@ -1,0 +1,74 @@
+cff-version: 1.2.0
+message: >-
+  If you use CableDyn in academic work, please cite the journal article given
+  as the preferred citation. To identify the exact software release used, also
+  cite this software entry with its version.
+title: "CableDyn: Geometrically exact finite-element statics and dynamics of mooring lines and dynamic power cables for floating offshore wind"
+type: software
+abstract: >-
+  CableDyn is an open-source, geometrically exact finite-element solver for the
+  static and dynamic analysis of offshore mooring lines and dynamic power cables.
+  Its strain and curvature are the exact large-deformation measures. It combines
+  tension-only elements for moorings with cubic-Hermite finite-bending elements
+  for power cables, solves the static equilibrium by Newton's method, and
+  integrates the dynamics with the implicit generalised-alpha scheme. It runs as
+  a standalone program, as an OpenFAST mooring module, through a C interface, or
+  from Python.
+authors:
+  - family-names: Seo
+    given-names: Jae Hoon
+    email: jaehoon.seo@inha.ac.kr
+    affiliation: "Department of Naval Architecture and Ocean Engineering, Inha University, Incheon, Republic of Korea"
+    orcid: "https://orcid.org/0000-0003-1047-2119"
+repository-code: "https://github.com/SMI-Lab-Inha/CableDyn"
+url: "https://github.com/SMI-Lab-Inha/CableDyn"
+license: Apache-2.0
+version: 0.4.2
+date-released: 2026-11-09
+keywords:
+  - mooring dynamics
+  - cable dynamics
+  - cubic-Hermite bending cable
+  - generalised-alpha integrator
+  - floating offshore wind
+  - OpenFAST
+  - MoorDyn
+preferred-citation:
+  type: article
+  title: >-
+    CableDyn: Curvature-resolving implicit finite-element analysis of mooring
+    lines and dynamic power cables for floating offshore wind
+  authors:
+    - family-names: Seo
+      given-names: Jae Hoon
+      orcid: "https://orcid.org/0000-0003-1047-2119"
+      affiliation: >-
+        Department of Naval Architecture and Ocean Engineering, Inha University,
+        Incheon, Republic of Korea
+    - family-names: Lim
+      given-names: Junsoo
+      orcid: "https://orcid.org/0009-0006-6109-2342"
+      affiliation: >-
+        Department of Naval Architecture and Ocean Engineering, Inha University,
+        Incheon, Republic of Korea
+    - family-names: Shim
+      given-names: Kyusung
+      orcid: "https://orcid.org/0009-0003-3752-8271"
+      affiliation: >-
+        Department of Naval Architecture and Ocean Engineering, Inha University,
+        Incheon, Republic of Korea
+    - family-names: Song
+      given-names: Jinwoo
+      orcid: "https://orcid.org/0009-0006-2403-1006"
+      affiliation: >-
+        Department of Naval Architecture and Ocean Engineering, Inha University,
+        Incheon, Republic of Korea
+  journal: Ocean Engineering
+  publisher:
+    name: Elsevier
+  year: 2026
+  month: 11
+  volume: 368
+  issue: "Part 2"
+  start: "128332"
+  doi: "10.1016/j.oceaneng.2026.128332"

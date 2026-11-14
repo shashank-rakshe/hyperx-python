@@ -1,0 +1,62 @@
+--------------------- CableDyn Input File ------------------------------------
+CableDyn driver deck -- dynamic power cable shared by two floaters, both hang-offs moving, 36 s
+-- A 360 m finite-EI array cable (the bare cable of the Lozon lazy-wave decks: D 0.16 m,
+-- 36.7 kg/m, EI 1.99e4 N m^2) hangs in a free catenary between the hang-offs of two floaters
+-- 300 m apart, 14 m below the surface, in 200 m of water: its lowest point is about 100 m deep,
+-- clear of the seabed. Both ends are Coupled points, so End B moves as End A does: the motionFile
+-- (data/shared/floaters_surge_heave_12s_dt0025.txt, written by generate_floater_motion.py) gives
+-- each floater a 2 m surge and a 1.5 m heave at 12 s, floater 2 surging in antiphase so that
+-- the span opens and closes by 4 m. Both hang-offs are clamped (Rigid) along their static
+-- tangents; BendMom1N1 and BendMom1N73 are the hang-off moments, FairTen1 and AnchTen1 the two
+-- hang-off tensions (End A and End B), L1N37pz the depth of the mid-span node.
+--------------------- LINE TYPES ---------------------------------------------
+TypeName  Diam   MassDenInAir  EA       BA   EI       Cd_n Cd_t Ca_n Ca_t
+(-)       (m)    (kg/m)        (N)      (-)  (N-m2)   (-)  (-)  (-)  (-)
+bare      0.160  36.70         4.69e8   0.0  1.99e4   1.2  0.1  1.0  0.0
+--------------------- POINTS ------------------------------------------------
+ID  Type     X       Y    Z
+(-) (-)      (m)     (m)  (m)
+1   Coupled  0.0     0.0  -14.0
+2   Coupled  300.0   0.0  -14.0
+--------------------- LINES -------------------------------------------------
+ID  NodeA  NodeB  Outputs
+(-) (-)    (-)    (-)
+1   1      2      -
+--------------------- SECTIONS ----------------------------------------------
+LineID  LineType  Length   NumSegs
+(-)     (-)       (m)      (-)
+1       bare      360.0    72
+--------------------- END CONNECTIONS ---------------------------------------
+-- Both hang-offs are clamped along the static tangents, 51.9 deg below horizontal at End A and
+-- 51.9 deg above it, toward End B, at End B (the A-to-B direction at either end).
+LineID  End  Stiffness  EzX     EzY  EzZ
+(-)     (-)  (N-m/rad)  (-)     (-)  (-)
+1       A    Rigid      0.61757  0.0  -0.78651
+1       B    Rigid      0.61757  0.0   0.78651
+--------------------- OPTIONS -----------------------------------------------
+9.80665  g                - Gravitational acceleration (m/s^2) [default: 9.80665]
+1025.0   rhoW             - Water density (kg/m^3) [default: 1025]
+200.0    WtrDpth          - Water depth for the flat seabed (m) [default: absent standalone; host-owned OpenFAST]
+1.0e5    kBot             - Seabed penalty stiffness base (Pa/m) [default: 1.0e5]
+1.0e4    cBot             - Seabed normal damping base (Pa-s/m) [default: 1.0e4]
+0.025    dtM              - CableDyn internal time step (s) [default: omitted standalone; the glue DT in OpenFAST]
+36.0     TMax             - Standalone simulation duration (s) [default: omitted standalone; host-owned OpenFAST]
+data/shared/floaters_surge_heave_12s_dt0025.txt motionFile - Prescribed motion of both Coupled hang-offs
+0.4       rhoInf           - Generalised-alpha spectral radius {0<=rhoInf<=1} [default: 0.4]
+False     modified_newton  - Tangent-reuse mode {False=full Newton; True=guarded reuse} [default: False]
+False     adaptive_mesh    - Automatic finite-EI refinement {False; True} [default: False]
+dynamic_solver 1.0e-8 1.0e-14 30 12 - Relative tolerance, absolute tolerance, max iterations, backtracks [defaults shown]
+none      frictionMu       - Seabed friction coefficient {none; value>=0} [default: none]
+none      current          - Current model and velocity (m/s) {none; uniform; profile} [default: none]
+none      waves            - Wave model, height, period, and direction (m, s, deg) {none; airy; jonswap} [default: none]
+0         WaterKin         - Water-kinematics source {0/none; file; SEASTATE coupled only} [default: no policy]
+-- Complete option/default reference: cabledyn_options_reference.dat and doc/options.rst.
+--------------------- OUTPUTS -----------------------------------------------
+"FairTen1"
+"AnchTen1"
+"FairIncl1"
+"AnchIncl1"
+"BendMom1N1"
+"BendMom1N73"
+"L1N37pz"
+--------------------- need this line ----------------------------------------

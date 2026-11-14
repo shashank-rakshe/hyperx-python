@@ -1,0 +1,55 @@
+name: ✨ Feature Request
+description: Suggest a new feature, API addition, or improvement.
+title: "[FEATURE] "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature!
+
+        **For larger features or API design questions,** consider opening an
+        [Ideas & RFCs discussion](https://github.com/camlab-ethz/TensorMesh/discussions/categories/ideas-rfcs)
+        first — it lets the community shape the design before anyone commits to
+        an implementation. Small, well-scoped additions are fine to file directly here.
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use case
+      description: What problem are you trying to solve? Lead with motivation, not the
+        proposed API.
+      placeholder: |
+        e.g. "I'm building a topology optimizer and need to assemble many K matrices,
+        each with a different per-element density. The current API forces a Python loop."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_api
+    attributes:
+      label: Proposed API or solution (optional)
+      description: If you have a concrete idea, sketch what the API would look like.
+        Pseudocode is fine.
+      render: python
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you've tried, related features in other FEM libraries,
+        prior art.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues and discussions for similar requests.
+          required: true
+        - label: For larger features, I considered opening an Ideas & RFCs discussion first.
+          required: false

@@ -1,0 +1,798 @@
+import logging
+from enum import Enum, auto
+
+import numpy as np
+from molde.interactor_styles import BoxSelectionInteractorStyle
+from molde.render_widgets import AnimatedRenderWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication
+from vtkmodules.vtkCommonDataModel import vtkPolyData
+
+from pulse import ICON_DIR, app
+from pulse.interface.user_input.plots.general.animation_widget import AnimationWidget
+from pulse.interface.user_input.project.loading_window import LoadingWindow
+from pulse.interface.viewer_3d.actors import (
+    ElementLinesActor,
+    NodesActor,
+    PointsActor,
+    SectionPlaneActor,
+    TubeActorResults,
+)
+from pulse.interface.viewer_3d.coloring.color_table import ColorTable
+from pulse.interface.viewer_3d.render_tools import RenderTool, SelectionTool
+from pulse.model import AnalysisID
+from pulse.utils.interface_utils import VisualizationFilter
+from pulse.utils.time_utils import function_timer
+
+from ._mesh_picker import MeshPicker
+from ._model_info_text import (
+    analysis_info_text,
+    elements_info_text,
+    lines_info_text,
+    min_max_stresses_info_text,
+    nodes_info_text,
+)
+
+
+class AnalysisMode(Enum):
+    EMPTY = auto()
+    STRESS = auto()
+    PRESSURE = auto()
+    DISPLACEMENT = auto()
+
+
+class ResultsRenderWidget(AnimatedRenderWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        # dont't remove, transparency depends on it
+        self.renderer.SetUseDepthPeeling(True)
+
+        self.set_interactor_style(BoxSelectionInteractorStyle())
+        self.mesh_picker = MeshPicker(self)
+        self.visualization_filter = VisualizationFilter(tubes=True)
+
+        self.open_pulse_logo = None
+        self.nodes_actor = None
+        self.points_actor = None
+        self.lines_actor = None
+        self.tubes_actor = None
+        self.plane_actor = None
+
+        self.current_frequency_index = 0
+        self.current_phase_step = 0
+        self._result_min = 0
+        self._result_max = 0
+        self.is_complex_result = False
+
+        self._animation_color_map = None
+        self._animation_current_frequency = None
+        self._animation_cached_data = dict()
+
+        self.transparency = 0
+        self.mouse_click = (0, 0)
+
+        self.analysis_mode = AnalysisMode.EMPTY
+        self.colormap = app().config.user_preferences.color_map
+        self.create_axes()
+        self.create_scale_bar()
+        self.create_logos()
+        self.create_color_bar()
+        self.set_default_render_tool()
+
+        self.apply_user_preferences()
+        self.create_camera_light(0.1, 0.1)
+        self._create_connections()
+        self.update_plot()
+
+    def _create_connections(self):
+        self.left_clicked.connect(self.click_callback)
+        self.left_released.connect(self.selection_callback)
+
+        app().main_window.theme_changed.connect(self.set_theme)
+        app().main_window.theme_changed.connect(self._apply_logo_theme)
+        app().main_window.visualization_changed.connect(self.visualization_changed_callback)
+        app().main_window.selection_changed.connect(self.update_selection)
+        app().main_window.section_plane.value_changed.connect(self.update_section_plane)
+
+    @property
+    def acoustic_postprocessing(self):
+        return app().project.get_acoustic_postprocessing()
+
+    @property
+    def structural_postprocessing(self):
+        return app().project.get_structural_postprocessing()
+
+    def update_plot(self, reset_camera=False):
+
+        self.remove_actors()
+        self.mesh_picker.update_bounds()
+        project = app().project
+
+        if not project.model.preprocessor.elements_attributes:
+            self.stop_animation()
+            return
+
+        # update the data according to the current analysis
+        acoustic_plot = self.analysis_mode == AnalysisMode.PRESSURE
+
+        self.lines_actor = ElementLinesActor()
+        self.nodes_actor = NodesActor()
+        self.points_actor = PointsActor()
+        self.tubes_actor = TubeActorResults(acoustic_plot=acoustic_plot)
+        self.plane_actor = SectionPlaneActor(self.tubes_actor.GetBounds())
+        self.plane_actor.VisibilityOff()
+
+        self.update_colors_and_deformation()
+
+        self.add_actors(
+            self.lines_actor,
+            self.nodes_actor,
+            self.points_actor,
+            self.tubes_actor,
+            self.plane_actor,
+        )
+
+        self.visualization_changed_callback(update=False)
+        self.update_section_plane()
+
+        if reset_camera:
+            self.renderer.ResetCamera()
+
+        self.update_info_text()
+        self.update_theme()
+        self.update()
+
+        # It needs to appear after the update to work propperly
+        self.set_tube_actors_transparency(self.transparency)
+
+    def update_colors_and_deformation(self, render=True):
+        if self.tubes_actor is None:
+            return
+
+        project = app().project
+        if project is None:
+            return
+
+        unit_label = "Unit: [--]"
+        analysis_id = project.analysis_id
+        self.colorbar_actor.VisibilityOn()
+
+        match self.analysis_mode:
+            case AnalysisMode.DISPLACEMENT:
+                if self.structural_postprocessing.solution is None:
+                    return
+
+                if analysis_id in [AnalysisID.STRUCTURAL_HARMONIC, AnalysisID.COUPLED_HARMONIC]:
+                    unit_label = "Unit: [m]"
+
+                deformed = True
+                color_table, self.is_complex_result = self._compute_displacement_field(
+                    self.current_frequency_index,
+                    self.current_phase_step,
+                )
+
+            case AnalysisMode.STRESS:
+                if self.structural_postprocessing.solution is None:
+                    return
+
+                if analysis_id in [AnalysisID.STRUCTURAL_HARMONIC, AnalysisID.COUPLED_HARMONIC]:
+                    unit_label = "Unit: [m]"
+
+                deformed = True
+                color_table, self.is_complex_result = self._compute_stress_field(
+                    self.current_frequency_index,
+                    self.current_phase_step,
+                )
+
+            case AnalysisMode.PRESSURE:
+                if analysis_id in [AnalysisID.ACOUSTIC_HARMONIC, AnalysisID.COUPLED_HARMONIC]:
+                    unit_label = "Unit: [Pa]"
+
+                deformed = False
+                color_table, self.is_complex_result = self._compute_pressure_field(
+                    self.current_frequency_index,
+                    self.current_phase_step,
+                )
+
+            case _:
+                deformed = False
+                color_table = ColorTable([], [0, 0], self.colormap)
+                self.colorbar_actor.VisibilityOff()
+
+        self.colorbar_actor.SetTitle(unit_label)
+        self.colorbar_actor.SetLookupTable(color_table)
+
+        self.tubes_actor.show_deformed = deformed
+        self.tubes_actor.update_element_coordinates_and_rotations()
+        self.tubes_actor.set_color_table(color_table)
+
+        if render:
+            self.update()
+
+    def set_colormap(self, colormap):
+        self.colormap = colormap
+        app().config.user_preferences.color_map = colormap
+        app().config.update_config_file()
+        self.update_plot()
+
+    def actors_to_cache(self):
+        return (
+            self.tubes_actor,
+            self.lines_actor,
+            self.nodes_actor,
+            self.points_actor,
+        )
+
+    def cache_animation_frames(self):
+        self._animation_current_frequency = self.current_frequency_index
+        self._animation_color_map = self.colormap
+
+        with self.update_lock:
+            for frame in range(self._animation_total_frames):
+                if frame in self._animation_cached_data:
+                    continue
+
+                logging.info(f"Caching animation frames [{frame}/{self._animation_total_frames}]")
+                d_theta = 2 * np.pi / self._animation_total_frames
+                phase_step = frame * d_theta
+                self.current_phase_step = phase_step
+
+                self.update_colors_and_deformation(render=False)
+                cached = []
+                for actor in self.actors_to_cache():
+                    pd = vtkPolyData()
+                    pd.DeepCopy(actor.GetMapper().GetInput())
+                    cached.append(pd)
+                self._animation_cached_data[frame] = tuple(cached)
+
+                if not self.is_complex_result:
+                    mirrored_frame = self._animation_total_frames - frame - 1
+                    self._animation_cached_data[mirrored_frame] = self._animation_cached_data[frame]
+
+        self._animation_current_cycle = 0
+
+    def stop_animation(self):
+        from pulse.interface.user_input.plots.general.animation_widget import AnimationWidget
+
+        # Do the things defined in the mother class
+        super().stop_animation()
+        # Change the animation button to paused
+        animation_widget = app().main_window.results_viewer_widget.get_animation_widget()
+        if isinstance(animation_widget, AnimationWidget):
+            animation_widget.pause_animation()
+
+    def clear_cache(self):
+        self._animation_cached_data.clear()
+
+    def update_animation(self, frame: int):
+        if self.analysis_mode == AnalysisMode.EMPTY:
+            self.stop_animation()
+            return
+
+        conditions_to_clear_cache = [
+            self._animation_current_frequency != self.current_frequency_index,
+            self._animation_color_map != self.colormap,
+        ]
+
+        if any(conditions_to_clear_cache):
+            self.clear_cache()
+
+        if not self._animation_cached_data:
+            LoadingWindow(self.cache_animation_frames).run()
+
+        if frame in self._animation_cached_data:
+            logging.info(f"Rendering animation frame [{frame}/{self._animation_total_frames}]")
+
+            cached = self._animation_cached_data[frame]
+            for actor, cache in zip(self.actors_to_cache(), cached):
+                actor.GetMapper().SetInputData(cache)
+            self.update()
+        else:
+            # It will only enter here if something wrong happened
+            # in the function that caches the frames
+            logging.warn(f"Cache miss on update_animation function for frame {frame}")
+            d_theta = 2 * np.pi / self._animation_total_frames
+            phase_step = frame * d_theta
+            self.current_phase_step = phase_step
+
+            self.update_plot()
+            cached = []
+            for actor in self.actors_to_cache():
+                pd = vtkPolyData()
+                pd.DeepCopy(actor.GetMapper().GetInput())
+                cached.append(pd)
+            self._animation_cached_data[frame] = tuple(cached)
+
+    def visualization_changed_callback(self, update=True):
+        if not self._actor_exists():
+            return
+
+        self.points_actor.SetVisibility(self.visualization_filter.points)
+        self.nodes_actor.SetVisibility(self.visualization_filter.nodes)
+        self.lines_actor.SetVisibility(self.visualization_filter.lines)
+        self.tubes_actor.SetVisibility(self.visualization_filter.tubes)
+        opacity = 0.9 if self.visualization_filter.transparent else 1
+        self.tubes_actor.GetProperty().SetOpacity(opacity)
+        if update:
+            self.update()
+
+    def slider_callback(self, phase_deg):
+        self.current_phase_step = phase_deg * (2 * np.pi / 360)
+        self.update_colors_and_deformation()
+
+    def show_empty(self, *args, **kwargs):
+        self.analysis_mode = AnalysisMode.EMPTY
+        self.current_frequency_index = 0
+        self.current_phase_step = 0
+        self.clear_cache()
+        self.update_plot()
+
+    def show_displacement_field(self, frequency_index):
+
+        self.current_frequency_index = frequency_index
+        self.current_phase_step = 0
+        self.analysis_mode = AnalysisMode.DISPLACEMENT
+
+        self._reset_min_max_values()
+        tmp = self.structural_postprocessing.get_min_max_resultant_displacements(frequency_index)
+        _, self.result_disp_min, self.result_disp_max, self.r_xyz_abs = tmp
+
+        self.clear_cache()
+        self.update_plot()
+
+    def show_stress_field(self, frequency_index: int):
+
+        self.current_frequency_index = frequency_index
+        self.current_phase_step = 0
+        self.analysis_mode = AnalysisMode.STRESS
+
+        self._reset_min_max_values()
+        self.stress_min, self.stress_max = self.structural_postprocessing.get_min_max_stresses_values()
+        tmp = self.structural_postprocessing.get_min_max_resultant_displacements(frequency_index)
+        _, self.result_disp_min, self.result_disp_max, self.r_xyz_abs = tmp
+
+        self.clear_cache()
+        self.update_plot()
+
+    def show_pressure_field(self, frequency_index):
+
+        self.current_frequency_index = frequency_index
+        self.current_phase_step = 0
+        self.analysis_mode = AnalysisMode.PRESSURE
+
+        self._reset_min_max_values()
+        tmp = self.acoustic_postprocessing.get_max_min_values_of_pressures(frequency_index)
+        self.pressure_min, self.pressure_max = tmp
+
+        self.clear_cache()
+        self.update_plot()
+
+    def set_tube_actors_transparency(self, transparency):
+        self.transparency = transparency
+        opacity = 1 - transparency
+        self.tubes_actor.GetProperty().SetOpacity(opacity)
+        self.update()
+
+    def set_theme(self, *args, **kwargs):
+        """It's necessary because if this function doesn't exist
+        CommomRenderWidget will call it's own set_theme function in
+        it's constructor"""
+
+        self.update_theme()
+
+    def update_theme(self):
+        user_preferences = app().main_window.config.user_preferences
+        bkg_1 = user_preferences.renderer_background_color_1
+        bkg_2 = user_preferences.renderer_background_color_2
+        font_color = user_preferences.renderer_font_color
+
+        if bkg_1 is None:
+            raise ValueError('Missing value "bkg_1"')
+        if bkg_2 is None:
+            raise ValueError('Missing value "bkg_2"')
+        if font_color is None:
+            raise ValueError('Missing value "font_color"')
+
+        self.renderer.GradientBackgroundOn()
+        self.renderer.SetBackground(bkg_1.to_rgb_f())
+        self.renderer.SetBackground2(bkg_2.to_rgb_f())
+
+        if hasattr(self, "text_actor"):
+            self.text_actor.GetTextProperty().SetColor(font_color.to_rgb_f())
+
+        if hasattr(self, "colorbar_actor"):
+            self.colorbar_actor.GetTitleTextProperty().SetColor(font_color.to_rgb_f())
+            self.colorbar_actor.GetLabelTextProperty().SetColor(font_color.to_rgb_f())
+
+        if hasattr(self, "scale_bar_actor"):
+            self.scale_bar_actor.GetLegendTitleProperty().SetColor(font_color.to_rgb_f())
+            self.scale_bar_actor.GetLegendLabelProperty().SetColor(font_color.to_rgb_f())
+
+    def create_logos(self):
+        if not hasattr(self, "_light_logo"):
+            self._light_logo = self.create_logo(ICON_DIR / "logos/op_light_theme.png")
+            self._light_logo.SetShowBorderToOff()
+            self._light_logo.SetShowPolygonBackground(0)
+
+        if not hasattr(self, "_dark_logo"):
+            self._dark_logo = self.create_logo(ICON_DIR / "logos/op_dark_theme.png")
+            self._dark_logo.SetShowBorderToOff()
+            self._dark_logo.SetShowPolygonBackground(0)
+
+        if getattr(self, "_logo_observer_id", None) is None:
+            self._logo_last_size = None
+            self._logo_observer_id = self.renderer.AddObserver("StartEvent", self._logo_size_callback)
+
+        self._apply_logo_theme()
+        self.update_logo_geometry()
+
+    def _logo_size_callback(self, *args, **kwargs):
+        size = tuple(self.renderer.GetSize())
+        if size != self._logo_last_size:
+            self._logo_last_size = size
+            self.update_logo_geometry()
+
+    def update_logo_geometry(self):
+        width_fraction = 0.15
+        min_width = 90
+        max_width = 240
+        max_height_ratio = 0.12
+        margin = 10
+
+        width, height = self.renderer.GetSize()
+        if width < 2 or height < 2:
+            return
+
+        for logo in (self._light_logo, self._dark_logo):
+            image = logo.GetImage()
+            if image is None:
+                continue
+
+            image_width, image_height, _ = image.GetDimensions()
+            if image_width < 1 or image_height < 1:
+                continue
+
+            aspect = image_width / image_height
+            logo_width = max(width_fraction * width, min_width)
+            logo_width = min(logo_width, max_width, 0.4 * width, max_height_ratio * height * aspect)
+            logo_height = logo_width / aspect
+
+            box_x = logo_width / width
+            box_y = logo_height / height
+
+            logo.SetPosition(1 - box_x - margin / width, 1 - box_y - margin / height)
+            logo.SetPosition2(box_x, box_y)
+            logo.Modified()
+
+    def _apply_logo_theme(self, *args, **kwargs):
+        light_theme = app().main_window.config.user_preferences.interface_theme == "light"
+        logo_visible = getattr(self, "_logo_visible", True)
+
+        self.open_pulse_logo = self._light_logo if light_theme else self._dark_logo
+        self._light_logo.SetVisibility(light_theme and logo_visible)
+        self._dark_logo.SetVisibility(not light_theme and logo_visible)
+
+    def enable_open_pulse_logo(self):
+        self._logo_visible = True
+        self._apply_logo_theme()
+
+    def disable_open_pulse_logo(self):
+        self._logo_visible = False
+        self._apply_logo_theme()
+
+    def apply_user_preferences(self):
+        self.update_open_pulse_logo_visibility()
+        self.update_scale_bar_visibility()
+        self.update_renderer_font_size()
+
+    def update_renderer_font_size(self):
+        user_preferences = app().main_window.config.user_preferences
+        font_size_px = int(user_preferences.renderer_font_size * 4 / 3)
+
+        info_text_property = self.text_actor.GetTextProperty()
+        info_text_property.SetFontSize(font_size_px)
+
+        scale_bar_title_property = self.scale_bar_actor.GetLegendTitleProperty()
+        scale_bar_label_property = self.scale_bar_actor.GetLegendLabelProperty()
+        scale_bar_title_property.SetFontSize(font_size_px)
+        scale_bar_label_property.SetFontSize(font_size_px)
+
+    def update_open_pulse_logo_visibility(self):
+        user_preferences = app().config.user_preferences
+
+        if user_preferences.show_open_pulse_logo:
+            self.enable_open_pulse_logo()
+        else:
+            self.disable_open_pulse_logo()
+
+    def update_scale_bar_visibility(self):
+        user_preferences = app().config.user_preferences
+
+        if user_preferences.show_reference_scale_bar:
+            self.enable_scale_bar()
+        else:
+            self.disable_scale_bar()
+
+    def enable_scale_bar(self):
+        self.scale_bar_actor.VisibilityOn()
+
+    def disable_scale_bar(self):
+        self.scale_bar_actor.VisibilityOff()
+
+    def click_callback(self, x, y):
+        self.mouse_click = x, y
+
+    def selection_callback(self, x1, y1):
+        if not self._actor_exists():
+            return
+
+        if not isinstance(self.interactor_style, SelectionTool):
+            return
+
+        if not self.interactor_style.is_selecting:
+            return
+
+        x0, y0 = self.mouse_click
+        mouse_moved = (abs(x1 - x0) > 10) or (abs(y1 - y0) > 10)
+        selection_filter = app().main_window.selection_filter
+
+        picked_nodes = set()
+        picked_elements = set()
+        picked_lines = set()
+
+        if mouse_moved:
+            if selection_filter.nodes:
+                picked_nodes = self.mesh_picker.area_pick_nodes(x0, y0, x1, y1)
+
+            if selection_filter.elements and self.visualization_filter.lines:
+                picked_elements = self.mesh_picker.area_pick_elements(x0, y0, x1, y1)
+
+            if selection_filter.lines and self.visualization_filter.lines:
+                picked_lines = self.mesh_picker.area_pick_lines(x0, y0, x1, y1)
+
+        else:
+            if selection_filter.nodes:
+                picked_nodes = set([self.mesh_picker.pick_node(x1, y1)])
+                picked_nodes.difference_update([-1])
+
+            if selection_filter.elements and self.visualization_filter.lines:
+                picked_elements = set([self.mesh_picker.pick_element(x1, y1)])
+                picked_elements.difference_update([-1])
+
+            if selection_filter.lines and self.visualization_filter.lines:
+                picked_lines = set([self.mesh_picker.pick_entity(x1, y1)])
+                picked_lines.difference_update([-1])
+
+        if self.visualization_filter.points:
+            points_indexes = set(app().project.model.preprocessor.get_geometry_points().keys())
+            picked_nodes.intersection_update(points_indexes)
+
+        # give priority to node selection
+        if picked_nodes and not mouse_moved:
+            picked_lines.clear()
+            picked_elements.clear()
+
+        modifiers = QApplication.keyboardModifiers()
+        ctrl_pressed = bool(modifiers & Qt.ControlModifier)
+        shift_pressed = bool(modifiers & Qt.ShiftModifier)
+        alt_pressed = bool(modifiers & Qt.AltModifier)
+
+        app().main_window.set_selection(
+            nodes=picked_nodes,
+            lines=picked_lines,
+            elements=picked_elements,
+            join=ctrl_pressed or shift_pressed,
+            remove=ctrl_pressed or alt_pressed,
+        )
+
+    def update_selection(self):
+        if not self._actor_exists():
+            return
+
+        self.points_actor.clear_colors()
+        self.nodes_actor.clear_colors()
+        self.lines_actor.clear_colors()
+
+        nodes = app().main_window.selected_nodes
+        lines = app().main_window.selected_lines
+        elements = app().main_window.selected_elements
+
+        self.points_actor.set_color((255, 50, 50), nodes)
+        self.nodes_actor.set_color((255, 50, 50), nodes)
+        self.lines_actor.set_color((200, 0, 0), elements, lines)
+
+        self.update_info_text()
+        self.update()
+
+    def update_info_text(self):
+        if self.analysis_mode == AnalysisMode.EMPTY:
+            self.set_info_text("")
+            return
+
+        info_text = ""
+        info_text += analysis_info_text(self.current_frequency_index)
+        info_text += nodes_info_text()
+        info_text += elements_info_text()
+        info_text += lines_info_text()
+
+        if self.analysis_mode == AnalysisMode.STRESS:
+            info_text += min_max_stresses_info_text()
+
+        self.set_info_text(info_text)
+
+    def remove_actors(self):
+        self.renderer.RemoveActor(self.nodes_actor)
+        self.renderer.RemoveActor(self.points_actor)
+        self.renderer.RemoveActor(self.lines_actor)
+        self.renderer.RemoveActor(self.tubes_actor)
+        self.renderer.RemoveActor(self.plane_actor)
+        self.nodes_actor = None
+        self.points_actor = None
+        self.lines_actor = None
+        self.tubes_actor = None
+        self.plane_actor = None
+
+    def _actor_exists(self):
+        actors = [
+            self.nodes_actor,
+            self.points_actor,
+            self.lines_actor,
+            self.tubes_actor,
+            self.plane_actor,
+        ]
+        return all([actor is not None for actor in actors])
+
+    def _compute_displacement_field(self, frequency_index: int, phase_step: float):
+
+        # It is probably a bit unclear, but this function have some colateral
+        # effects. It interprets the structural analysis and puts the meaningfull
+        # data inside the correspondent nodes.
+        # The return values are just extra information.
+
+        animation_widget = app().main_window.results_viewer_widget.get_animation_widget()
+        if isinstance(animation_widget, AnimationWidget):
+            animation_widget.update_factor_label(max_value=self.r_xyz_abs)
+            magnification_factor = animation_widget.magnification_factor
+        else:
+            magnification_factor = 1
+
+        color_scalars, self._magnification_factor, _ = self.structural_postprocessing.get_structural_response(
+            frequency_index,
+            phase_step=phase_step,
+            r_max=self.r_xyz_abs,
+            magnification_factor=magnification_factor,
+        )
+
+        min_max_values = (self.result_disp_min, self.result_disp_max)
+        color_table = ColorTable(color_scalars, min_max_values, self.colormap)
+
+        is_complex_result = np.imag(self.structural_postprocessing.solution).any()
+
+        return color_table, is_complex_result
+
+    def _compute_stress_field(self, frequency_index: int, phase_step: float):
+
+        animation_widget = app().main_window.results_viewer_widget.get_animation_widget()
+        if isinstance(animation_widget, AnimationWidget):
+            animation_widget.update_factor_label(max_value=self.r_xyz_abs)
+            magnification_factor = animation_widget.magnification_factor
+        else:
+            magnification_factor = 1
+
+        *_, self._magnification_factor, _delta = self.structural_postprocessing.get_structural_response(
+            frequency_index,
+            phase_step=phase_step,
+            r_max=self.r_xyz_abs,
+            magnification_factor=magnification_factor,
+        )
+
+        stresses_data, self.min_max_stresses_values_current = self.structural_postprocessing.get_stresses_to_plot(
+            phase_step=phase_step,
+            shift_phase=_delta,
+        )
+
+        min_max_values = (self.stress_min, self.stress_max)
+        color_table = ColorTable(
+            stresses_data,
+            min_max_values,
+            self.colormap,
+            stress_field_plot=True,
+        )
+
+        is_complex_result = np.imag(self.structural_postprocessing.solution).any()
+
+        return color_table, is_complex_result
+
+    def _compute_pressure_field(self, frequency_index, phase_step):
+
+        *_, pressure_field_data, self.min_max_pressures_values_current = self.acoustic_postprocessing.get_acoustic_response(
+            frequency_index, phase_step=phase_step
+        )
+
+        min_max_values = (self.pressure_min, self.pressure_max)
+        color_table = ColorTable(
+            pressure_field_data,
+            min_max_values,
+            self.colormap,
+            pressure_field_plot=True,
+        )
+
+        is_complex_result = np.imag(self.acoustic_postprocessing.solution).any()
+
+        return color_table, is_complex_result
+
+    def _reset_min_max_values(self):
+        self.count_cycles = 0
+        self.r_xyz_abs = None
+        self.result_disp_min = None
+        self.result_disp_max = None
+        self.stress_min = None
+        self.stress_max = None
+        self.pressure_min = None
+        self.pressure_max = None
+        self.min_max_stresses_values_current = None
+        self.min_max_pressures_values_current = None
+        self.plot_state = [False, False, False]
+
+    def update_section_plane(self):
+        if not self._actor_exists():
+            return
+
+        section_plane = app().main_window.section_plane
+
+        if not section_plane.cutting:
+            self._disable_section_plane()
+            return
+
+        position = section_plane.get_position()
+        rotation = section_plane.get_rotation()
+        inverted = section_plane.get_inverted()
+
+        if section_plane.editing:
+            self.plane_actor.configure_section_plane(position, rotation)
+            self.plane_actor.VisibilityOn()
+            self.plane_actor.GetProperty().SetColor(0, 0.333, 0.867)
+            self.plane_actor.GetProperty().SetOpacity(0.8)
+            self.update()
+        else:
+            # not a very reliable condition, but it works
+            show_plane = not section_plane.keep_section_plane
+            self._apply_section_plane(position, rotation, inverted, show_plane)
+
+    def _disable_section_plane(self):
+        self.plane_actor.VisibilityOff()
+        self.tubes_actor.disable_cut()
+        self.update()
+
+    def _apply_section_plane(self, position, rotation, inverted, show_plane=True):
+        self.plane_actor.configure_section_plane(position, rotation)
+        xyz = self.plane_actor.calculate_xyz_position(position)
+        normal = self.plane_actor.calculate_normal_vector(rotation)
+        if inverted:
+            normal = -normal
+
+        self.tubes_actor.apply_cut(xyz, normal)
+
+        self.plane_actor.SetVisibility(show_plane)
+        self.plane_actor.GetProperty().SetColor(0.5, 0.5, 0.5)
+        self.plane_actor.GetProperty().SetOpacity(0.2)
+        self.update()
+
+    def update_render_tool_according_to_results_viewer_widget(self, has_selection=True):
+        if has_selection and type(self.interactor_style) is RenderTool:
+            tool = SelectionTool()
+        elif not has_selection and type(self.interactor_style) is SelectionTool:
+            tool = RenderTool()
+        else:
+            tool = self.interactor_style
+
+        self.set_interactor_style(tool)
+
+        if hasattr(tool, "current_cursor"):
+            tool.update_mouse_cursor_in_render_widgets(tool.current_cursor)
+
+    def set_default_render_tool(self, base_tool=False):
+        tool = RenderTool()
+        self.set_interactor_style(tool)
+        tool.update_mouse_cursor_in_render_widgets(tool.current_cursor)

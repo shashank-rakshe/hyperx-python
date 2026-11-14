@@ -1,0 +1,34 @@
+[submodule "superlu"]
+	path = submodules/superlu
+	url = https://github.com/xiaoyeli/superlu
+	ignore = all
+	update = checkout
+	branch = master
+
+[submodule "superlu_mt"]
+	path = submodules/superlu_mt
+	url = https://github.com/xiaoyeli/superlu_mt
+	ignore = all
+	update = checkout
+	branch = master
+
+[submodule "metis/GKlib"]
+	path = submodules/GKlib
+	url = https://github.com/KarypisLab/GKlib.git
+	ignore = all
+	update = checkout
+	branch = master
+
+[submodule "metis/METIS"]
+	path = submodules/metis
+	url = https://github.com/KarypisLab/METIS.git
+	ignore = all
+	update = checkout
+	branch = master
+
+[submodule "Source/lapack"]
+	path = submodules/lapack
+	url = https://github.com/Reference-LAPACK/lapack.git
+	ignore = all
+	update = checkout
+	branch = master

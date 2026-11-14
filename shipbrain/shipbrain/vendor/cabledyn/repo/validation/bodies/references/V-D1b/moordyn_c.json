@@ -1,0 +1,55 @@
+{
+  "case": "V-D1b",
+  "code": "moordyn_c",
+  "series": "moordyn_c.csv.gz",
+  "date": "2026-09-27",
+  "host": "13th Gen Intel(R) Core(TM) i9-13900K, Windows",
+  "version": {
+    "commit": "319ff99771cffb835fea4423306a0849692afd53",
+    "describe": "v2.7.1",
+    "library_sha256": "9f611eeb80fd3836cb385ffaad583feab799badd7b040ee579a2f0afe40377b4",
+    "build": "Release -O3, Strawberry g++ 13.2 (out-of-tree CMake/Ninja)"
+  },
+  "runner": "validation/scripts/bodies_mdc_runner.cpp",
+  "settings": {
+    "scheme": "rk4",
+    "init": "MoorDyn_Init_NoIC + lines settled about the held bodies (--settle)",
+    "dtout": 0.05,
+    "coupling_dt": null,
+    "motion": null,
+    "settle_tmaxic": 300.0,
+    "deck": "cases/V-D1b/moordyn.txt"
+  },
+  "dt": 1.25e-05,
+  "convergence_window": null,
+  "convergence": [
+    {
+      "dt": 2.5e-05,
+      "e_rms_vs_finest": {
+        "Body1Px": 2.680555767738419e-08,
+        "Body1Pz": 1.6690941958401744e-08,
+        "TenA1": 7.46233908689237e-07,
+        "TenA2": 3.35942408160209e-07,
+        "TenA3": 3.889410586384426e-07
+      },
+      "max_e_rms": 7.46233908689237e-07,
+      "init_s": 574.514582,
+      "march_s": 1006.246099
+    },
+    {
+      "dt": 1.25e-05,
+      "e_rms_vs_finest": {
+        "Body1Px": 0.0,
+        "Body1Pz": 0.0,
+        "TenA1": 0.0,
+        "TenA2": 0.0,
+        "TenA3": 0.0
+      },
+      "max_e_rms": 0.0,
+      "init_s": 413.811255,
+      "march_s": 1744.61252
+    }
+  ],
+  "converged_below_0p1pct": true,
+  "t0_rod_node_error_m": {}
+}

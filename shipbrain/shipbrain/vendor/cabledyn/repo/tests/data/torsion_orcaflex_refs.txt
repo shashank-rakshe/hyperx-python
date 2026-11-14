@@ -1,0 +1,41 @@
+# OrcaFlex torsion reference values (summary values only) for tests/test_torsion_orcaflex.f90.
+# OrcaFlex 11.6d through OrcFxAPI; written by
+# validation/scripts/orcaflex_torsion_reference.py --refs from its JSON summary
+# (script SHA-256 65b6f529fec69320...). Line IncludeTorsion Yes, statics Catenary then
+# Full statics; StaticsTolerance 1e-09 (pure), 1e-08 (onsets, lazy wave);
+# StaticsMaxIterations 2000; TensionTorqueCoupling 0; seabed friction 0.
+# Units SI (N, m, N.m); OrcaFlex kN and kN.m are converted. See VALIDATION.md (torsion).
+#
+# pure: straight neutrally buoyant line, L 10.0 m, 20 segments, EI 1.0 kN.m^2,
+#   GJ 10.0 kN.m^2, both ends encastre; gamma reached by continuation.
+# tag  gamma_A_deg  gamma_B_deg  torque_N.m
+pure  0.0  90.0  1.570796326795e+03
+pure  0.0  450.0  7.853981633974e+03
+pure  0.0  1800.0  3.141592653590e+04
+pure  0.0  -90.0  -1.570796326795e+03
+pure  30.0  120.0  1.570796326795e+03
+# series: GJ 10 kN.m^2 over 4 m then 25 kN.m^2 over 6 m, gamma_B 90 deg
+# tag  torque_N.m
+series  2.454369260617e+03
+# clamped: Greenhill onset of the clamped-clamped line (case b, L 10 m, EI 1 kN.m^2), M_cr L/EI:
+#   OrcaFlex at 200 segments and the Richardson extrapolation of its three finest meshes
+# tag  T_L^2/EI  n200  extrapolated
+clamped  0.0  8.9870465524  8.9868186152
+clamped  10.0  10.4292160777  10.4288576773
+clamped  50.0  15.5899281305  15.5893530030
+clamped  200.0  28.9839761262  28.9830105566
+# pinned: bending-free ends with a finite twisting spring (1e4 kN.m/deg), M_cr L/EI as above
+# tag  T_L^2/EI  n200  extrapolated
+pinned  0.0  4.9113380432  4.9112670694
+pinned  10.0  7.2693679810  7.2692660363
+# lazywave: Lozon et al. (2025) GoMex 80 m (geometry as CableDyn validation/scripts/orcaflex_lozon_cables.py), GJ 50.0 kN.m^2 (illustrative),
+#   anchor End A, hang-off End B, segment 0.375 m, both ends encastre at the untwisted static
+#   orientation; the declinations (deg) of that orientation at the anchor and the hang-off:
+orientation  87.3991775607  8.3968483696
+# tag  turns  torque_hangoff_N.m  geometric_twist_turns  peak_interior_curvature_1/m  max_abs_Y_m  T_hangoff_N
+lazywave  0.0  -3.468577321e-14  1.879313946e-17  9.684766870e-02  4.146545931e-16  9.317615555e+03
+lazywave  1.0  1.765406378e+03  4.348309981e-02  9.721875420e-02  1.671157022e+00  9.326347366e+03
+lazywave  2.0  3.536055812e+03  8.412545341e-02  9.849395059e-02  3.222997787e+00  9.351197525e+03
+lazywave  3.0  5.313974260e+03  1.208293740e-01  1.013180989e-01  4.591115354e+00  9.389005537e+03
+lazywave  4.0  7.097221947e+03  1.546458532e-01  1.070380124e-01  5.770929912e+00  9.436854046e+03
+lazywave  5.0  8.879082825e+03  1.892137215e-01  1.196371754e-01  6.788001258e+00  9.493106351e+03

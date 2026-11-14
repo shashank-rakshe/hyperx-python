@@ -1,0 +1,65 @@
+{
+  "case": "V-M2",
+  "code": "moordyn_c",
+  "series": "moordyn_c.csv.gz",
+  "date": "2026-09-27",
+  "host": "13th Gen Intel(R) Core(TM) i9-13900K, Windows",
+  "version": {
+    "commit": "319ff99771cffb835fea4423306a0849692afd53",
+    "describe": "v2.7.1",
+    "library_sha256": "9f611eeb80fd3836cb385ffaad583feab799badd7b040ee579a2f0afe40377b4",
+    "build": "Release -O3, Strawberry g++ 13.2 (out-of-tree CMake/Ninja)"
+  },
+  "runner": "validation/scripts/bodies_mdc_runner.cpp",
+  "settings": {
+    "scheme": "rk4",
+    "init": "MoorDyn_Init_NoIC + lines settled about the held bodies (--settle)",
+    "dtout": 0.05,
+    "coupling_dt": null,
+    "motion": null,
+    "settle_tmaxic": 300.0,
+    "deck": "cases/V-M2/moordyn.txt"
+  },
+  "dt": 5e-05,
+  "convergence_window": null,
+  "convergence": [
+    {
+      "dt": 0.0001,
+      "e_rms_vs_finest": {
+        "Body1Px": 1.1385018051537404e-11,
+        "Body1Pz": 2.0002232852219065e-09,
+        "Body1Ry": 1.380579433796367e-10,
+        "Point9Px": 1.7284645509209098e-10,
+        "Rod2N5Px": 1.687486748812234e-11,
+        "TenA1": 9.6004438911902e-11,
+        "TenA2": 2.5376894499057665e-10,
+        "TenA3": 2.610603839459702e-10,
+        "TenA7": 1.0000034231439667e-08,
+        "TenA8": 5.92016990605903e-05
+      },
+      "max_e_rms": 5.92016990605903e-05,
+      "init_s": 40.632425,
+      "march_s": 41.779164
+    },
+    {
+      "dt": 5e-05,
+      "e_rms_vs_finest": {
+        "Body1Px": 0.0,
+        "Body1Pz": 0.0,
+        "Body1Ry": 0.0,
+        "Point9Px": 0.0,
+        "Rod2N5Px": 0.0,
+        "TenA1": 0.0,
+        "TenA2": 0.0,
+        "TenA3": 0.0,
+        "TenA7": 0.0,
+        "TenA8": 0.0
+      },
+      "max_e_rms": 0.0,
+      "init_s": 40.716756,
+      "march_s": 83.371549
+    }
+  ],
+  "converged_below_0p1pct": true,
+  "t0_rod_node_error_m": {}
+}

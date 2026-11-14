@@ -1,0 +1,63 @@
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    pass
+
+
+from copy import deepcopy
+
+from pulse.editor.structures import RectangularBeam
+
+from .structure_options import StructureOptions
+
+
+class RectangularBeamOptions(StructureOptions):
+    structure_type = RectangularBeam
+
+    def get_kwargs(self) -> dict:
+        if self.structure_info is None:
+            return
+
+        parameters = self.structure_info.get("section_parameters")
+        if parameters is None:
+            return
+
+        return dict(
+            width=parameters[0],
+            height=parameters[1],
+            width_internal=parameters[2],
+            height_internal=parameters[3],
+            offset_y=parameters[4],
+            offset_z=parameters[5],
+            extra_info=self._get_extra_info(),
+        )
+
+    def configure_structure(self):
+
+        self.cross_section_widget.set_inputs_to_geometry_creator()
+        self.cross_section_widget.hide_all_tabs()
+        self.cross_section_widget.tabWidget_general.setTabVisible(1, True)
+        self.cross_section_widget.tabWidget_beam_section.setTabVisible(0, True)
+        self.cross_section_widget.lineEdit_height_C_section.setFocus()
+        self.cross_section_dialog.load_active_sections("rectangular_beam")
+        self.cross_section_dialog.exec()
+
+        if not self.cross_section_dialog.complete:
+            return
+
+        self.cross_section_dialog.reset()
+        if self.cross_section_widget.get_beam_section_parameters():
+            self.configure_structure()
+            return
+
+        self.structure_info = self.cross_section_widget.beam_section_info.as_dict()
+
+        self.configure_section_of_selected()
+        self.update_permissions()
+
+    def _get_extra_info(self):
+        return dict(
+            structural_element_type="beam_1",
+            cross_section_info=deepcopy(self.structure_info),
+            material_id=self.geometry_designer_widget.current_material_id,
+        )

@@ -1,0 +1,139 @@
+import numpy as np
+from vtkmodules.vtkCommonCore import vtkLookupTable
+from vtkmodules.vtkRenderingCore import vtkColorTransferFunction
+
+from pulse import app
+from pulse.interface.viewer_3d.coloring.color_palettes import (
+    grey_colors,
+    jet_colors,
+    viridis_colors, 
+    inferno_colors, 
+    magma_colors, 
+    plasma_colors, 
+    bwr_colors, 
+    PiYG_colors, 
+    PRGn_colors, 
+    BrBG_colors, 
+    PuOR_colors, 
+    )
+
+from pulse.model.elements.element_attributes import ElementAttributes
+
+class ColorTable(vtkLookupTable):
+    def __init__(self, data: np.ndarray, min_max_values: tuple[float, float], colormap: str, stress_field_plot: bool = False, pressure_field_plot: bool = False):
+        super().__init__()
+
+        self.value_vector = data
+
+        (self.min_value, self.max_value) = min_max_values
+
+        self.colormap = colormap
+        self.stress_field_plot = stress_field_plot
+        self.pressure_field_plot = pressure_field_plot
+
+        self.SetTableRange(self.min_value, self.max_value)
+        self.set_colormap(self.colormap)
+
+        self.project = app().project
+
+    def set_colormap(self, colormap: str):
+        # just to make sure it has no uppercases or extra spaces
+        colormap = colormap.strip().lower()
+
+        if colormap == "grayscale":
+            self.set_colors(grey_colors)
+        elif colormap == "jet":
+            self.set_colors(jet_colors)
+        elif colormap == "viridis":
+            self.set_colors(viridis_colors)
+        elif colormap == "inferno":
+            self.set_colors(inferno_colors)
+        elif colormap == "magma":
+            self.set_colors(magma_colors)
+        elif colormap == "plasma":
+            self.set_colors(plasma_colors)
+        elif colormap == "bwr":
+            self.set_colors(bwr_colors)
+        elif colormap == "piyg":
+            self.set_colors(PiYG_colors)
+        elif colormap == "prgn":
+            self.set_colors(PRGn_colors)
+        elif colormap == "brbg":
+            self.set_colors(BrBG_colors)
+        elif colormap == "puor":
+            self.set_colors(PuOR_colors)
+        else:
+            print(f'Invalid colormap "{colormap}". Using "viridis" instead.')
+            self.set_colors(viridis_colors)
+
+        diverging_colormaps = ["bwr", "piyg", "prgn", "brbg", "puor"]
+        if colormap in diverging_colormaps:
+            # Center values on Zeros
+            max_abs = max(abs(self.min_value), abs(self.max_value))
+            self.SetTableRange(-max_abs, max_abs)
+        else:
+            self.SetTableRange(self.min_value, self.max_value)
+
+    def set_colors(self, colors, shades=256):
+        color_transfer = vtkColorTransferFunction()
+        for i, color in enumerate(colors):
+            color_transfer.AddRGBPoint(i / (len(colors) - 1), *color)
+
+        self.SetNumberOfColors(shades)
+        for i in range(shades):
+            interpolated_color = color_transfer.GetColor(i / (shades - 1))
+            normalized_color = [i / 255 for i in interpolated_color]
+            self.SetTableValue(i, *normalized_color)
+        self.Build()
+
+    def is_empty(self):
+        return len(self.value_vector) == 0
+
+    def distance_to(self, cord1, cord2):
+        return np.linalg.norm(cord1 - cord2)
+
+    def get_node_color(self, node):
+        if self.is_empty():
+            return [255, 255, 255]
+
+        value = self.value_vector[node.index]
+        color_temp = [255, 255, 255]
+        self.GetColor(value, color_temp)
+        color_temp = [int(i * 255) for i in color_temp]
+        return
+
+    def get_element_color(self, element_attributes: ElementAttributes):
+
+        index = element_attributes.index
+
+        first_gid = element_attributes.first_node.index
+        last_gid = element_attributes.last_node.index
+
+        if self.is_empty():
+            return [255, 255, 255]
+
+        element_type = element_attributes.structural_element_type
+        if self.stress_field_plot:
+            if element_type in ["beam_1", "expansion_joint", "valve"]:
+                return [255, 255, 255]
+            else:
+                value = np.real(self.value_vector[index])
+
+        elif self.pressure_field_plot:
+            if element_type == "beam_1":
+                return [255, 255, 255]
+
+            elif element_attributes.turned_off:
+                return [255, 255, 255]
+
+            value = (self.value_vector[first_gid] + self.value_vector[last_gid]) / 2
+
+        else:
+            value = (self.value_vector[first_gid] + self.value_vector[last_gid]) / 2
+
+        color_temp = [0, 0, 0]
+
+        self.GetColor(value, color_temp)
+        color_temp = [int(i * 255) for i in color_temp]
+
+        return color_temp

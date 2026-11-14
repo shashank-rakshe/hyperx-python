@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Awatif UI - Layout</title>
+    <style>
+      #layout .viewer {
+        background: #2d2d2d;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #layout .display {
+        background: #3a4a5a;
+      }
+      #layout .header {
+        background: #4a3a3a;
+      }
+      #layout .bottom-left {
+        background: #3a3a4a;
+      }
+      #layout .components {
+        background: #5a3a5a;
+      }
+      #layout .components-bar {
+        background: #4a4a3a;
+      }
+      #layout .canvas {
+        background: #2e4a3e;
+      }
+    </style>
+  </head>
+  <body>
+    <script type="module">
+      import { getLayout } from "./getLayout.ts";
+
+      const createElement = (text) => {
+        const element = document.createElement("div");
+        element.textContent = text;
+        return element;
+      };
+
+      const viewer = createElement("--------- Viewer Element ------------");
+      const display = createElement("--------- Display Element ------------");
+      const header1 = createElement("--------- Header Element 1 ------------");
+      const header2 = createElement("--------- Header Element 2 ------------");
+      const components = createElement(
+        "--------- Components Element ------------"
+      );
+      const canvas = createElement("--------- Canvas Element ------------");
+
+      document.body.append(
+        getLayout({
+          viewer,
+          display,
+          header: [header1, header2],
+          components,
+          canvas,
+        })
+      );
+    </script>
+  </body>
+</html>

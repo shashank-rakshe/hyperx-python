@@ -1,0 +1,7 @@
+interface:
+  display_name: "Simulator Development"
+  short_description: "Guardrails for Simthesizer simulator changes"
+  default_prompt: "Use $sim-dev to implement or debug a Simthesizer simulator change while following the repo's architecture and validation rules."
+
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,15 @@
+# build
+/target
+
+# output
+/output/
+
+# cache
+__pycache__
+
+# lint cache
+.ruff_cache/
+
+# development environments
+.devenv*
+.venv/

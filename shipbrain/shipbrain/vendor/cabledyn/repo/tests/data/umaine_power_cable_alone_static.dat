@@ -1,0 +1,50 @@
+--------------------- CableDyn Input File ------------------------------------
+UMaine mixed-deck power cable (line 4) solved alone: static initialization only (TMax 0)
+-- Line 4 of examples/iea15mw_umaine_mixed_cabledyn.dat extracted with its line types, end
+-- points, sections and options. The standalone finite-EI route must reach the same
+-- touchdown equilibrium the coupled aggregate route finds for this cable, and hold it.
+--------------------------- LINE TYPES ----------------------------------------
+Name  Diam   Mass    EA       BA    EI      Cdn   Cdt   Can   Cat
+(-)   (m)    (kg/m)  (N)      (-)   (Nm2)   (-)   (-)   (-)   (-)
+bare  0.16   36.70   4.69e8   0.0   1.99e4  1.2   0.1   1.0   0.0
+buoy  0.29   59.53   4.69e8   0.0   1.99e4  1.2   0.1   1.0   0.0
+--------------------------- POINTS --------------------------------------------
+ID   Type      X         Y        Z
+(-)  (-)      (m)       (m)      (m)
+7    Coupled   30.000     0.000  -20.000
+8    Fixed    500.000     0.000 -200.000
+--------------------------- LINES ---------------------------------------------
+ID  NodeA  NodeB  Outputs
+(-)  (-)    (-)    (-)
+4    7      8      -
+--------------------------- SECTIONS ------------------------------------------
+LineID  LineType  Length  NumSegs
+(-)     (-)       (m)     (-)
+4       bare      80.0    20
+4       buoy     100.0    25
+4       bare     420.0    42
+--------------------------- OPTIONS -------------------------------------------
+9.80665  g
+1025.0   rhoW
+0.4      rhoInf
+False    modified_newton
+3.0e6    kBot
+3.0e5    cBot
+0.35     frictionMu
+200.0    WtrDpth
+0.025    dtM
+0.0      TMax
+False    adaptive_mesh
+dynamic_solver 1.0e-8 1.0e-14 30 12
+none     current
+none     waves
+0        WaterKin
+--------------------------- OUTPUTS -------------------------------------------
+"FairTen4"
+"AnchTen4"
+"FairIncl4"
+"AnchIncl4"
+"Curv4N20"
+"BendMom4N20"
+END
+--------------------------- need this line ------------------------------------

@@ -1,0 +1,9 @@
+DEXPI Studio
+============
+
+data/reference_pid.xml is the reference P&ID of the DEXPI Specification 2.0.1, (c) 2026 DEXPI
+(DEXPI e.V.), licensed under the Creative Commons Attribution 4.0 International License
+(CC BY 4.0), https://creativecommons.org/licenses/by/4.0/.
+
+Source: https://gitlab.com/dexpi/Specification/-/releases/V2.0.1, the file
+src/documentation/_static/reference_pid.xml. Changes: none.

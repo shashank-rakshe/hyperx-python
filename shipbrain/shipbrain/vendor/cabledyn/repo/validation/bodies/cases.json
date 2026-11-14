@@ -1,0 +1,1380 @@
+{
+ "V-D1a": {
+  "family": "V-D1 decay",
+  "title": "V-D1 submerged 6-DOF buoy on three taut polyester legs, surge release from 0.5 m",
+  "tier": "xcode",
+  "cabledyn_deck": "cabledyn.dat",
+  "tmax": 120.0,
+  "references": {
+   "moordyn_c": {
+    "deck": "moordyn.txt",
+    "tmax": 120.0,
+    "dtout": 0.05,
+    "noic": true,
+    "settle": 300.0,
+    "scheme": "rk4",
+    "dt_levels": [
+     0.0001,
+     5e-05,
+     2.5e-05
+    ]
+   }
+  },
+  "metrics": [
+   {
+    "id": "surge_rms",
+    "metric": "e_rms",
+    "cd": "Body1Px",
+    "ref_code": "moordyn_c",
+    "ref": "Body1Px",
+    "gate": 0.005
+   },
+   {
+    "id": "heave_rms",
+    "metric": "e_rms",
+    "cd": "Body1Pz",
+    "ref_code": "moordyn_c",
+    "ref": "Body1Pz",
+    "gate": 0.05,
+    "note": "heave excursion is small; gate on the relative-to-surge scale in e_rms_abs"
+   },
+   {
+    "id": "surge_period",
+    "metric": "e_T",
+    "cd": "Body1Px",
+    "ref_code": "moordyn_c",
+    "ref": "Body1Px",
+    "gate": 0.003
+   },
+   {
+    "id": "FairTen1_rms",
+    "metric": "e_rms",
+    "cd": "FairTen1",
+    "ref_code": "moordyn_c",
+    "ref": "TenA1",
+    "gate": 0.005
+   },
+   {
+    "id": "FairTen2_rms",
+    "metric": "e_rms",
+    "cd": "FairTen2",
+    "ref_code": "moordyn_c",
+    "ref": "TenA2",
+    "gate": 0.005
+   },
+   {
+    "id": "FairTen3_rms",
+    "metric": "e_rms",
+    "cd": "FairTen3",
+    "ref_code": "moordyn_c",
+    "ref": "TenA3",
+    "gate": 0.005
+   },
+   {
+    "id": "FairTen1_t0",
+    "metric": "e_t0",
+    "cd": "FairTen1",
+    "ref_code": "moordyn_c",
+    "ref": "TenA1",
+    "gate": 0.005,
+    "note": "release protocol: initial fairlead tension within 0.5 % before scoring"
+   }
+  ]
+ },
+ "V-D1b": {
+  "family": "V-D1 decay",
+  "title": "V-D1 submerged 6-DOF buoy on three taut polyester legs, surge release from 5.0 m",
+  "tier": "xcode",
+  "cabledyn_deck": "cabledyn.dat",
+  "tmax": 120.0,
+  "references": {
+   "moordyn_c": {
+    "deck": "moordyn.txt",
+    "tmax": 120.0,
+    "dtout": 0.05,
+    "noic": true,
+    "settle": 300.0,
+    "scheme": "rk4",
+    "dt_levels": [
+     2.5e-05,
+     1.25e-05
+    ]
+   }
+  },
+  "metrics": [
+   {
+    "id": "surge_rms",
+    "metric": "e_rms",
+    "cd": "Body1Px",
+    "ref_code": "moordyn_c",
+    "ref": "Body1Px",
+    "gate": 0.005
+   },
+   {
+    "id": "heave_rms",
+    "metric": "e_rms",
+    "cd": "Body1Pz",
+    "ref_code": "moordyn_c",
+    "ref": "Body1Pz",
+    "gate": 0.05,
+    "note": "heave excursion is small; gate on the relative-to-surge scale in e_rms_abs"
+   },
+   {
+    "id": "surge_period",
+    "metric": "e_T",
+    "cd": "Body1Px",
+    "ref_code": "moordyn_c",
+    "ref": "Body1Px",
+    "gate": 0.003
+   },
+   {
+    "id": "FairTen1_rms",
+    "metric": "e_rms",
+    "cd": "FairTen1",
+    "ref_code": "moordyn_c",
+    "ref": "TenA1",
+    "gate": 0.005
+   },
+   {
+    "id": "FairTen2_rms",
+    "metric": "e_rms",
+    "cd": "FairTen2",
+    "ref_code": "moordyn_c",
+    "ref": "TenA2",
+    "gate": 0.005
+   },
+   {
+    "id": "FairTen3_rms",
+    "metric": "e_rms",
+    "cd": "FairTen3",
+    "ref_code": "moordyn_c",
+    "ref": "TenA3",
+    "gate": 0.005
+   },
+   {
+    "id": "FairTen1_t0",
+    "metric": "e_t0",
+    "cd": "FairTen1",
+    "ref_code": "moordyn_c",
+    "ref": "TenA1",
+    "gate": 0.005,
+    "note": "release protocol: initial fairlead tension within 0.5 % before scoring"
+   },
+   {
+    "id": "of_surge_period",
+    "metric": "e_T",
+    "cd": "Body1Px",
+    "ref_code": "orcaflex",
+    "ref": "Body1Px",
+    "gate": 0.003,
+    "window": [
+     0.5,
+     120.0
+    ],
+    "note": "OrcaFlex 11.6d summary value (orcaflex_vd1b_reference.py); cross-check, not the pass/fail reference"
+   },
+   {
+    "id": "of_surge_min",
+    "metric": "e_stat",
+    "cd": "Body1Px",
+    "ref_code": "orcaflex",
+    "ref": "Body1Px",
+    "gate": 0.005,
+    "window": [
+     0.5,
+     120.0
+    ],
+    "note": "OrcaFlex 11.6d summary value (orcaflex_vd1b_reference.py); cross-check, not the pass/fail reference",
+    "stat": "min",
+    "scale": "excursion"
+   },
+   {
+    "id": "of_surge_std",
+    "metric": "e_stat",
+    "cd": "Body1Px",
+    "ref_code": "orcaflex",
+    "ref": "Body1Px",
+    "gate": 0.005,
+    "window": [
+     0.5,
+     120.0
+    ],
+    "note": "OrcaFlex 11.6d summary value (orcaflex_vd1b_reference.py); cross-check, not the pass/fail reference",
+    "stat": "std",
+    "scale": "self"
+   },
+   {
+    "id": "of_heave_std",
+    "metric": "e_stat",
+    "cd": "Body1Pz",
+    "ref_code": "orcaflex",
+    "ref": "Body1Pz",
+    "gate": 0.01,
+    "window": [
+     0.5,
+     120.0
+    ],
+    "note": "OrcaFlex 11.6d summary value (orcaflex_vd1b_reference.py); cross-check, not the pass/fail reference",
+    "stat": "std",
+    "scale": "self"
+   },
+   {
+    "id": "of_FairTen1_mean",
+    "metric": "e_stat",
+    "cd": "FairTen1",
+    "ref_code": "orcaflex",
+    "ref": "FairTen1",
+    "gate": 0.005,
+    "window": [
+     0.5,
+     120.0
+    ],
+    "note": "OrcaFlex 11.6d summary value (orcaflex_vd1b_reference.py); cross-check, not the pass/fail reference",
+    "stat": "mean",
+    "scale": "excursion"
+   },
+   {
+    "id": "of_FairTen1_std",
+    "metric": "e_stat",
+    "cd": "FairTen1",
+    "ref_code": "orcaflex",
+    "ref": "FairTen1",
+    "gate": 0.01,
+    "window": [
+     0.5,
+     120.0
+    ],
+    "note": "OrcaFlex 11.6d summary value (orcaflex_vd1b_reference.py); cross-check, not the pass/fail reference",
+    "stat": "std",
+    "scale": "self"
+   },
+   {
+    "id": "of_FairTen1_max",
+    "metric": "e_stat",
+    "cd": "FairTen1",
+    "ref_code": "orcaflex",
+    "ref": "FairTen1",
+    "gate": 0.05,
+    "window": [
+     0.5,
+     120.0
+    ],
+    "note": "OrcaFlex 11.6d summary value (orcaflex_vd1b_reference.py); cross-check, not the pass/fail reference",
+    "stat": "max",
+    "scale": "self"
+   },
+   {
+    "id": "of_FairTen1_harm",
+    "metric": "e_harm",
+    "cd": "FairTen1",
+    "ref_code": "orcaflex",
+    "ref": "FairTen1",
+    "gate": 0.1,
+    "window": [
+     0.5,
+     120.0
+    ],
+    "note": "OrcaFlex 11.6d summary value (orcaflex_vd1b_reference.py); cross-check, not the pass/fail reference"
+   },
+   {
+    "id": "of_FairTen2_mean",
+    "metric": "e_stat",
+    "cd": "FairTen2",
+    "ref_code": "orcaflex",
+    "ref": "FairTen2",
+    "gate": 0.005,
+    "window": [
+     0.5,
+     120.0
+    ],
+    "note": "OrcaFlex 11.6d summary value (orcaflex_vd1b_reference.py); cross-check, not the pass/fail reference",
+    "stat": "mean",
+    "scale": "excursion"
+   },
+   {
+    "id": "of_FairTen2_std",
+    "metric": "e_stat",
+    "cd": "FairTen2",
+    "ref_code": "orcaflex",
+    "ref": "FairTen2",
+    "gate": 0.01,
+    "window": [
+     0.5,
+     120.0
+    ],
+    "note": "OrcaFlex 11.6d summary value (orcaflex_vd1b_reference.py); cross-check, not the pass/fail reference",
+    "stat": "std",
+    "scale": "self"
+   },
+   {
+    "id": "of_FairTen2_max",
+    "metric": "e_stat",
+    "cd": "FairTen2",
+    "ref_code": "orcaflex",
+    "ref": "FairTen2",
+    "gate": 0.05,
+    "window": [
+     0.5,
+     120.0
+    ],
+    "note": "OrcaFlex 11.6d summary value (orcaflex_vd1b_reference.py); cross-check, not the pass/fail reference",
+    "stat": "max",
+    "scale": "self"
+   },
+   {
+    "id": "of_FairTen2_harm",
+    "metric": "e_harm",
+    "cd": "FairTen2",
+    "ref_code": "orcaflex",
+    "ref": "FairTen2",
+    "gate": 0.1,
+    "window": [
+     0.5,
+     120.0
+    ],
+    "note": "OrcaFlex 11.6d summary value (orcaflex_vd1b_reference.py); cross-check, not the pass/fail reference"
+   },
+   {
+    "id": "of_FairTen1_snap1",
+    "metric": "e_snap",
+    "cd": "FairTen1",
+    "ref_code": "orcaflex",
+    "ref": "FairTen1",
+    "gate": 0.06,
+    "window": [
+     0.5,
+     120.0
+    ],
+    "note": "OrcaFlex 11.6d summary value (orcaflex_vd1b_reference.py); cross-check, not the pass/fail reference",
+    "snap": 0
+   },
+   {
+    "id": "of_FairTen1_snap2",
+    "metric": "e_snap",
+    "cd": "FairTen1",
+    "ref_code": "orcaflex",
+    "ref": "FairTen1",
+    "gate": 0.06,
+    "window": [
+     0.5,
+     120.0
+    ],
+    "note": "OrcaFlex 11.6d summary value (orcaflex_vd1b_reference.py); cross-check, not the pass/fail reference",
+    "snap": 1
+   }
+  ]
+ },
+ "V-D2a": {
+  "family": "V-D2 decay",
+  "title": "V-D2 submerged free spar rod on four taut legs, release dx = 0.1 m, dz = 0.0 m",
+  "tier": "xcode",
+  "cabledyn_deck": "cabledyn.dat",
+  "tmax": 60.0,
+  "references": {
+   "moordyn_c": {
+    "deck": "moordyn.txt",
+    "tmax": 60.0,
+    "dtout": 0.01,
+    "noic": true,
+    "settle": 300.0,
+    "scheme": "rk4",
+    "dt_levels": [
+     2.5e-05
+    ]
+   }
+  },
+  "metrics": [
+   {
+    "id": "endA_rms",
+    "metric": "e_rms",
+    "cd": "Rod1Px",
+    "ref_code": "moordyn_c",
+    "ref": "Rod1Px",
+    "gate": 0.02
+   },
+   {
+    "id": "endB_rms",
+    "metric": "e_rms",
+    "cd": "Rod1N20Px",
+    "ref_code": "moordyn_c",
+    "ref": "Rod1N20Px",
+    "gate": 0.02
+   },
+   {
+    "id": "FairTen1_rms",
+    "metric": "e_rms",
+    "cd": "FairTen1",
+    "ref_code": "moordyn_c",
+    "ref": "TenA1",
+    "gate": 0.02
+   },
+   {
+    "id": "FairTen2_rms",
+    "metric": "e_rms",
+    "cd": "FairTen2",
+    "ref_code": "moordyn_c",
+    "ref": "TenA2",
+    "gate": 0.02
+   },
+   {
+    "id": "FairTen3_rms",
+    "metric": "e_rms",
+    "cd": "FairTen3",
+    "ref_code": "moordyn_c",
+    "ref": "TenA3",
+    "gate": 0.02
+   },
+   {
+    "id": "FairTen4_rms",
+    "metric": "e_rms",
+    "cd": "FairTen4",
+    "ref_code": "moordyn_c",
+    "ref": "TenA4",
+    "gate": 0.02
+   },
+   {
+    "id": "FairTen1_t0",
+    "metric": "e_t0",
+    "cd": "FairTen1",
+    "ref_code": "moordyn_c",
+    "ref": "TenA1",
+    "gate": 0.005,
+    "note": "release protocol: initial tension within 0.5 % before scoring"
+   }
+  ]
+ },
+ "V-D2b": {
+  "family": "V-D2 decay",
+  "title": "V-D2 submerged free spar rod on four taut legs, release dx = 0.0 m, dz = 0.1 m",
+  "tier": "xcode",
+  "cabledyn_deck": "cabledyn.dat",
+  "tmax": 60.0,
+  "references": {
+   "moordyn_c": {
+    "deck": "moordyn.txt",
+    "tmax": 60.0,
+    "dtout": 0.01,
+    "noic": true,
+    "settle": 300.0,
+    "scheme": "rk4",
+    "dt_levels": [
+     2.5e-05,
+     1.25e-05
+    ]
+   }
+  },
+  "metrics": [
+   {
+    "id": "endA_rms",
+    "metric": "e_rms",
+    "cd": "Rod1Pz",
+    "ref_code": "moordyn_c",
+    "ref": "Rod1Pz",
+    "gate": 0.02
+   },
+   {
+    "id": "endB_rms",
+    "metric": "e_rms",
+    "cd": "Rod1N20Pz",
+    "ref_code": "moordyn_c",
+    "ref": "Rod1N20Pz",
+    "gate": 0.02
+   },
+   {
+    "id": "FairTen1_rms",
+    "metric": "e_rms",
+    "cd": "FairTen1",
+    "ref_code": "moordyn_c",
+    "ref": "TenA1",
+    "gate": 0.02
+   },
+   {
+    "id": "FairTen2_rms",
+    "metric": "e_rms",
+    "cd": "FairTen2",
+    "ref_code": "moordyn_c",
+    "ref": "TenA2",
+    "gate": 0.02
+   },
+   {
+    "id": "FairTen3_rms",
+    "metric": "e_rms",
+    "cd": "FairTen3",
+    "ref_code": "moordyn_c",
+    "ref": "TenA3",
+    "gate": 0.02
+   },
+   {
+    "id": "FairTen4_rms",
+    "metric": "e_rms",
+    "cd": "FairTen4",
+    "ref_code": "moordyn_c",
+    "ref": "TenA4",
+    "gate": 0.02
+   },
+   {
+    "id": "FairTen1_t0",
+    "metric": "e_t0",
+    "cd": "FairTen1",
+    "ref_code": "moordyn_c",
+    "ref": "TenA1",
+    "gate": 0.005,
+    "note": "release protocol: initial tension within 0.5 % before scoring"
+   }
+  ]
+ },
+ "V-D2c": {
+  "family": "V-D2 decay",
+  "title": "V-D2 submerged free spar rod on four taut legs, release dx = 2.0 m, dz = 0.0 m",
+  "tier": "xcode",
+  "cabledyn_deck": "cabledyn.dat",
+  "tmax": 10.0,
+  "references": {
+   "moordyn_c": {
+    "deck": "moordyn.txt",
+    "tmax": 10.0,
+    "dtout": 0.01,
+    "noic": true,
+    "settle": 300.0,
+    "scheme": "rk4",
+    "dt_levels": [
+     1.25e-05,
+     6.25e-06
+    ]
+   }
+  },
+  "metrics": [
+   {
+    "id": "endA_rms",
+    "metric": "e_rms",
+    "cd": "Rod1Px",
+    "ref_code": "moordyn_c",
+    "ref": "Rod1Px",
+    "gate": 0.05
+   },
+   {
+    "id": "endB_rms",
+    "metric": "e_rms",
+    "cd": "Rod1N20Px",
+    "ref_code": "moordyn_c",
+    "ref": "Rod1N20Px",
+    "gate": 0.05
+   },
+   {
+    "id": "FairTen1_rms",
+    "metric": "e_rms",
+    "cd": "FairTen1",
+    "ref_code": "moordyn_c",
+    "ref": "TenA1",
+    "gate": 0.05
+   },
+   {
+    "id": "FairTen2_rms",
+    "metric": "e_rms",
+    "cd": "FairTen2",
+    "ref_code": "moordyn_c",
+    "ref": "TenA2",
+    "gate": 0.05
+   },
+   {
+    "id": "FairTen3_rms",
+    "metric": "e_rms",
+    "cd": "FairTen3",
+    "ref_code": "moordyn_c",
+    "ref": "TenA3",
+    "gate": 0.05
+   },
+   {
+    "id": "FairTen4_rms",
+    "metric": "e_rms",
+    "cd": "FairTen4",
+    "ref_code": "moordyn_c",
+    "ref": "TenA4",
+    "gate": 0.05
+   },
+   {
+    "id": "FairTen1_t0",
+    "metric": "e_t0",
+    "cd": "FairTen1",
+    "ref_code": "moordyn_c",
+    "ref": "TenA1",
+    "gate": 0.005,
+    "note": "release protocol: initial tension within 0.5 % before scoring"
+   },
+   {
+    "id": "endA_peak",
+    "metric": "e_pk",
+    "cd": "Rod1Px",
+    "ref_code": "moordyn_c",
+    "ref": "Rod1Px",
+    "gate": 0.05
+   }
+  ]
+ },
+ "V-D2d": {
+  "family": "V-D2 decay",
+  "title": "V-D2 submerged free spar rod on four taut legs, release dx = 0.0 m, dz = 1.0 m",
+  "tier": "xcode",
+  "cabledyn_deck": "cabledyn.dat",
+  "tmax": 10.0,
+  "references": {
+   "moordyn_c": {
+    "deck": "moordyn.txt",
+    "tmax": 10.0,
+    "dtout": 0.01,
+    "noic": true,
+    "settle": 300.0,
+    "scheme": "rk4",
+    "dt_levels": [
+     2.5e-05,
+     1.25e-05
+    ]
+   }
+  },
+  "metrics": [
+   {
+    "id": "endA_rms",
+    "metric": "e_rms",
+    "cd": "Rod1Pz",
+    "ref_code": "moordyn_c",
+    "ref": "Rod1Pz",
+    "gate": 0.05
+   },
+   {
+    "id": "endB_rms",
+    "metric": "e_rms",
+    "cd": "Rod1N20Pz",
+    "ref_code": "moordyn_c",
+    "ref": "Rod1N20Pz",
+    "gate": 0.05
+   },
+   {
+    "id": "FairTen1_rms",
+    "metric": "e_rms",
+    "cd": "FairTen1",
+    "ref_code": "moordyn_c",
+    "ref": "TenA1",
+    "gate": 0.05
+   },
+   {
+    "id": "FairTen2_rms",
+    "metric": "e_rms",
+    "cd": "FairTen2",
+    "ref_code": "moordyn_c",
+    "ref": "TenA2",
+    "gate": 0.05
+   },
+   {
+    "id": "FairTen3_rms",
+    "metric": "e_rms",
+    "cd": "FairTen3",
+    "ref_code": "moordyn_c",
+    "ref": "TenA3",
+    "gate": 0.05
+   },
+   {
+    "id": "FairTen4_rms",
+    "metric": "e_rms",
+    "cd": "FairTen4",
+    "ref_code": "moordyn_c",
+    "ref": "TenA4",
+    "gate": 0.05
+   },
+   {
+    "id": "FairTen1_t0",
+    "metric": "e_t0",
+    "cd": "FairTen1",
+    "ref_code": "moordyn_c",
+    "ref": "TenA1",
+    "gate": 0.005,
+    "note": "release protocol: initial tension within 0.5 % before scoring"
+   },
+   {
+    "id": "endA_peak",
+    "metric": "e_pk",
+    "cd": "Rod1Pz",
+    "ref_code": "moordyn_c",
+    "ref": "Rod1Pz",
+    "gate": 0.05
+   }
+  ]
+ },
+ "V-R3": {
+  "family": "V-R3 ROD TYPES semantics",
+  "title": "V-D2 submerged free spar rod on four taut legs, release dx = 0.0 m, dz = 0.1 m",
+  "tier": "xcode",
+  "cabledyn_deck": "cabledyn.dat",
+  "tmax": 60.0,
+  "references": {
+   "moordyn_c": {
+    "deck": "moordyn.txt",
+    "tmax": 60.0,
+    "dtout": 0.01,
+    "noic": true,
+    "settle": 300.0,
+    "scheme": "rk4",
+    "dt_levels": [
+     2.5e-05,
+     1.25e-05
+    ]
+   }
+  },
+  "metrics": [
+   {
+    "id": "heave_period",
+    "metric": "e_T",
+    "cd": "Rod1Pz",
+    "ref_code": "moordyn_c",
+    "ref": "Rod1Pz",
+    "gate": 0.01,
+    "window": [
+     0.0,
+     5.0
+    ]
+   },
+   {
+    "id": "heave_rms",
+    "metric": "e_rms",
+    "cd": "Rod1Pz",
+    "ref_code": "moordyn_c",
+    "ref": "Rod1Pz",
+    "gate": 0.03
+   }
+  ]
+ },
+ "V-SP-heave": {
+  "family": "V-SP surface-piercing spar",
+  "title": "V-SP/V-D3 ballasted surface-piercing spar, heave release from +1 m",
+  "tier": "fast / xcode",
+  "cabledyn_deck": "cabledyn.dat",
+  "cabledyn_deck_parity": "cabledyn_mdparity.dat",
+  "tmax": 200.0,
+  "references": {
+   "analytic": {
+    "script": "bodies_analytic.py"
+   },
+   "moordyn_c": {
+    "deck": "moordyn.txt",
+    "tmax": 200.0,
+    "dtout": 0.05,
+    "noic": true,
+    "scheme": "rk4",
+    "dt_levels": [
+     0.01,
+     0.005,
+     0.0025
+    ]
+   }
+  },
+  "metrics": [
+   {
+    "id": "draft",
+    "metric": "e_eq",
+    "cd": "static:Body1Pz",
+    "ref_code": "analytic",
+    "ref": "z_eq",
+    "gate": 0.0001,
+    "note": "static equilibrium (cabledyn_static.dat) vs rho A draft = m"
+   },
+   {
+    "id": "heave_period",
+    "metric": "e_T",
+    "cd": "Body1Pz",
+    "ref_code": "analytic",
+    "ref": "T_heave",
+    "gate": 0.01
+   }
+  ]
+ },
+ "V-SP-pitch": {
+  "family": "V-SP surface-piercing spar",
+  "title": "V-SP/V-D3 ballasted surface-piercing spar, pitch release from 3 deg",
+  "tier": "fast / xcode",
+  "cabledyn_deck": "cabledyn.dat",
+  "cabledyn_deck_parity": "cabledyn_mdparity.dat",
+  "tmax": 400.0,
+  "references": {
+   "analytic": {
+    "script": "bodies_analytic.py"
+   },
+   "moordyn_c": {
+    "deck": "moordyn.txt",
+    "tmax": 400.0,
+    "dtout": 0.05,
+    "noic": true,
+    "scheme": "rk4",
+    "dt_levels": [
+     0.01,
+     0.005,
+     0.0025
+    ]
+   }
+  },
+  "metrics": [
+   {
+    "id": "pitch_period",
+    "metric": "e_T",
+    "cd": "Body1Ry",
+    "ref_code": "analytic",
+    "ref": "T_pitch_exact",
+    "gate": 0.02
+   },
+   {
+    "id": "pitch_rms_md",
+    "metric": "e_rms",
+    "cd": "Body1Ry",
+    "ref_code": "moordyn_c",
+    "ref": "Body1Ry",
+    "gate": 0.03,
+    "note": "scored on the cabledyn_mdparity.dat run (rodHydro moordyn)",
+    "cd_run": "_mdparity"
+   }
+  ]
+ },
+ "V-SPW": {
+  "family": "V-SP surface-piercing spar",
+  "title": "V-SPW waterplane-term check: squat spar (d 10 m, draft 20 m, GM 0.41 m), pitch release 2 deg",
+  "tier": "fast / xcode",
+  "cabledyn_deck": "cabledyn.dat",
+  "cabledyn_deck_parity": "cabledyn_mdparity.dat",
+  "tmax": 300.0,
+  "references": {
+   "analytic": {
+    "script": "bodies_analytic.py"
+   },
+   "moordyn_c": {
+    "deck": "moordyn.txt",
+    "tmax": 300.0,
+    "dtout": 0.05,
+    "noic": true,
+    "scheme": "rk4",
+    "dt_levels": [
+     0.01,
+     0.005,
+     0.0025
+    ]
+   }
+  },
+  "metrics": [
+   {
+    "id": "pitch_period_exact",
+    "metric": "e_T",
+    "cd": "Body1Ry",
+    "ref_code": "analytic",
+    "ref": "T_pitch_exact",
+    "gate": 0.01
+   },
+   {
+    "id": "pitch_period_md",
+    "metric": "e_T",
+    "cd": "Body1Ry",
+    "ref_code": "moordyn_c",
+    "ref": "Body1Ry",
+    "gate": 0.01,
+    "note": "scored on the cabledyn_mdparity.dat run (rodHydro moordyn)",
+    "cd_run": "_mdparity"
+   }
+  ]
+ },
+ "V-P1a": {
+  "family": "V-P1 pendulum",
+  "title": "V-P1 dry rigid rod pendulum pinned at End A, released from 10.0 deg",
+  "tier": "fast",
+  "cabledyn_deck": "cabledyn.dat",
+  "tmax": 259.5519,
+  "dt": 0.0519,
+  "references": {
+   "analytic": {
+    "script": "bodies_analytic.py"
+   },
+   "moordyn_c": {
+    "deck": "moordyn.txt",
+    "tmax": 60.0,
+    "dtout": 0.01,
+    "noic": true,
+    "scheme": "rk4",
+    "dt_levels": [
+     0.001,
+     0.0005,
+     0.00025
+    ],
+    "note": "cross-check only; channels offset by the pin height"
+   }
+  },
+  "metrics": [
+   {
+    "id": "period",
+    "metric": "e_T",
+    "cd": "derived:pend_angle",
+    "ref_code": "analytic",
+    "ref": "theta",
+    "gate": 0.001,
+    "ref_value": 5.19060139260207
+   },
+   {
+    "id": "angle_rms",
+    "metric": "e_rms",
+    "cd": "derived:pend_angle",
+    "ref_code": "analytic",
+    "ref": "theta",
+    "gate": 0.01,
+    "window": [
+     0.0,
+     25.95300696301035
+    ]
+   }
+  ]
+ },
+ "V-P1b": {
+  "family": "V-P1 pendulum",
+  "title": "V-P1 dry rigid rod pendulum pinned at End A, released from 60.0 deg",
+  "tier": "fast",
+  "cabledyn_deck": "cabledyn.dat",
+  "tmax": 278.0,
+  "dt": 0.0556,
+  "references": {
+   "analytic": {
+    "script": "bodies_analytic.py"
+   },
+   "moordyn_c": {
+    "deck": "moordyn.txt",
+    "tmax": 60.0,
+    "dtout": 0.01,
+    "noic": true,
+    "scheme": "rk4",
+    "dt_levels": [
+     0.001,
+     0.0005,
+     0.00025
+    ],
+    "note": "cross-check only; channels offset by the pin height"
+   }
+  },
+  "metrics": [
+   {
+    "id": "period",
+    "metric": "e_T",
+    "cd": "derived:pend_angle",
+    "ref_code": "analytic",
+    "ref": "theta",
+    "gate": 0.001,
+    "ref_value": 5.559856328756783
+   },
+   {
+    "id": "angle_rms",
+    "metric": "e_rms",
+    "cd": "derived:pend_angle",
+    "ref_code": "analytic",
+    "ref": "theta",
+    "gate": 0.01,
+    "window": [
+     0.0,
+     27.799281643783914
+    ]
+   }
+  ]
+ },
+ "V-P1c": {
+  "family": "V-P1 pendulum",
+  "title": "V-P1 dry rigid rod pendulum pinned at End A, released from 120.0 deg",
+  "tier": "fast",
+  "cabledyn_deck": "cabledyn.dat",
+  "tmax": 355.6422,
+  "dt": 0.0711,
+  "references": {
+   "analytic": {
+    "script": "bodies_analytic.py"
+   },
+   "moordyn_c": {
+    "deck": "moordyn.txt",
+    "tmax": 60.0,
+    "dtout": 0.01,
+    "noic": true,
+    "scheme": "rk4",
+    "dt_levels": [
+     0.001,
+     0.0005,
+     0.00025
+    ],
+    "note": "cross-check only; channels offset by the pin height"
+   }
+  },
+  "metrics": [
+   {
+    "id": "period",
+    "metric": "e_T",
+    "cd": "derived:pend_angle",
+    "ref_code": "analytic",
+    "ref": "theta",
+    "gate": 0.001,
+    "ref_value": 7.112510542610465
+   },
+   {
+    "id": "angle_rms",
+    "metric": "e_rms",
+    "cd": "derived:pend_angle",
+    "ref_code": "analytic",
+    "ref": "theta",
+    "gate": 0.01,
+    "window": [
+     0.0,
+     35.56255271305233
+    ]
+   }
+  ]
+ },
+ "V-S1m": {
+  "family": "V-S1 shared anchor",
+  "title": "V-S1m three IEA-15MW VolturnUS-S chains from three turbines to one shared anchor",
+  "tier": "xcode",
+  "cabledyn_deck": "cabledyn.dat",
+  "cabledyn_deck_static": "cabledyn_static.dat",
+  "tmax": 300.0,
+  "references": {
+   "moordyn_c": {
+    "deck": "moordyn.txt",
+    "tmax": 300.0,
+    "dtout": 0.1,
+    "noic": false,
+    "scheme": "rk4",
+    "motion": "motion_mdc.txt",
+    "cdt": "dtM",
+    "dt_levels": [
+     0.0005,
+     0.00025
+    ]
+   },
+   "moordyn_c_static": {
+    "deck": "moordyn_static.txt",
+    "motion": "held_mdc.txt"
+   },
+   "moordyn_c_static_surge10": {
+    "deck": "moordyn_static.txt",
+    "motion": "surge10_mdc.txt"
+   }
+  },
+  "metrics": [
+   {
+    "id": "static_symmetry",
+    "metric": "e_rel_spread",
+    "cd": "static:FairTen1,FairTen2,FairTen3",
+    "ref_code": "self",
+    "ref": null,
+    "gate": 1e-06,
+    "note": "held hosts: the three line tensions equal"
+   },
+   {
+    "id": "static_FairTen1",
+    "metric": "e_stat_value",
+    "cd": "static:FairTen1",
+    "ref_code": "moordyn_c_static",
+    "ref": "TenA1",
+    "gate": 0.005
+   },
+   {
+    "id": "static_surge10_FairTen1",
+    "metric": "e_stat_value",
+    "cd": "static_surge10:FairTen1",
+    "ref_code": "moordyn_c_static_surge10",
+    "ref": "TenA1",
+    "gate": 0.005,
+    "note": "needs the CableDyn static deck with T1 PtfmSurge = 10"
+   },
+   {
+    "id": "anchor_FH",
+    "metric": "e_rms_star",
+    "cd": "derived:anchor_FH",
+    "ref_code": "moordyn_c",
+    "ref": "derived:anchor_FH",
+    "gate": 0.02,
+    "window": [
+     100.0,
+     300.0
+    ]
+   },
+   {
+    "id": "FairTen1",
+    "metric": "e_rms_star",
+    "cd": "FairTen1",
+    "ref_code": "moordyn_c",
+    "ref": "TenA1",
+    "gate": 0.02,
+    "window": [
+     100.0,
+     300.0
+    ]
+   },
+   {
+    "id": "FairTen2",
+    "metric": "e_rms_star",
+    "cd": "FairTen2",
+    "ref_code": "moordyn_c",
+    "ref": "TenA2",
+    "gate": 0.02,
+    "window": [
+     100.0,
+     300.0
+    ]
+   },
+   {
+    "id": "FairTen3",
+    "metric": "e_rms_star",
+    "cd": "FairTen3",
+    "ref_code": "moordyn_c",
+    "ref": "TenA3",
+    "gate": 0.02,
+    "window": [
+     100.0,
+     300.0
+    ]
+   }
+  ]
+ },
+ "V-M1": {
+  "family": "V-M mixed topology",
+  "title": "V-M mixed topology: free body with fixed and pinned rods, finite-EI cable; release from x = 3.0 m",
+  "tier": "xcode",
+  "cabledyn_deck": "cabledyn.dat",
+  "tmax": 60.0,
+  "references": {
+   "moordyn_c": {
+    "deck": "moordyn.txt",
+    "tmax": 60.0,
+    "dtout": 0.05,
+    "noic": true,
+    "settle": 300.0,
+    "scheme": "rk4",
+    "dt_levels": [
+     0.0001,
+     5e-05
+    ]
+   }
+  },
+  "metrics": [
+   {
+    "id": "surge_rms",
+    "metric": "e_rms",
+    "cd": "Body1Px",
+    "ref_code": "moordyn_c",
+    "ref": "Body1Px",
+    "gate": 0.05
+   },
+   {
+    "id": "heave_rms",
+    "metric": "e_rms",
+    "cd": "Body1Pz",
+    "ref_code": "moordyn_c",
+    "ref": "Body1Pz",
+    "gate": 0.05
+   },
+   {
+    "id": "pitch_rms",
+    "metric": "e_rms",
+    "cd": "Body1Ry",
+    "ref_code": "moordyn_c",
+    "ref": "Body1Ry",
+    "gate": 0.05
+   },
+   {
+    "id": "pinned_rod_rms",
+    "metric": "e_rms",
+    "cd": "Rod2N5Px",
+    "ref_code": "moordyn_c",
+    "ref": "Rod2N5Px",
+    "gate": 0.05
+   },
+   {
+    "id": "FairTen1_rms",
+    "metric": "e_rms",
+    "cd": "FairTen1",
+    "ref_code": "moordyn_c",
+    "ref": "TenA1",
+    "gate": 0.05
+   },
+   {
+    "id": "FairTen2_rms",
+    "metric": "e_rms",
+    "cd": "FairTen2",
+    "ref_code": "moordyn_c",
+    "ref": "TenA2",
+    "gate": 0.05
+   },
+   {
+    "id": "FairTen3_rms",
+    "metric": "e_rms",
+    "cd": "FairTen3",
+    "ref_code": "moordyn_c",
+    "ref": "TenA3",
+    "gate": 0.05
+   },
+   {
+    "id": "FairTen4_rms",
+    "metric": "e_rms",
+    "cd": "FairTen4",
+    "ref_code": "moordyn_c",
+    "ref": "TenA4",
+    "gate": 0.05
+   },
+   {
+    "id": "cable_t0",
+    "metric": "e_t0",
+    "cd": "FairTen5",
+    "ref_code": "moordyn_c",
+    "ref": "TenA5",
+    "gate": 0.005,
+    "note": "finite-EI cable (EI 1e4 N m^2, cubic Hermite) vs MoorDyn-C's lumped bending line: static hang-off tension; its dynamic swing is under 1 % of the mean, where the two bending models differ by about 0.2 % of the mean"
+   },
+   {
+    "id": "decay",
+    "metric": "decay_ratio",
+    "cd": "Body1Px",
+    "ref_code": "self",
+    "ref": null,
+    "gate": 0.5,
+    "window": [
+     0.0,
+     60.0
+    ],
+    "note": "energy decay: late surge amplitude over the early one (last vs first fifth)"
+   }
+  ]
+ },
+ "V-M2": {
+  "family": "V-M mixed topology",
+  "title": "V-M mixed topology: free body with fixed and pinned rods, chain through Free points, finite-EI cable; release from x = 3.0 m",
+  "tier": "xcode",
+  "cabledyn_deck": "cabledyn.dat",
+  "tmax": 60.0,
+  "references": {
+   "moordyn_c": {
+    "deck": "moordyn.txt",
+    "tmax": 60.0,
+    "dtout": 0.05,
+    "noic": true,
+    "settle": 300.0,
+    "scheme": "rk4",
+    "dt_levels": [
+     0.0001,
+     5e-05
+    ]
+   }
+  },
+  "metrics": [
+   {
+    "id": "surge_rms",
+    "metric": "e_rms",
+    "cd": "Body1Px",
+    "ref_code": "moordyn_c",
+    "ref": "Body1Px",
+    "gate": 0.05
+   },
+   {
+    "id": "heave_rms",
+    "metric": "e_rms",
+    "cd": "Body1Pz",
+    "ref_code": "moordyn_c",
+    "ref": "Body1Pz",
+    "gate": 0.05
+   },
+   {
+    "id": "pitch_rms",
+    "metric": "e_rms",
+    "cd": "Body1Ry",
+    "ref_code": "moordyn_c",
+    "ref": "Body1Ry",
+    "gate": 0.05
+   },
+   {
+    "id": "pinned_rod_rms",
+    "metric": "e_rms",
+    "cd": "Rod2N5Px",
+    "ref_code": "moordyn_c",
+    "ref": "Rod2N5Px",
+    "gate": 0.05
+   },
+   {
+    "id": "free_point_rms",
+    "metric": "e_rms",
+    "cd": "Point9Px",
+    "ref_code": "moordyn_c",
+    "ref": "Point9Px",
+    "gate": 0.05
+   },
+   {
+    "id": "FairTen1_rms",
+    "metric": "e_rms",
+    "cd": "FairTen1",
+    "ref_code": "moordyn_c",
+    "ref": "TenA1",
+    "gate": 0.05
+   },
+   {
+    "id": "FairTen2_rms",
+    "metric": "e_rms",
+    "cd": "FairTen2",
+    "ref_code": "moordyn_c",
+    "ref": "TenA2",
+    "gate": 0.05
+   },
+   {
+    "id": "FairTen3_rms",
+    "metric": "e_rms",
+    "cd": "FairTen3",
+    "ref_code": "moordyn_c",
+    "ref": "TenA3",
+    "gate": 0.05
+   },
+   {
+    "id": "FairTen7_rms",
+    "metric": "e_rms",
+    "cd": "FairTen7",
+    "ref_code": "moordyn_c",
+    "ref": "TenA7",
+    "gate": 0.05
+   },
+   {
+    "id": "cable_t0",
+    "metric": "e_t0",
+    "cd": "FairTen8",
+    "ref_code": "moordyn_c",
+    "ref": "TenA8",
+    "gate": 0.005,
+    "note": "finite-EI cable (EI 1e4 N m^2, cubic Hermite) vs MoorDyn-C's lumped bending line: static hang-off tension; its dynamic swing is under 1 % of the mean, where the two bending models differ by about 0.2 % of the mean"
+   },
+   {
+    "id": "decay",
+    "metric": "decay_ratio",
+    "cd": "Body1Px",
+    "ref_code": "self",
+    "ref": null,
+    "gate": 0.5,
+    "window": [
+     0.0,
+     60.0
+    ],
+    "note": "energy decay: late surge amplitude over the early one (last vs first fifth)"
+   },
+   {
+    "id": "rest_drift_body",
+    "metric": "e_drift_abs",
+    "cd": "Body1Px,Body1Py,Body1Pz",
+    "ref_code": "self",
+    "ref": null,
+    "gate": 0.005,
+    "note": "static equilibrium: the full mix stays at rest [m]; the finite-EI cable enters the object statics without its bending stiffness",
+    "cd_run": "_rest"
+   },
+   {
+    "id": "rest_drift_rods",
+    "metric": "e_drift_abs",
+    "cd": "Rod2N5Px,Rod2N5Pz,Rod3Px,Rod3Pz",
+    "ref_code": "self",
+    "ref": null,
+    "gate": 0.001,
+    "note": "pinned and free rods stay at rest [m]",
+    "cd_run": "_rest"
+   }
+  ],
+  "cabledyn_deck_rest": "cabledyn_rest.dat"
+ }
+}

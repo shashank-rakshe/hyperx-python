@@ -1,0 +1,1 @@
+AlgoHex check run requested 2026-11-12: build commit 27cd6e7e on GitHub, run the demo and ShipBrain parts, publish algohex-latest.

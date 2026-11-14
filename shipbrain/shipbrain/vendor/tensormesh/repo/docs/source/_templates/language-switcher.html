@@ -1,0 +1,19 @@
+{#-
+  Language switcher for the Furo sidebar (inserted between brand and search).
+  Layout assumed: English at <root>/, Chinese at <root>/zh/.
+  pagename is e.g. "examples/poisson" (no .html), same in both builds.
+  Note: Sphinx normalizes the language code to use hyphens (e.g. zh-CN), so we
+  match on .startswith('zh') rather than ==.
+-#}
+{%- set depth = pagename.count('/') -%}
+<div class="sidebar-language-switcher">
+{%- if language and language.lower().startswith('zh') %}
+  <a href="{{ '../' * (depth + 1) }}{{ pagename }}.html" rel="alternate" hreflang="en" title="English">English</a>
+  <span class="sep">·</span>
+  <span class="active">中文</span>
+{%- else %}
+  <span class="active">English</span>
+  <span class="sep">·</span>
+  <a href="{{ '../' * depth }}zh/{{ pagename }}.html" rel="alternate" hreflang="zh-CN" title="中文">中文</a>
+{%- endif %}
+</div>

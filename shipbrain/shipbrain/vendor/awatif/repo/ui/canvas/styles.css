@@ -1,0 +1,211 @@
+#canvas {
+  width: 100%;
+  height: 100%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px var(--shadow);
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#canvas.open {
+  display: flex;
+}
+
+.canvas-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  height: 44px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-tertiary);
+}
+
+.canvas-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.canvas-header h2 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.canvas-header .print-button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.canvas-header .print-button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+.canvas-header .close-button {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  opacity: 0.65;
+}
+
+.canvas-header .close-button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  opacity: 1;
+}
+
+.canvas-header .close-button:active {
+  background: var(--bg-active);
+}
+
+.canvas-body {
+  flex: 1;
+  padding: 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--bg-primary);
+}
+
+@media print {
+  :root {
+    --text-primary: #111111;
+    --text-secondary: #555555;
+    --border: #cccccc;
+    --bg: #ffffff;
+    --bg-primary: #ffffff;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f5f5f5;
+    --shadow: none;
+  }
+
+  /* When printing only the canvas, override layout and overflow controls */
+  html.printing-canvas,
+  body.printing-canvas {
+    height: auto !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+
+  body.printing-canvas > *:not(#layout) {
+    display: none !important;
+  }
+
+  body.printing-canvas #layout {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+
+  body.printing-canvas #layout > div:not(.canvas) {
+    display: none !important;
+  }
+
+  body.printing-canvas #layout .canvas {
+    width: 100% !important;
+    height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+
+  body.printing-canvas #canvas {
+    display: block !important;
+    border: none !important;
+    box-shadow: none !important;
+    height: auto !important;
+    width: 100% !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+
+  body.printing-canvas .canvas-header {
+    display: none !important;
+  }
+
+  body.printing-canvas .canvas-body {
+    padding: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+    display: block !important;
+  }
+
+  /* Specific element coloring adjustments for better print visibility */
+
+  /* Force background colors to print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Remove opacity from beta notice so text stays crisp */
+  [style*="opacity: 0.6"] {
+    opacity: 1 !important;
+  }
+
+  /* Warning/amber — replace near-transparent bg with solid light yellow */
+  [style*="background: #f59e0b"],
+  [style*="background:#f59e0b"] {
+    background: #fff8e1 !important;
+    color: #7a5800 !important;
+    border: 1px solid #d97706 !important;
+  }
+  [style*="color: #f59e0b"] {
+    color: #7a5800 !important;
+  }
+
+  /* Pass/green — replace near-transparent bg with solid light green */
+  [style*="background: #10b981"],
+  [style*="background:#10b981"] {
+    background: #ecfdf5 !important;
+    color: #065f46 !important;
+    border: 1px solid #059669 !important;
+  }
+  [style*="color: #10b981"] {
+    color: #065f46 !important;
+  }
+
+  /* Fail/red — replace near-transparent bg with solid light red */
+  [style*="background: #ef4444"],
+  [style*="background:#ef4444"] {
+    background: #fef2f2 !important;
+    color: #991b1b !important;
+    border: 1px solid #dc2626 !important;
+  }
+  [style*="color: #ef4444"] {
+    color: #991b1b !important;
+  }
+}

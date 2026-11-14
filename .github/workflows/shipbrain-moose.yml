@@ -1,0 +1,75 @@
+# ShipBrain: run MOOSE (Idaho National Laboratory, LGPL-2.1) in its official Docker image on GitHub's computers, solve
+# plate fields with MOOSE's shell element through shipbrain.moose, compare every result with theory (Navier series,
+# Roark clamped coefficients), turn the results into training conversations and publish them as the release
+# "moose-latest" (the Kaggle training run downloads it). Started by a change to shipbrain/training/MOOSE_REQUEST.txt
+# or by hand (Actions tab).
+name: shipbrain-moose
+on:
+  push:
+    paths: ['shipbrain/training/MOOSE_REQUEST.txt']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: shipbrain-moose
+jobs:
+  solve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    container:
+      image: idaholab/moose:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Solve the plate cases with MOOSE
+        working-directory: shipbrain
+        shell: bash
+        run: |
+          set -o pipefail
+          # the image's environment (compilers, MPI, PETSc, the installed MOOSE) - see MOOSE's docker.md
+          if [ -f /environment ]; then . /environment; fi
+          export PATH=/opt/moose/bin:$PATH
+          echo "moose-opt: $(command -v moose-opt || ls /opt/moose/bin 2>/dev/null | head)"
+          python3 --version
+          python3 training/moose_tasks.py --run --n 40 --results /tmp/results.json 2>&1 | tee /tmp/moose_log.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: moose-results
+          path: |
+            /tmp/results.json
+            /tmp/moose_log.txt
+  publish:
+    needs: solve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: actions/download-artifact@v4
+        with: {name: moose-results, path: /tmp/m}
+      - name: Training conversations + summary
+        working-directory: shipbrain
+        run: |
+          pip -q install numpy
+          ls -la /tmp/m
+          python training/moose_tasks.py --samples --results /tmp/m/results.json --out /tmp/m/moose_train.jsonl.gz
+          python - <<'PY' > /tmp/notes.md
+          import json
+          res = json.load(open('/tmp/m/results.json'))
+          ok = [r for r in res if 'difference_percent' in r]
+          print(f'MOOSE shell-element plate checks run on GitHub: {len(ok)} of {len(res)} solved.\n')
+          print('| a x b x t | q | edges | MOOSE w | theory | diff % | s |')
+          print('|---|---|---|---|---|---|---|')
+          for r in res:
+              c = r['case']
+              th = r.get('navier', r.get('roark_clamped'))
+              print(f"| {c['a']:g} x {c['b']:g} x {c['t']:g} | {c['q']:g} | {'clamped' if c['clamped'] else 'simply supported'} | "
+                    f"{r.get('max_deflection', float('nan')):.5g} | {th if th is None else f'{th:.5g}'} | {r.get('difference_percent', r.get('error', '')[:80])} | {r.get('seconds')} |")
+          PY
+          tail -5 /tmp/m/moose_log.txt >> /tmp/notes.md || true
+      - name: Publish as release moose-latest
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: |
+          gh release view moose-latest -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create moose-latest -R "$GITHUB_REPOSITORY" \
+            --prerelease --target "${GITHUB_SHA}" --title "ShipBrain MOOSE checks (latest)" --notes "being built"
+          gh release upload moose-latest -R "$GITHUB_REPOSITORY" /tmp/m/moose_train.jsonl.gz /tmp/m/results.json --clobber
+          gh release edit moose-latest -R "$GITHUB_REPOSITORY" --notes-file /tmp/notes.md

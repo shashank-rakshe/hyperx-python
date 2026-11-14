@@ -1,0 +1,98 @@
+# ShipBrain: build AlgoHex (frame-field hex meshing, AGPL-3.0, cgg-bern) from its sources as written on GitHub's computers - the
+# cloud sandbox cannot reach RWTH Aachen's GitLab, where two of its libraries live - run it on its own demo and on parts meshed by
+# ShipBrain, check every hex mesh (cells, inverted cells, scaled Jacobian, volume against the exact volume) and publish the results
+# as the release "algohex-latest". Started by a change to shipbrain/training/ALGOHEX_REQUEST.txt or by hand (Actions tab).
+name: shipbrain-algohex
+on:
+  push:
+    paths: ['shipbrain/training/ALGOHEX_REQUEST.txt']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: shipbrain-algohex
+env:
+  ALGOHEX_COMMIT: 27cd6e7e8557987f4ae79be6e2de1f92e5da9033
+jobs:
+  build-and-run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+      - name: System packages (compilers, IPOPT, Bonmin, SuiteSparse, Eigen)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q build-essential git coinor-libipopt-dev coinor-libbonmin-dev libsuitesparse-dev libeigen3-dev
+          pip install -q "cmake>=3.31,<4"
+          cmake --version | head -1
+          free -g; nproc
+      - name: AlgoHex sources (pinned commit)
+        run: |
+          git clone -q https://github.com/cgg-bern/AlgoHex.git /tmp/AlgoHex
+          cd /tmp/AlgoHex && git checkout -q "$ALGOHEX_COMMIT" && git submodule update --init --recursive
+          git log -1 --format='%H %ad' --date=short
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/AlgoHex/build
+          key: algohex-${{ env.ALGOHEX_COMMIT }}-ubuntu-24.04-v1
+      - name: Build HexMeshing
+        run: |
+          set -o pipefail
+          mkdir -p /tmp/AlgoHex/build && cd /tmp/AlgoHex/build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DALGOHEX_BUILD_TESTS=OFF -DALGOHEX_BUILD_EXPENSIVE_TESTS=OFF 2>&1 | tail -20
+          cmake --build . --target HexMeshing -j 2 2>&1 | tail -40
+          ls -la Build/bin/ || find . -name HexMeshing -type f
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Inputs (AlgoHex demo + parts meshed by ShipBrain)
+        working-directory: shipbrain
+        run: |
+          pip install -q numpy scipy cadquery
+          python training/algohex_cases.py --prepare --dir /tmp/ah_cases
+      - name: Run AlgoHex on every case
+        run: |
+          EXE=$(find /tmp/AlgoHex/build -name HexMeshing -type f -perm -u+x | head -1)
+          echo "HexMeshing: $EXE"
+          cd /tmp/ah_cases
+          for inp in $(python3 -c "import json; print(' '.join(c['input'] for c in json.load(open('cases.json'))))"); do
+            name="${inp%.*}"
+            start=$(date +%s)
+            timeout 3600 "$EXE" -i "$inp" -o "${name}_hex.ovm" > "${name}.log" 2>&1 || echo "AlgoHex exit $? for $name" >> "${name}.log"
+            echo $(( $(date +%s) - start )) > "${name}.seconds"
+            tail -3 "${name}.log"
+          done
+      - name: Check the hex meshes
+        if: always()
+        working-directory: shipbrain
+        run: |
+          python training/algohex_cases.py --report --dir /tmp/ah_cases --out /tmp/ah_cases/results.json
+          python - <<'PY' > /tmp/ah_cases/notes.md
+          import json
+          res = json.load(open('/tmp/ah_cases/results.json'))
+          print('AlgoHex (commit ' + '27cd6e7e' + ') built and run on GitHub; checked by shipbrain.algohex.\n')
+          print('| case | hexes | inverted | min scaled Jacobian | mean | volume error % | s |')
+          print('|---|---|---|---|---|---|---|')
+          for r in res:
+              print(f"| {r['name']} | {r.get('hexahedra', '-')} | {r.get('inverted', '-')} | {r.get('min_scaled_jacobian', '-')} | "
+                    f"{r.get('mean_scaled_jacobian', '-')} | {r.get('volume_error_percent', '-')} | {r.get('seconds', '-')} |"
+                    + (f" {r['error']}" if r.get('error') else ''))
+          PY
+          cat /tmp/ah_cases/notes.md
+          cd /tmp/ah_cases && for f in *_hex.ovm; do [ -f "$f" ] && gzip -kf "$f"; done; ls -la
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: algohex-results
+          path: |
+            /tmp/ah_cases/results.json
+            /tmp/ah_cases/notes.md
+            /tmp/ah_cases/*.log
+            /tmp/ah_cases/*_hex.ovm.gz
+      - name: Publish as release algohex-latest
+        if: always()
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: |
+          gh release view algohex-latest -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create algohex-latest -R "$GITHUB_REPOSITORY" \
+            --prerelease --target "${GITHUB_SHA}" --title "ShipBrain AlgoHex checks (latest)" --notes "being built"
+          cd /tmp/ah_cases
+          gh release upload algohex-latest -R "$GITHUB_REPOSITORY" results.json notes.md *.log $(ls *_hex.ovm.gz 2>/dev/null) --clobber
+          gh release edit algohex-latest -R "$GITHUB_REPOSITORY" --notes-file notes.md

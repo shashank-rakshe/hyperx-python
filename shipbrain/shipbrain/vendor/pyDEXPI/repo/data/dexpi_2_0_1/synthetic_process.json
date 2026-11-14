@@ -1,0 +1,1639 @@
+{
+    "dexpiVersion": "2.0.1",
+    "id": "EngineeringModel_Synthetic",
+    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/EngineeringModel",
+    "composition": {
+        "conceptualModel": {
+            "id": "ProcessModel_Synthetic",
+            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/ProcessModel",
+            "composition": {
+                "roles": [
+                    {
+                        "id": "Role_Outlet",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Role",
+                        "data": {
+                            "name": "Outlet"
+                        }
+                    },
+                    {
+                        "id": "Role_Feed",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Role",
+                        "data": {
+                            "name": "Feed"
+                        }
+                    },
+                    {
+                        "id": "Role_BottomProduct",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Role",
+                        "data": {
+                            "name": "BottomProduct"
+                        }
+                    },
+                    {
+                        "id": "Role_Inlet",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Role",
+                        "data": {
+                            "name": "Inlet"
+                        }
+                    },
+                    {
+                        "id": "Role_Monitored",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Role",
+                        "data": {
+                            "name": "Monitored"
+                        }
+                    },
+                    {
+                        "id": "Role_Input",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Role",
+                        "data": {
+                            "name": "Input"
+                        }
+                    },
+                    {
+                        "id": "Role_Output",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Role",
+                        "data": {
+                            "name": "Output"
+                        }
+                    }
+                ],
+                "instrumentationSystemActivities": [
+                    {
+                        "id": "InstrumentationSystem_PIC101",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/InstrumentationSystemActivity",
+                        "composition": {
+                            "instrumentationActivities": [
+                                {
+                                    "id": "Activity_PT101",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/MeasuringProcessVariable",
+                                    "composition": {
+                                        "informationPorts": [
+                                            {
+                                                "id": "Port_TransmitterIn",
+                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/InformationPort",
+                                                "reference": {
+                                                    "performedRoles": [
+                                                        "Role_Input"
+                                                    ],
+                                                    "connectorReference": "InformationFlow_TrayPressure"
+                                                },
+                                                "data": {
+                                                    "identifier": "PT-101.1",
+                                                    "nominalDirection": {
+                                                        "__enum__": "PortDirection",
+                                                        "name": "INLET"
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "id": "Port_TransmitterOut",
+                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/InformationPort",
+                                                "reference": {
+                                                    "performedRoles": [
+                                                        "Role_Output"
+                                                    ],
+                                                    "connectorReference": "InformationFlow_FeedSignal"
+                                                },
+                                                "data": {
+                                                    "identifier": "PT-101.2",
+                                                    "nominalDirection": {
+                                                        "__enum__": "PortDirection",
+                                                        "name": "OUTLET"
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "reference": {
+                                        "measuredVariableReference": "TrayPressure",
+                                        "processStepDetailReference": "Detail_FeedTray"
+                                    },
+                                    "data": {
+                                        "description": {
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/MultiLanguageString",
+                                            "data": {
+                                                "singleLanguageStrings": [
+                                                    {
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/SingleLanguageString",
+                                                        "data": {
+                                                            "language": "en",
+                                                            "value": "Measures the feed tray pressure"
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        "identifier": "PT-101",
+                                        "label": "Feed tray pressure",
+                                        "measuredVariable": {
+                                            "__enum__": "MeasuredQuantity",
+                                            "name": "PRESSURE"
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        "data": {
+                            "description": {
+                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/MultiLanguageString",
+                                "data": {
+                                    "singleLanguageStrings": [
+                                        {
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/SingleLanguageString",
+                                            "data": {
+                                                "language": "en",
+                                                "value": "Feed tray pressure loop"
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            "identifier": "PIC-101",
+                            "label": "Feed tray pressure loop"
+                        }
+                    }
+                ],
+                "listsOfMaterialComponents": [
+                    {
+                        "id": "ComponentList_Feed",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/ListOfMaterialComponents",
+                        "reference": {
+                            "component": [
+                                "Component_Water",
+                                "Component_Ethanol",
+                                "Component_Methanol"
+                            ]
+                        }
+                    }
+                ],
+                "materialComponents": [
+                    {
+                        "id": "Component_Ethanol",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PureMaterialComponent",
+                        "data": {
+                            "identifier": "C2H5OH",
+                            "label": "Ethanol",
+                            "chEBI_identifier": "CHEBI:16236",
+                            "iUPAC_identifier": "ethanol"
+                        }
+                    },
+                    {
+                        "id": "Component_Methanol",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PureMaterialComponent",
+                        "data": {
+                            "identifier": "CH3OH",
+                            "label": "Methanol",
+                            "chEBI_identifier": "CHEBI:17790",
+                            "iUPAC_identifier": "methanol"
+                        }
+                    },
+                    {
+                        "id": "Component_Water",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PureMaterialComponent",
+                        "data": {
+                            "identifier": "H2O",
+                            "label": "Water",
+                            "chEBI_identifier": "CHEBI:15377",
+                            "iUPAC_identifier": "oxidane"
+                        }
+                    }
+                ],
+                "materialStates": [
+                    {
+                        "id": "MaterialState_Feed",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/MaterialState",
+                        "composition": {
+                            "phases": [
+                                {
+                                    "id": "MaterialStateType_Liquid",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/MaterialStateType",
+                                    "composition": {
+                                        "composition": {
+                                            "id": "Composition_Liquid",
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Composition",
+                                            "composition": {
+                                                "massFlow": [
+                                                    {
+                                                        "id": "MassFlow_Liquid_Water",
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                                        "data": {
+                                                            "displayText": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Undefined"
+                                                            },
+                                                            "value": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantity",
+                                                                "data": {
+                                                                    "unit": {
+                                                                        "__enum__": "MassFlowRateUnit",
+                                                                        "name": "KILOGRAMPERHOUR"
+                                                                    },
+                                                                    "value": 468.75
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    {
+                                                        "id": "MassFlow_Liquid_Ethanol",
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                                        "data": {
+                                                            "displayText": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Undefined"
+                                                            },
+                                                            "value": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantity",
+                                                                "data": {
+                                                                    "unit": {
+                                                                        "__enum__": "MassFlowRateUnit",
+                                                                        "name": "KILOGRAMPERHOUR"
+                                                                    },
+                                                                    "value": 206.25
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    {
+                                                        "id": "MassFlow_Liquid_Methanol",
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                                        "data": {
+                                                            "displayText": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Undefined"
+                                                            },
+                                                            "value": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantity",
+                                                                "data": {
+                                                                    "unit": {
+                                                                        "__enum__": "MassFlowRateUnit",
+                                                                        "name": "KILOGRAMPERHOUR"
+                                                                    },
+                                                                    "value": 75.0
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                ],
+                                                "massFractions": [
+                                                    {
+                                                        "id": "MassFractions_Liquid",
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                                        "data": {
+                                                            "displayText": "62.5 % / 27.5 % / 10 %",
+                                                            "value": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantityVector",
+                                                                "data": {
+                                                                    "unit": {
+                                                                        "__enum__": "RatioUnit",
+                                                                        "name": "PERCENT"
+                                                                    },
+                                                                    "values": [
+                                                                        62.5,
+                                                                        27.5,
+                                                                        10.0
+                                                                    ]
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "data": {
+                                                "display": {
+                                                    "__enum__": "CompositionDisplay",
+                                                    "name": "PERCENT"
+                                                }
+                                            }
+                                        },
+                                        "massFlow": [
+                                            {
+                                                "id": "MassFlow_Liquid",
+                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                                "data": {
+                                                    "displayText": "750 kg/h",
+                                                    "value": {
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantity",
+                                                        "data": {
+                                                            "unit": {
+                                                                "__enum__": "MassFlowRateUnit",
+                                                                "name": "KILOGRAMPERHOUR"
+                                                            },
+                                                            "value": 750.0
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "data": {
+                                        "description": {
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/MultiLanguageString",
+                                            "data": {
+                                                "singleLanguageStrings": [
+                                                    {
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/SingleLanguageString",
+                                                        "data": {
+                                                            "language": "en",
+                                                            "value": "Liquid part of the column feed"
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        "identifier": "MST-L",
+                                        "label": "Liquid feed"
+                                    }
+                                },
+                                {
+                                    "id": "MaterialStateType_Vapour",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/MaterialStateType",
+                                    "composition": {
+                                        "composition": {
+                                            "id": "Composition_Vapour",
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Composition",
+                                            "composition": {
+                                                "massFlow": [
+                                                    {
+                                                        "id": "MassFlow_Vapour_Water",
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                                        "data": {
+                                                            "displayText": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Undefined"
+                                                            },
+                                                            "value": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantity",
+                                                                "data": {
+                                                                    "unit": {
+                                                                        "__enum__": "MassFlowRateUnit",
+                                                                        "name": "KILOGRAMPERHOUR"
+                                                                    },
+                                                                    "value": 43.75
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    {
+                                                        "id": "MassFlow_Vapour_Ethanol",
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                                        "data": {
+                                                            "displayText": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Undefined"
+                                                            },
+                                                            "value": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantity",
+                                                                "data": {
+                                                                    "unit": {
+                                                                        "__enum__": "MassFlowRateUnit",
+                                                                        "name": "KILOGRAMPERHOUR"
+                                                                    },
+                                                                    "value": 131.25
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    {
+                                                        "id": "MassFlow_Vapour_Methanol",
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                                        "data": {
+                                                            "displayText": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Undefined"
+                                                            },
+                                                            "value": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantity",
+                                                                "data": {
+                                                                    "unit": {
+                                                                        "__enum__": "MassFlowRateUnit",
+                                                                        "name": "KILOGRAMPERHOUR"
+                                                                    },
+                                                                    "value": 75.0
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                ],
+                                                "massFractions": [
+                                                    {
+                                                        "id": "MassFractions_Vapour",
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                                        "data": {
+                                                            "displayText": "17.5 % / 52.5 % / 30 %",
+                                                            "value": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantityVector",
+                                                                "data": {
+                                                                    "unit": {
+                                                                        "__enum__": "RatioUnit",
+                                                                        "name": "PERCENT"
+                                                                    },
+                                                                    "values": [
+                                                                        17.5,
+                                                                        52.5,
+                                                                        30.0
+                                                                    ]
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "data": {
+                                                "display": {
+                                                    "__enum__": "CompositionDisplay",
+                                                    "name": "PERCENT"
+                                                }
+                                            }
+                                        },
+                                        "massFlow": [
+                                            {
+                                                "id": "MassFlow_Vapour",
+                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                                "data": {
+                                                    "displayText": "250 kg/h",
+                                                    "value": {
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantity",
+                                                        "data": {
+                                                            "unit": {
+                                                                "__enum__": "MassFlowRateUnit",
+                                                                "name": "KILOGRAMPERHOUR"
+                                                            },
+                                                            "value": 250.0
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "data": {
+                                        "description": {
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/MultiLanguageString",
+                                            "data": {
+                                                "singleLanguageStrings": [
+                                                    {
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/SingleLanguageString",
+                                                        "data": {
+                                                            "language": "en",
+                                                            "value": "Vapour part of the column feed"
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        "identifier": "MST-V",
+                                        "label": "Vapour feed"
+                                    }
+                                }
+                            ],
+                            "state": {
+                                "id": "MaterialStateType_Overall",
+                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/MaterialStateType",
+                                "composition": {
+                                    "composition": {
+                                        "id": "Composition_Overall",
+                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Composition",
+                                        "composition": {
+                                            "massFlow": [
+                                                {
+                                                    "id": "MassFlow_Overall_Water",
+                                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                                    "data": {
+                                                        "displayText": {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Undefined"
+                                                        },
+                                                        "value": {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantity",
+                                                            "data": {
+                                                                "unit": {
+                                                                    "__enum__": "MassFlowRateUnit",
+                                                                    "name": "KILOGRAMPERHOUR"
+                                                                },
+                                                                "value": 512.5
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "id": "MassFlow_Overall_Ethanol",
+                                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                                    "data": {
+                                                        "displayText": {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Undefined"
+                                                        },
+                                                        "value": {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantity",
+                                                            "data": {
+                                                                "unit": {
+                                                                    "__enum__": "MassFlowRateUnit",
+                                                                    "name": "KILOGRAMPERHOUR"
+                                                                },
+                                                                "value": 337.5
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "id": "MassFlow_Overall_Methanol",
+                                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                                    "data": {
+                                                        "displayText": {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Undefined"
+                                                        },
+                                                        "value": {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantity",
+                                                            "data": {
+                                                                "unit": {
+                                                                    "__enum__": "MassFlowRateUnit",
+                                                                    "name": "KILOGRAMPERHOUR"
+                                                                },
+                                                                "value": 150.0
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            ],
+                                            "massFractions": [
+                                                {
+                                                    "id": "MassFractions_Overall",
+                                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                                    "data": {
+                                                        "displayText": "51.25 % / 33.75 % / 15 %",
+                                                        "value": {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantityVector",
+                                                            "data": {
+                                                                "unit": {
+                                                                    "__enum__": "RatioUnit",
+                                                                    "name": "PERCENT"
+                                                                },
+                                                                "values": [
+                                                                    51.25,
+                                                                    33.75,
+                                                                    15.0
+                                                                ]
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        "data": {
+                                            "display": {
+                                                "__enum__": "CompositionDisplay",
+                                                "name": "PERCENT"
+                                            }
+                                        }
+                                    },
+                                    "massFlow": [
+                                        {
+                                            "id": "MassFlow_Overall",
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                            "data": {
+                                                "displayText": "1000 kg/h",
+                                                "value": {
+                                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantity",
+                                                    "data": {
+                                                        "unit": {
+                                                            "__enum__": "MassFlowRateUnit",
+                                                            "name": "KILOGRAMPERHOUR"
+                                                        },
+                                                        "value": 1000.0
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    ]
+                                },
+                                "data": {
+                                    "description": {
+                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/MultiLanguageString",
+                                        "data": {
+                                            "singleLanguageStrings": [
+                                                {
+                                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/SingleLanguageString",
+                                                    "data": {
+                                                        "language": "en",
+                                                        "value": "Overall part of the column feed"
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    "identifier": "MST-O",
+                                    "label": "Overall feed"
+                                }
+                            }
+                        },
+                        "data": {
+                            "description": "Two-phase column feed: 75 % liquid, 25 % vapour by mass",
+                            "identifier": "MS-1",
+                            "label": "Column feed"
+                        }
+                    }
+                ],
+                "materialTemplates": [
+                    {
+                        "id": "MaterialTemplate_Feed",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/MaterialTemplate",
+                        "reference": {
+                            "listOfComponents": "ComponentList_Feed"
+                        },
+                        "data": {
+                            "description": {
+                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/MultiLanguageString",
+                                "data": {
+                                    "singleLanguageStrings": [
+                                        {
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/SingleLanguageString",
+                                            "data": {
+                                                "language": "en",
+                                                "value": "Aqueous alcohol feed, in two phases"
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            "identifier": "MT-1",
+                            "label": "Water, ethanol, methanol",
+                            "numberOfMaterialComponents": 3,
+                            "numberOfPhases": 2,
+                            "phaseLabel": [
+                                "Liquid",
+                                "Vapour"
+                            ]
+                        }
+                    }
+                ],
+                "processConnections": [
+                    {
+                        "id": "Stream_Feed",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Stream",
+                        "composition": {
+                            "massFlow": [
+                                {
+                                    "id": "FeedMassFlow",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                    "data": {
+                                        "displayText": {
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Undefined"
+                                        },
+                                        "provenance": {
+                                            "__enum__": "QuantityProvenance",
+                                            "name": "SPECIFIED"
+                                        },
+                                        "scope": {
+                                            "__enum__": "Scope",
+                                            "name": "DESIGN"
+                                        },
+                                        "value": {
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantity",
+                                            "data": {
+                                                "unit": {
+                                                    "__enum__": "MassFlowRateUnit",
+                                                    "name": "KILOGRAMPERHOUR"
+                                                },
+                                                "value": 1000.0
+                                            }
+                                        }
+                                    }
+                                }
+                            ],
+                            "pressure": [
+                                {
+                                    "id": "FeedPressure",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                    "data": {
+                                        "displayText": {
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Undefined"
+                                        },
+                                        "value": {
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantity",
+                                            "data": {
+                                                "unit": {
+                                                    "__enum__": "PressureAbsoluteUnit",
+                                                    "name": "BAR"
+                                                },
+                                                "value": 1.5
+                                            }
+                                        }
+                                    }
+                                }
+                            ],
+                            "temperature": [
+                                {
+                                    "id": "FeedTemperature",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                    "data": {
+                                        "displayText": {
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Undefined"
+                                        },
+                                        "value": {
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantity",
+                                            "data": {
+                                                "unit": {
+                                                    "__enum__": "TemperatureUnit",
+                                                    "name": "DEGREECELSIUS"
+                                                },
+                                                "value": 78.0
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        "reference": {
+                            "source": "Port_SourceOutlet",
+                            "target": "Port_ColumnFeed",
+                            "materialStateReference": "MaterialState_Feed",
+                            "materialTemplateReference": "MaterialTemplate_Feed"
+                        },
+                        "data": {
+                            "identifier": "S-1",
+                            "label": "Column feed"
+                        }
+                    },
+                    {
+                        "id": "Stream_Bottoms",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Stream",
+                        "reference": {
+                            "source": "Port_ColumnBottoms",
+                            "target": "Port_SinkInlet",
+                            "materialTemplateReference": "MaterialTemplate_Feed"
+                        },
+                        "data": {
+                            "identifier": "S-2",
+                            "label": "Bottom product"
+                        }
+                    },
+                    {
+                        "id": "InformationFlow_TrayPressure",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/InformationFlow",
+                        "composition": {
+                            "informationValue": {
+                                "id": "InformationFlow_TrayPressure_Value",
+                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/InformationVariant",
+                                "data": {
+                                    "booleanValue": false,
+                                    "doubleValue": 1.2,
+                                    "integerValue": 0,
+                                    "variantType": {
+                                        "__enum__": "InformationVariantType",
+                                        "name": "DOUBLE"
+                                    },
+                                    "vectorSize": 1
+                                }
+                            }
+                        },
+                        "reference": {
+                            "source": "Port_TraySignal",
+                            "target": "Port_TransmitterIn"
+                        },
+                        "data": {
+                            "identifier": "I-1",
+                            "label": "Tray pressure"
+                        }
+                    },
+                    {
+                        "id": "InformationFlow_FeedSignal",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/InformationFlow",
+                        "composition": {
+                            "informationValue": {
+                                "id": "InformationFlow_FeedSignal_Value",
+                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/InformationVariant",
+                                "data": {
+                                    "booleanValue": false,
+                                    "doubleValue": 1.2,
+                                    "integerValue": 0,
+                                    "variantType": {
+                                        "__enum__": "InformationVariantType",
+                                        "name": "DOUBLE"
+                                    },
+                                    "vectorSize": 1
+                                }
+                            }
+                        },
+                        "reference": {
+                            "source": "Port_TransmitterOut",
+                            "target": "Port_SourceSignal"
+                        },
+                        "data": {
+                            "identifier": "I-2",
+                            "label": "Feed signal"
+                        }
+                    }
+                ],
+                "processSteps": [
+                    {
+                        "id": "Step_Feed",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Source",
+                        "composition": {
+                            "ports": [
+                                {
+                                    "id": "Port_SourceOutlet",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/MaterialPort",
+                                    "reference": {
+                                        "performedRoles": [
+                                            "Role_Outlet"
+                                        ],
+                                        "connectorReference": "Stream_Feed"
+                                    },
+                                    "data": {
+                                        "identifier": "N1",
+                                        "nominalDirection": {
+                                            "__enum__": "PortDirection",
+                                            "name": "OUTLET"
+                                        }
+                                    }
+                                },
+                                {
+                                    "id": "Port_SourceSignal",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/InformationPort",
+                                    "reference": {
+                                        "performedRoles": [
+                                            "Role_Input"
+                                        ],
+                                        "connectorReference": "InformationFlow_FeedSignal"
+                                    },
+                                    "data": {
+                                        "identifier": "S1",
+                                        "nominalDirection": {
+                                            "__enum__": "PortDirection",
+                                            "name": "INLET"
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        "data": {
+                            "identifier": "FEED",
+                            "label": "Feed"
+                        }
+                    },
+                    {
+                        "id": "Step_Column",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Distilling",
+                        "composition": {
+                            "ports": [
+                                {
+                                    "id": "Port_ColumnFeed",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/MaterialPort",
+                                    "reference": {
+                                        "performedRoles": [
+                                            "Role_Feed"
+                                        ],
+                                        "connectorReference": "Stream_Feed",
+                                        "subReference": [
+                                            "Port_StrippingFeed"
+                                        ],
+                                        "materialTemplateReference": "MaterialTemplate_Feed"
+                                    },
+                                    "data": {
+                                        "identifier": "N2",
+                                        "nominalDirection": {
+                                            "__enum__": "PortDirection",
+                                            "name": "INLET"
+                                        }
+                                    }
+                                },
+                                {
+                                    "id": "Port_ColumnBottoms",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/MaterialPort",
+                                    "reference": {
+                                        "performedRoles": [
+                                            "Role_BottomProduct"
+                                        ],
+                                        "connectorReference": "Stream_Bottoms"
+                                    },
+                                    "data": {
+                                        "identifier": "N3",
+                                        "nominalDirection": {
+                                            "__enum__": "PortDirection",
+                                            "name": "OUTLET"
+                                        }
+                                    }
+                                }
+                            ],
+                            "processStepDetails": [
+                                {
+                                    "id": "Detail_FeedTray",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/ContactingOnTray",
+                                    "composition": {
+                                        "ports": [
+                                            {
+                                                "id": "Port_TraySignal",
+                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/InformationPort",
+                                                "reference": {
+                                                    "performedRoles": [
+                                                        "Role_Output"
+                                                    ],
+                                                    "connectorReference": "InformationFlow_TrayPressure"
+                                                },
+                                                "data": {
+                                                    "identifier": "T1",
+                                                    "nominalDirection": {
+                                                        "__enum__": "PortDirection",
+                                                        "name": "OUTLET"
+                                                    }
+                                                }
+                                            }
+                                        ],
+                                        "pressure": [
+                                            {
+                                                "id": "TrayPressure",
+                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                                "data": {
+                                                    "displayText": {
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Undefined"
+                                                    },
+                                                    "provenance": {
+                                                        "__enum__": "QuantityProvenance",
+                                                        "name": "OBSERVED"
+                                                    },
+                                                    "value": {
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantity",
+                                                        "data": {
+                                                            "unit": {
+                                                                "__enum__": "PressureAbsoluteUnit",
+                                                                "name": "BAR"
+                                                            },
+                                                            "value": 1.2
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        ],
+                                        "temperature": [
+                                            {
+                                                "id": "TrayTemperature",
+                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/QualifiedValue",
+                                                "data": {
+                                                    "displayText": {
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Undefined"
+                                                    },
+                                                    "value": {
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PhysicalQuantity",
+                                                        "data": {
+                                                            "unit": {
+                                                                "__enum__": "TemperatureUnit",
+                                                                "name": "DEGREECELSIUS"
+                                                            },
+                                                            "value": 82.5
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "reference": {
+                                        "performedRoles": [
+                                            "Role_Monitored"
+                                        ]
+                                    },
+                                    "data": {
+                                        "description": {
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/MultiLanguageString",
+                                            "data": {
+                                                "singleLanguageStrings": [
+                                                    {
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/SingleLanguageString",
+                                                        "data": {
+                                                            "language": "en",
+                                                            "value": "The tray the feed enters on"
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        "identifier": "C-101.T12",
+                                        "label": "Feed tray",
+                                        "number": 12
+                                    }
+                                }
+                            ],
+                            "subProcessSteps": [
+                                {
+                                    "id": "Step_StrippingSection",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/StrippingDistilling",
+                                    "composition": {
+                                        "ports": [
+                                            {
+                                                "id": "Port_StrippingFeed",
+                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/MaterialPort",
+                                                "reference": {
+                                                    "performedRoles": [
+                                                        "Role_Feed"
+                                                    ],
+                                                    "connectorReference": "Stream_Feed",
+                                                    "superReference": "Port_ColumnFeed",
+                                                    "materialTemplateReference": "MaterialTemplate_Feed"
+                                                },
+                                                "data": {
+                                                    "identifier": "N2.1",
+                                                    "nominalDirection": {
+                                                        "__enum__": "PortDirection",
+                                                        "name": "INLET"
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "data": {
+                                        "hierarchyLevel": {
+                                            "__enum__": "ProcessStepHierarchyLevel",
+                                            "name": "ELEMENTARYFUNCTION"
+                                        },
+                                        "identifier": "C-101.S",
+                                        "label": "Stripping section"
+                                    }
+                                }
+                            ]
+                        },
+                        "data": {
+                            "hierarchyLevel": {
+                                "__enum__": "ProcessStepHierarchyLevel",
+                                "name": "UNITOPERATION"
+                            },
+                            "identifier": "C-101",
+                            "label": "Distillation column"
+                        }
+                    },
+                    {
+                        "id": "Step_Product",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Sink",
+                        "composition": {
+                            "ports": [
+                                {
+                                    "id": "Port_SinkInlet",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/MaterialPort",
+                                    "reference": {
+                                        "performedRoles": [
+                                            "Role_Inlet"
+                                        ],
+                                        "connectorReference": "Stream_Bottoms"
+                                    },
+                                    "data": {
+                                        "identifier": "N4",
+                                        "nominalDirection": {
+                                            "__enum__": "PortDirection",
+                                            "name": "INLET"
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        "data": {
+                            "identifier": "PRODUCT",
+                            "label": "Bottom product"
+                        }
+                    }
+                ]
+            }
+        },
+        "diagram": {
+            "id": "Diagram_Synthetic",
+            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Diagram",
+            "composition": {
+                "groups": [
+                    {
+                        "id": "Drawing_Step_Feed",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/RepresentationGroup",
+                        "composition": {
+                            "groups": [
+                                {
+                                    "id": "Drawing_Step_Feed_Static",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Static",
+                                    "composition": {
+                                        "elements": [
+                                            {
+                                                "id": "Drawing_Step_Feed_Outline",
+                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PolyLine",
+                                                "data": {
+                                                    "points": [
+                                                        {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                            "data": {
+                                                                "x": 40.0,
+                                                                "y": 130.0
+                                                            }
+                                                        },
+                                                        {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                            "data": {
+                                                                "x": 100.0,
+                                                                "y": 130.0
+                                                            }
+                                                        },
+                                                        {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                            "data": {
+                                                                "x": 100.0,
+                                                                "y": 170.0
+                                                            }
+                                                        },
+                                                        {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                            "data": {
+                                                                "x": 40.0,
+                                                                "y": 170.0
+                                                            }
+                                                        },
+                                                        {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                            "data": {
+                                                                "x": 40.0,
+                                                                "y": 130.0
+                                                            }
+                                                        }
+                                                    ],
+                                                    "stroke": {
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Stroke",
+                                                        "data": {
+                                                            "color": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Color",
+                                                                "data": {
+                                                                    "b": 0,
+                                                                    "g": 0,
+                                                                    "r": 0
+                                                                }
+                                                            },
+                                                            "dashStyle": {
+                                                                "__enum__": "DashStyle",
+                                                                "name": "SOLID"
+                                                            },
+                                                            "width": 0.5
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ],
+                            "nodePositions": [
+                                {
+                                    "id": "Position_SourceOutlet",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PortNodePosition",
+                                    "reference": {
+                                        "port": "Port_SourceOutlet"
+                                    },
+                                    "data": {
+                                        "position": {
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                            "data": {
+                                                "x": 100.0,
+                                                "y": 150.0
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        "reference": {
+                            "represents": "Step_Feed"
+                        }
+                    },
+                    {
+                        "id": "Drawing_Step_Column",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/RepresentationGroup",
+                        "composition": {
+                            "groups": [
+                                {
+                                    "id": "Drawing_Step_Column_Static",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Static",
+                                    "composition": {
+                                        "elements": [
+                                            {
+                                                "id": "Drawing_Step_Column_Outline",
+                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PolyLine",
+                                                "data": {
+                                                    "points": [
+                                                        {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                            "data": {
+                                                                "x": 180.0,
+                                                                "y": 60.0
+                                                            }
+                                                        },
+                                                        {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                            "data": {
+                                                                "x": 240.0,
+                                                                "y": 60.0
+                                                            }
+                                                        },
+                                                        {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                            "data": {
+                                                                "x": 240.0,
+                                                                "y": 240.0
+                                                            }
+                                                        },
+                                                        {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                            "data": {
+                                                                "x": 180.0,
+                                                                "y": 240.0
+                                                            }
+                                                        },
+                                                        {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                            "data": {
+                                                                "x": 180.0,
+                                                                "y": 60.0
+                                                            }
+                                                        }
+                                                    ],
+                                                    "stroke": {
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Stroke",
+                                                        "data": {
+                                                            "color": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Color",
+                                                                "data": {
+                                                                    "b": 0,
+                                                                    "g": 0,
+                                                                    "r": 0
+                                                                }
+                                                            },
+                                                            "dashStyle": {
+                                                                "__enum__": "DashStyle",
+                                                                "name": "SOLID"
+                                                            },
+                                                            "width": 0.5
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "id": "Drawing_Step_StrippingSection",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/RepresentationGroup",
+                                    "composition": {
+                                        "groups": [
+                                            {
+                                                "id": "Drawing_Step_StrippingSection_Static",
+                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Static",
+                                                "composition": {
+                                                    "elements": [
+                                                        {
+                                                            "id": "Drawing_Step_StrippingSection_Outline",
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PolyLine",
+                                                            "data": {
+                                                                "points": [
+                                                                    {
+                                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                                        "data": {
+                                                                            "x": 185.0,
+                                                                            "y": 140.0
+                                                                        }
+                                                                    },
+                                                                    {
+                                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                                        "data": {
+                                                                            "x": 235.0,
+                                                                            "y": 140.0
+                                                                        }
+                                                                    },
+                                                                    {
+                                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                                        "data": {
+                                                                            "x": 235.0,
+                                                                            "y": 235.0
+                                                                        }
+                                                                    },
+                                                                    {
+                                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                                        "data": {
+                                                                            "x": 185.0,
+                                                                            "y": 235.0
+                                                                        }
+                                                                    },
+                                                                    {
+                                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                                        "data": {
+                                                                            "x": 185.0,
+                                                                            "y": 140.0
+                                                                        }
+                                                                    }
+                                                                ],
+                                                                "stroke": {
+                                                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Stroke",
+                                                                    "data": {
+                                                                        "color": {
+                                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Color",
+                                                                            "data": {
+                                                                                "b": 0,
+                                                                                "g": 0,
+                                                                                "r": 0
+                                                                            }
+                                                                        },
+                                                                        "dashStyle": {
+                                                                            "__enum__": "DashStyle",
+                                                                            "name": "SOLID"
+                                                                        },
+                                                                        "width": 0.5
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        ],
+                                        "nodePositions": [
+                                            {
+                                                "id": "Position_StrippingFeed",
+                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PortNodePosition",
+                                                "reference": {
+                                                    "port": "Port_StrippingFeed"
+                                                },
+                                                "data": {
+                                                    "position": {
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                        "data": {
+                                                            "x": 185.0,
+                                                            "y": 150.0
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "reference": {
+                                        "represents": "Step_StrippingSection"
+                                    }
+                                }
+                            ],
+                            "nodePositions": [
+                                {
+                                    "id": "Position_ColumnFeed",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PortNodePosition",
+                                    "reference": {
+                                        "port": "Port_ColumnFeed"
+                                    },
+                                    "data": {
+                                        "position": {
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                            "data": {
+                                                "x": 180.0,
+                                                "y": 150.0
+                                            }
+                                        }
+                                    }
+                                },
+                                {
+                                    "id": "Position_ColumnBottoms",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PortNodePosition",
+                                    "reference": {
+                                        "port": "Port_ColumnBottoms"
+                                    },
+                                    "data": {
+                                        "position": {
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                            "data": {
+                                                "x": 210.0,
+                                                "y": 240.0
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        "reference": {
+                            "represents": "Step_Column"
+                        }
+                    },
+                    {
+                        "id": "Drawing_Step_Product",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/RepresentationGroup",
+                        "composition": {
+                            "groups": [
+                                {
+                                    "id": "Drawing_Step_Product_Static",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Static",
+                                    "composition": {
+                                        "elements": [
+                                            {
+                                                "id": "Drawing_Step_Product_Outline",
+                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PolyLine",
+                                                "data": {
+                                                    "points": [
+                                                        {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                            "data": {
+                                                                "x": 300.0,
+                                                                "y": 120.0
+                                                            }
+                                                        },
+                                                        {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                            "data": {
+                                                                "x": 340.0,
+                                                                "y": 120.0
+                                                            }
+                                                        },
+                                                        {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                            "data": {
+                                                                "x": 340.0,
+                                                                "y": 200.0
+                                                            }
+                                                        },
+                                                        {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                            "data": {
+                                                                "x": 300.0,
+                                                                "y": 200.0
+                                                            }
+                                                        },
+                                                        {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                            "data": {
+                                                                "x": 300.0,
+                                                                "y": 120.0
+                                                            }
+                                                        }
+                                                    ],
+                                                    "stroke": {
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Stroke",
+                                                        "data": {
+                                                            "color": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Color",
+                                                                "data": {
+                                                                    "b": 0,
+                                                                    "g": 0,
+                                                                    "r": 0
+                                                                }
+                                                            },
+                                                            "dashStyle": {
+                                                                "__enum__": "DashStyle",
+                                                                "name": "SOLID"
+                                                            },
+                                                            "width": 0.5
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ],
+                            "nodePositions": [
+                                {
+                                    "id": "Position_SinkInlet",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/PortNodePosition",
+                                    "reference": {
+                                        "port": "Port_SinkInlet"
+                                    },
+                                    "data": {
+                                        "position": {
+                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                            "data": {
+                                                "x": 320.0,
+                                                "y": 200.0
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        "reference": {
+                            "represents": "Step_Product"
+                        }
+                    },
+                    {
+                        "id": "Drawing_Stream_Feed",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/RepresentationGroup",
+                        "composition": {
+                            "groups": [
+                                {
+                                    "id": "Drawing_Stream_Feed_Static",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Static",
+                                    "composition": {
+                                        "elements": [
+                                            {
+                                                "id": "Line_Stream_Feed",
+                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/ConnectorLine",
+                                                "reference": {
+                                                    "source": "Position_SourceOutlet",
+                                                    "target": "Position_ColumnFeed"
+                                                },
+                                                "data": {
+                                                    "stroke": {
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Stroke",
+                                                        "data": {
+                                                            "color": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Color",
+                                                                "data": {
+                                                                    "b": 0,
+                                                                    "g": 0,
+                                                                    "r": 0
+                                                                }
+                                                            },
+                                                            "dashStyle": {
+                                                                "__enum__": "DashStyle",
+                                                                "name": "SOLID"
+                                                            },
+                                                            "width": 0.5
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        "reference": {
+                            "represents": "Stream_Feed"
+                        }
+                    },
+                    {
+                        "id": "Drawing_Stream_Bottoms",
+                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/RepresentationGroup",
+                        "composition": {
+                            "groups": [
+                                {
+                                    "id": "Drawing_Stream_Bottoms_Static",
+                                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Static",
+                                    "composition": {
+                                        "elements": [
+                                            {
+                                                "id": "Line_Stream_Bottoms",
+                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/ConnectorLine",
+                                                "reference": {
+                                                    "source": "Position_ColumnBottoms",
+                                                    "target": "Position_SinkInlet"
+                                                },
+                                                "data": {
+                                                    "innerPoints": [
+                                                        {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                            "data": {
+                                                                "x": 210.0,
+                                                                "y": 260.0
+                                                            }
+                                                        },
+                                                        {
+                                                            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Point",
+                                                            "data": {
+                                                                "x": 320.0,
+                                                                "y": 260.0
+                                                            }
+                                                        }
+                                                    ],
+                                                    "stroke": {
+                                                        "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Stroke",
+                                                        "data": {
+                                                            "color": {
+                                                                "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Color",
+                                                                "data": {
+                                                                    "b": 0,
+                                                                    "g": 0,
+                                                                    "r": 0
+                                                                }
+                                                            },
+                                                            "dashStyle": {
+                                                                "__enum__": "DashStyle",
+                                                                "name": "SOLID"
+                                                            },
+                                                            "width": 0.5
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        "reference": {
+                            "represents": "Stream_Bottoms"
+                        }
+                    }
+                ]
+            },
+            "reference": {
+                "represents": "ProcessModel_Synthetic"
+            },
+            "data": {
+                "backgroundColor": {
+                    "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Color",
+                    "data": {
+                        "b": 255,
+                        "g": 255,
+                        "r": 255
+                    }
+                },
+                "maxX": 420.0,
+                "maxY": 297.0,
+                "minX": 0.0,
+                "minY": 0.0,
+                "name": "Synthetic DEXPI 2.0.1 process"
+            }
+        }
+    },
+    "data": {
+        "exportDateTime": "2026-10-03 12:00:00",
+        "originatingSystemName": "pyDEXPI",
+        "originatingSystemVendorName": "Process Intelligence Research, TU Delft",
+        "originatingSystemVersion": {
+            "uri": "https://pyDEXPI.org/schemas/pydexpi_2_0/Undefined"
+        }
+    }
+}

@@ -1,0 +1,115 @@
+[project.urls]
+"Homepage" = "https://github.com/OCXStandard/OCX_Schema"
+"Bug Tracker" = "https://github.com/OCXStandard/OCX_Schema/issues"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[project]
+name = "OCX"
+version = "3.2.0"
+description = ""
+requires-python = ">=3.9"
+authors = [
+    {name="ocastrup", email= "ole.christian.astrup@dnv.com"}
+]
+readme = "README.md"
+packages = [{include = "ocx"}]
+dependencies = [
+    "typing-extensions>=4.16.0",
+    "xsdata[cli]>=25.7",
+]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+packaging = "^23.1"
+tbump = "*"
+ocx_databinding = "*"
+twine = "*"
+
+[tool.tbump]
+# Uncomment this if your project is hosted on GitHub:
+github_url = "https://github.com/OCXStandard/OCX_Schema"
+
+[tool.tbump.version]
+current = "3.2.0"
+
+# Example of a semver regexp.
+# Make sure this matches current_version before
+# using tbump
+regex = '''
+  (?P<major>\d+)
+  \.
+  (?P<minor>\d+)
+  \.
+  (?P<patch>\d+)
+  (
+    (?P<extra>.+)
+  )?
+  '''
+
+
+[[tool.tbump.field]]
+# the name of the field
+name = "extra"
+# the default value to use, if there is no match
+default = ""
+
+[tool.tbump.git]
+message_template = "Bump to {new_version}"
+tag_template = "v{new_version}"
+
+# For each file to patch, add a [[tool.tbump.file]] config
+# section containing the path of the file, relative to the
+# tbump.toml location.
+
+[[tool.tbump.file]]
+src = "pyproject.toml"
+
+[[tool.tbump.file]]
+src = "./ocx/__init__.py"
+
+[[tool.tbump.file]]
+src = "./ocx/OCX_Schema.xsd"
+search = 'fixed="{current_version}"'
+
+[[tool.tbump.file]]
+src = "./ocx/OCX_Schema.xsd"
+version_template = "{major}{minor}{patch}{extra}"
+search = 'ocx_schema//V{current_version}'
+
+# You can specify a list of commands to
+# run after the files have been patched
+# and before the git commit is made
+
+[[tool.tbump.before_commit]]
+name = "Generate data-binding package config."
+cmd = "databinding generate ./ocx/OCX_Schema.xsd ocx {new_version}"
+
+#[[tool.tbump.before_commit]]
+#name = "Cd to ./ocx"
+#cmd = "cd ./ocx"
+#
+#[[tool.tbump.before_commit]]
+#name = "Generate data-bindings."
+#cmd = "xsdata generate OCX_Schema.xsd"
+#
+#[[tool.tbump.before_commit]]
+#name = "Cd to .."
+#cmd = "cd .."
+
+[[tool.tbump.before_commit]]
+name = "Add generated files to commit."
+cmd = "git add ./ocx*"
+
+#[[tool.tbump.before_commit]]
+#name = "Insert version string in databinding."
+#cmd = "python insert_version.py {new_version}"
+
+# Or run some commands after the git tag and the branch
+# have been pushed:
+#  [[tool.tbump.after_push]]
+#  name = "publish"
+#  cmd = "./publish.sh"

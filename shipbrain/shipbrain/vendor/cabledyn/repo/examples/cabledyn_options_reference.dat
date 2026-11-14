@@ -1,0 +1,128 @@
+--------------------- CableDyn Input File ------------------------------------
+CableDyn driver deck -- runnable reference showing the common OPTIONS keywords
+-- Active rows form a static 30 m chain example. Alternative or mutually exclusive rows begin
+-- with "--" and are documentation only: remove the leading comment marker before using one.
+-- For physical examples, copy only the options needed by the selected standalone/OpenFAST route.
+-- The full keyword list, with meanings, units and limits, is in doc/options.rst.
+--------------------- LINE TYPES ---------------------------------------------
+TypeName  Diam  MassDenInAir  EA       BA/-zeta  EI   Cd_n  Cd_t  Ca_n  Ca_t
+(-)       (m)   (kg/m)        (N)      (N-s/-)   (N-m^2) (-)  (-)   (-)   (-)
+chain     0.126 105.6          7.518e8  -1.0      0.0  1.37  0.64   1.0   0.0
+--------------------- POINTS -------------------------------------------------
+ID  Type     X      Y    Z      Mass  Vol  CdA  Ca
+(-) (-)      (m)    (m)  (m)    (kg)  (m^3) (m^2) (-)
+1   Coupled  0.0    0.0  -5.0   0     0    0    0
+2   Fixed    100.0  0.0  -30.0  0     0    0    0
+--------------------- LINES --------------------------------------------------
+ID  NodeA  NodeB  Outputs
+(-) (-)    (-)    (-)
+1   1      2      -
+--------------------- SECTIONS -----------------------------------------------
+LineID  LineType  Length  NumSegs
+(-)     (-)       (m)     (-)
+1       chain     110.0   22
+--------------------- OPTIONS ------------------------------------------------
+9.80665  g                 - Gravitational acceleration (m/s^2) [default: 9.80665]
+1025.0   rhoW              - Water density (kg/m^3) [default: 1025]
+30.0     WtrDpth           - Water depth for the flat seabed (m) [default: absent standalone; host value in OpenFAST]
+1.0e5    kBot              - Seabed penalty stiffness base (Pa/m) [default: 1.0e5]
+1.0e4    cBot              - Seabed normal damping base (Pa-s/m) [default: 1.0e4]
+none      frictionMu       - Seabed friction coefficient {none=0=off; value>=0} [default: none]
+static    bodyIC           - Free Rigid6 body / rod start {static=equilibrium; deck=deck pose} [default: static]
+sphere    bodyWetting      - Rigid6 submergence {sphere=equivalent sphere; moordyn=always wet} [default: sphere]
+morison   bodyHydro        - Rigid6 fluid inertia {morison=with Froude-Krylov; moordyn=without} [default: morison]
+exact     rodHydro         - Rod waterplane moment {exact=displaced volume; moordyn=MoorDyn term} [default: exact]
+monolithic bodyScheme      - Bodies/rods/points step {monolithic=implicit; staggered=partitioned} [default: monolithic]
+accuracy  bodySubstep      - Monolithic sub-stepping {accuracy=resolve body-mooring mode; none} [default: accuracy]
+0.4       rhoInf           - Generalised-alpha spectral radius {0<=rhoInf<=1} [default: 0.4]
+0.5       maxStrain        - Per-step plausibility bound on EI=0 element strain {>=0; 0=off} [default: 0.5]
+False     modified_newton  - Tangent-reuse mode {False=full Newton; True=guarded reuse} [default: False]
+True      cable_load_feedback - Return finite-EI cable reactions to OpenFAST {False; True} [default: True]
+False     adaptive_mesh    - Automatic finite-EI refinement {False; True} [default: False]
+continuation cable_statics - Finite-EI static route order {continuation; sequenced} [default: continuation]
+equilibrium OutputRecovery - Finite-EI node tension/curvature/moment {equilibrium; element} [default: equilibrium]
+True      alpha_force_blend - Generalised-alpha force blend, finite-EI and EI=0 lines {True; False=configuration blend} [default: True]
+False     tensile_safety   - Element-mean axial-force audit {False; warn; True=reject} [default: False]
+2.0e-6    tensile_strain_tolerance - Dynamic audit strain band [default: 2.0e-6]
+1024      recovery_max_substeps - Internal dynamic-step recovery ceiling {4..65536} [default: 1024]
+auto      ei0_substeps     - EI=0 sub-steps for segment rotation and slack-taut snaps {auto; off} [default: auto; off with False alpha_force_blend]
+1.0       ei0_substep_angle - Largest taut-segment turn per EI=0 step before sub-stepping (deg) {0<angle<=90} [default: 1.0]
+16        ei0_substep_max  - Largest number of EI=0 rotation sub-steps per step {integer 2..1024} [default: 16]
+4         axial_quadrature_order   - Finite-EI axial Gauss order {integer 1..6} [default: 4]
+4         bending_quadrature_order - Finite-EI bending Gauss order {integer 1..6} [default: 4]
+dynamic_solver 1.0e-8 1.0e-14 30 12 - Relative tolerance, absolute tolerance, max iterations, backtracks [defaults shown]
+-- dynamic_solver 1.0e-8 1.0e-14 30 12 0.4 - Optional sixth token also sets rhoInf (overrides the rhoInf row)
+none      current           - Current model and velocity (m/s), in the static IC {none; uniform; profile} [default: none]
+none      waves             - Wave model and parameters (m, s, deg) {none; airy; jonswap} + models below [default: none]
+1         WaveSeed          - JONSWAP random-phase seed {integer 1..2147483646; same seed = same sea} [default: 1]
+0.0       rampTime          - Half-cosine start-up ramp of the waves (s) {>=0; 0=off} [default: 0]
+0         WaterKin         - Water-kinematics source {0/none; file; SEASTATE coupled only} [default: no policy]
+-- 0.025  dtM               - Standalone/module step (s); standalone dynamics require dtM and TMax
+-- 10.0   TMax              - Standalone duration (s); OpenFAST owns run duration
+-- 0.0    RangeStart        - Range-graph window start (s); needs TMax and a LINES Outputs flag r [default: 0]
+-- "motion.txt" motionFile  - Prescribed standalone Coupled/Vessel/Body motion {0/none disables}; active path requires dtM and TMax
+-- "vessel.txt" vesselMotion - 6-DOF vessel record moving every Coupled/Vessel point rigidly {alternative to motionFile}
+-- "rao.txt" vesselRAO      - Displacement RAO table: vessel motion from the deck waves {alternative to motionFile}
+-- 0.0|0.0|0.0 vesselRef    - Vessel reference point / rotation centre / RAO origin (m) [default: 0|0|0]
+-- "bathymetry.txt" bathymetryFile - Structured x/y/depth seabed; mutually exclusive with WtrDpth
+-- uniform 1.0 0.0 0.0 current - Uniform X/Y/Z current velocity (m/s)
+-- profile -30 0.2 0 0 0 0.5 0 0 current - Two-level z/vx/vy/vz current profile (m, m/s)
+-- airy 2.0 8.0 0.0 waves - Airy height, period, direction (m, s, deg)
+-- jonswap 3.0 10.0 3.3 0.0 waves - JONSWAP Hs, Tp, gamma, direction (m, s, -, deg)
+-- stream 6.0 10.0 0.0 waves - Regular stream-function wave height, period, direction (m, s, deg)
+-- pm 3.0 10.0 0.0 waves     - Pierson-Moskowitz Hs, Tp, direction (m, s, deg)
+-- torsethaugen 3.0 10.0 0.0 waves - Torsethaugen Hs, Tp, direction (m, s, deg)
+-- ochihubble 2.0 12.0 3.0 2.0 7.0 1.0 0.0 waves - Ochi-Hubble Hs1 Tp1 lambda1 Hs2 Tp2 lambda2 direction
+-- 0       StreamOrder      - Fourier terms of a stream wave {0=20; 2 to 60} [default: 0]
+-- 0.0     WaveSpreading    - cos-2s spreading exponent of a spectral waves row {0=long-crested} [default: 0]
+-- 9       WaveDirections   - Direction bins of a spread sea or train {>=1} [default: 9]
+-- 200     WaveComponents   - Frequency components per train and direction {>=2} [default: 200]
+-- jonswap 3.0 7.0 3.3 0.0 6.0 wavetrain - One train of a multi-train sea: Hs, Tp, gamma, dir, s (no waves row)
+-- 3       WaterKin         - MoorDyn-C WaveKin 3/7: wave_elevation.txt / wave_frequencies.txt in the deck folder
+-- 0.5     frictionMuAxial  - Seabed friction along the line axis {>=0} [default: frictionMu]
+-- 0.5     frictionMuLateral - Seabed friction across the line axis {>=0} [default: frictionMu]
+-- asLaid  staticsFriction  - Statics seabed friction policy {none; asLaid} [default: none]
+-- mode1   axialDampingRatio - A negative BA is the damping ratio of {segment=each segment; mode1=the first axial mode} [default: segment]
+-- 0.0     layAzimuth       - Lay azimuth of every line from +x toward +y (deg) [default: anchor -> fairlead]
+-- 225.0   layAzimuth2      - Lay azimuth of line 2 alone (deg) [default: layAzimuth]
+-- 0.0     asLaidTension    - As-laid effective tension of every line (N) [default: 0]
+-- 2.0e5   asLaidTension2   - As-laid effective tension of line 2 alone (N) [default: asLaidTension]
+-- 0       nModes           - Modal analysis: lowest natural modes per line {0=off; 1 to 1000} [default: 0]
+-- "WaterKin.dat" WaterKin - MoorDyn-F WaterKin file (standalone file modes or coupled host selectors)
+-- SEASTATE WaterKin        - Full host SeaState field (OpenFAST aggregate only)
+-- RK2     tScheme          - MoorDyn compatibility only; accepted and ignored by CableDyn
+-- 0.001   dtIC             - MoorDyn dynamic-relaxation compatibility only; accepted and ignored
+-- 60.0    TmaxIC           - MoorDyn dynamic-relaxation compatibility only; accepted and ignored
+-- 0.1     CdScaleIC        - MoorDyn dynamic-relaxation compatibility only; accepted and ignored
+-- 0.01    threshIC         - MoorDyn dynamic-relaxation compatibility only; accepted and ignored
+-- 0       WriteLog         - MoorDyn logging compatibility only; accepted and ignored
+-- 0.1     dtOut            - MoorDyn output-cadence compatibility only; accepted and ignored
+-- 0       Currents         - MoorDyn-C current mode {0=none; 1=current_profile.txt} [default: 0]
+-- 0.25    dtWave           - MoorDyn-C WaveKin 3 resampling step (s) [default: 0.25]
+-- 3.14159 WvHiCOff         - High cut-off of an elevation record, WaveKinMod 1 or WaveKin 3 (rad/s) {value; none} [default: 3.14159]
+-- 0.0     WaveRefX         - x of the point an elevation record or component file refers to (m) [default: 0]
+-- 0.0     WaveRefY         - y of the point an elevation record or component file refers to (m) [default: 0]
+-- Keyword aliases (equivalent spellings, case-insensitive):
+--   g = gravity; rhoW = WtrDnsty = water_density; WtrDpth = water_depth; kBot = kb; cBot = cb
+--   bathymetryFile = bathymetry_file = seafloorFile = seafloor_file; frictionMu = mu = frictionCoefficient
+--   staticsFriction = statics_friction = staticsSeabedFrictionPolicy = seabedFrictionPolicy
+--   layAzimuth = lay_azimuth; asLaidTension = as_laid_tension
+--   dtM = dt; rhoInf = rho_inf; modified_newton = modifiedNewton; adaptive_mesh = adaptiveMesh
+--   cable_statics = cableStatics; alpha_force_blend = alphaForceBlend; OutputRecovery = output_recovery
+--   axialDampingRatio = axial_damping_ratio
+--   maxStrain = max_strain; WaveSeed = wave_seed; rampTime = ramp_time = tRamp
+--   RangeStart = range_start
+--   cable_load_feedback = cableLoadFeedback; tensile_safety = tensileSafety
+--   tensile_strain_tolerance = tensileStrainTolerance; recovery_max_substeps = recoveryMaxSubsteps
+--   ei0_substeps = ei0Substeps; ei0_substep_angle = ei0SubstepAngle; ei0_substep_max = ei0SubstepMax
+--   axial_quadrature_order = axialQuadratureOrder = axial_quadrature
+--   bending_quadrature_order = bendingQuadratureOrder = bending_quadrature
+--   waves = wave; WaterKin = WaveKin
+-- Logical values: True/T/yes/y/on/1 and False/F/no/n/off/0; tensile_safety also accepts
+--   error (= True) and warn/warning/monitor
+--------------------- OUTPUTS ------------------------------------------------
+"FairTen1"
+"AnchTen1"
+"FairIncl1"
+"AnchIncl1"
+--------------------- need this line -----------------------------------------

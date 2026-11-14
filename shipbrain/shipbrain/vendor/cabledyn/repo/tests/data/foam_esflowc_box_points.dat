@@ -1,0 +1,41 @@
+--------------------- CableDyn Input File ------------------------------------
+foamMooring EsfLOWC floating box (Wu et al., 2018): four slack EI=0 lines, 4 Fixed anchors, 4 Coupled fairleads
+Source: the MoorDyn v2 input lines_v2.txt of foamMooring's EsfLOWC tutorial, with the points renumbered
+sequentially (anchors 1-4, fairleads 5-8). The fairleads sit at the deck z = -0.062 m; the tutorial's box
+starts with them at z = -0.077 m (the C API host-coupling test, tests/test_c_api_host_coupling.c).
+--------------------- LINE TYPES ---------------------------------------------
+TypeName   Diam     MassDenInAir   EA     BA/-zeta  EI   Cd   Ca   CdAx  CaAx
+(name)     (m)      (kg/m)         (N)    (N-s/-)   (N-m^2) (-) (-) (-) (-)
+main       0.003656 0.0607         29     -0.8      0    1.6  1.0  0.05  0.0
+--------------------- POINTS -------------------------------------------------
+ID  Type   X       Y       Z       Mass Vol CdA Ca
+(#) (-)    (m)     (m)     (m)     (kg) (m3) (m2) (-)
+1   Fixed  -1.385   0.423  -0.5    0 0 0 0
+2   Fixed  -1.385  -0.423  -0.5    0 0 0 0
+3   Fixed   1.385   0.423  -0.5    0 0 0 0
+4   Fixed   1.385  -0.423  -0.5    0 0 0 0
+5   Coupled  -0.1     0.1    -0.062  0 0 0 0
+6   Coupled  -0.1    -0.1    -0.062  0 0 0 0
+7   Coupled   0.1     0.1    -0.062  0 0 0 0
+8   Coupled   0.1    -0.1    -0.062  0 0 0 0
+--------------------- LINES --------------------------------------------------
+ID LineType AttachA AttachB UnstrLen NumSegs Outputs
+(#) (name)  (#)     (#)     (m)      (-)     (-)
+1 main 1 5 1.455 40 -
+2 main 2 6 1.455 40 -
+3 main 3 7 1.455 40 -
+4 main 4 8 1.455 40 -
+--------------------- OPTIONS ------------------------------------------------
+9.81      g
+1025.0    rhoW
+0.5       WtrDpth
+3.0e6     kBot
+3.0e5     cBot
+--------------------- OUTPUTS ------------------------------------------------
+FairTen4
+AnchTen4
+Point8Fx
+Point8Fy
+Point8Fz
+TDP4s
+--------------------- need this line -----------------------------------------

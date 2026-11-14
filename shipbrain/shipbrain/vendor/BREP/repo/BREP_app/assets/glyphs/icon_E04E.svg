@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:brep="https://brep.io/icons"
+     viewBox="0 0 24 24" width="24" height="24" brep:glyph-name="icon_feat_mirror" brep:unicode="E04E">
+  <!-- A solid and its reflection either side of a dashed mirror plane. -->
+  <path d="M1 17 4.8 19.8 4.8 12.8 1 10Z" fill="#f0b840" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M4.8 19.8 9.3 17.6 9.3 10.6 4.8 12.8Z" fill="#d4901f" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M1 10 5.5 7.9 9.3 10.6 4.8 12.8Z" fill="#ffd977" stroke="#7a4d10" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M12.5 19.8 16.3 22.5 16.3 15.5 12.5 12.8Z" fill="#8b6fd4" stroke="#3d2a6b" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M16.3 22.5 20.8 20.4 20.8 13.4 16.3 15.5Z" fill="#3d2a6b" stroke="#3d2a6b" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M12.5 12.8 17 10.6 20.8 13.4 16.3 15.5Z" fill="#c9b6f0" stroke="#3d2a6b" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M11.2 3V21.5" style="fill:none" stroke="#3d86c4" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="2 1.5"/>
+</svg>

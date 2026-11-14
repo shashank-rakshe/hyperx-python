@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Jae Hoon Seo, SMI Lab, Inha University
+# Reproducible conda environment for CableDyn development.
+#
+# Installs the Fortran/C toolchain, BLAS/LAPACK, and the build system for the
+# production core (src/). After:
+#
+#     conda env create -f environment.yml
+#     conda activate cabledyn
+#     cmake -S . -B build && cmake --build build && ctest --test-dir build
+#
+# Optional: activate local formatting/commit hooks after environment creation:
+#     pre-commit install
+
+name: cabledyn
+channels:
+  - conda-forge
+  - nodefaults
+
+dependencies:
+  # Fortran compiler for the production core (src/).
+  #
+  # The conda-forge `gfortran` package ships builds for linux-64,
+  # linux-aarch64, osx-64, osx-arm64, and win-64 (Windows uses the
+  # mingw-w64 gfortran). The version is intentionally unpinned because
+  # conda-forge ships different major versions per platform; pin after
+  # creation if a specific version is required:
+  # `mamba install -n cabledyn 'gfortran>=15'`. Do not mix with system
+  # gfortran or with Intel IFX.
+  - gfortran
+  # C11 compiler for the C sources (registry mutex, path and BLAS helpers) and the
+  # C-ABI tests. On win-64 the gfortran package also installs the matching MinGW
+  # `gcc` (conda-forge package `gcc`); configure with -DCMAKE_C_COMPILER=gcc, as CI
+  # does, so the C sources build with the same GNU toolchain.
+  - c-compiler
+
+  # Build system for the core (src/). CMake configures + drives the build and
+  # ships CTest; Ninja is the documented generator and Make is also available. With
+  # these present, the documented workflow runs from a freshly created env:
+  #   cmake -S . -B build && cmake --build build && ctest --test-dir build
+  - cmake
+  - ninja
+  - make
+  - gcovr
+
+  # BLAS / LAPACK — linked by the Fortran core (banded DGBSV/DGBTRF/DGBTRS and
+  # DPBTRF/DPBTRS; DSBGVX, DSYGV and DSYEV for modal analysis).
+  #
+  # OpenBLAS 0.3.34 is excluded: on AMD Zen 4/5 CPUs that expose AVX-512, its Zen and
+  # Haswell DGEMM kernels overrun their stack buffer for an inner dimension above 128
+  # in builds without the AVX-512 kernels (the win-64 package), or with a forced
+  # OPENBLAS_CORETYPE (OpenMathLib/OpenBLAS#6013, #6021; fixed after 0.3.34). The dense
+  # modal reference (DSYGV) of test_modal faulted there.
+  - openblas !=0.3.34
+  - libopenblas !=0.3.34
+  - liblapack
+
+  # Formatting / local commit hooks for Fortran development.
+  - fprettify
+  - pre-commit
+  - pytest
+  - python-build
+  - twine
+
+  # Python + NumPy for the repository tools -- the DLC A/B verification-and-validation scorer
+  # (validation/scripts/dlc_ab_compare.py) imports numpy, so a freshly created env runs the documented
+  # reproduction without a ModuleNotFoundError.
+  - python
+  - numpy
+  - scipy

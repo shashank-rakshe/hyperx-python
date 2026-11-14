@@ -1,0 +1,8 @@
+#!/bin/sh -e
+
+# Same set as scripts/lint, so what CI rejects is what a local ./scripts/lint would have
+# fixed.
+SOURCE_FILES="pydexpi tests scripts .claude"
+
+ruff format --check --diff $SOURCE_FILES
+ruff check --no-fix $SOURCE_FILES

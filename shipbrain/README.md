@@ -1,0 +1,1426 @@
+# ShipBrain — local LLM assistant for ship structure CAD / FE mesh / FEA
+
+Type a command in a chat window, like in Claude:
+
+> *Mesh a deck panel 4800 x 3200 mm, plate 12 mm, FB 150x12 at 800, one T 400x10/150x15 web frame, 5 m water head, clamped edges*
+
+The model reads the request, calls a tool, and the tool builds the mesh. You get a Nastran `.bdf` and a
+CalculiX/Abaqus `.inp`, a 3D preview and a short summary. **No GPU and no internet are needed on the workstation.**
+
+```
+ you ──► GUI (browser page, local) ──► small fine-tuned LLM (CPU, GGUF/llamafile)
+                    ▲                         │  ```tool {"name": "panel_mesh", "args": {...}}```
+                    │                         ▼
+                    └──── answer ◄──── tools (deterministic code): own mesher, CadQuery, Roark checks,
+                                       CalculiX, mesh checks, RAG search, your private ship tools (plugin)
+```
+
+**How it is built.** The model never writes mesh files or works out numbers in its head. It writes a short JSON spec and
+code does the rest: builds the mesh, checks it and writes the files (the same rule as "XML by code" in the ship-rules repo).
+A small model can learn to write that JSON reliably, and the results stay correct.
+
+## What it can do now
+
+Every tool answers with numbers that come from code, plus a `plain_english` summary. The assistant is told to write in
+simple English, and to call `file_info` first when you ask about an uploaded file.
+
+**Meshing (own mesher, no gmsh)**
+
+| Tool | What it does | Verified |
+|---|---|---|
+| `panel_mesh` | stiffened panel (plate + FlatBar/T/L/HP stiffeners + frames), shell or beam stiffeners | CalculiX vs Roark 0.2 % |
+| `build_structure` | **short building-block programs** (lesson of CAD2Program): `deck L=6000 B=4000 t=12; girder y=1000 h=600 t=12; web x=3000 h=800 t=10; opening ...; stiffeners spacing=500 profile=FB150x12; load p=0.05; fix x=0` -> plates + 1D stiffeners (cut at openings, none on girders) -> mesh / STEP. About 7x fewer characters for the model to write than coordinates, so it is faster on a CPU and makes fewer mistakes; clear error messages for wrong input |
+| `plates_mesh` | **global structure mesh, 1D + 2D**: any assembly of flat plates (deck, girders, webs, brackets, floors, bulkheads, openings) as all-quad shells, plus 1D stiffeners (CBAR with offsets) that share the plate nodes. Joints share nodes by construction; the geometry is cleaned first | 0 free / duplicate nodes, 1 part; Roark −0.1 % / 0.0 %; 1D+2D vs structured mesher within 3 % |
+| `cad_mesh` | STEP/BREP → cleaned → thin solids to mid-surface plates → mesh | STEP grillage → one connected mesh |
+| `fatigue_mesh` | **fatigue hot-spot model**: cuts a box around the hot spot, meshes it t × t, finds the 0.5t / 1.5t read-out points; with `solve` it runs CalculiX and returns s_hs = 1.5 s(0.5t) − 0.5 s(1.5t) per surface | test |
+| `geometry_clean` | **unclean geometry**: repeated or in-line points, corners that almost meet, warped plates (moves only the odd corner), slivers, duplicates, tiny holes; STEP repair, sewing, merging faces split in one plane | dirty model: 2 loose parts → 1 clean part |
+| `mesh_check` | any `.bdf`/`.inp` (also from gmsh/ANSA/Patran): free nodes, duplicates, loose parts, free edges, angles, warp | |
+
+**FE model: formats, conversion, editing (1D / 2D / 3D)**
+
+| Tool | What it does |
+|---|---|
+| `fe_convert` | Nastran `.bdf` (read with **pyNastran**) ↔ Abaqus/CalculiX `.inp` ↔ ANSYS APDL `.mac`. Writes driver scripts for **PyMAPDL** (`ansys-mapdl-core`) and **Abaqus/CAE** (Python). Bars, shells, solids, properties, materials, supports and loads are kept: the same CalculiX answer through every format (test) |
+| `repair_model` | **geometry repair for FEA from your words**: upload a STEP and say e.g. *"remove holes below 20, fillets below R10, chamfers under 3 and pins under 12 mm"* — holes (with their edge chamfers), fillets, chamfer strips, bosses/pins and small faces are removed (OpenCascade defeaturing), then sewn and fixed; every removal is re-counted on the result, and anything that would break the solid is kept and reported. FE meshes (bdf/inp): merge nodes, remove degenerate/duplicate elements, fix inside-out solids, consistent shell normals, delete loose bits. `mesh_size` meshes the clean part straight away | test bracket: 23 faces → 7, all 11 small features removed, valid solid |
+| `surface_extract` | **mid-surface / outer-surface extraction** from solid CAD (STEP): every thin solid (flat, bent or curved plate, pipe wall) gives its mid (or outer) surface and thickness, grouped by thickness (`Mid_Surface_10T` …); faces saved as B-splines (SpaceClaim exports) are recognised as plane / cylinder / torus first; `mesh_size` meshes the flat mid-surfaces | real pump skid (3,389 solids, 31,000 B-spline faces): 1,290 thin solids → 1,749 mid faces in 45 thickness groups, 3 min on a CPU |
+| `pipe_extract` | **piping**: straight pipes and elbows (OD, wall, bend radius / angle, length), joined into runs; wall from the model (hollow) or the pipe schedule (SCH10/40/80/160); bolts, pins and U-bolts left out; 1D FE model with pipe sections, tees and valve gaps joined | same skid: 260 pipes + 47 standard elbows, 56 m of pipe, 26 s |
+| `surrogate_build` / `surrogate_predict` | **AI surrogate (reduced-order model)** of a parametric FE problem: a study of real CalculiX runs (own mesher), POD of the result fields + RBF in log space, **adaptive**: new runs where it is least accurate; accuracy by leave-one-out; each prediction (full field as ParaView .vtk + peaks, ~1 ms) has an error estimate, and when unsure or outside the range the real solver runs and the run is added. Exports a dependency-free **C++ header** for a C++ CAD/FE program | clamped plates L 1-3 m, B 0.5-1 m, t 8-20 mm, p 0.01-0.1 MPa, 70 runs: peak displacement within 2 %, peak stress within ~5 % (limited by FE mesh noise of the peak itself); C++ header gives the same numbers as Python |
+| `result_insight` | post-processing of any CalculiX result: peak and where, utilisation vs yield with PASS/FAIL, hotspot areas, elements to refine (stress jump inside an element) with a suggested size, change against a baseline run, a report draft, .vtk | |
+| `fe_edit` | equivalence, delete (group / box / ids / type), remove free nodes, translate, **mirror** (half → full breadth), **refine** (supports carried over; converges to Roark), split quads, renumber, merge models, set thickness |
+| element-type conversion (`fe_edit` ops) | 2D → 3D `shell_to_solid` (hexa/penta through the thickness), 3D → 2D `solid_skin`, 2D → 1D `edges_to_beams`, 1D → 2D `beams_to_shells` |
+
+PyMAPDL and Abaqus need their own licensed software on your PC. ShipBrain writes the input files and the scripts; it does not run ANSYS or Abaqus itself.
+
+**Drawings**
+
+| Tool | What it does |
+|---|---|
+| `drawing_to_3d` | DXF structural plan → 3D: outline/opening layers → plate with holes; girder/web/frame layers → vertical plates; stiffener layers → 1D beams. Writes a STEP and a 1D + 2D mesh. Scanned drawings need the vision model or redrawn DXF lines |
+| `compare_drawings` | two drawings (PDF page, PNG/JPG, DXF), aligned automatically: red = removed, green = added, % same, list of changed areas |
+| `compare_mesh_drawing` | FE mesh vs drawing (plan view at a height): % of mesh lines on drawn lines, coverage, and the shift that would line them up (calibration error) with an overlay image |
+| `compare_drawings` (vector) | for PDFs with real lines/text and for DXF it also says **what** changed: lines added/removed, line style changed (solid ↔ dashed, thin ↔ heavy, layer), texts changed/added/removed, each number classified (plate thickness, weld size, section size, frame, dimension, off-centre-line, elevation), e.g. *"text changed '12' → '14' (plate thickness)"*, *"girder line solid → dashed"* |
+| `drawing_check` | checks the arithmetic written on a drawing: products and sums such as `24 x 101.6 = 2438.4`, `6 @ 800 = 4800`, `1200 + 800 = 2000`; lists the ones that do not add up. Reads DXF and PDF text; scans only if Tesseract OCR is installed (optional, Apache-2.0) |
+| `cad_view_check` | **machine-part** drawings only (front / top / side views): checks a 3D part against a drawing view: projects the model (front / top / side), compares the lines both ways and the proportions, and gives PASS / WARN / FAIL with hints (missing hole, extra feature, wrong size) and an overlay image |
+| `file_info` | plain-English description of any uploaded file (FE model, STEP, DXF, PDF, image, JSON, XML, text) |
+
+**Structure models (member level)**
+
+| Tool | What it does |
+|---|---|
+| `drawing_to_model` | reads a **ship** structural drawing (PDF deck plans, elevations, sections) with the ship drawing reader (its own frame / OFF C.L / deck-height calibration, line-style and label rules) into a member model XML; lists the reader's open questions; optional score against a reference XML. On a real deckhouse drawing: 4.4 min, 55 blocks |
+| `compare_structures` (default: coverage) | compares two structure models **independent of how members are split** (a drawing-read model and a yard model never split them the same way): share of stiffener length and plate area found in the other model, with the same section / thickness, both ways, and where the biggest gaps are. Real deckhouse, drawing-read vs yard model: plates 78-82 % (72 % same thickness), stiffeners 63-75 % (55 % same section) |
+| `compare_structures` (method "members") | two versions of ONE structure model, member by member: plates (thickness, grade), stiffeners (section, grade), brackets, openings → same / changed / moved / added / removed, with positions. Reads structure JSON, or your ship XML through your private plugin (its `xml_to_members` is picked up automatically) |
+| `structure_to_mesh` | structure model → cleaned → global 1D + 2D mesh (plates with thickness and openings as shells, stiffeners as beams with their sections), plus a STEP |
+
+**Knowledge and memory (ideas from Voitta's knowledge engine, own implementation)**
+
+| Feature | What it does |
+|---|---|
+| hybrid search | keyword (BM25) + meaning-based search fused by reciprocal rank fusion. Meaning-based search uses any local open-source embedding model served by llama.cpp (`--embed-server`, e.g. nomic-embed-text, Apache-2.0), on CPU |
+| fast restarts | index and embeddings are cached; only files whose content changed are read again |
+| search scope | `knowledge_search(..., scope="project-a")` searches one project or folder only |
+| memory | `remember` / `recall` / `memory_feedback`: facts and yard practice you teach are used in later answers. Liked memories rank higher; clearly disliked ones are dropped |
+| 👍 / 👎 on answers | a 👎 with your correction is remembered at once. All rated chats go to `feedback.jsonl`, and `make_dataset.py --feedback` turns the liked ones into training data for the next fine-tune |
+| MCP server | `claude mcp add shipbrain -- python -m shipbrain.mcp_server --knowledge D:\ship_src`: Claude Code or other agents use the same tools |
+
+**Engines and solvers (small brain, real solvers)**
+
+ShipBrain builds the CAD and the mesh itself. The analysis runs in a solver that is already on the workstation:
+
+| Tool | What it does |
+|---|---|
+| `choose_engine` | question -> analysis type (static, natural frequencies, buckling, ultimate, contact, impact, fatigue, fracture, CFD, heat, CAD, mesh) -> the best engine and the next tool; guide-only answers use the engine's knowledge pack (e.g. MoFEM tutorials) |
+| `find_solvers` / `remember_solver` | finds CalculiX, MSC / NX Nastran, MYSTRAN, ANSYS, Abaqus, OpenFOAM, Code_Aster on the PATH and in their usual install folders, plus a user list |
+| `solve` | the chosen solver runs the ShipBrain model in batch (static / modal / buckling): input written, solver run, results read back in plain English. CalculiX is tested here (static, natural frequencies 0.3 %, buckling 0.6 % vs handbook); the Nastran (.f06), ANSYS (APDL result export) and Abaqus (odb extract script) adapters follow their documented batch interfaces and must be checked once on the workstation (`python -m shipbrain.solvers --check`) |
+| `analysis_run` | static / modal / buckling directly with CalculiX |
+
+**Other tools:** `cadquery_build` (checked CAD), `solve_calculix`, `plate_check`, `stiffener_check`, `plate_buckling`, `section_props`,
+`calc`, `knowledge_search` with automatic RAG, and your plugins (e.g. your private `ship_mcp.py`).
+
+With no model connected, the app still works: `/panel_mesh {"length": 4800, "width": 3200}` runs a tool directly, and plain
+questions search the knowledge folder.
+
+## Quick start (workstation, CPU only)
+
+```bash
+pip install numpy scipy cadquery pyNastran ezdxf pymupdf pillow   # see requirements.txt for what each one is for
+python -m shipbrain --model shipbrain-q4_k_m.gguf --allow-code \
+       --knowledge D:\ship_src  --plugin D:\cad-llm-repo
+```
+The page opens at http://127.0.0.1:7860. If the model is already running elsewhere (Ollama, LM Studio, llama-server), use
+`--server http://127.0.0.1:11434 --model-name shipbrain` in place of `--model`.
+
+**Two files only:** `python packaging/build_exe.py` builds `shipbrain.exe` (app, GUI and tools; about 70 MB without
+CadQuery, a few hundred MB with it).
+`packaging/make_llamafile.md` explains how to pack the model into `shipbrain.llamafile`.
+Then run `shipbrain.exe --model shipbrain.llamafile`.
+
+## One universal model, every user different
+
+The model weights are the same for everybody and hold only general engineering skill (public data). What differs per
+user lives on that user's PC and is read at run time, so nobody needs their own retraining:
+
+| Per user | Where | How |
+|---|---|---|
+| units, material and yield, design code, field of work, answer language | `profile.json` in the work folder | say it once ("I work in inches and psi, A36, AISC") -> `set_profile`; given to the model with every question |
+| other units in a question | `convert_units` | inch / ft / psi / ksi / kip / kN.m / cm4 / msw ... converted into the tools' mm-N-MPa and the answer back |
+| facts and corrections | memory | `remember`, thumbs up / down |
+| books, rules, standards, company documents | knowledge folder + `.sbpack` packs | searched and cited |
+| own scripts and tools | plugins folder | loaded as extra tools |
+| installed solvers | `find_solvers` / `remember_solver` | whatever is on that workstation |
+| CPU / GPU | `--gpu auto` | uses the card when it works, else the CPU |
+| company data for training | private Kaggle dataset | gives that company its own private model; the public model never sees it |
+
+## One model that also sees: fixed base Qwen3-VL-4B-Instruct
+
+The base model is **fixed** in `training/base_model.json`: `Qwen3-VL-4B-Instruct` (Apache-2.0). One model does text,
+tool use, code and pictures; every Kaggle run trains it fresh on all the data, so nothing is lost and nothing changes
+between runs except what it has learned. The draft model `Qwen3-0.6B` (same tokenizer) keeps it quick on a CPU.
+
+- Files: `shipbrain-q4_k_m.gguf` (~2.5 GB) + `shipbrain-mmproj-f16.gguf` (the image part, ~0.8 GB). Keep them in one
+  folder: `python -m shipbrain --model shipbrain-q4_k_m.gguf` finds the image part by itself.
+- `look(file, page, question)`: the model looks at a picture or a PDF page (drawings, scans, sketches, screenshots).
+- `pid_kg read`: the model reads each rendered P&ID sheet into pid-to-kg's format; every sheet is checked with
+  pid-to-kg's own data model (one retry with the error), then `build` runs its QA.
+- Training pictures: `training/synth_pid.py` draws P&ID sheets (ISA-style symbols) with exact answer keys, made at
+  training time (400 per run); the questions are the same ones `pid_kg read` / `look` ask.
+- Honest limit: a 4B model reads drawings far less reliably than a large model; its sheets are drafts for the QA loop.
+  Ship drawings -> XML stay with the rule-based reader (`drawing_to_model`), which the model can now cross-check with `look`.
+
+## Other people's code, used whole and in its own language
+
+Nothing is rewritten when it can be used as it is, so no core function can go missing:
+
+- **Complete copies** of open-source repos (permissive licences) live in `shipbrain/vendor/<name>/repo`, unchanged, with
+  their licence and the commit they came from: `awatif` (TypeScript + C++), `diff3d` (Python). Add more with
+  `python -m shipbrain.polyglot add https://github.com/owner/repo` (MIT / BSD / Apache / ISC / CC0 only).
+- **Any function, in its own language** (`code_functions` to find it, `code_call` to run it): Python is imported directly,
+  TypeScript / JavaScript run in Node.js through tsx (`python -m shipbrain.polyglot setup awatif` installs their npm
+  packages once), C / C++ / Rust run as their compiled WebAssembly (Awatif's C++ solver in `frame_solve`). Checked:
+  Awatif's TypeScript solver, its C++ solver and the hand formula give the same cantilever deflection.
+- **Knowledge packs hold every file** (`repopack build --full`): all code and docs of every repo, no size budget,
+  20 packs, ~460,000 searchable pieces. Languages read: Python, C, C++, C#, Rust, TypeScript, JavaScript, Fortran, Julia,
+  MATLAB, CUDA, Java, Kotlin, Go, Lua, Tcl, R, shell, GLSL, SQL, CMake, Qt UI. The search index is cached
+  (`~/.cache/shipbrain`): first start ~40 s, then ~3 s; a search takes 0.01-0.2 s.
+- Licences decide how a repo is used: permissive = copied whole, searched and trained on; GPL / AGPL / LGPL / MPL and
+  non-commercial = searched and trained on too, because the owner declared ShipBrain open and non-commercial
+  (`shipbrain/licence_mode.json`; GPL code is only run as a separate program, never mixed into ShipBrain's code);
+  brand material (SolidCraft's UI kit, look, theme, logo under its brand licence) left out.
+
+## STL meshes -> exact STEP solids (next.BREP.io's stl2step, used unchanged)
+
+The BREP kernel family of [next.BREP.io](https://github.com/mmiscool/next.BREP.io_RUST_BREP_KERNEL) (Rust, 373,000
+lines: NURBS, booleans, fillets, sheet metal, STEP) is copied whole into `shipbrain/vendor/BREP`. Its licence is MIT
+wording **with extra conditions on modifications** (they must go to its author), so ShipBrain uses it **unchanged**
+and never patches it (`DO_NOT_MODIFY.md`); the licence checker now marks such licences `conditional`.
+
+- `stl_to_step` (and every CAD tool: `repair_model`, `surface_extract`, `pipe_extract`, `cad_mesh` now accept `.stl`):
+  scans, 3D-print files and mesh exports become exact solids - planes, cylinders, cones, spheres and tori recognised.
+  Checked: a filleted plate with holes comes back with its 6 planes + 6 cylinders and the identical volume in 0.2 s;
+  then `repair_model` removes the holes and fillets from the STL as from a STEP.
+- Build once: Rust from rustup.rs, then `python -c "from shipbrain import brep; brep.build()"` (~5 min; Windows,
+  Linux, macOS). The Kaggle run does it by itself and adds STL inputs to the CAD training tasks.
+- Found on the way: `repair_model` failed on trimmed cylinders in real STEP files - fixed.
+
+## OCX (3Docx) ship models: the whole OCX library inside
+
+[OCX](https://3docx.org) is the open XML standard for 3D ship structure models (class approval, yard to class, design to
+production). ShipBrain carries two repos, copied whole and used as written:
+
+- **OCX_Schema** ([OCXStandard/OCX_Schema](https://github.com/OCXStandard/OCX_Schema), Apache-2.0): the official schema
+  of **every version 2.8.6 to 3.2.0 (12 versions)** as XSD and as **Python classes** - every element, type, attribute,
+  child, allowed value and its documentation (554 classes in 3.2.0). The model is trained on it.
+- **OCXReader** ([skfcz/OCXReader](https://github.com/skfcz/OCXReader), LGPL-2.1, C++ / OpenCascade): OCX -> exact STEP.
+  LGPL, so it is copied **unchanged**, built and run **as its own program**; its code is also a trained knowledge pack (`COPYLEFT.md`).
+  Its sample ship models (company / ship names) were left out.
+
+Tools:
+
+| tool | what it does |
+|---|---|
+| `ocx_syntax` | exact syntax of any OCX element / type / enumeration in any version: required attributes, children in order with how many, allowed values, where it is used, which versions have it, an XML example; search by meaning ("bulb", "watertight"); `changes_from` = what changed between two versions |
+| `ocx_read` | any OCX file (2.8.x - 3.2): panels, plates and thickness, stiffeners and sections, brackets, pillars, seams, holes, frame tables, catalogues, plate area and weight; saved as a structure JSON |
+| `ocx_validate` | against the official XSD of its version (exact place of each problem) + every element name against the library |
+| `ocx_write` | structure JSON / OCX / ship XML -> **OCX 3.2.0** built with the official classes, checked against the official XSD |
+| `ocx_to_step` | 3D CAD: OCXReader when built (`python -c "from shipbrain import ocx; ocx.reader_build()"`, needs CMake + vcpkg), else ShipBrain's own plate solids + stiffener beams |
+| `ocx_query` | members of a model by name, kind, panel function (DECK, BULKHEAD ...) or plate thickness, with thickness, material, section, size, weight |
+| `compare_structures`, `structure_to_mesh`, `file_info` | now take `.3docx` directly |
+
+**Training on real OCX models** (`training/ocx_samples.py`, run by the Kaggle notebook): 14 public OCX exports (real CAD
+models, schema 2.8.5 / 2.8.6 / 3.0.0, 20 kB to 64 MB, up to 1.16 million elements) are fetched at training time, never
+stored in the repo. Names are removed first: file name, header (author, company, CAD system), vessel name, yard /
+designer / owner, class number and class society; any sample still holding one of them is dropped. They give about 210
+samples from the real tool results: what is in a model, panels / plates / stiffeners by name, function, thickness or
+section, validation against the official XSD, upgrade to OCX 3.2.0, revision compare. Your own OCX files can be added
+with `--src <folder> --rules <your private name list>`.
+
+Checked: structure -> OCX 3.2.0 passes the official XSD and reads back member for member identical; four real OCX
+exports from two different CAD systems (2.8.5 / 2.8.6, up to 590,000 elements) read in 0.1-3.3 s with thickness,
+sections and frames right (two exporters write units and references differently - both handled); the XSD check finds
+the real schema deviations in those exports. Curved shell panels are flattened onto their best plane for comparing
+and meshing.
+
+**OCXReader uses the same OpenCascade ShipBrain already has** (CadQuery's OCP is OpenCascade). `ocx.reader_build()`
+builds it, unchanged, against the system OpenCascade 7.6 C++ files: on Linux `sudo apt install` the packages listed in
+`ocx.APT`, then about 1 minute - no vcpkg. Windows / macOS use its vcpkg set-up (`VCPKG_ROOT`). Checked here: the
+2.8.5 / 2.8.6 real models become STEP in 0.4-21 s (up to 430,000 STEP entities). OCXReader reads OCX 2.8.x only; for
+3.x files `ocx_to_step` uses ShipBrain's own solids and says why.
+
+## Outside data on Kaggle (the build session has no internet to those sites)
+
+All outside data is downloaded on Kaggle, which has internet:
+
+1. **Data notebook** (once, no GPU): Kaggle -> New Notebook -> Internet ON -> paste `training/kaggle/data_kernel.py`
+   -> Save & Run All (30-90 min). It downloads PID2Graph, CubiCasa5K (2,000 plans), PIDQA, FloorPlanCAD (if its links
+   work) and the free class rule books of IACS + 12 societies, builds the private class-rule packs, and leaves it all
+   in its output `shipbrain_data/` with `manifest.json` (what came, what did not). Keep it **private** (default).
+2. **Training notebook** (`training/kaggle/kernel.py`): Add Input -> Your Work -> Notebooks -> the data notebook. The run
+   finds `shipbrain_data/` itself and uses it; anything missing in it is downloaded during the run instead.
+3. Rule books that need a login: save them on your PC as `<society>/*.pdf`, upload as a private Kaggle dataset with
+   "rules" in its name, attach it to the training notebook too.
+4. Optional: `training/kaggle/detector_kernel.py` in a GPU notebook trains the drawing symbol detector.
+
+## Everything you shared: the complete list
+
+`docs/WHAT_IS_IN_SHIPBRAIN.md` lists all 75 repositories you gave, each with its status (pack in the repo, or private pack only because it has no licence) and licence. The latest additions: your own `mayo-develop` (company, product, hull and part names removed;
+its hex meshing suite and ship XML import rules are skills `hex-meshing-suite` and `ship-xml-import-rules`, the rules in full in `docs/ship_xml_import_rules.md`), `multiverse`, `GPUCADforAM`, `OpenGeometry`, `steel-python` (a browser-automation SDK, not structural steel),
+`Civil-Engineering-Scripts`, `mdlARC`, `weight-space-engineering`. Eight repositories without a licence are private packs only. Opening Rhino `.3dm` and NX `.prt` files works (`native_cad`, `tests/test_rhino_nx.py`, a real NIST NX part becomes STEP with 139 faces);
+2D drawings to ship XML is `shiptools/` (`drawing_to_model`, `xml_from_members`, `xml_validate`).
+
+## Seeing and choosing the right tool: code tools on, a Python tool, routing for every tool
+
+- **Code tools are on by default** on this PC (`python -m shipbrain.server`): `cadquery_build` (CadQuery scripts to STEP / STL) and the new `python_run` (a short Python script in the work folder: loops, tables, plots, CSV, with a time limit;
+  shows the printed output, the new files and any error). They were hidden before unless you started with `--allow-code`. With `--lan` (other PCs on the network) they stay off unless you add `--allow-code`; `--no-code` switches them off.
+  The scripts run on this PC without a sandbox: only ask for code you are comfortable with.
+- **Every tool is now routed:** the 30 tools that had no keyword rule (code, CadQuery, MATLAB folders, MCP, surrogate, solve / mesh check / pictures, drawings, OCX, documents, memory ...) have one (`KEYWORD_TOOLS`), so a plain request offers
+  the right tool in full. Checked (`tests/test_routing_python.py`): 21 requests, one per formerly unrouted tool, plus the scorecard: the expected tool is offered for 106 of 106 requests (it was 104 of 106).
+- **Training now shows the same tools:** the training system prompt (`finetune.py`) was built without the code tools, so the model never saw `cadquery_build` in its tool list. It does now. New data: `python_tools_train` (80 real runs of
+  `python_run` and `cadquery_build`) and `missing_tools_train` (240 real runs: mesh -> solve -> picture chain, cad_mesh, fatigue_mesh, cfd_export, memory, engine choice).
+- Still without training samples (they need a vision model, a commercial program, a big external build or your own file): look, drawing_*, cad_view_check, compare_mesh_drawing, moose_run, hex_mesh_algohex, mcp_call, code_folder, parse_document, remember_solver, structure_to_mesh, ocx_to_step.
+
+## Training samples for the tools added late
+
+`training/late_tools_tasks.py` (data `training/data/late_tools_train.jsonl.gz`, 220 samples from real tool runs, wired into `kernel.py`): propeller_bem, propeller_design (also the question it asks when inputs are missing),
+blade_geometry, nastran_read, nastran_plate_deck, hull_resistance (and the refusal outside Holtrop's range), gz_curve, hull_motions, hull_generate then stl_stability, catamaran_hull, dbb_blocks, pynite_fea, openhcm_read,
+and answers about what those tools are not. An earlier full run does not include it; an incremental run (`SB_MODE=auto`) trains on it as new data.
+
+## Google Colab
+
+`training/ShipBrain_colab_run.ipynb` (open it in Colab via File -> Open notebook -> GitHub): mounts Google Drive, keeps the data and results in `MyDrive/shipbrain_run`, and runs the same launcher as Lightning (`run_lightning.sh data|train`). T4 GPU for the training step. Not run on Colab itself yet.
+
+## Lightning AI (or your own GPU PC)
+
+`training/lightning/run_lightning.sh data|train|all` runs the same training as the Kaggle cell on a Lightning AI Studio or any Linux machine with an NVIDIA GPU: it downloads the Kaggle kernel and swaps `/kaggle/working` and `/kaggle/input` for folders in your home directory
+(checked: the script parses and no Kaggle path is left). Steps and settings: `training/lightning/README.md`. HF and GitHub tokens are read from environment variables there. Not run on Lightning itself yet.
+
+## Kaggle: one pasted cell, and training only on new data
+
+`training/kaggle/PASTE_IN_KAGGLE.md`: a two-line cell downloads `kernel.py` from this repository and runs it; the run fetches code, packs and data itself. **Incremental training** (`training/incremental.py`,
+used by `kernel.py`, `SB_MODE=auto` by default): every sample is identified by a content hash; after an accepted run the hashes and the LoRA adapter are saved to a private Hugging Face repo `<you>/shipbrain-state`
+(needs the Kaggle secret `HF_TOKEN`, write access). The next run fetches them and trains only on samples not yet learned, plus a 10 % replay of old ones (`SB_REPLAY`), at LR 1e-4, from the saved adapter; the scorecard
+before / after and the accept gate then compare against the previous model. `SB_MODE=full` retrains everything; a changed base model or lost state falls back to full. The draft model is not retrained in incremental runs.
+Tested: the sample bookkeeping (`tests/test_incremental.py`: new vs old, replay share, base change, eval files ignored, nothing committed twice). Not tested here (no GPU): continuing the adapter on Kaggle: check the line
+`INCREMENTAL: N new samples` and the loss in the first incremental log. Pure new-data training can forget older skills: that is why the replay is on by default.
+
+## Native CAD files without the CAD program: cadmpeg (Apache-2.0)
+
+[cadmpeg](https://github.com/cadmpeg/cadmpeg) opens native CAD files directly, written clean-room (no vendor SDKs).
+ShipBrain runs its own program, pinned to commit `6c775550` (version 0.6.11):
+
+| Format | how far cadmpeg reads it |
+|---|---|
+| STEP, IGES | full (IGES also written back) |
+| FreeCAD `.FCStd`, Fusion 360 `.f3d` | complete shape with colours |
+| SolidWorks `.sldprt`, CATIA V5 `.CATPart`, Inventor `.ipt`/`.iam`, ACIS `.sat`, Creo View `.pvz` | full solid |
+| Rhino `.3dm` | exact, by ShipBrain's own reader (below); cadmpeg as backup |
+| Siemens NX `.prt` parts | solid geometry (tested on an NX 1980 part: same size, volume within 0.06 % of NIST's STEP) |
+| NX assemblies | component placements only: the parts' geometry is in separate .prt files, upload them too |
+| OpenUSD | geometry, not yet full solids |
+| Creo `.prt` | opened and listed only, no geometry yet |
+
+- Tool `native_cad(file, op)`: `convert` (to STEP, or IGES), `inspect`, `check`, `measure` (volume, area, centroid, mass with
+  a density), `diff` (geometry of two files, e.g. a native file against its STEP export). Answers say what STEP could not
+  carry (feature history, appearance details) and when a format gives no geometry yet.
+- Every CAD tool (file_info, cad_mesh, surface_extract, compare ...) now accepts these files directly: they are converted
+  to STEP on the way in.
+- Encrypted or licence-locked files are refused on purpose (its LEGAL.md); ShipBrain never tries to get around that.
+- Install (once): the one-line installer from its [README](https://github.com/cadmpeg/cadmpeg#install), or with Rust
+  `python -c "from shipbrain import cadmpeg; cadmpeg.build()"` (about 30 minutes on 2 cores; uses less memory than the
+  default build). The chat gives the install card when it is missing.
+- Not copied into this repo: its source is about 80 MB (plus 80 MB of test files); ShipBrain uses its released program
+  instead. Its docs and code are the knowledge pack `packs/cadmpeg.sbpack` (7,202 chunks); 240 training conversations
+  come from real runs on its public CC0 / NIST sample files (`training/cadmpeg_tasks.py`).
+
+## Ship piping hydraulics: ProcessPi (MIT)
+
+[ProcessPi](https://github.com/varma666/ProcessPi)'s `processpi` package is copied as written in `vendor/processpi` (its
+committed virtual environment with .exe files is left out). Tool `pipe_flow(flow_m3h, segments, fluid, branches)`:
+seawater cooling, ballast, bilge, fire main, fuel, lube oil and fresh water lines - Darcy-Weisbach with Colebrook-White
+(64/Re when laminar), valve and bend losses from its K and Le/D tables, elevation, parallel branches; pressure drop,
+head, velocity per pipe, pump power (hydraulic and shaft), and a warning above common velocity limits.
+
+Checked by hand: a single pipe matches Darcy-Weisbach / Colebrook to 0.1 Pa, elevation is exactly rho g h, a globe valve
+exactly K = 10, laminar oil exactly 64/Re, two equal parallel branches split the flow equally. Two things found and
+handled while checking:
+- ProcessPi's `Water` ignores a density override (an "overridden" oil was computed with water's density, giving a 10 %
+  low friction factor in laminar flow), and it has no seawater or marine fuels: ShipBrain passes its own fluids with
+  fixed properties (seawater ITTC 20 C, fresh water, MGO, HFO 380, lube oil, hydraulic oil - or the user's density and
+  viscosity; fuel oil viscosity changes strongly with temperature).
+- Fittings placed at a network node are skipped by ProcessPi (by design): ShipBrain puts them on their pipe.
+
+Not included (said in the answers): pump curves, NPSH / cavitation, water hammer, two-phase flow, fouling margins.
+Skill `pipe-hydraulics`, pack `packs/ProcessPi.sbpack`, 60 training conversations from real runs, tests.
+
+## 2D drawings from plain words: dxf_draw and dxf_check (ezdxf)
+
+The user describes the drawing; the model turns the words into `parts` (it works out hole positions from "40 mm from the
+edges", converts inches, asks when a key size is missing); `shipbrain/dxfdraw.py` draws a properly layered DXF plus a
+PNG preview:
+- **plate** (holes, hole grid, corner radius, slots), **panel** (stiffened panel in plan: stiffener lines at the spacing
+  with the profile label, frames FR1 ... at their spacing, dimension chains "4 @ 800 = 3200"), **flange** (bore, bolt circle,
+  bolt holes), **shapes** (lines, circles, rectangles, polylines, texts).
+- layers OUTLINE, HOLES, STIFFENER, FRAME, CENTER, HIDDEN, DIM, TEXT, TITLE with real linetypes; units set to mm; the
+  scale is chosen automatically (1:20 for a 4.8 m panel on A3; text and arrows are 2.5 mm on paper at that scale);
+  sheet border and title block (title, scale, date); notes; centre marks and diameter / linear dimensions.
+- errors are explained, not hidden: a hole outside the plate, a bore larger than the flange, a missing size.
+- `dxf_check(file)`: drafting quality of any DXF - units missing, everything on layer 0, undefined linetypes, zero-length
+  and duplicate entities, 3D leftovers, nearly-meeting line ends (an outline that looks closed but is not), dimension
+  text typed over the measured value, stray objects far from the drawing. Checked on a deliberately bad drawing with seven
+  planted problems: all seven found; the drawings made by `dxf_draw` pass clean. (`drawing_check` stays the tool for the
+  arithmetic written on a drawing.)
+Skill `dxf-draw`, 120 training conversations from real runs (`training/dxf_tasks.py`), tests. It also writes what
+LibreCAD and QCAD open (their packs hold the format knowledge).
+
+## Scanned drawings -> vectors: VTracer (MIT)
+
+[VTracer](https://github.com/visioncortex/vtracer) (visioncortex; built for high-resolution scans of historic blueprints)
+- its Rust crates copied as written in `vendor/vtracer`, run through its Python package (`pip install "vtracer==1.0.0a4"`).
+- Tool `trace_drawing(file, page, scale)`: a scan (PNG / JPG / TIFF, or a scanned PDF page) -> DXF (layer TRACE) + SVG,
+  black-and-white line-art preset with adaptive threshold for uneven scans and a dust filter; `scale` = drawing units
+  per pixel. The SVG -> DXF step is ShipBrain's own code (paths, curves flattened, y flipped).
+- What it is for: a clean vector copy of an old paper drawing, to open in CAD or lay over a model. Each pen stroke comes
+  out as its outline (a thin closed shape), not a centre line.
+- Not used for comparing two scans: tested, a line-by-line compare of two traces reported 361 "changes" where there
+  were 2 (each trace splits the outlines differently). Two scans are compared by `compare_drawings`' picture overlay.
+- 30 training conversations from real traces (`training/vtracer_tasks.py`), pack `packs/vtracer.sbpack`, tests.
+
+## Multiphysics FE: MOOSE (Idaho National Laboratory, LGPL-2.1)
+
+[MOOSE](https://github.com/idaholab/moose) - fully-coupled implicit multiphysics: shells, solids, plasticity, contact,
+XFEM fracture, heat transfer, Navier-Stokes, porous flow, thermal hydraulics. It is 48 000 files and takes hours to build,
+so it is NOT copied here: ShipBrain runs the user's MOOSE as written - `moose-opt` on the PATH, or the official Docker
+image `idaholab/moose` (all modules compiled; ShipBrain runs it by itself with the work folder mounted).
+
+- Tool `moose_plate(a, b, t, q, clamped)`: a plate field under lateral pressure with MOOSE's shell element. The input file
+  is patterned on MOOSE's own test `shell/static/clamped_plate_flat.i` (every object and parameter appears in MOOSE's
+  test inputs); the mesh is written in the .msh file format by ShipBrain's own code (no Gmsh program). Every answer is
+  compared with the Navier series (simply supported; it reproduces MOOSE's quoted 2.998536e-3 m) or Roark's clamped
+  coefficients.
+- Tool `moose_run(input.i)`: any MOOSE input, postprocessors read from its CSV.
+- Checked on GitHub, not here: `.github/workflows/shipbrain-moose.yml` runs 41 plate cases in the official MOOSE image,
+  publishes the comparison table and the training conversations as the release `moose-latest` (the Kaggle run downloads
+  them). Started by a change to `shipbrain/training/MOOSE_REQUEST.txt`.
+- Knowledge pack `packs/moose.sbpack`: the docs of the framework syntax, solid mechanics, heat transfer, contact and XFEM,
+  and their example / test input files (6 344 chunks). Skill `moose`; install card (Docker is the easiest).
+
+## Hexahedral meshing of solid parts: ShipBrain's own hex mesher
+
+`shipbrain/hexmesh.py` (own code, numpy only, no Gmsh; the idea of voxel / octree hex meshing with feature-preserving
+snapping comes from the published paper by Gao et al. 2019 - none of the paper's code, which has no licence, is used).
+Tool `hex_mesh(file, size, to)`: STEP / BREP / STL -> hexahedra written as `.inp` (CalculiX / Abaqus), `.bdf` (Nastran)
+or `.fem` (OptiStruct). For castings, foundations, shaft brackets, lugs and thick plates - not for thin plates (use the
+shell meshers).
+
+1. a regular grid whose cell size divides each side of the bounding box exactly (axis-aligned faces come out exact);
+2. a cell is solid when its centre is inside the part (ray parity down every grid column);
+3. the solid cells are the hexahedra - one conforming mesh, no hanging nodes (a uniform grid, not an octree);
+4. boundary nodes are snapped onto the true surface, nodes near a sharp edge (dihedral angle > 35 deg) onto that edge,
+   nodes near a corner onto the corner; interior nodes are smoothed; the moves grow in ten steps and a node is held back
+   only where going on would make a brick poor (scaled Jacobian below 0.3), so the mesh is always valid;
+5. the answer reports the exact-volume error, the worst and mean scaled Jacobian and how many nodes were snapped.
+
+Checked (not only run):
+- volumes within 0.1-1.5 % of the exact CAD volume (plain voxels 0.2-4 %), no inverted brick on blocks, plates with holes,
+  cylinders, flanges, L brackets;
+- through CalculiX (C3D8I) a 200 x 40 x 20 cantilever is within 1.4-1.9 % of beam theory with shear on 160 to 4 320 bricks;
+- a plate with a hole in tension (hole / width = 0.5) against Peterson's Kt: stress at the hole side -4.6 %, +2.3 %,
+  +1.4 % of the published value at 3, 2 and 1.5 mm cells (3 786 to 35 056 bricks). A single-node maximum on the hole edge
+  can spike (nodal extrapolation noise): compare the stress at a point and refine.
+Limits (said in the answers): a uniform grid follows curved surfaces in steps; features smaller than a cell vanish; thin
+walls need cells of about a third of the wall. A size that would make more than 4 million cells is refused with a
+suggestion. Skill `hex-mesh`, 60 training conversations from real meshing runs (`training/hexmesh_tasks.py`), tests.
+
+## Differentiable FE and topology optimisation: TensorMesh (Apache-2.0)
+
+[TensorMesh](https://github.com/camlab-ethz/TensorMesh) (CAMLab, ETH Zurich) is copied as written in `vendor/tensormesh`
+(code, examples, tests, docs text; its 64 MB of pictures and videos left out): finite elements on PyTorch with tensorised
+assembly, CPU or GPU, and gradients through the solve. Its Gmsh mesh generators are never used: meshes come from
+ShipBrain's own mesher (`tensorfem.to_mesh` takes any FEModel; standard node order converted with `reorder=True`).
+
+- Tool `topology(L, H, fixed, load_at, force, volfrac)`: 2D topology optimisation with TensorMesh's own SIMP stiffness
+  and MMA optimiser (its `compliance_topology` example, as written) on a ShipBrain quad mesh - bracket shapes, lightening
+  holes in web frames and floors, gussets. Gives a picture and "keeping X % of the material gives Y % of the stiffness".
+  The textbook cantilever case gives the textbook truss layout.
+- Tool `tensor_fem(file, fixed, loads)`: linear-elastic static solve of a solid mesh (tetra / hexa / wedge) on CPU or GPU.
+  Checked on a 2 m steel cantilever: 8.34 / 9.19 / 9.44 mm on 20 / 40 / 80-element meshes against 9.60 mm from beam
+  theory with shear (linear hexahedra converge from the stiff side, as they should).
+- Install: `pip install torch torch-sla meshio` (the chat shows the card when missing). Skill `topology`, pack
+  `packs/TensorMesh.sbpack`, 55 training conversations from real runs (`training/tensormesh_tasks.py`).
+
+## Mooring lines and dynamic cables: CableDyn (Apache-2.0)
+
+[CableDyn](https://github.com/SMI-Lab-Inha/CableDyn) (J. H. Seo et al., Ocean Engineering 368, 128332, 2026) is copied
+as written in `vendor/cabledyn`: a geometrically exact finite-element solver for mooring lines and dynamic power cables -
+statics from the geometry alone, implicit dynamics with waves / current / vessel motion, bending stiffness, bend
+stiffeners, torsion, seabed contact and friction, modes, VIV, fibre ropes; it reads MoorDyn v2 decks and couples with
+OpenFAST. Its own validation: within 0.06-0.6 % of OrcaFlex 11.6d on lazy-wave curvature and tension, and model tests.
+
+- Tool `mooring(depth, length, radius, d_mm, grade, kind, fairlead_z, current, condition)`: one chain line from plain
+  numbers -> fairlead / anchor tension and angle, touchdown point, grounded length, breaking load and the API RP 2SK
+  check (CableDyn's own factors of safety). Chain properties: studless mass 19.9 d² t/m, EA 0.854·10⁸ d² kN (d in m),
+  hydrodynamic diameter 1.8 d (exactly what CableDyn's own example decks use); MBL = c d² (44 - 0.08 d) kN with
+  c = 0.0223 R3 ... 0.0320 R5 (DNV-OS-E302). A line shorter than the fairlead-anchor distance is refused with the reason.
+- Tool `cable_run(deck)`: any CableDyn / MoorDyn v2 deck -> tensions and their maxima over time.
+- Install: `pip install "cabledyn[post]"` (the wheel carries the solver) or the Windows `CableDyn_driver.exe`; or
+  `python -c "from shipbrain import cabledyn; cabledyn.build()"` compiles ShipBrain's copy (gfortran + LAPACK + CMake).
+- Skill `mooring`, knowledge pack `packs/CableDyn.sbpack`, 160 training conversations from real runs
+  (`training/cabledyn_tasks.py`), tests incl. a hand catenary check.
+
+## Siemens NX automation: NX Open journals (nxopentse) and renaming with links
+
+For users who have NX / Simcenter 3D (reading NX files needs no NX - see above):
+- [nxopentse](https://github.com/theScriptingEngineer/nxopentse) (AGPL-3.0, copied as written in `vendor/nxopentse`; the
+  packaged successor of [NXOpen-CAE-python](https://github.com/theScriptingEngineer/NXOpen-CAE-python), which has no licence
+  file and is therefore not copied) gives 149 NX Open Python functions: CAD (bodies, faces, features, datums, points,
+  splines, assemblies, layers, colours, mass properties) and Simcenter CAE (mesh collectors, nodes, forces / moments /
+  pressure on groups, constraints, solutions, subcases, solver sets, solving, results: load, export, combine, envelope,
+  nodal / elemental values, screenshots).
+- Tool `nx_open`: `find` / `syntax` read the functions from nxopentse's own code (never invented); `journal` writes an
+  NX Open journal that opens the part and calls them in order (results passed on with `"$name"`, repeated with
+  `for_each`, NX constants as `{"nx": "NXOpen..."}`), checked as valid Python, and runs it with NX's `run_journal` when
+  NX is installed - otherwise the answer says how to run it in NX (File > Execute > NX Open..., Alt+F8).
+- Tool `nx_rename`: [NX File Renamer](https://github.com/nahidmubin/Siemens_NX_File_Renamer) (GPL-3.0, copied as written
+  without its .exe) renames a .prt and updates the assemblies / drawings in the same folder with NX's `ug_edit_part_names`
+  (Windows with NX; needs pywin32).
+- Skill `nx-open`, packs `nxopentse` and `Siemens_NX_File_Renamer`, 100 training conversations (`training/nx_tasks.py`).
+
+## Rhino and NX import
+
+- **Rhino `.3dm`**: `shipbrain/rhino.py` reads it with McNeel's own open library `rhino3dm` (MIT, `pip install rhino3dm`)
+  and builds exact OpenCascade geometry: every face is its exact NURBS surface (weights kept: circles stay circles)
+  bounded by its edges, faces sewn, closed polysurfaces become solids. Extrusions, surfaces, meshes, curves and block
+  instances (with their placement, nested too) are read; units are converted to mm; layer, name and block are kept per
+  object. Tested on McNeel's rhino3dm test models and on primitives: box, sphere, cylinder exact, extrusion 0.001 %.
+  SubD objects are reported (convert them with ToNURBS in Rhino). Points are listed but kept out of the solid model.
+- **Siemens NX `.prt`** parts: read by cadmpeg (above). An NX assembly holds only component placements: the answer says
+  so and asks for the part files.
+- Both work everywhere: `file_info`, `native_cad(op="convert")`, `cad_mesh`, `surface_extract`, `compare_structures` ...
+- Volumes are measured with OpenCascade's precise rule (`rhino.volume`); its default rule is up to ~1 % off on
+  rational NURBS (cylinders, spheres), which looks like a conversion error but is not.
+
+## STL -> STEP with features: ReverseCAD (non-commercial licence)
+
+[ReverseCAD](https://github.com/grizlizora/reverse-cad) (PolyForm Noncommercial 1.0.0; used because ShipBrain is declared
+non-commercial) is copied whole into `shipbrain/vendor/reverse-cad` and run as written with Node.js. ShipBrain builds it
+by itself on first use (`npm install` + TypeScript, about 10 s).
+
+- Tool `reverse_cad(file, material)`: STL -> watertight STEP AP242 solid, volume / area / centre of mass / inertia, mass
+  for steel, aluminium, PLA, PETG, ABS or glass, recognised holes, ISO threads, fillets, chamfers, slots, cavities, and its
+  own 5-gate check of the STEP against the mesh (Hausdorff distance). The answer says the features are recognised from
+  the mesh and must be checked (on test parts it sometimes calls a plain hole a tapped one).
+- Its MCP server is built in as `reverse-cad` (cad_analyze_stl, cad_detect_threads, cad_verify_rsvs, cad_convert_to_step).
+- Skill `reverse-cad`; knowledge pack `packs/reverse-cad.sbpack` (1,716 chunks); 80 training conversations made from real
+  conversions of CadQuery parts (`training/reversecad_tasks.py` -> `training/data/reversecad_train.jsonl.gz`).
+- `stl_to_step` (next.BREP.io) stays for exact curved faces; use both when needed.
+- **Licence:** non-commercial only, and not by or for a for-profit company. Before any commercial or company use remove
+  `vendor/reverse-cad`, its pack and its training data and train again, or buy the author's commercial licence.
+
+## Pre-processing like HyperMesh (element quality, model check, OptiStruct .fem)
+
+HyperMesh (Altair) is a paid pre-processor; its manual is Altair's copyright, so nothing from it is copied. ShipBrain
+does the same jobs with its own free code, and writes files HyperMesh opens directly:
+
+| HyperMesh step | ShipBrain |
+|---|---|
+| geometry cleanup / defeature | `repair_model` (holes, fillets, chamfers, small faces, sewing) |
+| midsurface | `surface_extract(kind="mid")` |
+| automesh (shells, solids) | own mesher: `plates_mesh`, `panel_mesh`, `structure_to_mesh`, `cad_mesh`, `fatigue_mesh` |
+| check elements / quality index | **`fe_quality`** (new): aspect, warpage, skew, taper, Jacobian, quad/tria corner angles, shortest edge, % triangles, pass/warn/fail limits you can change; failing elements saved as named sets (`*ELSET` or `SET`) that any pre-processor shows |
+| model checker | **`fe_quality`**: elements without property, property without material, zero thickness, duplicate elements, loads/constraints on missing nodes, no constraints |
+| equivalence, free edges, normals | `mesh_check`, `fe_edit` (equivalence, orient_normals, remove_degenerate, repair ...) |
+| export solver deck | `fe_convert(to=["fem"])` = OptiStruct (new), `bdf` Nastran, `inp` Abaqus/CalculiX, `mac` ANSYS |
+| solve | free: MYSTRAN (`.bdf`), CalculiX (`.inp`) |
+
+The skill `fe-preprocess` tells the model this order of work. Default quality limits are typical ship FE practice;
+give your class or company limits as `criteria`, e.g. `{"aspect": [3, 5], "warpage": [10, 15]}`. If you have a HyperMesh
+licence and its help pages or PDFs, put them in your private knowledge folder (not in this public repo) and ShipBrain
+will search them too.
+
+## Process simulation (DWSIM) and DEXPI P&IDs (pyDEXPI)
+
+**DWSIM** ([DanWBR/dwsim10](https://github.com/DanWBR/dwsim10), GPL-3.0): the open-source chemical process simulator.
+ShipBrain builds its own MCP server once (`python -c "from shipbrain import dwsim; dwsim.build()"`, needs the free
+.NET 10 SDK - the chat shows the link) and runs it unchanged as a separate program.
+- `process_sim`: `run` a DWSIM flowsheet (every stream: T, P, flow, phases, composition; every unit operation),
+  `flash` a mixture (feed in **mass** fractions, DWSIM's convention) with any of its 30 property packages
+  (Peng-Robinson, SRK, NRTL, UNIFAC, steam tables, GERG-2008, PC-SAFT ...), list `packages`.
+- All 58 of its own operations (build flowsheets, unit operations, columns, reactors, dynamics, PID tuning ...) via
+  `mcp_call(server="dwsim")`. `choose_engine` now routes process questions (flash, distillation, flowsheet ...) to it.
+- Checked: built here; all **22 of its sample plants** (gas processing, columns, reactors, LNG, biodiesel ...) load and
+  solve with no errors in 0.1-9.5 s; a 50/50 by mass water-methanol flash gives 64 % water by moles (exact).
+- Training: `training/data/dwsim_train.jsonl.gz` - 347 samples from the real simulator (22 plants, 65 stream questions,
+  260 flashes of 12 mixture families), kept in the repo so Kaggle need not build DWSIM.
+
+**pyDEXPI** ([process-intelligence-research/pyDEXPI](https://github.com/process-intelligence-research/pyDEXPI)) and
+**DEXPI Studio** (its desktop app), both AGPL-3.0, copied whole; pyDEXPI runs as its own program (`pip install
+"pydexpi[png,pdf]"`, Python 3.12+). DEXPI is the open P&ID exchange standard.
+- `dexpi`: `summary` (equipment with tags and classes, instruments, piping), `validate` (all of pyDEXPI's DEXPI rules),
+  `tables` (equipment / line / instrument / piping-component / valve lists, xlsx or csv), `drawing` (PNG + SVG), `diff`
+  of two revisions; its MCP server (43 operations: find by tag, connections, paths, exports ...) via `mcp_call(server="dexpi")`.
+- Training: its real example P&IDs (DEXPI reference P&ID, 36 DEXPI training test cases, a CO2 terminal, Tennessee
+  Eastman) -> summaries, validations, and the drawn P&IDs with their exact tag lists (`training/data/dexpi_*`).
+- Code packs of DWSIM, pyDEXPI and DEXPI Studio are trained on too (copyleft allowed: ShipBrain is open, non-commercial).
+
+## Document reading: LiteParse + ParseBench (run-llama, Apache-2.0)
+
+- **LiteParse** (`pip install liteparse`; Rust core with PDFium, runs on the PC): now ShipBrain's PDF reader for the
+  knowledge base and the class-rule books - lines, reading order and table grids kept (pypdfium2 stays as fallback).
+  Tool `parse_document`: PDF / Word / Excel / PowerPoint / picture -> markdown with headings and tables, saved as
+  `<name>.md`; it says which pages are scanned or mostly pictures, and `ocr: true` reads those (Tesseract; its language
+  data is fetched once from the internet). A 14-page PDF reads in 0.1 s. Word / Excel / PowerPoint need LibreOffice.
+- **ParseBench** (~2,000 human-verified pages of real insurance, finance and government documents; tables, charts,
+  formatting, layout): the GitHub data job downloads it with its own command and turns each page into "page picture ->
+  its verified markdown" training samples - only if the dataset's Hugging Face licence allows training (checked first
+  and written to the release notes; no-derivatives licences are refused). Hugging Face is blocked in the build session.
+- The rest of run-llama (LlamaIndex) is mostly demos of paid cloud services; their code packs were not added.
+  LiteParse and ParseBench code are trained knowledge packs.
+
+## Bolted joints and vibration
+
+- `bolt` tool (`shipbrain/bolts.py`): metric ISO coarse threads, ISO 898-1 / ISO 3506 property classes, VDI 2230
+  Part 1 formulas - stress area (matches the ISO table exactly), assembly preload at 90 % yield utilisation,
+  tightening torque, preload scatter of the tightening method, and with an axial working load: bolt stress, fatigue
+  (alternating stress vs endurance limit) and the clamping force left. **Inch bolts** too (US practice): UNC / UNF
+  sizes #2 - 2 in, SAE J429 grades 2 / 5 / 8 and ASTM A325 / A490, ASME B1.1 stress area (same values as the
+  Vibrationdata MATLAB bolt tool's table), preload c x A_t x S_p and nut-factor torque T = K D F (Shigley).
+  Training samples in make_dataset (`t_bolt`). The Vibrationdata MATLAB package copy on GitHub
+  (nkatsinas/vibrationdata_matlab) has no licence file, so its code is not copied; the formulas are standard.
+  The Vibrationdata blog post on bolt calculations (Nov 2026) could not be read from the build session (its site is
+  blocked) and its code is not on GitHub yet: send the code or the download and it is added as written.
+- **Vibrationdata for Python** (Tom Irvine, MIT; [nkatsinas/vibrationdata_python](https://github.com/nkatsinas/vibrationdata_python))
+  copied whole: 116 modules - shock response spectrum, PSD and spectral moments, rainflow, SDOF / modal response,
+  plates and honeycomb panels, sine sweeps ... Its calculation functions run through `code_functions` / `code_call`
+  as written (e.g. a flat PSD 0.04 G2/Hz, 20-2,000 Hz -> 8.9 GRMS, exact); a desktop toolkit it imports for its
+  windows is given an empty stand-in where none is installed. Trained knowledge pack.
+
+## MATLAB code without MATLAB: GNU Octave
+
+MATLAB is paid; **GNU Octave** (free, GPL, https://octave.org) runs the same language. ShipBrain's code runner now
+treats `.m` files like Python / TypeScript: `code_functions` lists their functions, `code_call` runs one as written in
+Octave (arguments in, every output back), `run_script` runs a whole `.m` script. Octave is a separate program
+(Windows installer, `sudo apt install octave`, `brew install octave`); the chat shows the link when it is missing.
+Checked: Octave 8.4 - a two-output function and a vector function give the same numbers as the Python versions.
+Windows made with MATLAB's GUIDE (.fig) do not run in Octave, but their calculation code does.
+
+**Packages the user downloads** (not copied into ShipBrain, e.g. no licence for sharing): when a calculation needs
+one that is not on the PC, the chat says where to get it - today Tom Irvine's Vibrationdata MATLAB package
+(https://github.com/nkatsinas/vibrationdata_matlab: Code -> Download ZIP, plus GNU Octave). Tell ShipBrain the
+folder once ("use the folder D:/vibrationdata_matlab-main as vibrationdata_matlab", tool `code_folder`, remembered in
+`~/.shipbrain/repos.json`) and its functions run through `code_functions` / `code_call` like the copied repos.
+More such packages go in `polyglot.DOWNLOADABLE` (name, link, why) - one line each.
+
+## LLM serving simulation (Simthesizer)
+
+[Simthesizer](https://github.com/casys-kaist/simthesizer) (MIT, Rust, HPCA 2027) is copied whole and run as written:
+it simulates an LLM server under many users without a GPU. Tool `serving_sim`: users, requests per second, prompt
+and answer length -> time to first word, tokens/s per user, answer time, total throughput. It ships one measured
+set-up (Llama 3.1 8B on one RTX Pro 6000); other models / GPUs need its own GPU profiling (vLLM). Checked: builds in
+17 s; 20 requests at 0.5/s -> first word 0.03 s, 88 tokens/s per user; 200 at 20/s -> the GPU saturates, first word
+after 9 s (90 %: 17 s). ShipBrain's one-PC planner stays `shipbrain.speed` (CPU / small GPU). Its code is a trained pack.
+
+**ShipBrain's own model on a GPU:** the Kaggle training run ends by measuring ShipBrain's model (the Qwen3-4B text
+part of the base model, dummy weights - nothing large is downloaded) on its GPU with Simthesizer's own profiler
+(Python 3.14 + vLLM 0.31 via `uv`; `training/serving/qwen3_4b.toml`, 29 batch shapes; checked here with its dry run).
+The result lands in the run's output `shipbrain_serving/`; `serving.add_profile("shipbrain_serving")` installs it and
+`serving_sim` then answers for ShipBrain itself on that card. Also as its own notebook:
+`training/kaggle/serving_profile_kernel.py`. Simthesizer models dense models with head size = hidden / heads, so
+Qwen3-4B is given as 20 heads x 128 (KV cache per token exact); the vision encoder is not included. Not run yet:
+needs the Kaggle GPU; whether vLLM 0.31 accepts the T4 shows in that run's log.
+
+## Class society rules (ships and offshore)
+
+ShipBrain answers class rule questions **from the rules themselves**, with society, document, section and page, in
+plain sentences - never from memory.
+
+- **Calculators** (`class_rule` tool, action `longitudinal` / `k`): IACS UR S11 / S7 / S4 hull girder strength - wave
+  coefficient, wave bending moments (hogging / sagging), minimum section modulus and moment of inertia, permissible
+  bending and shear stress, required section modulus with a still-water moment, PASS / FAIL for your Z and I,
+  material factor k. Checked by hand (L 200 m: C = 9.75, Z_min 19.1 m3). Wave shear forces are left to the rule text
+  (their distribution factors were not reliable enough from memory to code).
+- **Rule books** (`python -m shipbrain.classrules download --out <folder>`): crawls the free rule pages of IACS (CSR,
+  UR, UI, Rec), DNV, ABS, BV, LR, ClassNK, KR, CCS, RINA, IRS, PRS, CRS, TL for their PDF rule books (ships and
+  offshore). Rule books that need a free login: save them into `<folder>/<society>/` by hand. Then
+  `python -m shipbrain.classrules build --pdfs <folder>` cuts them into sections with their formulas into **private**
+  packs (`packs/class_rules_<society>.private.sbpack`, git-ignored: the rules are copyright of each society).
+  `class_rule` action `search` finds the section and quotes the requirement and formula with document, section, page.
+- **Training** (`training/class_rule_tasks.py`, in the Kaggle run): calculator questions for many ship sizes and, for
+  every rule section with a formula, "what is the formula / requirement for ... in <society> rules?" -> search ->
+  the requirement in words + formula + where its symbols are defined + document, section, page. The Kaggle run
+  downloads the free rule books itself (SB_CLASS_RULES=0 to skip) and uses any rule PDFs you attach; **a model trained
+  on them is private** (kept off GitHub, uploaded only to your private Hugging Face repo).
+- The paid rule-check programs (BV Mars, DNV Nauticus Hull, ABS Eagle, ClassNK PrimeShip-Hull, LR RulesCalc, KR
+  SeaTrust-HullScan, CCS Compass) are licensed software of each society and cannot be downloaded or copied.
+- Not tested here: the rule sites are blocked in the build session's network; the crawler, section cutter, private
+  pack, search and training were checked with a rule-style PDF.
+
+## Answers in natural language
+
+Every technical answer explains in sentences what the result means, gives the value with units and where it comes
+from (formula, rule and section), then the numbers - never only JSON or a bare number (system prompt rules 6 - 7;
+every training answer is written that way).
+
+## OpenRouter (cloud models, many free)
+
+`python -m shipbrain --openrouter "qwen/qwen2.5-vl-72b-instruct:free"` with your key in `OPENROUTER_API_KEY`
+(https://openrouter.ai/keys; never on the command line). OpenRouter speaks the same OpenAI API, so every ShipBrain tool,
+cad3dify (`drawing_to_step`) and pictures work the same. `shipbrain.server.openrouter_models(free_only=True, vision=True)`
+lists the free models that take pictures.
+
+## Part drawing -> STEP with a correct-it loop: cad3dify on ShipBrain's own model
+
+[cad3dify](https://github.com/neka-nat/cad3dify) (MIT) is copied whole and run as written: a 2D CAD drawing picture ->
+CadQuery code -> run -> STEP -> render it in 3D -> the model compares the render with the drawing and corrects the
+code, again and again. It was written for paid cloud models; ShipBrain runs it **unchanged on its own local model**
+(a small launcher gives it the local OpenAI-style server and its "execute only" path; the cloud SDKs are not needed).
+
+- Tool `drawing_to_step(file, refinements)`: picture or PDF of a part -> STEP, size and volume.
+- **Training** (`training/cad3dify_tasks.py`, in the Kaggle run) uses **cad3dify's own prompts, taken from its own
+  classes**, so the model is good at exactly the job cad3dify gives it: a three-view drawing of each verified CAD
+  example -> its CadQuery code, and the drawing next to cad3dify's own render of a WRONG version (one dimension
+  changed) -> the corrected code. Here: 94 samples (35 generate, 59 refine) in 30 s.
+- Checked with a stand-in model server: the first round and two refinement rounds run, each sending the picture, and
+  the STEP is right (60 x 40 x 10 box with a 12 mm hole: volume exact).
+- Found on the way (cad3dify bug, not patched - its code stays unchanged): .jpg drawings fail in the refinement step
+  (it saves with Pillow format "JPG"); ShipBrain always hands it a PNG copy, which also makes PDFs work.
+- Needs `pip install "langchain<1" "langchain-openai<1" "langchain-experimental<1" svglib rlPyCairo loguru` (the
+  chat shows this if missing).
+
+## Construction drawings: ConstructDrawingAI (non-commercial licence)
+
+[ConstructDrawingAI](https://github.com/A-SHOJAEI/ConstructDrawingAI) (PolyForm Noncommercial 1.0.0) is copied whole
+and run as written, in its own Python process (3.11+). It reads construction drawings (electrical, architectural,
+P&ID) into one schema, the CIR, and answers from it:
+
+- `drawing_takeoff`: quantity takeoff - counts per item with **MasterFormat / IFC codes**, items to review,
+  connections (conductors, home runs, feeders), lengths / areas when a scale is known
+- `drawing_qa`: counts, lists, sheets, disciplines with evidence; `action: "rfi"` drafts RFIs for unclear items
+- **Training** (`training/construct_tasks.py`, in the Kaggle run): its synthetic engine draws electrical sets
+  (power & lighting plan, single-line diagram, panel schedule) in many styles with scan damage, each with an exact
+  answer key checked by its own validator. The vision model learns to count symbols, do a takeoff with MasterFormat
+  codes, and read panel voltage / circuits straight from the picture; 12 sets give 64 samples (60 with pictures).
+  Its code is also a knowledge pack (`packs/ConstructDrawingAI.sbpack`, 1,066 chunks) for search and code training.
+- **Real drawings too** (`training/construct_real.py`, in the Kaggle run, downloaded there): **PID2Graph** (CC BY-SA:
+  real OPEN100 P&IDs + Dataset-P&ID + synthetic, every symbol and line connection annotated; converted with
+  ConstructDrawingAI's own converter) -> valves / instruments / other symbols / line connections per sheet; and
+  **CubiCasa5K** (CC BY-NC: 5,000 real floor plans) -> rooms by type, bedrooms, bathrooms, doors, windows. Up to about
+  740 picture samples, answers from the datasets' own annotation.
+- **PIDQA** (CC0: 64,000 questions on P&IDs) is paired with the Dataset-P&ID pictures inside PID2Graph - only after a
+  check: the tags PIDQA lists for a sheet must be read (OCR) on that picture on at least 6 of 10 sheets, else it is
+  skipped. Checked here both ways (right tags: 7 of 10 -> used; blank pictures -> skipped).
+- **FloorPlanCAD** (CC BY-NC): fetched from the links on its page (Google Drive, gdown) and used only if its class-name
+  list is in the download (names are never guessed). Not tested (its host is blocked here).
+- **Symbol detector**: `training/kaggle/detector_kernel.py` - a separate free Kaggle GPU notebook trains its
+  electrical symbol detector with its own code on its own synthetic drawings (YOLO11; dataset export checked here:
+  6 sets -> 22 tiles, 278 boxes). Save the result as `~/.shipbrain/cdai/electrical.pt`; then `drawing_detect` reads
+  electrical drawing pictures -> CIR -> takeoff / Q&A.
+- **DELP** electrical plans: its authors give the annotated set only on request (academic e-mail to the SkeySpot
+  authors); put it into a folder and its own converter reads it.
+
+**Licence: ShipBrain is declared open and non-commercial** (`shipbrain/licence_mode.json`, set on the owner's word:
+"I am not going to use commercial"). That allows non-commercial material (PolyForm Noncommercial, CC BY-NC) and
+copyleft code (GPL, LGPL, AGPL, MPL: LibreCAD, QCAD, Inkscape, OpenCourant, OCXReader packs) to be searched and trained
+on; every such item is marked (`vendor/*/NONCOMMERCIAL.md` / `COPYLEFT.md`, `usage` in its pack, packs/NOTICE.md).
+Copyleft means ShipBrain and models trained with it stay open under the same terms. No pack is private-only any more. Before any commercial use of ShipBrain
+or of a model trained with it: set `noncommercial` to false, remove those items and train again - or get a commercial
+licence from their authors.
+
+## Drawing compare like a CAD compare tool (DXF, DWG, PDF)
+
+`compare_drawings` on two revisions of a drawing now gives what a CAD compare tool gives:
+
+- **A result drawing** `compare_<a>_vs_<b>_changes.dxf`: removed in red, added in green, changed in yellow, and
+  every change inside a **numbered revision cloud** (magenta). It opens in any CAD program.
+- **A numbered change list** (also as `.csv` for Excel): number, kind, what it was, what it is now, layer and position.
+- **More than lines and text**: block insert moved / added / removed, block attributes changed, dimension value
+  changed (e.g. 4000 → 3900), hatch changed, circles and arcs, and layer settings (colour, linetype, on/off, frozen).
+- **Filters and tolerance**: ignore kinds (`ignore: ["hatches", "dimensions"]`) or layers (`ignore_layers`), and a
+  position tolerance so tiny shifts do not count as changes.
+- **DWG**: through the free **ODA File Converter** (opendesign.com → ODA File Converter, free download). Its
+  licence does not allow ShipBrain to include it, so install it once; ShipBrain finds it by itself (PATH, the usual
+  install folders) or from `SHIPBRAIN_ODA` / `~/.shipbrain/oda.txt`. Each DWG is converted once and cached.
+  Without it: save the drawing as DXF in AutoCAD.
+
+## Something not installed? The chat says what, why, and gives the link
+
+When a tool needs free software that is not on the PC (ODA File Converter for DWG, CalculiX, MYSTRAN, Node.js, Rust,
+a C compiler, Tesseract OCR, llama.cpp, or a Python package), the chat shows an **Install needed** card: the name,
+why it is needed, the official download link (clickable) and the steps for Windows, Linux or macOS, then "ask again".
+The model is trained to repeat it, and if it forgets the link, the app adds it under the answer. Ask *"what do I need
+to install?"* (tool `setup_check`, or `python -m shipbrain.installs`) for the whole list with installed / missing.
+All links live in one place: `shipbrain/installs.py`. Only free software is listed.
+
+## MYSTRAN: a free Nastran-compatible solver that RUNS the .bdf ShipBrain writes
+
+[MYSTRAN](https://github.com/MystranSolver/MYSTRANSolver) (MIT) is copied whole into `shipbrain/vendor/MYSTRAN`. It solves
+static (SOL 101), natural frequencies (SOL 103) and buckling (SOL 105) from the same Nastran `.bdf` files, so the
+Nastran path no longer only "writes the input": `solve(file, solver="mystran", analysis)` runs it.
+
+- Windows: take the ready `mystran.exe` from the MYSTRAN releases (put it on PATH or `remember_solver` once).
+  Linux / macOS / WSL: `python -c "from shipbrain import mystran; mystran.build()"` (gfortran + cmake + ninja, ~10 min).
+- Checked on the same plates as CalculiX: pressure deflection 12.50 mm (CalculiX 12.40), first natural frequency
+  44.06 Hz (hand 44.14, CalculiX 44.24), buckling factor 7.415 (hand 7.447, CalculiX 7.492).
+- Running it for real fixed the never-tested `.f06` reader: MYSTRAN's displacement table layout, its `job.F06` file
+  name, and buckling factors read from the eigenvalue column (Nastran too).
+
+## Physics lab: OpenPhysicsAI, used as written
+
+[OpenPhysicsAI](https://github.com/molanocortes/OpenPhysicsAI) (Apache-2.0) is copied whole into `shipbrain/vendor/`
+(code, docs, examples, validation data; pictures and videos left out) and built once on Linux / macOS (on Windows inside
+WSL): `python -c "from shipbrain import openphysics; openphysics.build()"` (~30 s; clang or gcc + make).
+
+- `physics_lab`: its more than twenty C solvers, each checked against a closed form or a measurement - flow up to
+  shocks, heat, fire, water and sloshing, sound, radar, magnetics and motors, fracture, impact, gears and mechanisms,
+  metal / plastic 3D printing. `list` / `get` the 77 example scenarios, `run` one as written or with `changes`. Checked
+  here: the Lisle 2017 gear tooth gives 117.21 MPa at 15 kN (strain gauge 115.7 MPa) in 1.5 s, and twice the load
+  gives exactly twice the stress.
+- `mcp_tools` / `mcp_call`: ShipBrain is now also an **MCP client**. It talks to OpenPhysicsAI's own MCP server (88
+  operations: geometry, meshing, materials, structural / thermal analysis, topology optimisation, mechanisms, 3D
+  printing, the lab) and to any server you list in `<workdir>/mcp_servers.json`.
+- The engine router now RUNS flow / CFD, heat, fracture and impact questions with it (before: guidance only).
+- Training: `training/physics_tasks.py` builds it on Kaggle and runs the 13 examples measured to finish within 40 s on
+  4 CPU cores (`training/data/physics_quick.json`), as written and with a changed load, and learns from the real records.
+- On a CPU most of its simulations are batch jobs: of the 77 examples, 13 finish within 40 s (0.3-31 s: gear tooth,
+  radar, sound, small flow / gas / heat volumes, Mach 6 capsule, orbits), 48 take longer (2D / 3D flow, fire, water,
+  fracture), 16 need macOS (Apple maths library or the GPU flow engine). The physics-lab skill tells the model to say
+  so before a long run.
+
+## P&ID drawings -> process knowledge graph (pid-to-kg, used as written)
+
+`pid_kg` runs the scripts of [PID-to-Knowledge-Graph](https://github.com/ScottDuncanAI/PID-to-Knowledge-Graph) (MIT),
+copied whole into `shipbrain/vendor/` (its own 78 tests pass on the copy); its `SKILL.md` is loaded as a ShipBrain
+skill as written. Steps: `probe` (vector / outlined / scanned pages), `render` (tiles), `hints` (text / OCR tags) ->
+the sheets are read into `extract/page_NN.json` (needs a vision model: Claude, or ShipBrain started with a vision
+model via `--mmproj`) -> `build` (graph.json, DuckDB, summary.md, qa_report.md) -> `query` (upstream, downstream,
+path, loops, loop, instruments, describe, sql) and `export` (GraphML, Neo4j). Public P&ID sets to try it on are listed
+in the copied [public-chemical-manufacturing-datasets](https://github.com/ScottDuncanAI/public-chemical-manufacturing-datasets)
+(CC-BY-4.0); those drawings may be downloaded and read, not republished.
+
+**The model learns from those public P&IDs:** on Kaggle, `training/public_pids.py` downloads the five sets (Haile, Pahala,
+Virden (scanned), Salina, Ruttan), prepares the first P&ID pages of each with the real tools (probe, render, OCR / text
+tags) and turns the real outputs into training samples. The drawings are used only for training there: they are never
+stored in the repo or in a pack. `pid_kg` action `tags` lists the tags found on each sheet (read with pid-to-kg's
+own ISA parser; to be confirmed when the sheet is read).
+
+## Frames, beams and pipe supports: Awatif's solver inside
+
+`frame_solve` checks 3D frames, beams, columns, portals and pipe supports with the linear solver of
+[Awatif](https://github.com/madil4/awatif) (MIT): its own compiled C++/Eigen code (`shipbrain/vendor/awatif/lSolver.wasm`,
+unchanged, with its source and licence) runs from Python through `wasmtime`; nothing else to install. The input follows
+Awatif's rules: line loads go L/2 to each end of every element of the line mesh, load cases G / Q / W, its combinations
+ULS-1 (1.35G + 1.5Q + 0.9W) and ULS-2 (1.35G + 1.05Q + 1.5W), plus SLS. Sections: pipe, rect, I, box or A / Iy / Iz / J;
+moment releases; self weight. Output: governing combination and member, stress (axial + bending) and utilisation,
+deflections, reactions, a Markdown report. A pipe model from `pipe_extract` is solved directly (supports and loads at
+coordinates). Checked: cantilever tip deflection and root moment exact; simply supported UDL moment exact, deflection
+within 1 % (Awatif's lumped line loads; finer mesh = closer). Without wasmtime, ShipBrain's own numpy frame solver
+(exact fixed-end loads) is used and the answer says so. Buckling, shear and local checks are not included.
+
+## Skills and hooks: teach it workflows without retraining
+
+**Skills** are small Markdown files with the steps of a workflow. For every question the best matching skill is given to
+the model, which then follows the steps. Built in (`shipbrain/skill_library/`): `fea-prep` (clean up CAD for FEA),
+`piping-model`, `surrogate-study`, `result-review`, `other-units`. Your own go in `<workdir>/skills/`, or teach one in
+the chat: *"Whenever I say 'monthly tank check', do: 1) plate_check ... 2) ... 3) ..."* -> `add_skill` saves it, and it
+is used from then on (`list_skills` shows them all). A skill file:
+
+```
+---
+name: monthly-tank-check
+description: monthly tank wall check
+when: monthly tank            # regex of trigger words (optional; else word match with the description)
+---
+1. plate_check for each tank wall plate with 0.15 MPa
+2. stiffener_check for the vertical stiffeners
+3. list any utilisation above 0.9
+```
+
+**Hooks** are functions in a plugin file (next to its `TOOLS`), called at fixed moments; the text they return is given
+to the model as a note: `HOOKS = {'question': fn(question), 'tool_result': fn(name, args, result), 'compact': fn(notes)}`.
+Example: a company rule checker that adds "site rule: yield 355 MPa" to every question about yield.
+
+## Long chats on a small model
+
+The model's window is small (8k tokens by default, `--ctx`). When a chat no longer fits, the oldest turns are replaced by
+notes made **by code**, so nothing important is paraphrased away (idea from
+[compact-state](https://github.com/BrijeshParmar/compact-state-skill), MIT): **State now**, **Decisions** (the user's
+words, verbatim, dated), **IDs and paths** (every file name and id), **Next**. They are also saved as
+`.state/<chat id>.md` in the work folder; to correct them, edit the file and add ` (edited)` to its first line.
+
+## Small NVIDIA GPU (e.g. an older 4 GB card)
+
+`python -m shipbrain --model shipbrain-q4_k_m.gguf` now checks for an NVIDIA GPU (`nvidia-smi`) and, when the model fits,
+puts all of it on the GPU (`--gpu auto`, the default; `--gpu off` = CPU, `--gpu 20` = only 20 layers on the GPU).
+Which llama.cpp build (llama.cpp releases page, Windows zip):
+
+| Card (if unsure, use Vulkan) | Build |
+|---|---|
+| don't know / very old (e.g. Quadro K-series, GTX 600-700) | **`vulkan`**: works on almost any GPU with a current driver; start with `--gpu on` |
+| Quadro M / P / T, GTX 900 / 1000 / 1600, RTX (2014 and newer) | `cuda` (fastest) or `vulkan` |
+
+**Safety net:** if the model does not load on the GPU, or the first test answer fails, ShipBrain restarts it on the CPU by
+itself and keeps going. So trying the GPU can never leave the app broken.
+
+| Card memory | Fits on the GPU | Expected |
+|---|---|---|
+| 4 GB | 1.7B q4 (1.1 GB) + 0.6B draft + 8k context, about 3 GB in total | answers several times faster than on the CPU |
+| 4 GB | 4B q4 (2.5 GB) does not fit with its context: use `--gpu 24` (part on the GPU) or stay with 1.7B | |
+
+Training stays on Kaggle (free 16 GB T4): 4 GB is too little to fine-tune even the 1.7B model comfortably. The CAE tools
+(mesher, surrogate, CalculiX) run on the CPU and do not need the GPU.
+
+## Fast on a CPU (and with pictures)
+
+**Where the time goes** (`python -m shipbrain.speed` measures your PC and predicts it; method from
+[HuggingArch](https://github.com/shenh10/HuggingArch), MIT: cost from the architecture, bounded by the hardware):
+
+- **Reading** the prompt (question, retrieved knowledge, pictures) is compute-bound: a 4B model reads ~20-60 tokens/s
+  on a CPU. This is what makes you wait for the first word.
+- **Writing** each word is memory-bound: all weights (~2.5 GB) + the KV cache are read per token, ~10-20 tokens/s.
+
+| Measure | What it saves |
+|---|---|
+| **Knowledge at the end of the prompt**: retrieved text goes into the newest question, so the system prompt and the earlier turns stay one fixed prefix for llama.cpp's prompt cache | each turn reads only its new tokens; a long chat no longer re-reads its history |
+| **Retrieval budget** (`--rag-budget`, default 1800 characters ~ 500 tokens), filled by priority: profile, skill, your memory, one CAD example, rule book, repo text; each cut to its share | at ~45 tokens/s every 100 retrieved tokens cost ~2 s of waiting |
+| **Fast llama.cpp settings** set by ShipBrain: flash attention, 8-bit KV cache (`-fa on -ctk q8_0 -ctv q8_0`), physical-core threads, 512-token prompt batches; dropped automatically on an older llama-server | half the KV-cache bytes per written token; faster prompt reading |
+| **Draft model** (`--draft shipbrain-draft-q8_0.gguf`, Qwen3-0.6B) | ~1.5-2x faster writing, same answers |
+| **The 4 GB graphics card** (`--gpu auto`) | mostly speeds up READING: ~1500 tokens/s instead of ~45, the first word comes in about a second |
+| **Pictures**: `look` sends 1024 px (~740 image tokens, ~25 s to read on a CPU, ~10 s with the card); crops of the part you need are cheaper; several questions about the same picture reuse the cache | image tokens grow with the square of the size |
+| **Long chats**: old turns are folded into code-made notes at the context limit (`--ctx 8192`) | the KV cache, and so the writing speed, stays bounded |
+| **Compact system prompt and short tool results** (in training too); knowledge lives in the search index, not the weights | fewer tokens to read |
+
+## Weight-space tools (`training/weightspace.py`)
+
+**Grow the model skill by skill, without growing its size (adapter merging / task arithmetic).** Train one small LoRA
+add-on per skill or per new repo: a short, cheap run on the free GPU or overnight on the CPU. Then fold all add-ons into
+**one** model with `merge --method ties` (or `dare`, `linear`). The merged model has the same size and CPU speed as the
+base, so a new repo needs only a new add-on, not a full retrain.
+
+**Repair without training ("weight-space programming", after the MIT CSAIL 2026 idea; own implementation).**
+`edit --good good.jsonl --bad bad.jsonl --eval data/eval.jsonl`:
+1. Find the direction in the model's hidden states that separates bad behaviour (rambling, repeating, breaking the tool
+   format) from good behaviour (clean tool calls).
+2. Project that direction out of the output matrices of a few layers.
+3. Keep the edit **only if the ShipBrain test score goes up**. Shorter answers decide a tie, because shorter is faster on
+   a CPU.
+
+The patch is saved separately and can be undone. As in the original work, this removes obstacles; it **cannot add a
+skill** the model never learned, and it does not make the model smaller. Size and speed come from the base model,
+quantisation and the measures in "Fast on a CPU".
+
+Status: both tools are tested on a tiny local model (the merge arithmetic is exact, the edit loop runs end to end).
+Real gains have to be measured on the trained ShipBrain model.
+
+## Known limits (measured on a real engine-room structure model: 703 plates, 565 stiffeners)
+
+| | first version | now | target |
+|---|---|---|---|
+| mesh time (4 CPU cores, 400 mm elements) | 135 s | **51 s** | |
+| unconnected pieces | 165 | **10** | 1 |
+| largest connected piece | 92 % | **98.7 %** | >= 99 % |
+| loose brackets | 139 | **0** (262 bracket edges tied to their stiffeners) | 0 |
+| near-duplicate nodes | 824 | **0** | 0 |
+| inverted / degenerate elements | 518 | **14** | 0 |
+| elements with a corner < 5 deg | 2,352 | **335** | 0 |
+| max aspect ratio / max warp | 1014 / 79 deg | **134 / 6.7 deg** | |
+
+- The 9 remaining loose plate pieces sit 105-773 mm from any other plate. That looks like structure missing from the
+  source model, so they are reported, not forced shut.
+- The remaining slivers are thin triangles between real lines 20-60 mm apart, wider than the 5 % snap tolerance. A
+  larger snap made more zig-zag lines and more inverted elements, so it was not used.
+- New mesher options: `snap_tol` (default 0.05 x element size), `min_seg` (h/10), `bracket_ties` (on), `repair` (on).
+  The report lists every line clean-up, bracket tie and repair.
+- The synthetic test models are fully clean: 1 part, no free or duplicate nodes, no bad elements.
+
+## Making the model ("modify the LLM weights")
+
+### Three free ways to train (pick one)
+
+| Way | Account needed | GPU | How |
+|---|---|---|---|
+| **Kaggle** (recommended: the assistant can start and watch runs for you) | free Kaggle account + **phone verification** (needed for GPU and internet in notebooks) | free T4/P100, ~30 h per week, up to 12 h per run | `pip install kaggle`, set `KAGGLE_USERNAME` / `KAGGLE_KEY`, then `python training/kaggle_run.py start`, `watch`, `fetch` |
+| **Google Colab** | free Google account | free T4 (when available) | open `training/ShipBrain_train_colab.ipynb`, run the cells |
+| **Your own PC, no account** | none | none (CPU) | `python training/finetune_cpu.py --base Qwen/Qwen3-0.6B --max-samples 1000`. It is slow (hours to a day for small models) and saves checkpoints, so it can resume |
+
+All three use only open-source software: Qwen3 models (Apache-2.0), Unsloth (Apache-2.0) or Transformers + PEFT
+(Apache-2.0), and llama.cpp (MIT) for the CPU model file. The model file is saved to your private Hugging Face repo, or
+downloaded from the Kaggle or Colab output.
+
+**Colab: open `training/ShipBrain_train_colab.ipynb` in Google Colab** (File → Upload notebook, Runtime → T4 GPU) and
+run the cells. It clones the code, makes the data, scores the base model, fine-tunes, scores again, writes the GGUF, and
+uploads it to a **private** Hugging Face repo using a token stored in Colab's *Secrets* panel as `HF_TOKEN`.
+
+The model is fine-tuned with QLoRA, which changes a small set of extra weights and then merges them into the model. This is
+the same kind of fine-tuning that is done to GPT-style models. It needs a GPU **once**. A free Colab T4 is enough. After that
+the model runs on any CPU.
+
+```bash
+# 1. data: every tool result and number is computed by the real tools (never written by hand)
+python training/make_dataset.py --n 4000 --out data/train.jsonl --eval-out data/eval.jsonl \
+       --knowledge ship_src/rules_index.json          # optional: adds rule-retrieval tasks (keep this data private)
+# your existing ship data from cad_vlm_all_in_one.py can be added too: --data data/train.jsonl ship_data/*.jsonl
+
+# 2. score the base model first (served by llama-server / Ollama)
+python training/evaluate.py --server http://127.0.0.1:8080 --data data/eval.jsonl --out eval_before.json
+
+# 3. fine-tune on the GPU and export a CPU model
+pip install unsloth
+python training/finetune.py --data data/train.jsonl --out shipbrain_model
+
+# 4. score again
+python training/evaluate.py --server http://127.0.0.1:8080 --data data/eval.jsonl --out eval_after.json
+```
+
+Base model: **fixed** to `Qwen3-VL-4B-Instruct` in `training/base_model.json` (vision built in; do not change between runs). See
+`packaging/make_llamafile.md` for CPU speeds.
+
+The training data includes the retrieved context exactly as the app adds it at run time, so the model learns to use RAG.
+Task families: panel mesh, plate-assembly mesh, recovery from a tool error, stated assumptions, CadQuery parts with checked
+sizes, Roark / stiffener / buckling / section checks, rule retrieval (with your index).
+
+**Publishing the model.** GGUF files are 1-5 GB. That is too big for git (GitHub's file limit is 100 MB). Upload them as a
+GitHub Release asset (up to 2 GB per file) or to a Hugging Face model repo. Do not train on company data if you intend to
+publish the model: a model fine-tuned with your rule index can repeat it.
+
+### Scorecard: does the model understand users and drive the tools well?
+
+`training/scorecard.py` / `training/scorecard.jsonl`: realistic requests written by hand (not by the training-data
+generators), scored before and after every Kaggle training (`scorecard_before.json` / `scorecard_after.json`, and in
+`summary.json`). Categories: **complete** (right tool, right key inputs), **messy** (feet / inches / psi / bar / gpm /
+DN sizes / water head / Hinglish converted into mm, MPa, m3/h), **missing** (asks instead of inventing numbers),
+**multi** (right first step of a longer job), **no_tool** (knowledge answer, no calculation tool). Checked: correct
+replies score 143/143, wrong replies 0/143.
+
+### Understanding users: asking, units, design loops, error recovery
+
+`training/understanding_tasks.py` -> `training/data/understanding_train.jsonl.gz` (400 conversations, every tool result a
+real run, wording different from the scorecard - checked: no scorecard request appears in any training file):
+- **ask**: a key input missing -> one specific question -> the user's answer -> tool -> answer
+- **assume**: only a secondary input missing -> run with a stated assumption (friction 0.12, seawater ...)
+- **messy**: ft / in / fractions / psi / bar / kPa / m of head / gpm / l/s / m3/s -> mm, MPa, m3/h, and the answer says how
+  the units were read
+- **design**: loops that change the design until it passes (pipe bore until <= 3 m/s, plate thickness until utilisation
+  <= 1, mooring length until no anchor uplift) - several tool calls, each explained
+- **recover**: a tool error (unknown fitting name, impossible mooring geometry, non-standard bolt class) -> read it ->
+  fix and run again, or explain what the user must decide
+
+### Fewer tools per question, the same prompt in training and use
+
+ShipBrain has 85 tools; a small model chooses far better from ~15. `agent.select_tools` picks, for each question, the
+core tools (knowledge, files, units, calculator, memory), strong keyword hits (chain / fairlead -> mooring, gpm / head
+loss -> pipe_flow, plating / psi -> plate_check, mixture -> process_sim, P&ID -> dexpi ...), file types (.3dm, .stl,
+.bdf, .dxf ...), the best word matches and the routed engine's tools. Only those are described in full; every other
+tool is listed by name, so nothing becomes unreachable. Measured: the needed tool is shown in full for 99.3 % of the
+1 668 tool calls in the training data and for 60 / 60 scorecard requests; the system prompt drops from ~2 550 to ~900
+tokens (faster first answer on a CPU).
+
+Before, only 495 of 2 882 stored training conversations carried a system prompt at all. Now `finetune.with_system` gives
+every training conversation (and the DPO pairs, the scorecard and the evaluation) the same per-question prompt the app
+uses. The prompt also says: a missing KEY input -> ask; a missing secondary value -> assume and say so; a tool error ->
+fix and retry or ask.
+
+### Instant learning from a correction (no retraining)
+
+A 👎 with a written correction becomes, at once, a worked example in the memory: the original question, the wrong answer,
+the correction and the tool involved. For a similar question it is given to the model as "Earlier a similar request ...
+was answered wrongly ...; the user corrected it: ... Do it this way now." The same correction given again raises its
+weight ("corrected 3 times") instead of adding a duplicate. A correction with numbers the tool never computed is marked:
+the model then follows the tool's result and asks the user what was missing (a strainer, a cooler ...), instead of
+copying a possibly wrong number. Training conversations teach the model to follow such examples (understanding_tasks:
+memory_edges / memory_units / memory_disagrees).
+
+### From 👍 / 👎 to a better model, automatically and safely
+
+```
+python -m shipbrain.feedback retrain --workdir <app work folder> --dataset <kaggle-user>/shipbrain-feedback --scrub-file names.txt
+```
+1. **export**: collects the app's `feedback.jsonl`, drops what cannot teach (a 👎 without a correction, one-turn records),
+   removes duplicates and scrubs private details - e-mail addresses, folder paths with user names, and every name in
+   `names.txt` (ships, hull numbers, companies: none may reach any model or repository).
+2. **upload**: a PRIVATE Kaggle dataset with your own Kaggle login - never GitHub.
+3. **request**: writes `training/TRAIN_REQUEST.json` with the dataset; pushing it starts the Kaggle run
+   (`shipbrain-train` workflow). The run turns liked conversations into training samples and corrections into DPO pairs.
+4. **accept gate** (`training/accept_gate.py`): the new model is accepted only if the scorecard did not get worse -
+   overall within 1 point, no category down more than 5 points, and `missing` (asks) and `no_tool` (never invents) not
+   down at all; the tool-call evaluation within 3 points. A rejected model is neither uploaded to GitHub nor Hugging
+   Face (its files stay in the run's Output); `accept.json` says why. Checked: an overall gain that came with asking
+   less often is rejected.
+Because feedback is private, a run with it never publishes the model. Instant learning (the memory) continues to work
+between retrains.
+
+### Learning from 👍 / 👎: DPO after the fine-tune
+
+After the normal fine-tune, the Kaggle run does one short DPO step (Direct Preference Optimisation, with Hugging Face
+TRL; `training/finetune.py`, pairs from `training/dpo_pairs.py`). Each pair is the same conversation with a CHOSEN and a
+REJECTED next answer:
+
+| kind | chosen | rejected | teaches |
+|---|---|---|---|
+| feedback | your written correction after a 👎 | the model's answer | your corrections (private) |
+| invented | the real tool call | a made-up answer with plausible numbers | compute with the tool, never from memory |
+| unfaithful | the real answer | the same answer with numbers changed | report the tool's numbers exactly |
+| overclaim | the answer with its caveat | the answer with the caveat cut off | keep the limits of a result |
+
+- Your feedback: the app writes `feedback.jsonl` in its work folder. Upload it to a PRIVATE Kaggle dataset and attach
+  it: the run finds it by name (`*feedback*.jsonl`). A 👎 counts only with a written correction. A 👍 conversation is
+  used in the normal fine-tune; a 👎 is never trained on as if it were right.
+- Small and safe: one epoch, learning rate 5e-6, beta 0.1; the fine-tuned model is the reference (no second copy in
+  memory). If the step fails for any reason, the fine-tuned model is kept and exported as usual. `DPO=0` skips it.
+- Checked here on a tiny model with TRL 1.17: the share of pairs where the model prefers the chosen answer rose
+  59 % -> 84 % -> 93 % over three passes. The config adapts to the installed TRL / transformers (renamed settings are
+  translated, unknown ones left out) - this also protects the normal fine-tune from library updates.
+
+### Making the brain stronger: what goes where
+
+| You have… | Put it… | Why |
+|---|---|---|
+| rule books, yard standards, method notes, class rules you are licensed to use, past reports | `--knowledge` folder | facts change; search finds them on every question; no retraining |
+| a repeatable task (a new member type, a new check, a new file format) | a **tool** (Python function) + a few lines in `make_dataset.py` | code does it exactly; the model only learns when to call it |
+| your way of working, answer style, how to read a request | more / better **training samples** → fine-tune again | this is what weights are good at |
+| CAD parts you trust | `examples/cadquery/your_part.py` with `# Prompt:` / `# Tags:` lines, then `python -m shipbrain.examples verify` | verified examples are retrieved when the model writes CAD code |
+| drawings → model pairs (your `ship_pairs.py` tiles) | fine-tune the vision model (Qwen3-VL) as in the ship-rules repo | reading images needs a vision model |
+
+**Your own models as private training data:** `python training/private_samples.py run --workdir <folder> --files a.stp b.stp` runs the pipe and surface tools on your real files once; `python training/private_samples.py make --runs runs.jsonl` turns the results into chat samples. Upload the `.jsonl` as a PRIVATE Kaggle dataset; never commit it.
+**Your own code:** `python -m shipbrain.repopack build --repo <your code folder> --out packs --own` makes a `.private.sbpack` (git ignores it) that is searched at run time and may train your private model.
+
+### Pipe routes from plain words
+
+Say "168 mm pipe, 3 m east, 1.5 m up, then 2 m north" and the `pipe_route` tool builds the 3D pipe (STEP) with exact circular bends
+(long radius 1.5 x OD by default, short radius or a radius in mm on request) and gives the centre-line length, net rise, mass and a
+ready `pipe_flow_input` so the next step (pressure drop, pump head) is one more tool call. A leg too short for its bends is explained
+in plain words. Built on CadQuery / OpenCascade; checked against the analytic volume and an independent Rust kernel
+(cadcore, MIT): the same route gave the same volume (17,501,172.7 mm3). Finding from that check: cadcore's fillet radius is the
+inner radius of the bend, so centre-line radius = fillet + pipe radius. Training: `training/piperoute_tasks.py`.
+
+### Centre-line tracing (idea from AutoTrace)
+
+`trace_drawing` picks the mode itself (`auto`: thin pen strokes → centre-lines, filled or thick shapes → outlines); with `mode: "centerline"` it turns a thin-line scan or sketch into ONE line along the middle of every pen stroke (DXF
+layer CENTERLINE) instead of the outline of the stroke. Dust and short spurs from rough pen edges are removed. Own code (thinning, line walking, simplification); AutoTrace
+(autotrace/autotrace, LGPL/GPL) is in the knowledge pack as reference. Checked on a drawn box, diagonal and circle: lengths within
+2 % of the true centre-lines; a noisy 3000 x 2000 px sheet with 60 strokes takes about 5 s.
+
+### Steel connections from plain words (own library)
+
+`steel_connection` builds a steel joint from words such as "IPE400 beam on a HEB300 column, extended end plate, M20 bolts": **end plate**
+(flush or extended), **fin plate / shear tab**, **base plate** with four anchor bolts (ribs and concrete block optional) and a **bolted
+beam splice**. Sections IPE / HEA / HEB (EN 10365) or h, b, tw, tf; bolts M12-M30, ISO head / nut / washer sizes.
+You get a STEP in which every plate, bolt and weld is a named part, a bill of parts with mass (CSV), EN 1993-1-8 spacing checks (edge and
+pitch distances) and clash checks between parts, and on request meshes:
+- `mesh: "shell"` mid-surface all-quad mesh (own mesher) of plates and I-section walls; every bolt is a hole in the plates it joins and the
+  rim nodes are tied (rigid shank); CalculiX input with supports and an end load (`load_kn`), `solve: true` runs it;
+- `mesh: "hex"` hexahedral meshes of the thick plates (own hex mesher), one input per part.
+Checked: part volumes against the exact section area times length minus the holes (0.02 %), 60 end-plate combinations of section, bolt and
+extension without clash, CalculiX run on the shell model (tip deflection of the end-plate joint 3.4 mm against 0.74 mm for a rigid beam,
+the rest being joint rotation, shear and local load effects). Not done: connection resistance checks (bolt shear and bearing, welds, column web),
+contact between plates, uplift of base plates, section root fillets. IDEA StatiCa's connection library is proprietary and is not used;
+the geometry comes from published standards. Training: `training/connection_tasks.py`.
+
+### Bolt groups under eccentric load (EZbolt)
+
+`bolt_group` checks a group of bolts loaded in its plane (brackets, fin plates, lugs): the elastic method and the AISC instant centre of
+rotation method (Brandt's iteration), for any layout, any load direction and any eccentricity. EZbolt (MIT, Robert Wang) is copied as written
+in `vendor/ezbolt`; ShipBrain converts kN / mm to its kip / inch and back. Bolt resistance: give it per bolt, or the size and class for
+the EN 1993-1-8 shear value per shear plane (M20 8.8: 94.1 kN). Checked: a concentric load shares equally; 4 bolts at 3 in pitch with
+4 in eccentricity gives C = 2.365 (ICR more than the elastic method); the same answer from a torsion value or from an eccentricity.
+Bolt shear only: no bearing, tear-out, block shear or plate rupture. Training: `training/boltgroup_tasks.py`.
+Knowledge packs added with it: osoconn, steelpy, ezbolt, bolt (Go), Bolt-Calculation-Tool, BOLTS_archive (parts library, GPL), BAT (GPL),
+ideastatica-public (IDEA StatiCa's public API client and samples, MIT; the program itself is not included).
+
+### Connection resistance checks to AISC 360 (Osoconn)
+
+`connection_check` runs Osoconn (MIT, copied as written in `vendor/osoconn`; the C++ app is compiled on first use, about 40 s, needs
+cmake and g++): double clip angle shear connection, extended end plate moment connection, vertical and horizontal brace gusset
+connections. All limit states come back as interaction ratios with the governing one (bolt shear / tension / bearing, plate yielding and
+rupture, welds, column flange / web / panel zone, stiffeners, block shear ...), LRFD or ASD, N / mm or kip / in. Checked: the upstream
+example inputs reproduce their own results (maximum ratio and every check, 4 connection types), a metric end plate case fails by 4 % on plate
+thickness and passes after thickening to 32 mm, wrong or missing inputs return Osoconn's message. Its AISC section database (557 W shapes,
+angles, channels) also feeds `steel_connection`, so beams and columns can be W shapes. Not Eurocode. Training: `training/osoconn_tasks.py`.
+
+### XC called during assessments
+
+XC (open source finite elements with structural code checks: Eurocode 2 / 3, ACI 318, AISC 360, EHE, SIA, EAE; fibre sections,
+non-linear and dynamic runs, construction phases) is in the knowledge pack `xc` (the whole repository) and is RUN through `xc_run`:
+the question is routed to XC by `choose_engine` (new analysis type "rc" - concrete / code checks - and "ultimate"), the model finds the
+closest worked verification example in the pack, adapts it to the user's numbers, runs the script and reports what it printed
+(skill `xc-assessment`). XC itself is not copied (C++ with many libraries): ShipBrain uses a local install or the Docker image
+`engthiago/xcfem`, and when neither is there the tool returns an install card and keeps the script. Tested with a stand-in module (script
+run, output and files, failing script, install card, routing); NOT tested against a real XC here. Training (27 conversations,
+`training/xc_tasks.py`) teaches routing, asking for missing inputs and the honest not-installed path; no XC result is ever invented.
+
+### CBFEM for steel connections (own implementation)
+
+`steel_cbfem` runs a component-based finite element analysis of a steel connection from plain words, built from the published method (Wald, Sokol et al.; EN 1993-1-5
+annex C) on ShipBrain's shell mesher and CalculiX - NOT IDEA StatiCa's solver or code (that program is commercial; the `ideastatica-public` repository only holds its API client).
+Plates: elastic - plastic shells (fy, optional fu hardening), bolt holes with an RBE3-like ring; bolts: springs with EN 1993-1-8 tension (0.9 fub As / 1.25), shear
+and bearing capacity; contact: compression-only node pairs found by an active-set iteration (cheap elastic solves, then the non-linear ramp); welds: shared nodes; limit state:
+5 % plastic strain away from the bolt holes and loads, bolt tension / shear / bearing / interaction T/(1.4 Ft) + V/Fv; the answer is the load factor of the first limit.
+Kinds: end plate, fin plate, base plate (splice refused - not validated). Loads: shear V, moment M, axial N at the connection.
+Validation (see `tests/test_cbfem.py`): plastic bending of a cantilever plate within +13 % of the analytic collapse load; T-stub flange yielding 121 kN against 102 kN EN 1993-1-8 (+19 %);
+T-stub bolt-limited 102 kN against 121 kN (-16 %, conservative: the bolt reaches its capacity before the flange hinge forms); fin plate: the whole shear is found in the bolts and bearing governs;
+base plate: the two anchors on the lifting side take the uplift; end plate: shear shared by the bolts, tension in the upper rows. Known limits: CalculiX expands shell elements into bricks with
+two integration points through the thickness, so the plastic bending capacity is 15 % high - corrected by scaling fy by 0.866; peak strain at bolt holes is mesh dependent and not used
+(bearing is checked per bolt instead); no weld check, no buckling, no slip-critical bolts, no friction. Takes 30 s (fin plate, base plate) to 3 minutes (end plate). Use it to find the weak part
+and compare variants, not as the only design check. Training: `training/cbfem_tasks.py`.
+
+### Pipe stress analysis (psi, ASME B31.1)
+
+`pipe_stress` runs psi - Pipe Stress Infinity (GPL-3.0, Denis Gomes), copied in `vendor/psi` - on a route given in plain words (legs or waypoints,
+the same as `pipe_route`): sustained and expansion code checks against B31.1 allowables, support and anchor loads, movements, in mm / kN / kNm / MPa / deg C.
+Before use psi was checked carefully: on this machine the OpenBLAS inside old numpy returned wrong solutions (found by solving the same matrix with
+scipy and numpy 2), so the reference was psi on its pinned versions with a safe OpenBLAS kernel (47 of its 48 tests pass); ShipBrain's copy has two
+small numpy-2 compatibility edits and one data typo fixed (A53A modulus at 300 F was 10x too high) - see `vendor/psi/SOURCE.md` - and prints the same numbers for
+every psi example and V&V input. ShipBrain's own checks (`tests/test_pipestress.py`): cantilever weight reaction and moment exact; fully restrained thermal force
+E A alpha dT exact; an L-bend within 1.3 % of an independent frame model (psi includes shear deformation); rests carry exactly the pipe + water weight and never
+pull. psi's own limits: no bends yet (corners are sharp joints), one material (A53 grade A), B31.1-1967 only, water only. Training: `training/pipestress_tasks.py`.
+
+### Piping pulsation and vibration (OpenPulse)
+
+`pipe_pulsation` runs OpenPulse (GPL-3.0, MOPT / Federal University of Santa Catarina; Python code copied unchanged in `vendor/openpulse`) on a route
+in plain words: acoustic natural frequencies of the fluid column (pressure pulsation; the pipe wall flexibility lowers the speed of sound, Lin &
+Morgan, as OpenPulse does) and structural natural frequencies of the pipe (Timoshenko pipe elements with the fluid mass), checked against pump or
+compressor excitation frequencies (10 % separation by default). OpenPulse meshes with gmsh: ShipBrain does not use gmsh, so its own 1D mesher writes
+OpenPulse's mesh data; OpenPulse's desktop interface (Qt, VTK) is answered by placeholder imports in a separate process (`shipbrain/openpulse_shim.py`).
+Checked (`tests/test_pulsation.py`): closed-closed and open-closed pipe modes n c / 2L, (2n-1) c / 4L (first mode exact, higher within 0.03 %), the
+water speed of sound with the wall correction, a three-leg route equal to one straight column (corners connect), and simply supported pipe bending modes
+within 0.2 % of the exact Timoshenko beam (0.02 % in the stand-alone check). Not covered: water hammer, damping from flow, bends (sharp corners).
+Training: `training/pulsation_tasks.py`.
+
+### Propellers: own blade-element-momentum tool (three unlicensed propeller repositories)
+
+The three propeller repositories shared (a MATLAB lifting-line analysis, an OpenFOAM propeller template, an OpenFOAM / STAR-CCM+ propeller study) have no licence: private packs only, rows added to
+`docs/LICENCE_REQUESTS.md`. `propeller_bem` (`propeller.py`) is ShipBrain's own blade-element-momentum code: KT, KQ and eta0 against J, an operating point (thrust, torque, power, actuator-disk ideal
+efficiency, cavitation number at 0.7R). Checked (`tests/test_propeller.py`): thrust is zero at J = P/D for non-lifting sections (within 1 %), efficiency stays under the momentum limit, KT and KQ fall
+with J, the result converges with the number of elements, and the operating point obeys eta = T V / (2 pi n Q). Not validated against a real propeller: efficiency is optimistic by about 10 %; constant pitch,
+elliptical chord, no skew, rake or camber distribution; not a design program. Skills `propeller-modelling`, `propeller-analysis`, `propeller-tool-knowledge`.
+
+### Propellers: design and blade geometry (three licensed repositories)
+
+`BladeX` (MIT), `OpenProp` (GPL-3, MATLAB) and `PythonProp` (GPL-3, Python port) are added as packs (`packs/`, rows in `NOTICE.md`). Working tools: `propeller_design` (`propdesign.py`, PythonProp's optimum-circulation
+lifting-line code copied unchanged under `vendor/pythonprop`: design for blades, rpm, diameter, thrust and speed, with or without a duct, then the off-design curve and the radial pitch / chord / camber) and
+`blade_geometry` (`bladex_bridge.py`, BladeX under `vendor/bladex`: surface points of a blade from radial chord, pitch, rake, skew and NACA sections, written as a closed STL by ShipBrain's own writer; BladeX's
+pythonocc and smithers imports are replaced by placeholders because only the geometry is used, IGES export needs pythonocc-core). Checked (`tests/test_propdesign.py`): the designed KT equals T / (rho n^2 D^4)
+within 1 %, efficiency lies under the actuator-disk limit, the curve falls with J, and the STL of a constant NACA 0012 blade is closed with the volume within 3 % of area x span (every triangle faces outwards).
+Limits: lifting-line theory, no cavitation or strength check; the chord and thickness shape are PythonProp's example distributions scaled to the diameter; OpenProp (MATLAB) is not run (pack only). Skill `propeller-design`.
+
+### Nastran, code_aster, ensim4, FLOW (four more repositories)
+
+Packs (full): `pyNastran` (BSD-3, 37 000 chunks incl. the docs site content in `docs/`), `code_aster` (GPL-3, 78 000 chunks: sources, command catalogues, documentation, astest cases), `ensim4` (MIT, C engine and
+exhaust 1D-CFD simulator) and `flow` (MIT, browser FEA / CFD platform), rows in `NOTICE.md`. Working: tools `nastran_read` (BDF deck summary with mass and bounding box; OP2 largest displacement and von Mises per subcase;
+`.op2` files dropped in the chat window are now read) and `nastran_plate_deck` (cantilever plate deck). Checked (`tests/test_nastran.py`, with the small `plate.bdf` / `plate.op2` of the pyNastran repository, BSD-3, in
+`tests/data/pynastran`): counts and the OP2 maxima, mass = rho L W t, total force on the deck = the requested force, and the deck solved by CalculiX (through `FEModel`) gives a tip deflection and root stress within 5 %
+of beam theory. Not run here: code_aster (large install; skill `code-aster` helps to write and understand `.comm` / `.export`), ensim4 (needs SDL3 and audio) and FLOW (its solvers are small 2D teaching codes, the skill says so).
+Skills `nastran-pynastran`, `code-aster`, `engine-1d-cfd`, `flow-browser-sim`. Environment note: pyNastran 1.4 needs NumPy below 2.4 (the bridge patches `np.in1d`, but `np.chararray` is gone in 2.4+): use NumPy 2.3.
+
+### Own tools for what the unlicensed repositories do: motions, design blocks, hull dataset
+
+ShipD, shiplab/dbb, ShipStructure and the global-hull FEA repository have no licence, so none of their code or data is used. ShipBrain's own versions of what they are about:
+- `hull_motions` (`seakeeping.py`): roll (IMO IS Code 2.3.4 formula and the 0.4 B form), heave and pitch natural periods of a generated hull, and a one-degree-of-freedom regular-wave response with the damping as input.
+  Closed-form teaching estimates, no strip theory, no forward speed, not checked against model tests; checked against the closed forms for a barge and the resonance / long-wave / short-wave limits (`tests/test_motions_dbb.py`).
+- `dbb_blocks` (`dbb.py`): design building blocks - volumes with density and centre of gravity, grouped, summed to weight and CG, linked to shall / should requirements with red / green / orange status, and the
+  weights list for `ship_hydrostatics` / `gz_curve`. Written from the method's description, not from any editor's code.
+- `hulldataset.py`: `python -m shipbrain.hulldataset --n 2000` makes a dataset of random valid hulls with coefficients, GM, GZ summary, natural periods and Holtrop resistance, all from ShipBrain's own tools
+  (`training/data/hull_dataset.csv.gz`). Licence requests for the four repositories are in `docs/LICENCE_REQUESTS.md`.
+
+### PyNite, OpenHCM, the global hull FE study, and the skills
+
+`pynite_fea` runs PyNite (MIT, `pip install PyNiteFEA`): 3D frames with releases, nodal / member loads and combinations, rectangular plates with pressure and simply supported / clamped edges (`pynite_bridge.py`).
+Checked (`tests/test_pynite_openhcm.py`): cantilever and simply supported beam equal beam theory (0.2 %), a simply supported square plate equals Timoshenko's 0.00406 q a4 / D within 1 % and a clamped one 0.00126 within 2 %.
+`openhcm_read` reads OpenHCM XML (the open ship-structure format of class societies and CAD vendors) with ShipBrain's own reader (`openhcm.py`; the Apache-2.0 web viewer is the knowledge pack `OpenHCMViewer` and was the
+reference for the element names): counts, thicknesses, areas, mass, compartments, and a CalculiX shell mesh of the flat plates and stiffeners. It was tested on a model written to that description: **no real OpenHCM file was
+available**, so a real file may need reader fixes. Packs `Pynite` (MIT) and `OpenHCMViewer` (Apache-2.0) are in; the global-hull-FEA repository (ANSYS command files of a tanker, D. Melozzi) and ShipD have no licence: private packs for
+the owner's computer only, never in the repo or in training.
+Nine skills were added, each repository in three parts - modelling, analysis, tool knowledge: `pynite-*`, `openhcm-*` and `global-hull-fea-*` (the last written from general naval architecture knowledge, not from the unlicensed repository).
+
+### Any hull STL: stability with NavalToolbox, catamarans with FAST-SHIPS
+
+`stl_stability` runs NavalToolbox (AGPL-3.0, Rust, `pip install navaltoolbox`; its criteria scripts are copied in `vendor/navaltoolbox/rules`) on a hull STL: hydrostatics, the GZ curve with the trim
+optimised at every heel angle, and an intact criteria set (IS Code 2008, DIV 222). `catamaran_hull` generates slender catamaran demihulls with the FAST-SHIPS hull generator (NTNU, GPL-3.0, copied unchanged in
+`vendor/fastships`; needs numba), mirrors the generator's half mesh into a closed STL, and can place two at a separation. Knowledge packs `navaltoolbox` and `fastships_hull_generator`.
+
+Cross-checks (`tests/test_navalbridge.py`, `tests/test_catamaran.py`): on the generated hull NavalToolbox equals the generator's own waterplane area and LCB (1 %), KB (2 %), volume (2 %, STL discretisation)
+and the own GZ integration (within 0.04 m); on a FAST-SHIPS demihull it reproduces the generator's displacement (100.0 m3) and LWL, and the catamaran's BMt equals the parallel-axis estimate (12 %). Two of the
+library's scripts (hsc_2000_monohull_intact, is_code_2008_passenger) do not compile in its own engine (0.9.3): the tool refuses them. Not covered: tanks and loading conditions through the chat, down-flooding
+openings, wind heeling silhouettes (the library has them; not wired in).
+
+**Hull flow (OpenFOAM on a hull STL) is NOT offered.** `shipcfd.py` (double-body, own background grid + snappyHexMesh, force bookkeeping) runs and converges, but it failed its benchmark: a cube face-on
+gave Cd 0.63 against about 1.05 in the literature, and the hull results moved by a factor of 2 between refinement levels (pressure drag 277 -> 206 -> 154 kN at levels 3 -> 4 with a second-order scheme), with
+the friction 30 % under the flat-plate value. A cell-by-cell (voxel) version was dropped earlier because stair steps gave 6 times the drag. Until the cube comes out right the tool stays unregistered.
+
+### GZ curve and the IMO intact criteria
+
+`gz_curve` computes the righting-lever curve of a generated hull at a KG and displacement (`stability.py`, own code; the method is the classical heeled-hull integration that the FreeCAD Ship
+workbench also uses - its code, LGPL-2.1, is in the knowledge pack `freecad_ship`): at each heel angle the waterline plane is moved until the displaced volume equals the displacement, the centre of
+buoyancy of the heeled hull is integrated and GZ = yB cos(phi) + (zB - KG) sin(phi). Output: the curve, the six criteria of IS Code 2.2 with pass / fail, the deck-edge immersion angle, the angle of
+vanishing stability, a picture. Checked (`tests/test_stability.py`): a barge follows the wall-sided formula GZ = sin(phi)(GM + 1/2 BM tan2(phi)) within 3 % up to deck-edge immersion, the deck edge goes
+under at the right angle, displacement is kept at every angle, GZ is odd in the heel, a higher KG lowers and fails the curve, a sinking hull is refused. Limits: level keel (no trim), hull up to the deck
+(the deck-edge immersion angle stands in for the down-flooding angle unless given), free-surface loss as a single GG' number, no damage stability, no weather criterion: concept level, not class approval.
+
+### Hull resistance and the "more data = more accuracy" question
+
+`hull_resistance` gives the calm-water resistance and effective power of a generated hull: Holtrop-Mennen through Vessel.js (exact, ~30 ms), or a surrogate trained on a dataset ShipBrain made itself
+(`hullresist.py`, `python -m shipbrain.hullresist --train`): **2,400 random valid hulls x 5 Froude numbers = 12,000 labelled points** (`training/data/hull_resistance_dataset.csv.gz`, model
+`shipbrain/data/hull_resistance_surrogate.npz`), hulls restricted to Holtrop's range. Measured on 480 hulls the model never saw: mean error **2.3 %**, median 1.4 %, 95 % within 7.8 %, worst 15.5 %
+(a straight-line fit on the same numbers: 9.7 %).
+
+Does a large dataset make it accurate by itself? Not by itself, and the measurements say so. Learning curve (same unseen hulls): 100 training hulls 4.4 % mean error, 200: 3.4 %, 400: 2.9 %, 800: 2.7 %,
+1,200: 2.3 %, 2,000: 2.1 % - it flattens, because the labels switch regime inside Holtrop's formulas, and **a surrogate can never be more accurate than its labels**: these are Holtrop estimates
+(+-10-20 % against real ships), not measurements. The first attempt (21 raw hull parameters as inputs) was worse than the straight-line fit (median error 15 %); what fixed it was feeding the
+surrogate the numbers the method actually uses (L/B, B/T, Cb, Cm, Cwp, LCB, Fn, length, bulb, transom). Because Holtrop is as fast to run as the surrogate, the tool answers with the exact method; a
+surrogate pays off when the labels are slow (CFD runs of minutes): the same dataset machinery is for that. Tests: `tests/test_hullresist.py` (fresh hulls, error in line with the claim).
+
+### Hull generator (own code; Ship-D idea, no Ship-D code)
+
+`hull_generate` designs a ship hull from parameters - principal dimensions, midship section (bilge radius, deadrise, flare), plan form (entrance and run lengths, fullness exponents, transom), V-shaped
+ends, optional bulb - and returns the coefficients (Cb, Cp, Cm, Cwp, LCB, KB, wetted area, section area curve), a watertight STL, a picture, and with a KG the GM through Vessel.js; `target_cb`
+solves for a block coefficient; `samples = N` writes a CSV of N random valid hulls. It is `hullgen.py`, written from scratch because the Ship-D repository (https://github.com/noahbagz/ShipD) has
+no licence: its code and data are NOT in the repo and not used for training (the owner can build a private pack on their own computer with `repopack build --private-only`). If its authors add
+a licence, it can be added properly.
+
+Checked (`tests/test_hullgen.py`): the rounded-bilge and deadrise midship sections equal their closed forms (to 0.0002 in Cm); Cwp equals the exact integral of the plan form; a symmetric hull has
+LCB at midships; Vessel.js reading the same hull's table gives the same volume (1 %), KB, LCB and waterplane area as the own integration; the STL is watertight (hull and bulb as two closed shells) with
+the right volume (1.2 %); target Cb is hit within 0.002 or refused with the reachable range; invalid hulls are refused. Limits: similar-section lofting with tapered ends - concept studies and sensitivity,
+not a faired lines plan. Training: `training/hull_tasks.py`.
+
+### Hydrostatics and initial stability (Vessel.js)
+
+`ship_hydrostatics` runs Vessel.js (MIT; NTNU Ship Design and Operation Lab, H. M. Gaspar and contributors; the library's ES modules are copied unchanged in `vendor/vesseljs`, a small
+runner of ours drives them in Node.js - needs Node, free). Hull = box, Wigley or a half-breadth table / an uploaded Vessel.js ship specification; weights = tonnes and centres of gravity.
+Result: draft, trim, heel, KB, BM, KG, GM, drafts forward and aft, and a hydrostatic table; GM below 0 is called out as unstable. Knowledge pack `vesseljs` (docs and code, 4,500 chunks;
+the example vessel name in its docs is replaced by "ExampleVessel").
+
+Checked (`tests/test_vesselbridge.py`): the box barge equals the exact formulas (draft, KB = T/2, BM = B2/12T, GM to 0.002 m); the Wigley hull equals its analytical hydrostatics within 1 %
+(Cb = 4/9, KB = 5T/8, BM = 3B2/35T); the library's own reference case (draft 3.322 m, trim 0.129, GM 2.402 m) is reproduced; fresh water, an off-centre load (heel) and errors. Limits: small angles
+only (no GZ curve, no free-surface correction, no damage stability); the library also has ship motions, Holtrop resistance, manoeuvring and fuel modules that are not wired in yet.
+Training: `training/vessel_tasks.py`.
+
+### ANSYS, Abaqus, Fluent, STAR-CCM+ (commercial solvers)
+
+These need the user's licence and could not be run where ShipBrain was built, so what is claimed is limited to what was checked:
+- **Fluent / STAR-CCM+ CFD** - `cfd_export` writes the case: the mesh in Fluent's ASCII `.msh` format from ShipBrain's own grid (`fluentmesh.py`; **checked** by reading it back with OpenFOAM's
+  Fluent importer: same cells, `checkMesh` passes, zone names kept), a setup sheet in plain words, and a PyFluent script or a STAR-CCM+ Java macro (**not run, not compiled**: written from the
+  documented APIs; the files say so). The identical case runs in OpenFOAM here for a cross-check of the drag.
+- **Results back** - tables exported from Fluent / STAR-CCM+ / ParaView (CSV with x, y, z and fields; column spellings recognised) are read by `probe_result` and drawn by `show_result` (`tabfield.py`, tested).
+- **Abaqus / ANSYS structure** - ShipBrain's models are written as Abaqus `.inp` / ANSYS `.mac` / Nastran `.bdf` and run in the installed solver by `solve` (adapters follow the documented batch commands,
+  **not tested** without the software); `find_solvers` now also finds Fluent and STAR-CCM+. Their closed result files (.odb, .rst) must be exported.
+
+### Uploading any file in the chat window
+
+The + button takes several files at once; files can also be dropped on the window or pasted. Each is saved in the workspace and read at once (`intake.py`, behind `file_info`):
+a note under the message box says what it is and what was found. Read: STEP / IGES / native CAD (SolidWorks, CATIA, NX ...), STL (closed? volume), FE decks (.bdf .nas .fem .inp),
+foreign mesh formats through meshio (.msh .vtk .vtu .unv .med .cgns .obj .ply ... - converted to a ShipBrain `.inp` so the mesh, analysis and picture tools work on them; result fields
+are listed), CalculiX `.frd` results, DXF, PDF, images, PowerPoint, Word, Excel, CSV, OCX, and zip / tar archives (an OpenFOAM or Elmer case inside is recognised and unpacked).
+Not readable, said plainly with what to export: closed binary results of other solvers (Nastran .op2, ANSYS .rst, Abaqus .odb, LS-DYNA, HyperView .h3d) and ANSYS .fdb; old binary
+Office files need LibreOffice. An unknown file is described (text or binary sniffed), never refused. Tested in `tests/test_intake.py` and in a headless browser with 12 formats at once.
+
+### Results in the chat window
+
+Every picture a tool makes (`files` in its result: png, jpg, svg) is shown in the chat, click to enlarge. A structural result also opens an interactive view in the right
+panel (`/api/field`): the part coloured by von Mises stress or displacement with a colour bar - hover over any place for its value, click to pin it (the nearest node's
+coordinates, stress and displacement vector). For a value at a given place, `probe_result` reads it from a mesh result (mm), an OpenFOAM case (metres) or an Elmer `.vtu` and
+tells how far the node / cell is from the point asked for (`/api/probe` is the same for the page). Checked in `tests/test_probe.py` and in a headless browser run (pictures
+load, hover and pin give the values of the nearest node). Flow results are interactive too: an OpenFOAM case (a slice through the 3D grid, `/api/slice`) or an Elmer `.vtu` opens in the same panel - hover for velocity, pressure (and plate stress and displacement for FSI), click to pin.
+
+### 3D flow with OpenFOAM and the flow-to-stress chain
+
+`openfoam_flow` runs OpenFOAM (GPL-3, OpenCFD/ESI; v1912 from Ubuntu's `openfoam` package) - simpleFoam, steady incompressible, laminar or RANS k-omega SST with wall functions -
+on a plate or on a part from a STEP / STL file, 2D or 3D. ShipBrain writes everything around it with its own code (`openfoam.py`): the graded block grid, the part cut out
+cell by cell (stair-stepped wall), the polyMesh written directly (no gmsh, no blockMesh, no snappyHexMesh), the case files, and the results read from OpenFOAM's ASCII output
+(forces are summed from the face pressures and wall shear by ShipBrain; the `forces` function object crashes in this Ubuntu build). Pictures: velocity and pressure slices.
+
+`flow_load_stress` chains it: the force on every face of the body goes to the nearest element of the part's shell mesh (nodal forces, their sum equals the flow force exactly -
+tested), CalculiX solves displacement and von Mises, and the stress and displacement pictures are made (`flowload.py`). One-way coupling.
+
+Checked (`tests/test_openfoam.py`, skipped when OpenFOAM is missing): checkMesh passes on the written 2D and 3D meshes; channel flow is parabolic (umax = 1.5 x mean within 3 %,
+dp/dx within 5 %); the drag coefficient of a plate in a channel at Re 70 agrees with Elmer's (refined: OpenFOAM 7.29, 7.18, 7.10 and Elmer 6.26, 6.87, 7.24 at 40, 20, 10 mm
+cells - the two solvers converge to the same value); the nodal forces sum to the flow force. NOT validated against measurements: the SST runs and the loads on curved or
+bent parts (stair-stepped wall, coarse grid). Not covered: free surface, waves, ship motions, transient LES. Training: `training/openfoam_tasks.py`.
+
+### Flow and fluid-structure interaction (Elmer FEM)
+
+`elmer_flow` runs Elmer FEM (GPL-2+, CSC) on a plate standing in a 2D channel: water / seawater / air / oil, laminar or SST k-omega, a rigid plate or a flexible plate
+(two-way FSI: Elmer's fluid solver, elasticity solver and mesh update coupled through its FSI boundary). ShipBrain makes everything around Elmer with its own code
+(`elmer.py`): the block-structured mesh with a conforming fluid-structure interface (no gmsh, no ElmerGrid) in Elmer's mesh format, the solver input, the VTU reader, and the
+pictures (`viz.render_flow`: velocity, pressure, displacement, stress). Elmer was built from its sources and run here.
+
+Checked (`tests/test_elmer.py`, skipped when ElmerSolver is not installed): channel flow gives the exact parabolic profile (umax = 1.5 x mean within 1 %) and
+dp/dx = -12 mu U / H2 within 4 %; the FSI coupling is linear (Young's modulus x 10 gives 1/9.97 of the deflection) and a bending plate carries the same pressure drag as the
+rigid one (within 2 %). NOT validated against measurements: the drag coefficient of the plate and the SST k-omega runs (they run, but a steady RANS solution of a bluff plate
+may not converge - the tool reports `converged` and warns). Not covered: 3D flow around a STEP part, free surface and waves, hull seakeeping, SST with FSI.
+Training: `training/elmer_tasks.py`. Install Elmer (free): https://www.elmerfem.org (ElmerSolver on the PATH or ELMER_HOME).
+
+### Pictures of models and results (`show_result`)
+
+`viz.py` draws a STEP / STL / mesh as a shaded picture, or a CalculiX result on the mesh (von Mises stress, displacement drawn deformed) with a colour bar, as a
+PNG (matplotlib, no GUI, own code), and writes an ASCII VTU for ParaView. CalculiX expands shells and renumbers nodes, so the value at a shell node is taken from the
+expanded nodes around it (displacement: mean, stress: largest). Checked (`tests/test_viz.py`): the pictured maxima equal CalculiX's (displacement 2 %, stress 10 %)
+on a cantilever plate whose tip deflection matches beam theory P L3 / 3EI within 8 %.
+
+### 1D finite volume cases (Finite-Volume-Method-for-1D-CFD-Simulations)
+
+`fvm_1d` runs the repo's own MATLAB/Octave scripts (MIT, Mohith Sai Gorla; copied unchanged in `vendor/fvm1d/repo`) in Octave: steady conduction,
+conduction with a uniform source, convection-diffusion with the central scheme, and the 1D SIMPLE duct step. ShipBrain only replaces the input lines in a
+copy, cuts the plot lines, runs it, and compares with the exact solution (largest error returned). Needs Octave (free). The fin script (ae(1) never set) and the
+upwind script (unfinished) are not offered: see skill `fvm-1d`. Teaching-size 1D problems only.
+
+Checked (`tests/test_fvm1d.py`): conduction exact; heat-generation error equals q dx2 / 8k at 5, 10, 20, 40 cells (second order); convection-diffusion error
+falls 4x per halving of the cell; SIMPLE keeps the mass flow equal at all sections; the original scripts are never edited. Training: `training/fvm_tasks.py`.
+
+### Standard parts (BOLTS)
+
+`standard_part` looks up dimensions in the BOLTS library tables (https://github.com/boltsparts/BOLTS_archive; parser GPL-3, data LGPL 2.1+, copied
+unchanged in `vendor/bolts`): hexagon bolts and screws (ISO 4017/4014/4762, DIN 933/931/912 ...), nuts, washers, rolled sections (IPE, HEA, HEB, HEM,
+angles, channels, hollow sections), ASME B36.10 pipe, flanges, bearings - 78 part classes. Words in, one table row out (mm; ASME tables are in inches and get
+*_mm values); I-sections also get area, second moments and mass from the table dimensions. A size not in the table is refused with the range, never
+invented. Strength and capacity are not in these tables.
+
+Checked (`tests/test_parts.py`): all 25 sections in `connections.SECTIONS` are identical to the BOLTS tables (h, b, tw, tf); bolt across-flats and head
+height equal `connections.BOLTS` (M22: ISO 272 gives 32 mm, the old table has the DIN value 34); IPE300 area 5381 mm2 and Iy 8356 cm4 within 0.5 % of the
+catalogue; NPS 4 schedule 40 = 114.3 x 6.02 mm. Training: `training/parts_tasks.py`.
+
+### Frame-field hex meshes (AlgoHex)
+
+`hex_mesh_algohex` gives a part to AlgoHex (AGPL-3.0, cgg-bern, "Locally Meshable Frame Fields", ACM TOG 2023): ShipBrain makes the tetrahedral
+input from its own hex mesher (each hex split into 6 tets - conforming and checked for positive volume), AlgoHex turns it into a frame-field hex mesh,
+and ShipBrain reads AlgoHex's OpenVolumeMesh output (hexes put into C3D8 order with positive volume), checks it (inverted cells, scaled Jacobian,
+volume against the exact one) and writes CalculiX input. AlgoHex is not built in the cloud sandbox: two of its libraries (CoMISo, libHexEx) are hosted
+on RWTH Aachen's GitLab, which the sandbox cannot reach, and ShipBrain does not fetch them elsewhere. So `.github/workflows/shipbrain-algohex.yml` builds
+it from its sources on GitHub's computers, runs it on its own demo and on ShipBrain parts, and publishes the checked meshes as the release `algohex-latest`;
+on the user's computer ShipBrain runs the user's own AlgoHex build or container image. Checked here (`tests/test_algohex.py`): the tet split conserves volume
+and is conforming, hex meshes written with randomly oriented faces come back in C3D8 order with the same quality, AlgoHex's demo tet mesh reads with the right
+volume, a STEP part gives a valid tet input, and a hex with one folded corner is counted as inverted instead of being flipped.
+**First real run on GitHub** (build 7 min, run 10 min, commit 27cd6e7e; results in the release `algohex-latest`): AlgoHex's own demo cylinder 9,792 hexes,
+none inverted, smallest scaled Jacobian 0.34, mean 0.98; an L-bracket 10,290 hexes, all perfect (1.0, volume exact); but a cylinder (10,220 hexes) has 5 inverted
+cells (smallest Jacobian -0.07) and a block with a hole (11,543 hexes) 15 (-0.52), volumes within 0.26 % and 0.22 %. So AlgoHex works, but its curved-part meshes
+are not guaranteed valid: ShipBrain's check counts the inverted cells and the answer says so - treat such a mesh as needing repair before use. These inputs are
+tetrahedra split from ShipBrain's own voxel hex mesh, so their surface is stair-stepped, which is not the intended AlgoHex input (a smooth surface mesh).
+
+## Tests
+
+```bash
+python -m pytest tests -q        # 46 tests: memory, hybrid search, MCP, structure compare + mesh, semantic drawing diff, meshers, conformity, 1D+2D, cleaning, fatigue, formats + same solver answer through
+                                 # each, edit ops, 1D/2D/3D conversions, DXF->3D, drawing and mesh-vs-drawing comparison,
+                                 # CadQuery, RAG, plugins, agent loop + GUI server vs a mock model
+```
+
+## Next steps (not done yet)
+
+- **Train and measure.** Training has not run yet; there was no GPU in the build session. Run steps 1-4 above and compare `eval_before.json` with `eval_after.json`.
+- **HyperX.** Import the generated `.bdf` into HyperX through its Python API (docs in `../docs`) for panel sizing.
+- **CFD.** A tool that writes an OpenFOAM case (blockMesh/snappyHexMesh dictionaries) from a STEP hull or part. Today the assistant only explains the set-up.
+- **Fatigue sub-modelling.** Drive the cut boundary of the hot-spot box with the global model's displacements, not clamps. Add free-edge hot spots (cut-out corners) and S-N damage.
+- **Global ship model from a general arrangement.** Decks, bulkheads and double bottom from main dimensions, then mesh.
+- **Curved shell.** Mesh curved faces (hull shell) in the surface's own (u,v) parameters, with the same shared-edge rule.
+- **Stiffener slots in the assembly mesher.** Slots where stiffeners pass through web frames; today the web is continuous at the crossing.
+- **Ship primitives.** CAD2Program-style primitives (`plate`, `stiffener`, `bracket`, `bulkhead` + a few parameters) instead of free CadQuery code. Small models are more reliable with these.
+- **Arrangement → structure.** Feed bulkhead and deck positions from a general-arrangement generator (e.g. ShipSpace-GA) into `plates_mesh`, with tank heads as pressure loads.
+- **Vision.** Read a deck-plan tile and send the member JSON straight to `panel_mesh`, by joining with `ship_rag.py panel`.
+
+## Private data
+
+Do **not** commit ship drawings, XMLs, rule texts, `rules_index.json`, generated training data, or model weights.
+**This repository is public.** `.gitignore` already excludes these files. Keep them on the company drive and point the app at them with
+`--knowledge` / `--plugin`.
+
+## Licences: free and open source only
+
+Everything ShipBrain needs is free and open source: numpy and scipy (BSD), CadQuery (Apache-2.0) with OpenCascade (LGPL),
+pyNastran (BSD), ezdxf (MIT), pdfplumber (MIT), pypdfium2 (Apache/BSD), Pillow (MIT-CMU), CalculiX (GPL, run as a
+separate program), llama.cpp (MIT) and llamafile (Apache-2.0), the OCX schema (Apache-2.0), xsdata and xmlschema (MIT),
+OCXReader (LGPL-2.1, unchanged, run as a separate program). Non-commercial only (allowed because ShipBrain is
+declared non-commercial, see above): ConstructDrawingAI and ReverseCAD (PolyForm Noncommercial 1.0.0). Training uses Qwen3 (Apache-2.0), Unsloth (Apache-2.0),
+Transformers and PEFT (Apache-2.0). PyMuPDF (AGPL or paid) was replaced. ANSYS and Abaqus are only targets of the file
+converters and are never needed.
+
+## Credits (ideas, no code copied)
+
+- [agent3dify](https://github.com/neka-nat/agent3dify) (MIT): a fixed script contract with one JSON result line; a stall guard for repair loops; checking the model's projected views against the drawing.
+- [text-to-cad](https://github.com/earthtojake/text-to-cad) (MIT): check the user's sizes against the built solid, not against the model's words; an example corpus with prompts.
+- [solidcraft](https://github.com/tangency-labs/solidcraft) (MIT/Apache-2.0): a verified example and oracle set; small tool replies.
+  Now also: its five modelling skills (modeling, editing, checking, mechanisms, sheet metal; `vendor/solidcraft`) load
+  in ShipBrain, and when SolidCraft is installed (free, https://solidcraft.io/download) its own MCP server
+  (`solidcraft-cli mcp`) is a built-in server: `mcp_tools` / `mcp_call(server="solidcraft")`; without it the chat shows
+  the download link. Its full code is a trained knowledge pack (3,580 files).
+- [CAD2Program](https://manycore-research.github.io/CAD2Program/): small models do better emitting short parametric primitives than free B-rep code; used for `build_structure`.
+- [OpenCourantRP](https://github.com/CAMLAB-UChile/OpenCourantRP) (AGPL-3.0): knowledge pack (manual, explicit-dynamics example decks for impact / crash / sloshing), trained on (copyleft allowed by the owner); no code copied.
+- [Voitta](https://github.com/voitta-ai/voitta-rag) (voitta-rag is AGPL-3.0, so nothing was copied): hybrid search, re-indexing only changed files, search scope, assistant memory with like/dislike, tools over MCP.
+- [CAD-pdf-chatbot](https://github.com/adityawalture/CAD-pdf-chatbot) (no licence, so nothing copied): checking written dimension arithmetic, OCR fallback for scans.
+- [CADCraft](https://github.com/storytold/cadcraft) (MIT/Apache-2.0): DXF as the drawing exchange format.
+- [ShipSpace-GA](https://github.com/kodendaal/ShipSpace-GA) (MIT, data CC BY 4.0): an arrangement generator, planned as a source of bulkhead and deck positions.

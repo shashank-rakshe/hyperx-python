@@ -1,0 +1,56 @@
+--------------------- CableDyn Input File ------------------------------------
+CableDyn driver deck -- cross-flow VIV lock-in of a taut line in a uniform cross current, 90 s
+-- A 100 m line (D 0.1 m, 10 kg/m, EA 5e7 N, about 50 kN) held at both ends 50 m below the
+-- surface in a 0.15 m/s current along +Y, across the line. The LINE TYPES columns Cl dF cF give
+-- the lift coefficient 0.8 and MoorDyn's synchronisation band (dF 0.08 around cF 0.18): the
+-- shedding frequency cF U/D = 0.27 Hz sits on the first vertical mode (0.27 Hz with the added
+-- mass), so the line locks in and vibrates in Z, across the flow: over 60-90 s the mid-span
+-- amplitude A/D is 0.66, MoorDyn-F's on this line (tests/test_viv_lockin.py). L1N26pz is the
+-- mid-span node, L1N13pz the quarter span; the Outputs flag V writes the lift at every node to
+-- <root>.Line1.V.out.
+-- VIVphaseSeed spread starts node i at the phase 2 pi i/N (MoorDyn-C); VIVrmsWindow sets the
+-- averaging time of the running RMS motion of the synchronisation model. The static start
+-- carries the current drag but no lift; the lift builds up from the seeded phases.
+--------------------- LINE TYPES ---------------------------------------
+TypeName   Diam    MassDenInAir   EA        BA/-zeta   EI       Cd_n  Cd_t  Ca_n  Ca_t  Cl    dF     cF
+(-)        (m)     (kg/m)         (N)       (N-s/-)    (N-m^2)  (-)   (-)   (-)   (-)   (-)   (-)    (-)
+riser      0.10    10.0           5.0e7     -0.8       0.0      1.2   0.0   1.0   0.0   0.8   0.08   0.18
+--------------------- POINTS -------------------------------------------
+ID    Type      X        Y      Z         Mass    Vol     CdA    Ca
+(-)   (-)       (m)      (m)    (m)       (kg)    (m^3)   (m^2)  (-)
+1     Coupled   0.0      0.0    -50.0     0       0       0      0
+2     Fixed     100.0    0.0    -50.0     0       0       0      0
+--------------------- LINES --------------------------------------------
+ID    NodeA   NodeB   Outputs
+(-)   (-)     (-)     (-)
+1     1       2       V
+--------------------- SECTIONS -----------------------------------------
+-- 99.9 m unstretched: 50 kN stretches it to the 100 m span (EA 5e7 N, strain 0.1 %).
+LineID   LineType   Length   NumSegs
+(-)      (-)        (m)      (-)
+1        riser      99.9001  50
+--------------------- OPTIONS ------------------------------------------
+9.80665   g                - Gravitational acceleration (m/s^2) [default: 9.80665]
+1025.0    rhoW             - Water density (kg/m^3) [default: 1025]
+100.0     WtrDpth          - Water depth (m) [default: absent standalone; host-owned OpenFAST]
+1.0e5     kBot             - Seabed penalty stiffness base (Pa/m) [default: 1.0e5]
+1.0e4     cBot             - Seabed normal damping base (Pa-s/m) [default: 1.0e4]
+0.02      dtM              - CableDyn internal time step (s) [default: omitted standalone; the glue DT in OpenFAST]
+90.0      TMax             - Standalone simulation duration (s) [default: omitted standalone; host-owned OpenFAST]
+0.25      VIVrmsWindow     - Averaging time of the VIV running RMS motion (s) {0=500 steps of dtM} [default: 0]
+spread    VIVphaseSeed     - Initial VIV phases {spread=2 pi i/N, MoorDyn-C; zero=MoorDyn-F} [default: spread]
+uniform 0.0 0.15 0.0 current - Current model and X/Y/Z velocity (m/s) {none; uniform; profile} [default: none]
+none      waves            - Wave model, height, period, and direction (m, s, deg) {none; airy; jonswap} [default: none]
+0         WaterKin         - Water-kinematics source {0/none; 3; 7; file; SEASTATE coupled only} [default: no policy]
+0.4       rhoInf           - Generalised-alpha spectral radius {0<=rhoInf<=1} [default: 0.4]
+False     modified_newton  - Tangent-reuse mode {False=full Newton; True=guarded reuse} [default: False]
+False     adaptive_mesh    - Automatic finite-EI refinement {False; True} [default: False]
+dynamic_solver 1.0e-8 1.0e-14 30 12 - Relative tolerance, absolute tolerance, max iterations, backtracks [defaults shown]
+none      frictionMu       - Seabed friction coefficient {none; value>=0} [default: none]
+-- Complete option/default reference: cabledyn_options_reference.dat and doc/options.rst.
+--------------------- OUTPUTS ------------------------------------------
+"FairTen1"
+"AnchTen1"
+"L1N26pz"
+"L1N13pz"
+--------------------- need this line -----------------------------------

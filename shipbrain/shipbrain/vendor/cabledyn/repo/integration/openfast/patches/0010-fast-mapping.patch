@@ -1,0 +1,211 @@
+diff --git a/modules/openfast-library/src/FAST_Mapping.f90 b/modules/openfast-library/src/FAST_Mapping.f90
+index a150e6f06..8d0ed86e4 100644
+--- a/modules/openfast-library/src/FAST_Mapping.f90
++++ b/modules/openfast-library/src/FAST_Mapping.f90
+@@ -58,6 +58,7 @@ character(24), parameter   :: Custom_ED_to_ExtLd = 'ED -> ExtLd', &
+                               Custom_SrvD_to_SED = 'SrvD -> SED', &
+                               Custom_SrvD_to_SD = 'SrvD -> SD', &
+                               Custom_SrvD_to_MD = 'SrvD -> MD', &
++                              Custom_SrvD_to_CD = 'SrvD -> CD', &
+                               Custom_AD_to_ExtInfw = 'AD -> ExtInfw', &
+                               Custom_ED_Tower_Damping = 'ED Tower Damping', &
+                               Custom_ED_Blade_Damping = 'ED Blade Damping', &
+@@ -114,6 +115,8 @@ subroutine FAST_InputMeshPointer(ModData, Turbine, MeshLoc, Mesh, iInput, ErrSta
+       Mesh => MAP_InputMeshPointer(Turbine%MAP%Input(iInput), MeshLoc)
+    case (Module_MD)
+       Mesh => MD_InputMeshPointer(Turbine%MD%Input(iInput), MeshLoc)
++   case (Module_CD)
++      Mesh => CD_InputMeshPointer(Turbine%CD%Input(iInput), MeshLoc)
+    case (Module_Orca)
+       Mesh => Orca_InputMeshPointer(Turbine%Orca%Input(iInput), MeshLoc)
+    case (Module_SD)
+@@ -185,6 +188,8 @@ subroutine FAST_OutputMeshPointer(ModData, Turbine, MeshLoc, Mesh, ErrStat, ErrM
+       Mesh => MAP_OutputMeshPointer(Turbine%MAP%y, MeshLoc)
+    case (Module_MD)
+       Mesh => MD_OutputMeshPointer(Turbine%MD%y, MeshLoc)
++   case (Module_CD)
++      Mesh => CD_OutputMeshPointer(Turbine%CD%y, MeshLoc)
+    case (Module_Orca)
+       Mesh => Orca_OutputMeshPointer(Turbine%Orca%y, MeshLoc)
+    case (Module_SD)
+@@ -283,6 +288,8 @@ function FAST_InputFieldName(ModData, DL) result(Name)
+       Name = trim(ModData%Abbr)//"%"//MAP_InputFieldName(DL)
+    case (Module_MD)
+       Name = trim(ModData%Abbr)//"%"//MD_InputFieldName(DL)
++   case (Module_CD)
++      Name = trim(ModData%Abbr)//"%"//CD_InputFieldName(DL)
+    case (Module_Orca)
+       Name = trim(ModData%Abbr)//"%"//Orca_InputFieldName(DL)
+    case (Module_SD)
+@@ -346,6 +353,8 @@ function FAST_OutputFieldName(ModData, DL) result(Name)
+       Name = trim(ModData%Abbr)//"%"//MAP_OutputFieldName(DL)
+    case (Module_MD)
+       Name = trim(ModData%Abbr)//"%"//MD_OutputFieldName(DL)
++   case (Module_CD)
++      Name = trim(ModData%Abbr)//"%"//CD_OutputFieldName(DL)
+    case (Module_Orca)
+       Name = trim(ModData%Abbr)//"%"//Orca_OutputFieldName(DL)
+    case (Module_SD)
+@@ -488,6 +497,8 @@ subroutine FAST_InitMappings(Mappings, Mods, Turbine, ErrStat, ErrMsg)
+             call InitMappings_MAP(MappingsTmp, Mods(iModSrc), Mods(iModDst), Turbine, ErrStat2, ErrMsg2)
+          case (Module_MD)
+             call InitMappings_MD(MappingsTmp, Mods(iModSrc), Mods(iModDst), Turbine, ErrStat2, ErrMsg2)
++         case (Module_CD)
++            call InitMappings_CD(MappingsTmp, Mods(iModSrc), Mods(iModDst), Turbine, ErrStat2, ErrMsg2)
+          case (Module_Orca)
+             call InitMappings_Orca(MappingsTmp, Mods(iModSrc), Mods(iModDst), Turbine, ErrStat2, ErrMsg2)
+          case (Module_SD)
+@@ -1164,6 +1175,18 @@ subroutine InitMappings_ED(Mappings, SrcMod, DstMod, Turbine, ErrStat, ErrMsg)
+                        ErrStat=ErrStat2, ErrMsg=ErrMsg2)
+       if (Failed()) return
+ 
++   case (Module_CD)
++
++      ! Platform loads (SubDyn not active)
++      call MapLoadMesh(Turbine, Mappings, SrcMod=SrcMod, DstMod=DstMod, &
++                       SrcDL=DatLoc(CD_y_CoupledLoads, 1), &           ! CD%y%CoupledLoads(1)
++                       SrcDispDL=DatLoc(CD_u_CoupledKinematics, 1), &  ! CD%u%CoupledKinematics(1)
++                       DstDL=DatLoc(ED_u_PlatformPtMesh), &            ! ED%u%PlatformPtMesh
++                       DstDispDL=DatLoc(ED_y_PlatformPtMesh), &        ! ED%y%PlatformPtMesh
++                       Active=Turbine%p_FAST%CompSub == Module_None, &
++                       ErrStat=ErrStat2, ErrMsg=ErrMsg2)
++      if (Failed()) return
++
+    case (Module_Orca)
+ 
+       ! Platform loads (SubDyn not active)
+@@ -1523,6 +1546,15 @@ subroutine InitMappings_ExtPtfm(Mappings, SrcMod, DstMod, Turbine, ErrStat, ErrM
+                        DstDispDL=DatLoc(ExtPtfm_y_ConnMesh), &           ! ExtPtfm%y%ConnMesh
+                        ErrStat=ErrStat2, ErrMsg=ErrMsg2); if(Failed()) return
+ 
++   case (Module_CD)
++
++      call MapLoadMesh(Turbine, Mappings, SrcMod=SrcMod, DstMod=DstMod, &
++                       SrcDL=DatLoc(CD_y_CoupledLoads, 1), &             ! CD%y%CoupledLoads(1)
++                       SrcDispDL=DatLoc(CD_u_CoupledKinematics, 1), &    ! CD%u%CoupledKinematics(1)
++                       DstDL=DatLoc(ExtPtfm_u_ConnLDMesh), &             ! ExtPtfm%u%ConnLDMesh
++                       DstDispDL=DatLoc(ExtPtfm_y_ConnMesh), &           ! ExtPtfm%y%ConnMesh
++                       ErrStat=ErrStat2, ErrMsg=ErrMsg2); if(Failed()) return
++
+    case (Module_MAP)
+ 
+       call MapLoadMesh(Turbine, Mappings, SrcMod=SrcMod, DstMod=DstMod, &
+@@ -1907,6 +1939,59 @@ contains
+    end function
+ end subroutine
+ 
++subroutine InitMappings_CD(Mappings, SrcMod, DstMod, Turbine, ErrStat, ErrMsg)
++   type(MappingType), allocatable         :: Mappings(:)
++   type(ModDataType), intent(inout)       :: SrcMod, DstMod
++   type(FAST_TurbineType), intent(inout)  :: Turbine           !< Turbine type
++   integer(IntKi), intent(out)            :: ErrStat
++   character(*), intent(out)              :: ErrMsg
++
++   character(*), parameter    :: RoutineName = 'InitMappings_CD'
++   integer(IntKi)             :: ErrStat2
++   character(ErrMsgLen)       :: ErrMsg2
++
++   ErrStat = ErrID_None
++   ErrMsg = ''
++
++   select case (SrcMod%ID)
++
++   case (Module_ED)
++
++      call MapMotionMesh(Turbine, Mappings, SrcMod=SrcMod, DstMod=DstMod, &
++                         SrcDL=DatLoc(ED_y_PlatformPtMesh), &          ! ED%y%PlatformPtMesh
++                         DstDL=DatLoc(CD_u_CoupledKinematics, 1), &    ! CD%u%CoupledKinematics(1)
++                         Active=Turbine%p_FAST%CompSub == Module_None, &
++                         ErrStat=ErrStat2, ErrMsg=ErrMsg2); if(Failed()) return
++
++   case (Module_SD)
++
++      call MapMotionMesh(Turbine, Mappings, SrcMod=SrcMod, DstMod=DstMod, &
++                         SrcDL=DatLoc(SD_y_Y3Mesh), &                  ! SD%y%y3Mesh
++                         DstDL=DatLoc(CD_u_CoupledKinematics, 1), &    ! CD%u%CoupledKinematics(1)
++                         ErrStat=ErrStat2, ErrMsg=ErrMsg2); if(Failed()) return
++
++   case (Module_ExtPtfm)
++
++      call MapMotionMesh(Turbine, Mappings, SrcMod=SrcMod, DstMod=DstMod, &
++                         SrcDL=DatLoc(ExtPtfm_y_ConnMesh), &           ! ExtPtfm%y%ConnMesh
++                         DstDL=DatLoc(CD_u_CoupledKinematics, 1), &    ! CD%u%CoupledKinematics(1)
++                         ErrStat=ErrStat2, ErrMsg=ErrMsg2); if(Failed()) return
++
++   case (Module_SrvD)
++
++      ! Cable control: ServoDyn's CableDeltaL/CableDeltaLdot feed CableDyn's
++      ! u%DeltaL/u%DeltaLdot exactly like the stock MoorDyn wiring.
++      call MapCustom(Mappings, Custom_SrvD_to_CD, SrcMod, DstMod)
++
++   end select
++
++contains
++   logical function Failed()
++      call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
++      Failed = ErrStat >= AbortErrLev
++   end function
++end subroutine
++
+ subroutine InitMappings_Orca(Mappings, SrcMod, DstMod, Turbine, ErrStat, ErrMsg)
+    type(MappingType), allocatable      :: Mappings(:)
+    type(ModDataType), intent(inout)       :: SrcMod, DstMod
+@@ -2023,6 +2108,15 @@ subroutine InitMappings_SD(Mappings, SrcMod, DstMod, Turbine, ErrStat, ErrMsg)
+                        DstDispDL=DatLoc(SD_y_y3Mesh), &                  ! SD%y%y3Mesh
+                        ErrStat=ErrStat2, ErrMsg=ErrMsg2); if(Failed()) return
+ 
++   case (Module_CD)
++
++      call MapLoadMesh(Turbine, Mappings, SrcMod=SrcMod, DstMod=DstMod, &
++                       SrcDL=DatLoc(CD_y_CoupledLoads, 1), &             ! CD%y%CoupledLoads(1)
++                       SrcDispDL=DatLoc(CD_u_CoupledKinematics, 1), &    ! CD%u%CoupledKinematics(1)
++                       DstDL=DatLoc(SD_u_LMesh), &                       ! SD%u%LMesh
++                       DstDispDL=DatLoc(SD_y_y3Mesh), &                  ! SD%y%y3Mesh
++                       ErrStat=ErrStat2, ErrMsg=ErrMsg2); if(Failed()) return
++
+    case (Module_SlD)
+ 
+       call MapLoadMesh(Turbine, Mappings, SrcMod=SrcMod, DstMod=DstMod, &
+@@ -2976,6 +3070,8 @@ subroutine VarUnpackInput(ModData, Var, ValAry, T, iInput, ErrStat, ErrMsg)
+       call MAP_VarUnpackInput(Var, ValAry, T%MAP%Input(iInput))
+    case (Module_MD)
+       call MD_VarUnpackInput(Var, ValAry, T%MD%Input(iInput))
++   case (Module_CD)
++      call CD_VarUnpackInput(Var, ValAry, T%CD%Input(iInput))
+    case (Module_Orca)
+       call Orca_VarUnpackInput(Var, ValAry, T%Orca%Input(iInput))
+    case (Module_SD)
+@@ -3029,6 +3125,8 @@ subroutine VarPackOutput(ModData, Var, ValAry, T, ErrStat, ErrMsg)
+       call MAP_VarPackOutput(Var, T%MAP%y, ValAry)
+    case (Module_MD)
+       call MD_VarPackOutput(Var, T%MD%y, ValAry)
++   case (Module_CD)
++      call CD_VarPackOutput(Var, T%CD%y, ValAry)
+    case (Module_Orca)
+       call Orca_VarPackOutput(Var, T%Orca%y, ValAry)
+    case (Module_SD)
+@@ -3510,6 +3608,23 @@ subroutine Custom_InputSolve(Mapping, ModSrc, ModDst, iInput, T, ErrStat, ErrMsg
+          end if
+       end if
+ 
++!-------------------------------------------------------------------------------
++! CableDyn Inputs
++!-------------------------------------------------------------------------------
++
++   case (Custom_SrvD_to_CD)
++
++      ! Use Rotor 1 ServoDyn for CableDyn inputs (the stock MoorDyn wiring, CompMooring = 5)
++      if (ModSrc%iRotor == 1) then
++         if (allocated(T%CD%Input(iInput)%DeltaL) .and. allocated(T%SrvD%y(ModSrc%Ins)%CableDeltaL)) then
++            T%CD%Input(iInput)%DeltaL = T%SrvD%y(ModSrc%Ins)%CableDeltaL      ! these should be sized identically during init
++         end if
++
++         if (allocated(T%CD%Input(iInput)%DeltaLdot) .and. allocated(T%SrvD%y(ModSrc%Ins)%CableDeltaLdot)) then
++            T%CD%Input(iInput)%DeltaLdot = T%SrvD%y(ModSrc%Ins)%CableDeltaLdot   ! these should be sized identically during init
++         end if
++      end if
++
+ !-------------------------------------------------------------------------------
+ ! SubDyn Inputs
+ !-------------------------------------------------------------------------------
+
