@@ -410,6 +410,11 @@ if DATA_ONLY:
     report('data ready')
     cleanup_output()
     raise SystemExit(0)
+if not DATA_ONLY:
+    # fast data check (about 1 minute, no GPU) before the slow scoring and training: a damaged file stops the run here, not hours later
+    if not sh(f'python training/preflight.py --data data/train.jsonl data/repo_train.jsonl data/public_pid_train.jsonl data/synth_pid_train.jsonl data/physics_train.jsonl data/ocx_train.jsonl data/construct_train.jsonl data/construct_real_train.jsonl data/cad3dify_train.jsonl data/class_rule_train.jsonl data/dexpi_train.jsonl data/dwsim_train.jsonl data/reversecad_train.jsonl data/cadmpeg_train.jsonl data/rhino_train.jsonl data/nx_train.jsonl data/cabledyn_train.jsonl data/tensormesh_train.jsonl data/vtracer_train.jsonl data/pipeflow_train.jsonl data/understanding_train.jsonl data/hexmesh_train.jsonl data/dxf_train.jsonl data/piperoute_train.jsonl data/centerline_train.jsonl data/connection_train.jsonl data/boltgroup_train.jsonl data/osoconn_train.jsonl data/xc_train.jsonl data/cbfem_train.jsonl data/pipestress_train.jsonl data/pulsation_train.jsonl data/parts_train.jsonl data/fvm_train.jsonl data/elmer_train.jsonl data/openfoam_train.jsonl data/vessel_train.jsonl data/hull_train.jsonl data/late_tools_train.jsonl data/missing_tools_train.jsonl data/python_tools_train.jsonl data/missing_tools2_train.jsonl data/missing_tools3_train.jsonl data/repo_new_train.jsonl data/moose_train.jsonl data/parsebench_train.jsonl {PRIV} {PRIV}', required=False):
+        print('PREFLIGHT FAILED: see the lines above; the run stops here so that no GPU time is wasted', flush=True)
+        raise SystemExit('preflight failed: damaged training data')
 report('scoring the base model')
 sh(f'python training/cad_eval.py --local {BASE} --limit 30 --out /kaggle/working/cad_eval_before.json', required=False)
 sh(f'python training/evaluate.py --local {BASE} --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_before.json', required=False)
