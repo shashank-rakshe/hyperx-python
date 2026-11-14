@@ -171,6 +171,7 @@ def sh(cmd, required=True, limit=None):
 if os.environ.get('SB_FAST') == '1':
     os.environ.setdefault('EPOCHS', '1')
     os.environ.setdefault('SB_SERVING_PROFILE', '0')
+    os.environ.setdefault('SB_SKIP_BEFORE', '1')       # the untrained model's scores are known (scorecard 46 %): do not spend 1 to 1.5 GPU hours on them again
     EVAL_LIMIT = 30
     DRAFT = ''
 os.chdir('/kaggle/working')
@@ -425,10 +426,13 @@ if not DATA_ONLY:
         print('PREFLIGHT FAILED: see the lines above; the run stops here so that no GPU time is wasted', flush=True)
         raise SystemExit('preflight failed: damaged training data')
 report('scoring the base model')
-sh(f'python training/cad_eval.py --local {BASE} --limit 30 --out /kaggle/working/cad_eval_before.json', required=False)
-sh(f'python training/evaluate.py --local {BASE} --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_before.json', required=False)
+if os.environ.get('SB_SKIP_BEFORE') != '1':
+    sh(f'python training/cad_eval.py --local {BASE} --limit 30 --out /kaggle/working/cad_eval_before.json', required=False)
+if os.environ.get('SB_SKIP_BEFORE') != '1':
+    sh(f'python training/evaluate.py --local {BASE} --data data/eval.jsonl --limit {EVAL_LIMIT} --out /kaggle/working/eval_before.json', required=False)
 # the scorecard: hand-written realistic requests (complete / messy units / missing inputs / multi-step / no tool)
-sh(f'python training/scorecard.py --local {BASE} --out /kaggle/working/scorecard_before.json', required=False)
+if os.environ.get('SB_SKIP_BEFORE') != '1':
+    sh(f'python training/scorecard.py --local {BASE} --out /kaggle/working/scorecard_before.json', required=False)
 report('making DPO preference pairs')
 # tool calls instead of invented numbers, the tool's exact numbers, the caveats kept + your thumbs-down corrections
 # (attach the app's feedback.jsonl in a PRIVATE Kaggle dataset; it is found here by its name)
