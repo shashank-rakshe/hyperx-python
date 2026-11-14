@@ -177,12 +177,12 @@ os.chdir('/kaggle/working')
 report('started')
 shutil.rmtree('/kaggle/working/src', ignore_errors=True)        # a re-run in the same session must not fail
 _got = False
-for _try in range(3):                                          # a clone that hangs (it happened once on Kaggle: 15 minutes, no progress) is stopped after 4 minutes and tried again
+for _try in range(2):                                          # a clone can be slow on Kaggle (once 18 minutes, then it finished): it gets 25 minutes; only a clone with no end is stopped and tried again
     shutil.rmtree('/kaggle/working/src', ignore_errors=True)
-    if sh(f'timeout 240 git clone -b {BRANCH} --depth 1 {REPO} src', required=False):
+    if sh(f'timeout 1500 git clone -b {BRANCH} --depth 1 {REPO} src', required=False):
         _got = True
         break
-    print(f'git clone failed or was too slow (try {_try + 1} of 3)', flush=True)
+    print(f'git clone failed or was too slow (try {_try + 1} of 2)', flush=True)
 if not _got:                                                   # another download route: the same files as one archive
     shutil.rmtree('/kaggle/working/src', ignore_errors=True)
     sh(f'mkdir -p src && curl -sL --max-time 900 https://codeload.github.com/shashank-rakshe/hyperx-python/tar.gz/refs/heads/{BRANCH} | tar xz -C src --strip-components=1')
