@@ -167,7 +167,13 @@ def main():
         if not os.path.exists(path) or not os.path.getsize(path):
             continue
         for line in open(path, encoding='utf-8'):
-            d = json.loads(line)
+            if not line.strip():
+                continue
+            try:
+                d = json.loads(line)
+            except ValueError as e:                        # one damaged line must not stop hours of training: skip it and say so
+                print(f'(skipped a damaged line in {path}: {str(e)[:60]})', flush=True)
+                continue
             if 'good' in d and not d['good']:              # the app's thumbs-down records: never imitate them (DPO uses them)
                 continue
             if 'chosen' in d and 'rejected' in d:          # preference pairs belong to the DPO step, not here
